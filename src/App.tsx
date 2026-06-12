@@ -1,19 +1,15 @@
 import { useEffect, useState } from "react"
 import { Toaster } from "react-hot-toast"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
-import { supabase } from "./lib/supabase"
 
 import {
   LayoutDashboard,
   Package,
   Tag,
   ShoppingCart,
-  LogOut,
-  Sparkles,
-  Menu
+  Sparkles
 } from "lucide-react"
 
-import { AuthProvider } from "./features/context/AuthContext"
 import InventoryPage from "./features/inventory/InventoryPage"
 import PricingPage from "./features/pricing/PricingPage"
 import DashboardPage from "./features/dashboard/DashboardPage"
@@ -28,17 +24,13 @@ const TABS = [
   { id: "ventas", label: "Ventas", icon: ShoppingCart }
 ] as const
 
-function MainApp() {
+export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard")
-  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     const handler = (e: any) => {
       const t = e.detail?.tab
-      if (TABS.some(x => x.id === t)) {
-        setTab(t)
-        setMenuOpen(false)
-      }
+      if (TABS.some(x => x.id === t)) setTab(t)
     }
     window.addEventListener("app:navigate", handler)
     return () => window.removeEventListener("app:navigate", handler)
@@ -53,7 +45,7 @@ function MainApp() {
         }}
       />
 
-      {/* --- HEADER ULTRA COMPACTO --- */}
+      {/* HEADER */}
       <header className="z-50 bg-white/80 backdrop-blur-xl border-b border-pink-50 px-4 py-2 shrink-0">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <motion.div
@@ -70,7 +62,7 @@ function MainApp() {
           </motion.div>
 
           {/* NAV HORIZONTAL EN DESKTOP */}
-          <nav className="hidden md:flex flex-1 justify-center">
+          <nav className="hidden md:flex flex-1 justify-end">
             <LayoutGroup id="desktop-nav">
               <div className="flex bg-slate-50 border border-slate-100 rounded-full p-1">
                 {TABS.map(t => {
@@ -99,18 +91,10 @@ function MainApp() {
               </div>
             </LayoutGroup>
           </nav>
-
-          <button
-            className="p-1 text-primary"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Menú"
-          >
-            <Menu size={22} />
-          </button>
         </div>
       </header>
 
-      {/* --- CONTENIDO PRINCIPAL --- */}
+      {/* CONTENIDO */}
       <main className="flex-1 overflow-y-auto scroll-container-ios bg-slate-50/30">
         <div className="w-full max-w-7xl mx-auto px-4 py-4">
           <AnimatePresence mode="wait">
@@ -120,7 +104,7 @@ function MainApp() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15 }}
-              className="pb-20" // Espacio justo para no chocar con el dock
+              className="pb-20"
             >
               {tab === "dashboard" && <DashboardPage />}
               {tab === "inventario" && <InventoryPage />}
@@ -131,7 +115,7 @@ function MainApp() {
         </div>
       </main>
 
-      {/* --- DOCK MÓVIL --- */}
+      {/* DOCK MÓVIL */}
       <nav className="md:hidden sticky bottom-0 w-full bg-white/90 backdrop-blur-2xl border-t border-slate-100 z-50">
         <div className="flex justify-around items-center h-14 pb-safe">
           <LayoutGroup id="mobile-dock">
@@ -162,46 +146,6 @@ function MainApp() {
           </LayoutGroup>
         </div>
       </nav>
-
-      {/* MENU OVERLAY (logout y futuras opciones) */}
-      <AnimatePresence>
-        {menuOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60]"
-            onClick={() => setMenuOpen(false)}
-          >
-            <motion.div
-              initial={{ x: 100 }}
-              animate={{ x: 0 }}
-              exit={{ x: 100 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="absolute right-0 top-0 bottom-0 w-72 bg-white p-6 shadow-xl"
-              onClick={e => e.stopPropagation()}
-            >
-              <p className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400 mb-4">
-                Sesión
-              </p>
-              <button
-                onClick={() => supabase.auth.signOut()}
-                className="w-full flex items-center gap-3 p-4 text-red-500 font-bold bg-red-50 rounded-xl hover:bg-red-100 transition-colors"
-              >
-                <LogOut size={20} /> CERRAR SESIÓN
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
-  )
-}
-
-export default function App() {
-  return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
   )
 }
