@@ -6,6 +6,7 @@ export interface CreateSalePayload {
   phone?: string | null;
   address?: string | null;
   location?: string | null;
+  payment_url?: string | null;
   notes?: string | null;
   isLayaway?: boolean;
   total: number;
@@ -44,6 +45,7 @@ export async function createSale(payload: CreateSalePayload) {
       customer_phone: payload.phone ?? null,
       customer_address: payload.address ?? null,
       customer_location: payload.location ?? null,
+      payment_url: payload.payment_url ?? null,
       notes: payload.notes ?? null,
       is_layaway: !!payload.isLayaway,
       total: payload.total,

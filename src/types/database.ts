@@ -59,6 +59,7 @@ export interface Sale {
   customer_phone?: string | null;
   customer_address?: string | null;
   customer_location?: string | null; // Google Maps URL o "lat,lng"
+  payment_url?: string | null;       // Link de cobro (Mercado Pago, etc.)
   notes?: string | null;
   due_date?: string | null;
   is_layaway?: boolean;

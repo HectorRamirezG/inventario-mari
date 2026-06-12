@@ -20,25 +20,44 @@ import SalesPage from "./features/sales/SalesPage"
 import ApartadosPage from "./features/apartados/ApartadosPage"
 import ThemeToggle from "./components/ui/ThemeToggle"
 import CommandPalette from "./components/ui/CommandPalette"
+import PinGate from "./components/ui/PinGate"
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
+import { useRole } from "./lib/useRole"
 
 type Tab = "dashboard" | "inventario" | "ventas" | "apartados" | "precios"
 
 const TABS = [
-  { id: "dashboard", label: "Inicio", icon: LayoutDashboard },
-  { id: "inventario", label: "Stock", icon: Package },
-  { id: "ventas", label: "Ventas", icon: ShoppingCart },
-  { id: "apartados", label: "Apartados", icon: Bookmark },
-  { id: "precios", label: "Precios", icon: Tag }
+  { id: "dashboard", label: "Inicio", icon: LayoutDashboard, adminOnly: false },
+  { id: "inventario", label: "Stock", icon: Package, adminOnly: false },
+  { id: "ventas", label: "Ventas", icon: ShoppingCart, adminOnly: false },
+  { id: "apartados", label: "Apartados", icon: Bookmark, adminOnly: false },
+  { id: "precios", label: "Precios", icon: Tag, adminOnly: true }, // sólo admin ve márgenes/costos
 ] as const
 
 export default function App() {
+  return (
+    <PinGate>
+      <AppShell />
+    </PinGate>
+  )
+}
+
+function AppShell() {
   const [tab, setTab] = useState<Tab>("dashboard")
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const { isAdmin, role } = useRole()
   // useTheme se llama para aplicar el tema al cargar
   useTheme()
   useGlobalShortcuts()
+
+  // Filtra tabs según rol
+  const visibleTabs = TABS.filter(t => !t.adminOnly || isAdmin)
+
+  // Si cajera intenta entrar a tab admin (por shortcut), la mandamos a ventas
+  useEffect(() => {
+    if (!isAdmin && tab === "precios") setTab("ventas")
+  }, [isAdmin, tab])
 
   useEffect(() => {
     const navHandler = (e: any) => {
@@ -85,13 +104,24 @@ export default function App() {
             <h1 className="text-base font-black tracking-tighter italic">
               Mari <span className="text-primary not-italic">Inv</span>
             </h1>
+            {role && (
+              <span
+                className={`hidden sm:inline-flex ml-2 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                  isAdmin
+                    ? "bg-primary/10 text-primary"
+                    : "bg-amber-50 text-amber-700"
+                }`}
+              >
+                {isAdmin ? "Admin" : "Cajera"}
+              </span>
+            )}
           </motion.div>
 
           {/* NAV HORIZONTAL EN DESKTOP */}
           <nav className="hidden md:flex flex-1 justify-center">
             <LayoutGroup id="desktop-nav">
               <div className="flex bg-slate-50 border border-slate-100 rounded-full p-1">
-                {TABS.map(t => {
+                {visibleTabs.map(t => {
                   const active = tab === t.id
                   const Icon = t.icon
                   return (
@@ -187,7 +217,7 @@ export default function App() {
       <nav className="md:hidden sticky bottom-0 w-full bg-white/90 backdrop-blur-2xl border-t border-slate-100 z-50">
         <div className="flex justify-around items-center h-14 pb-safe">
           <LayoutGroup id="mobile-dock">
-            {TABS.map(t => {
+            {visibleTabs.map(t => {
               const active = tab === t.id
               const Icon = t.icon
               return (

@@ -1,7 +1,7 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { 
   RefreshCw, Trophy, AlertTriangle, ArrowUpRight, Target, Zap, 
-  ShoppingCart, Star, Wallet 
+  ShoppingCart, Star, Wallet, Sun 
 } from "lucide-react"
 import { 
   ResponsiveContainer, AreaChart, Area, XAxis, 
@@ -14,12 +14,14 @@ import Skeleton from "../../components/ui/Skeleton"
 import Card from "../../components/ui/Card"
 
 import { useDashboard } from "./useDashboard"
+import DayCloseView from "./DayCloseView"
 
 const formatCurrency = (v: number) => 
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(v)
 
 export default function DashboardPage() {
   const { stats, loading, refresh } = useDashboard()
+  const [dayCloseOpen, setDayCloseOpen] = useState(false)
 
   const chartData = useMemo(() => {
     if (!stats?.top) return []
@@ -32,6 +34,10 @@ export default function DashboardPage() {
 
   const ticketPromedio = stats ? (stats.revenue / (stats.operations || 1)) : 0
   const cobroEficiencia = stats ? (100 - (stats.pending / (stats.revenue || 1) * 100)) : 0
+
+  if (dayCloseOpen) {
+    return <DayCloseView onClose={() => setDayCloseOpen(false)} />
+  }
 
   if (loading) return (
     <div className="p-6 space-y-6">
@@ -56,12 +62,22 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <button
-          onClick={refresh}
-          className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-primary active:scale-90"
-        >
-          <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setDayCloseOpen(true)}
+            className="h-10 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom active:scale-95 transition-transform"
+            title="Cierre del día"
+          >
+            <Sun size={12} /> Cierre
+          </button>
+          <button
+            onClick={refresh}
+            className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-primary active:scale-90"
+            aria-label="Refrescar"
+          >
+            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+          </button>
+        </div>
       </div>
 
       <Tabs defaultValue="resumen" className="space-y-6">

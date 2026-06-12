@@ -4,6 +4,10 @@ import { getAllVariants } from "./productLookupService";
 import { createSale } from "./salesService";
 import { getPricingConfig } from "../pricing/pricingConfigService";
 import {
+  searchCustomers,
+  type CustomerSnapshot,
+} from "./customerHistoryService";
+import {
   detectCartTier,
   piecesToNextTier,
   priceForTier,
@@ -33,10 +37,16 @@ export function useSalesPage() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [locationUrl, setLocationUrl] = useState("");
+  const [paymentUrl, setPaymentUrl] = useState("");
   const [notes, setNotes] = useState("");
   const [isLayaway, setIsLayaway] = useState(false);
   const [paid, setPaid] = useState<number | string>(0);
   const [capturingLocation, setCapturingLocation] = useState(false);
+
+  // --- Sugerencias de cliente (histórico) ---
+  const [customerSuggestions, setCustomerSuggestions] = useState<
+    CustomerSnapshot[]
+  >([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -147,9 +157,39 @@ export function useSalesPage() {
     setPhone("");
     setAddress("");
     setLocationUrl("");
+    setPaymentUrl("");
     setNotes("");
     setIsLayaway(false);
     setPaid(0);
+    setCustomerSuggestions([]);
+  }, []);
+
+  /* ---------- Búsqueda de clientes (debounced) ---------- */
+  useEffect(() => {
+    const q = customer.trim();
+    if (q.length < 2) {
+      setCustomerSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(() => {
+      searchCustomers(q, 5).then((res) => {
+        if (!cancelled) setCustomerSuggestions(res);
+      });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [customer]);
+
+  /** Auto-rellena teléfono/dirección/ubicación al elegir un cliente sugerido */
+  const pickCustomer = useCallback((c: CustomerSnapshot) => {
+    setCustomer(c.name);
+    if (c.phone) setPhone(c.phone);
+    if (c.address) setAddress(c.address);
+    if (c.location) setLocationUrl(c.location);
+    setCustomerSuggestions([]);
   }, []);
 
   /* ---------- Captura de GPS → Google Maps URL ---------- */
@@ -234,7 +274,7 @@ export function useSalesPage() {
     customer,
     phone,
     address,
-    locationUrl,
+    paymentUrl,
     notes,
     isLayaway,
     total,
@@ -253,6 +293,7 @@ export function useSalesPage() {
       phone,
       address,
       locationUrl,
+      paymentUrl,
       notes,
       isLayaway,
       capturingLocation,
@@ -262,6 +303,7 @@ export function useSalesPage() {
       totalQty,
       nextTierHint,
       config,
+      customerSuggestions,
     },
     actions: {
       addToCart,
@@ -272,11 +314,13 @@ export function useSalesPage() {
       setPhone,
       setAddress,
       setLocationUrl,
+      setPaymentUrl,
       setNotes,
       setIsLayaway,
       captureLocation,
       setPaid,
       handleSave,
+      pickCustomer,
     },
   };
 }

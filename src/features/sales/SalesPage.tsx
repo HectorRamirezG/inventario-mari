@@ -448,6 +448,40 @@ export default function SalesPage() {
                         onChange={(e) => actions.setCustomer(e.target.value)}
                         className="w-full h-10 pl-8 pr-3 rounded-xl bg-slate-50 text-[11px] font-bold outline-none focus:ring-2 focus:ring-primary/20"
                       />
+
+                      {/* Sugerencias de clientes anteriores */}
+                      {state.customerSuggestions.length > 0 &&
+                        !state.customerSuggestions.some(
+                          (c: any) =>
+                            c.name.toLowerCase() ===
+                            state.customer.toLowerCase().trim()
+                        ) && (
+                          <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-slate-100 rounded-xl shadow-xl overflow-hidden">
+                            {state.customerSuggestions.map((c: any) => (
+                              <button
+                                key={c.name}
+                                type="button"
+                                onClick={() => actions.pickCustomer(c)}
+                                className="w-full flex items-center justify-between px-3 py-2 hover:bg-primary/5 text-left transition-colors"
+                              >
+                                <div className="min-w-0">
+                                  <p className="text-[11px] font-black text-slate-800 truncate">
+                                    {c.name}
+                                  </p>
+                                  <p className="text-[9px] font-bold text-slate-400 truncate">
+                                    {c.phone ?? "sin tel"} · {c.visits} compra
+                                    {c.visits === 1 ? "" : "s"}
+                                  </p>
+                                </div>
+                                {c.pending_balance > 0 && (
+                                  <span className="text-[9px] font-black text-rose-500 tabular-nums shrink-0 ml-2">
+                                    Debe {Math.round(c.pending_balance)}
+                                  </span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                     </div>
 
                     <div className="relative">
@@ -515,6 +549,25 @@ export default function SalesPage() {
                         onChange={(e) => actions.setNotes(e.target.value)}
                         rows={2}
                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50 text-[11px] font-bold outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                      />
+                    </div>
+
+                    {/* Liga de pago (Mercado Pago, Stripe, etc.) */}
+                    <div className="relative">
+                      <span
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-[10px] font-black"
+                        aria-hidden
+                      >
+                        $/
+                      </span>
+                      <input
+                        type="url"
+                        placeholder="Liga de pago (opcional, p.ej. Mercado Pago)"
+                        value={state.paymentUrl}
+                        onChange={(e) =>
+                          actions.setPaymentUrl(e.target.value)
+                        }
+                        className="w-full h-10 pl-10 pr-3 rounded-xl bg-slate-50 text-[11px] font-bold outline-none focus:ring-2 focus:ring-primary/20"
                       />
                     </div>
                   </div>

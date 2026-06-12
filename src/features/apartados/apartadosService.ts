@@ -25,6 +25,7 @@ export async function listApartados(opts: {
       customer_phone,
       customer_address,
       customer_location,
+      payment_url,
       notes,
       total,
       paid,

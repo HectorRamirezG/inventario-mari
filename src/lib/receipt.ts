@@ -46,6 +46,10 @@ export function buildReceiptText(sale: Sale): string {
   }
   if (Number(sale.balance) > 0) {
     lines.push(`Saldo pendiente: *${money(sale.balance)}*`)
+    if (sale.payment_url) {
+      lines.push("")
+      lines.push(`Liga de pago: ${sale.payment_url}`)
+    }
   } else {
     lines.push(`Estado: PAGADO ✅`)
   }
