@@ -38,8 +38,14 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,ico,woff,woff2}'],
-        navigateFallbackDenylist: [/^\/api\//],
+        globPatterns: ['**/*.{js,css,svg,ico,woff,woff2}'],
+        // No cachear el index.html: siempre que se navegue,
+        // pedirlo a la red para que entren las versiones nuevas.
+        navigateFallback: null,
+        // El nuevo SW toma control inmediato y borra caches viejos
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
       devOptions: {
         enabled: false,

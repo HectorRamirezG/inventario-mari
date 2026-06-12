@@ -3,10 +3,28 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 
-// Service worker con auto-update silencioso. El import es dinámico y
-// tolerante a fallos: si el plugin no expone el módulo virtual (por una
-// build mal configurada), la app se renderiza igual sin SW.
-if ('serviceWorker' in navigator) {
+// --- One-shot cleanup del SW/caches viejos -----------------------------
+// Hubo un deploy con URL de Supabase incorrecta hardcoded; el SW de esa
+// versión sigue sirviendo bundles cacheados con esa URL. Esto purga
+// todos los caches y desregistra service workers anteriores una sola
+// vez, y guarda una bandera en localStorage para no repetir.
+const SW_CLEAN_FLAG = 'mari-sw-cleaned-v1'
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  if (!localStorage.getItem(SW_CLEAN_FLAG)) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      Promise.all(regs.map(r => r.unregister()))
+        .then(() => 'caches' in window ? caches.keys() : Promise.resolve([]))
+        .then(keys => Promise.all(keys.map(k => caches.delete(k))))
+        .then(() => {
+          localStorage.setItem(SW_CLEAN_FLAG, '1')
+          // Si había SWs activos, recarga una vez para servir el bundle fresco
+          if (regs.length > 0) window.location.reload()
+        })
+        .catch(() => {/* ignoramos: limpieza es best-effort */})
+    })
+  }
+
+  // Re-registrar SW limpio (tolerante a fallos)
   import('virtual:pwa-register')
     .then(({ registerSW }) => registerSW({ immediate: true }))
     .catch(err => console.warn('[PWA] registro deshabilitado:', err))

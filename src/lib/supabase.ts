@@ -19,22 +19,27 @@ function sanitize(raw: string | undefined): string {
 const DEFAULT_URL = "https://naxdlainnnkyctcisnew.supabase.co"
 const DEFAULT_ANON = "sb_publishable_UviL4QyL2c1Fiy5Dje5UkQ_se2lCZWB"
 
+// URLs viejas / equivocadas: si la env var apunta a una de éstas,
+// la ignoramos y usamos el default correcto.
+const KNOWN_BAD_URLS = [
+  "ppvfxgjcrxrtlxdvtijg.supabase.co",
+]
+
 let supabaseUrl = sanitize(import.meta.env.VITE_SUPABASE_URL as string | undefined)
 let supabaseAnonKey = sanitize(import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)
 
-if (!supabaseUrl || !/^https?:\/\//i.test(supabaseUrl)) {
+const looksValid = supabaseUrl && /^https?:\/\//i.test(supabaseUrl)
+const isBlacklisted = KNOWN_BAD_URLS.some(bad => supabaseUrl.includes(bad))
+
+if (!looksValid || isBlacklisted) {
   // eslint-disable-next-line no-console
   console.warn(
-    `[supabase] VITE_SUPABASE_URL inválida (${JSON.stringify(supabaseUrl)}). ` +
-      `Usando default ${DEFAULT_URL}. Arregla la env var en Vercel.`
+    `[supabase] Ignorando URL inválida o vieja (${JSON.stringify(supabaseUrl)}). ` +
+      `Usando ${DEFAULT_URL}. Arregla VITE_SUPABASE_URL en Vercel.`
   )
   supabaseUrl = DEFAULT_URL
 }
 if (!supabaseAnonKey) {
-  // eslint-disable-next-line no-console
-  console.warn(
-    "[supabase] VITE_SUPABASE_ANON_KEY faltante. Usando publishable default."
-  )
   supabaseAnonKey = DEFAULT_ANON
 }
 
