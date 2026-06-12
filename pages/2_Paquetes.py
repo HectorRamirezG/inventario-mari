@@ -8,11 +8,11 @@ from core.services import bundles as bundles_svc
 from core.services.products import catalog
 from core.ui import money, page_header, page_setup, section
 
-page_setup("Paquetes", icon="🎁")
+page_setup("Paquetes", icon="")
 page_header(
     "Paquetes",
     subtitle="Combos de productos que se descuentan del stock automáticamente al venderlos",
-    icon="🎁",
+    icon="",
 )
 
 
@@ -30,7 +30,7 @@ bundles_list = _load_bundles()
 cat = _load_catalog()
 
 if not cat:
-    st.warning("⚠️ Primero registra productos y variantes en la pestaña **Inventario**.")
+    st.warning("Primero registra productos y variantes en la pestaña **Inventario**.")
     st.stop()
 
 # ─── Editor de paquete ───
@@ -39,7 +39,7 @@ editing = next((b for b in bundles_list if b["id"] == edit_id), None) if edit_id
 is_new = st.session_state.get("bundle_new", False)
 
 with st.expander(
-    "➕ Crear nuevo paquete" if not editing else f"✏️ Editando: {editing['name']}",
+    "Crear nuevo paquete" if not editing else f"Editando: {editing['name']}",
     expanded=is_new or bool(editing),
 ):
     initial_items = (
@@ -80,7 +80,7 @@ with st.expander(
         cols[1].caption(f"Costo unit: {money(v['effective_cost'])}")
         new_qty = cols[2].number_input("Cantidad", min_value=1, value=int(it["qty"]),
                                         key=f"q-{state_key}-{idx}", step=1, label_visibility="collapsed")
-        if cols[3].button("🗑", key=f"rm-{state_key}-{idx}"):
+        if cols[3].button("", key=f"rm-{state_key}-{idx}"):
             items_to_remove.append(idx)
         new_items.append({"variant_id": it["variant_id"], "qty": int(new_qty)})
 
@@ -97,13 +97,13 @@ with st.expander(
         used_ids = {i["variant_id"] for i in st.session_state[state_key]}
         available = [c for c in cat if c["id"] not in used_ids]
         if not available:
-            st.caption("✅ Todas las variantes ya están en el paquete.")
+            st.caption("Todas las variantes ya están en el paquete.")
         else:
             options = {f"{v['product_name']} — {v['variant_name']} (stock: {v.get('stock', 0)})": v["id"] for v in available}
             ac1, ac2, ac3 = st.columns([4, 1, 1])
             sel = ac1.selectbox("Variante a agregar", list(options.keys()), label_visibility="collapsed")
             qty_add = ac2.number_input("Qty", min_value=1, value=1, step=1, label_visibility="collapsed")
-            if ac3.form_submit_button("➕ Agregar"):
+            if ac3.form_submit_button("Agregar"):
                 st.session_state[state_key].append({"variant_id": options[sel], "qty": int(qty_add)})
                 st.rerun()
 
@@ -129,7 +129,7 @@ with st.expander(
     )
 
     b1, b2, b3 = st.columns(3)
-    if b1.button("💾 Guardar paquete", type="primary", use_container_width=True,
+    if b1.button("Guardar paquete", type="primary", use_container_width=True,
                  disabled=not (name.strip() and st.session_state[state_key])):
         payload = {
             "id": edit_id,
@@ -144,10 +144,10 @@ with st.expander(
         st.session_state.pop("bundle_new", None)
         st.session_state.pop(state_key, None)
         st.cache_data.clear()
-        st.success("✅ Paquete guardado")
+        st.success("Paquete guardado")
         st.rerun()
 
-    if b2.button("🗑️ Eliminar", use_container_width=True, disabled=not editing):
+    if b2.button("Eliminar", use_container_width=True, disabled=not editing):
         if editing:
             bundles_svc.bundles.remove(editing["id"])
             st.session_state.pop("bundle_edit_id", None)
@@ -164,7 +164,7 @@ with st.expander(
 st.divider()
 
 # ─── Lista de paquetes existentes ───
-section(f"{len(bundles_list)} paquete(s) activo(s)", icon="📦")
+section(f"{len(bundles_list)} paquete(s) activo(s)")
 
 if not bundles_list:
     st.info("Aún no hay paquetes. Crea el primero arriba.")
@@ -185,16 +185,16 @@ else:
             cols[4].metric(
                 "Margen",
                 money(margin),
-                delta=("✓" if margin >= 0 else "✗"),
+                delta=("" if margin >= 0 else ""),
                 delta_color="normal" if margin >= 0 else "inverse",
             )
 
             tags = []
             if b.get("counts_as_wholesale"):
-                tags.append("🛒 cuenta para mayoreo")
+                tags.append("cuenta para mayoreo")
             tags.append(f"{len(items)} producto(s)")
-            st.caption(" · ".join(tags))
+            st.caption("·".join(tags))
 
-            if st.button("✏️ Editar", key=f"edit-{b['id']}"):
+            if st.button("Editar", key=f"edit-{b['id']}"):
                 st.session_state["bundle_edit_id"] = b["id"]
                 st.rerun()

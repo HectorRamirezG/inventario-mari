@@ -21,8 +21,8 @@ def _fmt_dt(ts: str | None) -> str:
         return ts[:16]
 
 
-page_setup("Historial", icon="📜")
-page_header("Historial", subtitle="Ventas, abonos y movimientos de stock", icon="📜")
+page_setup("Historial", icon="")
+page_header("Historial", subtitle="Ventas, abonos y movimientos de stock", icon="")
 
 
 @st.cache_data(ttl=10)
@@ -35,7 +35,7 @@ def _load_movements() -> list[dict]:
     return sales_svc.list_movements()
 
 
-tab_sales, tab_mov = st.tabs(["💰 Ventas", "📦 Movimientos de stock"])
+tab_sales, tab_mov = st.tabs(["Ventas", "Movimientos de stock"])
 
 # ════════════════════════════════════
 # TAB: VENTAS
@@ -45,7 +45,7 @@ with tab_sales:
 
     # Filtros
     f1, f2 = st.columns([2, 1])
-    q = f1.text_input("🔍 Buscar por cliente o producto", placeholder="Escribe para filtrar...")
+    q = f1.text_input("Buscar por cliente o producto", placeholder="Escribe para filtrar...")
     fstatus = f2.selectbox("Estado", ["Todas", "Pendientes", "Pagadas"])
 
     filtered = []
@@ -62,7 +62,7 @@ with tab_sales:
                 continue
         filtered.append(s)
 
-    section(f"{len(filtered)} venta(s)", icon="🧾")
+    section(f"{len(filtered)} venta(s)")
 
     if not filtered:
         st.info("Sin ventas que mostrar.")
@@ -82,7 +82,7 @@ with tab_sales:
             top[3].metric(
                 "Saldo",
                 money(balance),
-                delta=("⏳ pendiente" if is_pending else "✅ pagada"),
+                delta=("pendiente" if is_pending else "pagada"),
                 delta_color="inverse" if is_pending else "normal",
             )
 
@@ -117,7 +117,7 @@ with tab_sales:
                         step=10.0,
                         key=f"ab-{s['id']}",
                     )
-                    if a2.form_submit_button("💵 Registrar abono", type="primary", use_container_width=True):
+                    if a2.form_submit_button("Registrar abono", type="primary", use_container_width=True):
                         sales_svc.register_payment(s["id"], float(monto))
                         st.cache_data.clear()
                         st.success("Abono registrado")
@@ -128,7 +128,7 @@ with tab_sales:
 # ════════════════════════════════════
 with tab_mov:
     moves = _load_movements()
-    section(f"Últimos {len(moves)} movimientos", icon="🔄")
+    section(f"Últimos {len(moves)} movimientos", icon="")
 
     if not moves:
         st.info("Sin movimientos registrados.")

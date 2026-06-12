@@ -4,34 +4,26 @@ from __future__ import annotations
 
 import streamlit as st
 
+from core.style import apply_style, page_hero
 
-def page_setup(title: str, icon: str = "💄") -> None:
-    """Configuración base que TODAS las páginas usan: título, icono, layout consistente."""
+
+def page_setup(title: str) -> None:
+    """Configuración base que TODAS las páginas usan: título, layout consistente, CSS global."""
     st.set_page_config(
         page_title=f"{title} · Mari Inventario",
-        page_icon=icon,
+        page_icon="https://api.iconify.design/lucide:sparkles.svg?color=%23e6007e",
         layout="wide",
-        initial_sidebar_state="expanded",
+        initial_sidebar_state="auto",
     )
+    apply_style()
 
 
-def page_header(title: str, subtitle: str = "", icon: str = "💄") -> None:
-    """Cabecera homologada para todas las pantallas."""
-    col1, col2 = st.columns([1, 12])
-    with col1:
-        st.markdown(
-            f"<div style='font-size:42px;line-height:1;'>{icon}</div>",
-            unsafe_allow_html=True,
-        )
-    with col2:
-        st.markdown(f"### {title}")
-        if subtitle:
-            st.caption(subtitle)
-    st.divider()
+def page_header(title: str, subtitle: str = "", eyebrow: str = "MARI INVENTARIO") -> None:
+    """Cabecera homologada (sin emojis, estilo editorial con barra rosa)."""
+    page_hero(eyebrow=eyebrow, title=title, subtitle=subtitle)
 
 
 def money(value: float | int | None) -> str:
-    """Formato MXN consistente."""
     try:
         n = float(value or 0)
     except (TypeError, ValueError):
@@ -47,6 +39,15 @@ def money_int(value: float | int | None) -> str:
     return f"${n:,.0f}"
 
 
-def section(title: str, *, icon: str = "") -> None:
-    label = f"{icon} {title}".strip()
-    st.markdown(f"#### {label}")
+def section(title: str, *, caption: str = "") -> None:
+    """Título de sección con estilo consistente (eyebrow rosa)."""
+    st.markdown(
+        f"""
+        <div style="margin: 24px 0 12px;">
+            <div style="font-size: 0.7rem; font-weight: 800; letter-spacing: 0.18em;
+                        text-transform: uppercase; color: #e6007e;">{title}</div>
+            {f'<div style="font-size: 0.78rem; color: #94a3b8; margin-top: 2px;">{caption}</div>' if caption else ''}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )

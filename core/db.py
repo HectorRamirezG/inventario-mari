@@ -28,7 +28,7 @@ def get_client() -> Client:
     key = _get_credential("SUPABASE_ANON_KEY")
     if not url or not key:
         st.error(
-            "❌ Faltan credenciales de Supabase. "
+            "Faltan credenciales de Supabase. "
             "Configura `SUPABASE_URL` y `SUPABASE_ANON_KEY` en `.env` o en `.streamlit/secrets.toml`."
         )
         st.stop()

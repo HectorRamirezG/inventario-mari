@@ -12,14 +12,14 @@ import streamlit as st
 from core.services.dashboard import stats
 from core.ui import money, page_header, page_setup, section
 
-page_setup("Inicio", icon="💄")
+page_setup("Inicio", icon="")
 
 # ─── Sidebar marca ───
 with st.sidebar:
-    st.markdown("## 💄 Mari Inventario")
+    st.markdown("## Mari Inventario")
     st.caption("Gestión de inventario, ventas y precios")
     st.divider()
-    if st.button("🔄 Refrescar datos", use_container_width=True):
+    if st.button("Refrescar datos", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
@@ -27,7 +27,7 @@ with st.sidebar:
 page_header(
     "Resumen Financiero",
     subtitle="Estado actual de tu negocio en tiempo real",
-    icon="📊",
+    icon="",
 )
 
 
@@ -39,7 +39,7 @@ def _load() -> dict:
 data = _load()
 
 # ─── Métricas principales ───
-section("Capital", icon="💎")
+section("Capital", icon="")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Utilidad", money(data["profit"]))
 c2.metric("Ingresos", money(data["revenue"]))
@@ -47,12 +47,12 @@ c3.metric("Cobrado", money(data["paid"]))
 c4.metric(
     "Pendiente",
     money(data["pending"]),
-    delta=("⚠️ por cobrar" if data["pending"] > 0 else "todo al día"),
+    delta=("por cobrar" if data["pending"] > 0 else "todo al día"),
     delta_color="inverse" if data["pending"] > 0 else "normal",
 )
 
 st.write("")
-section("Operación", icon="⚡")
+section("Operación", icon="")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Ventas", data["operations"])
 c2.metric("Ticket promedio", money(data["ticket_avg"]))
@@ -66,7 +66,7 @@ st.divider()
 left, right = st.columns([2, 1])
 
 with left:
-    section("Ventas últimos 7 días", icon="📈")
+    section("Ventas últimos 7 días", icon="")
     if data["by_day"]:
         df = pd.DataFrame(
             sorted(data["by_day"].items()), columns=["Fecha", "Total"]
@@ -86,7 +86,7 @@ with left:
         st.info("Aún no hay ventas registradas. Ve a **Ventas** para crear la primera.")
 
 with right:
-    section("Top productos", icon="🏆")
+    section("Top productos", icon="")
     if data["top"]:
         for i, p in enumerate(data["top"], start=1):
             cols = st.columns([1, 4, 2])
@@ -100,7 +100,7 @@ st.divider()
 
 # ─── Stock bajo (alerta) ───
 if data["low_stock"]:
-    section("⚠️ Stock por reabastecer", icon="📦")
+    section("Stock por reabastecer", icon="")
     df = pd.DataFrame([
         {
             "Producto": (v.get("product") or {}).get("name") or "—",
@@ -112,4 +112,4 @@ if data["low_stock"]:
     ])
     st.dataframe(df, use_container_width=True, hide_index=True)
 else:
-    st.success("✅ Inventario sano: ningún producto bajo el mínimo.")
+    st.success("Inventario sano: ningún producto bajo el mínimo.")
