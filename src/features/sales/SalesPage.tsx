@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import {
   ShoppingCart,
   Plus,
@@ -59,6 +59,13 @@ export default function SalesPage() {
   const [search, setSearch] = useState("");
   const [showCustomer, setShowCustomer] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+
+  // Permite abrir el scanner desde otras partes (ej. CommandPalette)
+  useEffect(() => {
+    const handler = () => setScannerOpen(true);
+    window.addEventListener("sales:open-scanner", handler);
+    return () => window.removeEventListener("sales:open-scanner", handler);
+  }, []);
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();

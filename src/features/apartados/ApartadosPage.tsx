@@ -12,12 +12,14 @@ import {
   CheckCircle2,
   AlertTriangle,
   MessageCircle,
+  Receipt,
 } from "lucide-react";
 
 import { useApartados, type ApartadosFilter } from "./useApartados";
 import PaymentModal from "./PaymentModal";
 import Badge from "../../components/ui/Badge";
 import type { Sale } from "../../types/database";
+import { sendReceiptByWhatsApp } from "../../lib/receipt";
 
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", {
@@ -467,6 +469,14 @@ function SaleCard({
               <Wallet size={12} /> Abonar
             </motion.button>
           )}
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={() => sendReceiptByWhatsApp(sale)}
+            className="h-10 px-3 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 hover:bg-emerald-100 transition-colors"
+            title="Enviar recibo por WhatsApp"
+          >
+            <Receipt size={12} /> Recibo
+          </motion.button>
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={onCancel}

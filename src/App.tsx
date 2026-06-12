@@ -8,7 +8,9 @@ import {
   Tag,
   ShoppingCart,
   Sparkles,
-  Bookmark
+  Bookmark,
+  Plus,
+  Command
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
@@ -17,6 +19,7 @@ import DashboardPage from "./features/dashboard/DashboardPage"
 import SalesPage from "./features/sales/SalesPage"
 import ApartadosPage from "./features/apartados/ApartadosPage"
 import ThemeToggle from "./components/ui/ThemeToggle"
+import CommandPalette from "./components/ui/CommandPalette"
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
 
@@ -32,17 +35,31 @@ const TABS = [
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard")
+  const [paletteOpen, setPaletteOpen] = useState(false)
   // useTheme se llama para aplicar el tema al cargar
   useTheme()
   useGlobalShortcuts()
 
   useEffect(() => {
-    const handler = (e: any) => {
+    const navHandler = (e: any) => {
       const t = e.detail?.tab
       if (TABS.some(x => x.id === t)) setTab(t)
     }
-    window.addEventListener("app:navigate", handler)
-    return () => window.removeEventListener("app:navigate", handler)
+    window.addEventListener("app:navigate", navHandler)
+
+    // Cmd/Ctrl+K abre la paleta
+    const kbdHandler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault()
+        setPaletteOpen(p => !p)
+      }
+    }
+    window.addEventListener("keydown", kbdHandler)
+
+    return () => {
+      window.removeEventListener("app:navigate", navHandler)
+      window.removeEventListener("keydown", kbdHandler)
+    }
   }, [])
 
   return (
@@ -101,7 +118,31 @@ export default function App() {
             </LayoutGroup>
           </nav>
 
-          <ThemeToggle />
+          {/* Acciones derecha (siempre visibles, móvil + desktop) */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Paleta de comandos"
+              className="hidden md:inline-flex items-center gap-1.5 h-10 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
+              title="Comandos (⌘K)"
+            >
+              <Command size={13} />
+              <span className="text-[10px] font-black uppercase tracking-widest">
+                K
+              </span>
+            </button>
+
+            {/* Móvil: ícono compacto */}
+            <button
+              onClick={() => setPaletteOpen(true)}
+              aria-label="Paleta de comandos"
+              className="md:hidden w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center"
+            >
+              <Command size={14} />
+            </button>
+
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
@@ -126,6 +167,21 @@ export default function App() {
           </AnimatePresence>
         </div>
       </main>
+
+      {/* FAB MÓVIL — Nueva venta rápida */}
+      {tab !== "ventas" && (
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setTab("ventas")}
+          className="md:hidden fixed right-4 bottom-[4.5rem] z-40 w-14 h-14 rounded-2xl bg-primary text-white shadow-bloom flex items-center justify-center"
+          aria-label="Nueva venta"
+        >
+          <Plus size={24} strokeWidth={3} />
+        </motion.button>
+      )}
 
       {/* DOCK MÓVIL */}
       <nav className="md:hidden sticky bottom-0 w-full bg-white/90 backdrop-blur-2xl border-t border-slate-100 z-50">
@@ -158,6 +214,9 @@ export default function App() {
           </LayoutGroup>
         </div>
       </nav>
+
+      {/* COMMAND PALETTE */}
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   )
 }
