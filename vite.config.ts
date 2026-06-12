@@ -27,35 +27,19 @@ export default defineConfig({
             src: '/icon-192.svg',
             sizes: '192x192',
             type: 'image/svg+xml',
-            purpose: 'any maskable',
+            purpose: 'any',
           },
           {
             src: '/icon-512.svg',
             sizes: '512x512',
             type: 'image/svg+xml',
-            purpose: 'any maskable',
+            purpose: 'any',
           },
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
-        // Cache de Supabase: stale-while-revalidate para que la app abra
-        // rápido offline aunque los datos estén ligeramente desfasados.
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/[a-z0-9]+\.supabase\.co\/rest\/v1\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-rest',
-              networkTimeoutSeconds: 4,
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24, // 1 día
-              },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
+        globPatterns: ['**/*.{js,css,html,svg,ico,woff,woff2}'],
+        navigateFallbackDenylist: [/^\/api\//],
       },
       devOptions: {
         enabled: false,

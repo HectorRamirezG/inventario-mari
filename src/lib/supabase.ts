@@ -6,11 +6,11 @@ import { createClient } from "@supabase/supabase-js"
  * comillas, el constructor de supabase-js lo rechaza con un Error.
  */
 function sanitize(raw: string | undefined): string {
-  if (!raw) return ""
-  const markdown = raw.match(/\((https?:\/\/[^\s)]+)\)/i)
-  let v = markdown ? markdown[1] : raw
-  v = v.trim().replace(/^["'`<\[]+|["'`>\]]+$/g, "").trim()
-  return v
+    if (!raw) return ""
+    const markdown = raw.match(/\((https?:\/\/[^\s)]+)\)/i)
+    let v = markdown ? markdown[1] : raw
+    v = v.trim().replace(/^["'`<\[]+|["'`>\]]+$/g, "").trim()
+    return v
 }
 
 // Defaults seguros — la `publishable key` está diseñada para correr en el
