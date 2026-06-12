@@ -16,6 +16,9 @@ import PricingPage from "./features/pricing/PricingPage"
 import DashboardPage from "./features/dashboard/DashboardPage"
 import SalesPage from "./features/sales/SalesPage"
 import ApartadosPage from "./features/apartados/ApartadosPage"
+import ThemeToggle from "./components/ui/ThemeToggle"
+import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
+import { useTheme } from "./lib/useTheme"
 
 type Tab = "dashboard" | "inventario" | "ventas" | "apartados" | "precios"
 
@@ -29,6 +32,9 @@ const TABS = [
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("dashboard")
+  // useTheme se llama para aplicar el tema al cargar
+  useTheme()
+  useGlobalShortcuts()
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -65,7 +71,7 @@ export default function App() {
           </motion.div>
 
           {/* NAV HORIZONTAL EN DESKTOP */}
-          <nav className="hidden md:flex flex-1 justify-end">
+          <nav className="hidden md:flex flex-1 justify-center">
             <LayoutGroup id="desktop-nav">
               <div className="flex bg-slate-50 border border-slate-100 rounded-full p-1">
                 {TABS.map(t => {
@@ -94,6 +100,8 @@ export default function App() {
               </div>
             </LayoutGroup>
           </nav>
+
+          <ThemeToggle />
         </div>
       </header>
 

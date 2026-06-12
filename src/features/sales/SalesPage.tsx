@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
   ShoppingCart,
   Plus,
@@ -17,13 +17,17 @@ import {
   StickyNote,
   Bookmark,
   ChevronDown,
+  ScanLine,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import confetti from "canvas-confetti";
+import { toast } from "react-hot-toast";
 
 import { useSalesPage } from "./useSalesPage";
 import { TIER_LABEL } from "./salesTier";
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
+import BarcodeScanner from "../../components/ui/BarcodeScanner";
 
 const money = (n: number) =>
   new Intl.NumberFormat("es-MX", {
@@ -54,6 +58,7 @@ export default function SalesPage() {
   const { state, actions } = useSalesPage();
   const [search, setSearch] = useState("");
   const [showCustomer, setShowCustomer] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -65,6 +70,52 @@ export default function SalesPage() {
         (p.sku ?? "").toLowerCase().includes(q),
     );
   }, [search, state.results]);
+
+  /**
+   * Handler del scanner. Busca el SKU leído en el catálogo y lo agrega
+   * al carrito. Devuelve true para cerrar el scanner inmediatamente al
+   * encontrar match; si no se encuentra, deja el scanner abierto y avisa.
+   */
+  const handleScan = useCallback(
+    (code: string) => {
+      const norm = code.trim().toUpperCase();
+      const match = state.results.find(
+        (r: any) =>
+          (r.sku ?? "").toUpperCase() === norm ||
+          (r.variant_name ?? "").toUpperCase() === norm
+      );
+      if (match) {
+        actions.addToCart(match);
+        toast.success(`+ ${match.variant_name}`, { duration: 1500 });
+        return true; // cierra scanner
+      }
+      toast.error(`Código "${code}" no encontrado`, { duration: 2000 });
+      return false;
+    },
+    [state.results, actions]
+  );
+
+  /**
+   * Wrap del handleSave original para disparar confetti al cerrar
+   * la venta cobrada por completo (no en apartados).
+   */
+  const handleSaveWithFx = useCallback(async () => {
+    const wasFullyPaid = Number(state.balance) <= 0 && !state.isLayaway;
+    await actions.handleSave();
+    if (wasFullyPaid) {
+      // Confetti tipo "explosión doble" desde abajo
+      const fire = (origin: { x: number; y: number }) =>
+        confetti({
+          particleCount: 70,
+          spread: 80,
+          startVelocity: 45,
+          origin,
+          colors: ["#e6007e", "#ff6ab5", "#fbbf24", "#10b981"],
+        });
+      fire({ x: 0.25, y: 0.9 });
+      setTimeout(() => fire({ x: 0.75, y: 0.9 }), 200);
+    }
+  }, [actions, state.balance, state.isLayaway]);
 
   // Cuánto se ahorraría el cliente vs menudeo (sólo si hay tier mejor activo)
   const savings = useMemo(() => {
@@ -99,18 +150,28 @@ export default function SalesPage() {
             <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest shrink-0">
               Productos
             </h3>
-            <div className="relative flex-1 max-w-[180px]">
-              <Search
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-                size={11}
-              />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-slate-50 border-none rounded-lg py-1.5 pl-7 pr-2 text-[10px] font-bold focus:ring-2 focus:ring-primary/30 transition-all outline-none"
-              />
+            <div className="flex items-center gap-2 flex-1 justify-end">
+              <div className="relative flex-1 max-w-[180px]">
+                <Search
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={11}
+                />
+                <input
+                  type="text"
+                  placeholder="Buscar..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-slate-50 border-none rounded-lg py-1.5 pl-7 pr-2 text-[10px] font-bold focus:ring-2 focus:ring-primary/30 transition-all outline-none"
+                />
+              </div>
+              <button
+                onClick={() => setScannerOpen(true)}
+                aria-label="Escanear código"
+                className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center active:scale-90 transition-transform shadow-sm"
+                title="Escanear código de barras"
+              >
+                <ScanLine size={14} />
+              </button>
             </div>
           </div>
 
@@ -531,7 +592,7 @@ export default function SalesPage() {
             )}
 
             <Button
-              onClick={actions.handleSave}
+              onClick={handleSaveWithFx}
               disabled={
                 !state.customer.trim() ||
                 state.loading ||
@@ -554,6 +615,13 @@ export default function SalesPage() {
           </div>
         </section>
       </div>
+
+      {/* SCANNER (cámara fullscreen) */}
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleScan}
+      />
     </div>
   );
 }

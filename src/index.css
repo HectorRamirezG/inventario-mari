@@ -26,7 +26,7 @@
   --color-success: #10b981;
   --color-success-bg: #f0fdf4;
   --color-success-border: rgba(16, 185, 129, 0.2);
-  
+
   --color-danger: #ef4444;
   --color-danger-bg: #fef2f2;
   --color-danger-border: rgba(239, 68, 68, 0.2);
@@ -70,7 +70,7 @@
   body {
     @apply min-h-screen w-full antialiased overflow-x-hidden select-none;
     /* Mesh Gradient de fondo de estudio fotográfico */
-    background: 
+    background:
       radial-gradient(at 0% 0%, rgba(230, 0, 126, 0.08) 0%, transparent 40%),
       radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.05) 0%, transparent 40%),
       radial-gradient(at 100% 0%, #fdf2f8 0%, transparent 30%),
@@ -83,7 +83,7 @@
   /* Tipografía de Dashboard */
   h1 { @apply text-4xl font-black tracking-tighter leading-none mb-2; }
   h2 { @apply text-2xl font-black tracking-tight leading-tight; }
-  
+
   /* Scrollbar Invisible pero Funcional */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -133,7 +133,7 @@
   }
 
   .input-floating-label {
-    @apply absolute -top-2.5 left-5 px-2 bg-white rounded-full text-[10px] 
+    @apply absolute -top-2.5 left-5 px-2 bg-white rounded-full text-[10px]
            font-black uppercase tracking-widest text-primary shadow-sm z-10;
   }
 
@@ -225,7 +225,7 @@
 
 /* --- UTILIDADES DE DISEÑO AVANZADO --- */
 @layer utilities {
-  
+
   /* Animaciones */
   @keyframes slideUpFade {
     from { opacity: 0; transform: translateY(30px) scale(0.96); filter: blur(10px); }
@@ -244,16 +244,16 @@
 
   /* Micro-Clases de Estilo */
   .text-luxury { @apply bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-primary to-slate-900 bg-[length:200%_auto] hover:animate-[gradient_3s_linear_infinite]; }
-  
+
   @keyframes gradient {
     to { background-position: 200% center; }
   }
 
   .mask-top { mask-image: linear-gradient(to bottom, transparent, black 15%); }
-  
+
   /* Tipografía tabular para dinero */
   .font-money { font-variant-numeric: tabular-nums; letter-spacing: -0.05em; }
-  
+
   /* Efectos de Vidrio */
   .glass-frost { @apply bg-white/40 backdrop-blur-md border border-white/20 shadow-glass; }
   .glass-ink { @apply bg-slate-900/80 backdrop-blur-md border border-white/10 text-white; }
@@ -289,7 +289,7 @@
   /* Profundidades para que las ventanas parezcan flotar sobre el fondo */
   --shadow-deep: 0 50px 100px -20px rgba(0, 0, 0, 0.15), 0 30px 60px -30px rgba(0, 0, 0, 0.2);
   --shadow-surface: 0 2px 4px rgba(0,0,0,0.02), 0 1px 0 rgba(0,0,0,0.02);
-  
+
   /* Colores de "Vidrio Ahumado" para menús secundarios */
   --color-glass-dark: rgba(15, 23, 42, 0.8);
   --color-glass-light: rgba(255, 255, 255, 0.9);
@@ -304,14 +304,14 @@
 
   /* Tarjeta de "Resumen Rápido" (Kpi Card) */
   .kpi-card {
-    @apply flex flex-col p-5 bg-white border border-slate-100 rounded-xlsoft 
+    @apply flex flex-col p-5 bg-white border border-slate-100 rounded-xlsoft
            relative overflow-hidden shadow-surface transition-all duration-500
            hover:shadow-premium hover:-translate-y-1;
   }
 
   .kpi-card::after {
     content: '';
-    @apply absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full 
+    @apply absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full
            -mr-10 -mt-10 blur-2xl transition-opacity opacity-0;
   }
   .kpi-card:hover::after { @apply opacity-100; }
@@ -336,11 +336,11 @@
     @apply bg-white p-8 rounded-t-3xl rounded-b-[10px] shadow-premium relative
            border-x border-t border-slate-50;
   }
-  
+
   /* El borde dentado de abajo del ticket */
   .receipt-zigzag {
     @apply h-4 w-full bg-white relative overflow-hidden;
-    background-image: linear-gradient(-45deg, transparent 75%, #f8fafc 75%), 
+    background-image: linear-gradient(-45deg, transparent 75%, #f8fafc 75%),
                       linear-gradient(45deg, transparent 75%, #f8fafc 75%);
     background-size: 12px 24px;
     background-position: 0 0;
@@ -369,7 +369,7 @@
   }
   .glass-sweep::before {
     content: '';
-    @apply absolute top-0 h-full w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent 
+    @apply absolute top-0 h-full w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent
            -skew-x-12;
     animation: sweep 2s infinite linear;
   }
@@ -419,7 +419,7 @@
   /* El "Glass Morph" de Nueva Generación (Más transparente y brillante) */
   .glass-superlight {
     @apply bg-white/40 backdrop-blur-3xl border border-white/60 shadow-glass;
-    box-shadow: 
+    box-shadow:
       0 8px 32px 0 rgba(230, 0, 126, 0.03),
       inset 0 0 0 1px rgba(255, 255, 255, 0.4);
   }
@@ -507,6 +507,11 @@
     padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
   }
 
+  /* Padding superior que respeta el notch del iPhone */
+  .pt-safe {
+    padding-top: max(0.25rem, env(safe-area-inset-top));
+  }
+
   /* Scroll suave + inercia en iOS + scrollbar fina */
   .scroll-container-ios {
     -webkit-overflow-scrolling: touch;
@@ -550,4 +555,139 @@
     animation: pop-in 0.28s var(--ease-out-back) both;
   }
 
+}
+
+/* =====================================================================
+   19. DARK MODE
+   Toggle via <html data-theme="dark"> (lo maneja src/lib/useTheme.ts).
+   No tocamos las variables core; sobreescribimos clases utility de
+   Tailwind aplicadas en los componentes.
+===================================================================== */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(at 0% 0%, rgba(230, 0, 126, 0.18) 0%, transparent 45%),
+    radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.15) 0%, transparent 45%),
+    radial-gradient(at 100% 0%, rgba(15, 23, 42, 0.95) 0%, transparent 30%),
+    #060912;
+  color: #f1f5f9;
+}
+
+/* Backgrounds blancos → slate-900 */
+:root[data-theme="dark"] .bg-white,
+:root[data-theme="dark"] .bg-white\/80,
+:root[data-theme="dark"] .bg-white\/90,
+:root[data-theme="dark"] .bg-white\/70 {
+  background-color: #0f172a !important;
+}
+:root[data-theme="dark"] .bg-white\/60,
+:root[data-theme="dark"] .bg-white\/50,
+:root[data-theme="dark"] .bg-white\/40 {
+  background-color: rgba(15, 23, 42, 0.6) !important;
+}
+
+/* Cards y tonos suaves */
+:root[data-theme="dark"] .bg-slate-50,
+:root[data-theme="dark"] .bg-slate-50\/30,
+:root[data-theme="dark"] .bg-slate-50\/40,
+:root[data-theme="dark"] .bg-slate-50\/50,
+:root[data-theme="dark"] .bg-slate-50\/60,
+:root[data-theme="dark"] .bg-slate-50\/80 {
+  background-color: #111827 !important;
+}
+:root[data-theme="dark"] .bg-slate-100,
+:root[data-theme="dark"] .bg-slate-100\/50,
+:root[data-theme="dark"] .bg-slate-100\/60 {
+  background-color: #1e293b !important;
+}
+
+:root[data-theme="dark"] .bg-pink-50,
+:root[data-theme="dark"] .bg-pink-50\/30,
+:root[data-theme="dark"] .bg-pink-50\/50 {
+  background-color: rgba(230, 0, 126, 0.12) !important;
+}
+
+/* Borders */
+:root[data-theme="dark"] .border-slate-100,
+:root[data-theme="dark"] .border-slate-50,
+:root[data-theme="dark"] .border-pink-50,
+:root[data-theme="dark"] .border-pink-100 {
+  border-color: #1e293b !important;
+}
+:root[data-theme="dark"] .border-slate-200,
+:root[data-theme="dark"] .border-slate-200\/50,
+:root[data-theme="dark"] .border-slate-200\/60 {
+  border-color: #334155 !important;
+}
+
+/* Textos */
+:root[data-theme="dark"] .text-slate-900,
+:root[data-theme="dark"] .text-slate-800,
+:root[data-theme="dark"] .text-slate-700 {
+  color: #f1f5f9 !important;
+}
+:root[data-theme="dark"] .text-slate-600,
+:root[data-theme="dark"] .text-slate-500 {
+  color: #cbd5e1 !important;
+}
+:root[data-theme="dark"] .text-slate-400 {
+  color: #94a3b8 !important;
+}
+:root[data-theme="dark"] .text-slate-300 {
+  color: #64748b !important;
+}
+
+/* Tarjetas oscuras de stats / KPI */
+:root[data-theme="dark"] .bg-slate-900 {
+  background-color: #020617 !important;
+}
+
+/* Inputs */
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+  color: #f1f5f9;
+  caret-color: var(--color-primary);
+}
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+  color: #64748b;
+}
+
+/* Modal backdrop más oscuro */
+:root[data-theme="dark"] .bg-slate-900\/60 {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+}
+
+/* Scrollbars en dark */
+:root[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+/* Tarjetas con tonos de color (verde, amber, rojo) se mantienen */
+/* pero atenuadas para que no quemen los ojos */
+:root[data-theme="dark"] .bg-emerald-50,
+:root[data-theme="dark"] .bg-emerald-50\/30,
+:root[data-theme="dark"] .bg-emerald-50\/60 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+:root[data-theme="dark"] .bg-amber-50,
+:root[data-theme="dark"] .bg-amber-50\/30 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+:root[data-theme="dark"] .bg-rose-50,
+:root[data-theme="dark"] .bg-rose-50\/30,
+:root[data-theme="dark"] .bg-rose-50\/60 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+}
+:root[data-theme="dark"] .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+
+/* Transición suave al cambiar tema */
+html, body, .bg-white, .text-slate-900, .text-slate-800, .border-slate-100 {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
 }
