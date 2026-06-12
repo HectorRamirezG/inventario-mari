@@ -1,0 +1,500 @@
+@import "tailwindcss";
+
+@theme {
+  /* --- 1. CORE IDENTIDAD INTERSTELLAR --- */
+  --color-primary: #e6007e;
+  --color-primary-hover: #c4006b;
+  --color-primary-active: #a00058;
+  --color-primary-subtle: #fff0f7;
+  --color-primary-glass: rgba(230, 0, 126, 0.05);
+
+  --color-accent: #fdf2f8;
+  --color-accent-hover: #fce7f3;
+
+  /* Neutros de Grado Quirúrgico */
+  --color-slate-950: #020617;
+  --color-slate-900: #0f172a;
+  --color-slate-800: #1e293b;
+  --color-slate-700: #334155;
+  --color-slate-600: #475569;
+  --color-slate-400: #94a3b8;
+  --color-slate-200: #e2e8f0;
+  --color-slate-100: #f1f5f9;
+  --color-slate-50: #f8fafc;
+
+  /* Estados Semánticos de Alta Fidelidad */
+  --color-success: #10b981;
+  --color-success-bg: #f0fdf4;
+  --color-success-border: rgba(16, 185, 129, 0.2);
+  
+  --color-danger: #ef4444;
+  --color-danger-bg: #fef2f2;
+  --color-danger-border: rgba(239, 68, 68, 0.2);
+
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fffbeb;
+
+  --color-info: #3b82f6;
+  --color-info-bg: #eff6ff;
+
+  /* --- 2. GEOMETRÍA SAGRADA (RADII) --- */
+  --radius-brand: 3.5rem;   /* Para el shell exterior */
+  --radius-xlsoft: 2.25rem; /* Para tarjetas principales */
+  --radius-soft: 1.5rem;    /* Para botones e inputs */
+  --radius-inner: 1rem;     /* Para elementos dentro de tarjetas */
+  --radius-pill: 9999px;
+
+  /* --- 3. SISTEMA DE ILUMINACIÓN (SHADOWS) --- */
+  --shadow-premium: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+  --shadow-bloom: 0 20px 40px -8px rgba(230, 0, 126, 0.25);
+  --shadow-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+  --shadow-inner-soft: inset 0 2px 8px 0 rgba(0, 0, 0, 0.04);
+  --shadow-highlight: inset 0 1px 1px 0 rgba(255, 255, 255, 0.8);
+
+  /* --- 4. FLUIDEZ DE MOVIMIENTO --- */
+  --ease-in-out-expo: cubic-bezier(0.87, 0, 0.13, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-spring: cubic-bezier(0.5, 1.25, 0.75, 1.25);
+  --duration-premium: 500ms;
+}
+
+/* --- FOUNDATION & RESET --- */
+@layer base {
+  :root {
+    --sat: env(safe-area-inset-top);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+    --sar: env(safe-area-inset-right);
+  }
+
+  body {
+    @apply min-h-screen w-full antialiased overflow-x-hidden select-none;
+    /* Mesh Gradient de fondo de estudio fotográfico */
+    background: 
+      radial-gradient(at 0% 0%, rgba(230, 0, 126, 0.08) 0%, transparent 40%),
+      radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.05) 0%, transparent 40%),
+      radial-gradient(at 100% 0%, #fdf2f8 0%, transparent 30%),
+      #ffffff;
+    color: var(--color-slate-900);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Tipografía de Dashboard */
+  h1 { @apply text-4xl font-black tracking-tighter leading-none mb-2; }
+  h2 { @apply text-2xl font-black tracking-tight leading-tight; }
+  
+  /* Scrollbar Invisible pero Funcional */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-200/50 rounded-full transition-colors;
+  }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-primary/40; }
+}
+
+/* --- ARQUITECTURA DE COMPONENTES --- */
+@layer components {
+
+  /* Shell Principal para Móvil/Desktop Center */
+  .app-container {
+    @apply max-w-lg mx-auto min-h-screen flex flex-col relative;
+    padding-top: calc(1.5rem + var(--sat));
+    padding-bottom: calc(7.5rem + var(--sab));
+    padding-left: calc(1.25rem + var(--sal));
+    padding-right: calc(1.25rem + var(--sar));
+  }
+
+  /* --- EL "MODAL" DE PRECIOS (GLASSMORPHISM) --- */
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-2xl border border-white/50 rounded-xlsoft p-6 mb-6
+           shadow-premium relative transition-all duration-500 overflow-hidden;
+    animation: slideUpFade 0.8s var(--ease-out-back) backwards;
+  }
+
+  .glass-card:active { @apply scale-[0.98]; }
+
+  /* Indicador de "Item Seleccionado" */
+  .active-ring {
+    @apply absolute inset-0 rounded-xlsoft border-2 border-primary ring-8 ring-primary/5 pointer-events-none;
+  }
+
+  /* --- INPUTS DE NUEVA GENERACIÓN --- */
+  .input-field {
+    @apply h-16 w-full px-6 bg-slate-100/40 border border-slate-200/60 rounded-soft
+           text-lg font-bold text-slate-950 shadow-inner-soft transition-all duration-300
+           outline-none placeholder:text-slate-400 placeholder:font-medium
+           focus:bg-white focus:border-primary focus:ring-8 focus:ring-primary/5
+           focus:-translate-y-1 focus:shadow-xl;
+  }
+
+  .input-group {
+    @apply flex flex-col gap-2 mb-6 relative;
+  }
+
+  .input-floating-label {
+    @apply absolute -top-2.5 left-5 px-2 bg-white rounded-full text-[10px] 
+           font-black uppercase tracking-widest text-primary shadow-sm z-10;
+  }
+
+  /* --- GRID DE ESCALA DE PRECIOS --- */
+  .price-matrix {
+    @apply grid grid-cols-3 gap-3 bg-slate-50/80 p-3 rounded-xlsoft border border-slate-100;
+  }
+
+  .price-node {
+    @apply flex flex-col items-center justify-center py-4 px-2 rounded-inner bg-white
+           border border-slate-100 shadow-sm transition-all duration-300
+           cursor-pointer active:scale-90 hover:shadow-md hover:border-primary/20;
+  }
+
+  .price-node.selected {
+    @apply bg-primary text-white border-primary shadow-bloom scale-105 z-10;
+    animation: bounceSelect 0.4s var(--ease-spring);
+  }
+
+  .price-node.selected .node-label { @apply text-white/80; }
+  .price-node.selected .node-value { @apply text-white; }
+
+  .node-label { @apply text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1; }
+  .node-value { @apply text-sm font-black text-slate-900; }
+
+  /* --- BOTONES CON EFECTO MAGNÉTICO --- */
+  .btn-primary {
+    @apply h-16 px-10 bg-primary text-white font-black text-lg rounded-soft
+           flex items-center justify-center gap-3 shadow-bloom active:scale-95
+           transition-all duration-300 hover:brightness-110 relative overflow-hidden;
+  }
+
+  .btn-primary::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0
+           -translate-x-full transition-transform duration-700;
+  }
+  .btn-primary:hover::before { @apply translate-x-full; }
+
+  .btn-secondary {
+    @apply h-14 px-8 bg-white border-2 border-slate-100 text-slate-900 font-bold
+           rounded-soft flex items-center justify-center gap-2
+           hover:bg-slate-50 hover:border-primary/20 transition-all;
+  }
+
+  /* --- DOCK DE NAVEGACIÓN (APPLE STYLE) --- */
+  .apple-dock {
+    @apply fixed bottom-8 left-6 right-6 h-20 z-[100]
+           bg-white/80 backdrop-blur-3xl border border-white/40
+           shadow-[0_25px_60px_-15px_rgba(0,0,0,0.2)] rounded-brand
+           flex items-center justify-around px-4;
+  }
+
+  .dock-trigger {
+    @apply flex flex-col items-center justify-center w-14 h-14 rounded-2xl
+           text-slate-400 transition-all duration-500 relative;
+  }
+
+  .dock-trigger-active {
+    @apply text-primary bg-primary-subtle scale-110 shadow-inner-soft;
+  }
+
+  .dock-trigger-active::after {
+    content: '';
+    @apply absolute -top-1 w-1 h-1 bg-primary rounded-full;
+  }
+
+  /* --- WIDGETS DE ESTADÍSTICAS (MÁRGENES) --- */
+  .stat-pill {
+    @apply flex items-center gap-3 p-4 bg-white border border-slate-50 rounded-xl shadow-sm;
+  }
+
+  .stat-icon-box {
+    @apply w-12 h-12 rounded-inner flex items-center justify-center text-xl;
+  }
+
+  /* --- ESTADOS DE CARGA (SHIMMER) --- */
+  .skeleton {
+    @apply relative overflow-hidden bg-slate-100 rounded-lg;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+    animation: shimmer 1.8s infinite;
+  }
+
+}
+
+/* --- UTILIDADES DE DISEÑO AVANZADO --- */
+@layer utilities {
+  
+  /* Animaciones */
+  @keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(30px) scale(0.96); filter: blur(10px); }
+    to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  }
+
+  @keyframes shimmer {
+    100% { transform: translateX(100%); }
+  }
+
+  @keyframes bounceSelect {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1.05); }
+  }
+
+  /* Micro-Clases de Estilo */
+  .text-luxury { @apply bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-primary to-slate-900 bg-[length:200%_auto] hover:animate-[gradient_3s_linear_infinite]; }
+  
+  @keyframes gradient {
+    to { background-position: 200% center; }
+  }
+
+  .mask-top { mask-image: linear-gradient(to bottom, transparent, black 15%); }
+  
+  /* Tipografía tabular para dinero */
+  .font-money { font-variant-numeric: tabular-nums; letter-spacing: -0.05em; }
+  
+  /* Efectos de Vidrio */
+  .glass-frost { @apply bg-white/40 backdrop-blur-md border border-white/20 shadow-glass; }
+  .glass-ink { @apply bg-slate-900/80 backdrop-blur-md border border-white/10 text-white; }
+
+  /* Grid Helpers */
+  .grid-2 { @apply grid grid-cols-2 gap-4; }
+  .flex-between { @apply flex items-center justify-between; }
+
+}
+
+/* --- ADAPTACIÓN TABLET/DESKTOP --- */
+@media (min-width: 1024px) {
+  .app-container {
+    @apply max-w-4xl grid grid-cols-2 gap-8 py-12 px-0;
+  }
+  .apple-dock {
+    @apply left-auto right-12 bottom-12 w-20 h-auto flex-col py-6 gap-6;
+  }
+}
+
+/* --- ACCESIBILIDAD Y REDUCED MOTION --- */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- 10. SISTEMA DE CAPAS DE ELEVACIÓN (S-LEVELS) --- */
+@theme {
+  /* Profundidades para que las ventanas parezcan flotar sobre el fondo */
+  --shadow-deep: 0 50px 100px -20px rgba(0, 0, 0, 0.15), 0 30px 60px -30px rgba(0, 0, 0, 0.2);
+  --shadow-surface: 0 2px 4px rgba(0,0,0,0.02), 0 1px 0 rgba(0,0,0,0.02);
+  
+  /* Colores de "Vidrio Ahumado" para menús secundarios */
+  --color-glass-dark: rgba(15, 23, 42, 0.8);
+  --color-glass-light: rgba(255, 255, 255, 0.9);
+
+  /* Curvaturas ultra-orgánicas */
+  --radius-huge: 4rem;
+  --radius-smooth: 1.25rem;
+}
+
+/* --- 11. COMPONENTES DE ALTA COSTURA (HIGH-END UI) --- */
+@layer components {
+
+  /* Tarjeta de "Resumen Rápido" (Kpi Card) */
+  .kpi-card {
+    @apply flex flex-col p-5 bg-white border border-slate-100 rounded-xlsoft 
+           relative overflow-hidden shadow-surface transition-all duration-500
+           hover:shadow-premium hover:-translate-y-1;
+  }
+
+  .kpi-card::after {
+    content: '';
+    @apply absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full 
+           -mr-10 -mt-10 blur-2xl transition-opacity opacity-0;
+  }
+  .kpi-card:hover::after { @apply opacity-100; }
+
+  /* Badge de Stock (Crítico, Bajo, Lleno) */
+  .badge-stock {
+    @apply px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5;
+  }
+  .badge-stock-low { @apply bg-danger-bg text-danger border border-danger-border; }
+  .badge-stock-ok { @apply bg-success-bg text-success border border-success-border; }
+
+  /* Input de Búsqueda Estilo Spotlight (Apple) */
+  .search-spotlight {
+    @apply h-12 w-full bg-slate-100/50 backdrop-blur-md border-none rounded-full
+           px-12 text-sm font-bold text-slate-900 transition-all
+           placeholder:text-slate-400 focus:bg-white focus:ring-4 focus:ring-primary/10
+           shadow-inner-soft;
+  }
+
+  /* Contenedor de "Ticket de Venta" Virtual */
+  .receipt-container {
+    @apply bg-white p-8 rounded-t-3xl rounded-b-[10px] shadow-premium relative
+           border-x border-t border-slate-50;
+  }
+  
+  /* El borde dentado de abajo del ticket */
+  .receipt-zigzag {
+    @apply h-4 w-full bg-white relative overflow-hidden;
+    background-image: linear-gradient(-45deg, transparent 75%, #f8fafc 75%), 
+                      linear-gradient(45deg, transparent 75%, #f8fafc 75%);
+    background-size: 12px 24px;
+    background-position: 0 0;
+  }
+
+}
+
+/* --- 12. MICRO-ANIMACIONES DE SISTEMA --- */
+@layer utilities {
+
+  /* Aparecer con rebote (para modales) */
+  @keyframes popIn {
+    0% { transform: scale(0.9) opacity(0); }
+    70% { transform: scale(1.05); }
+    100% { transform: scale(1) opacity(1); }
+  }
+  .animate-pop { animation: popIn 0.4s var(--ease-out-back) forwards; }
+
+  /* Brillo que recorre la tarjeta (Skeleton Screen Pro) */
+  @keyframes sweep {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+  .glass-sweep {
+    @apply relative overflow-hidden;
+  }
+  .glass-sweep::before {
+    content: '';
+    @apply absolute top-0 h-full w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent 
+           -skew-x-12;
+    animation: sweep 2s infinite linear;
+  }
+
+  /* Mascara para que el scroll de la tabla se desvanezca arriba/abajo */
+  .mask-fade-y {
+    mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+  }
+
+  /* Estilo de fila "Zebra" Boutique */
+  .row-zebra:nth-child(even) {
+    @apply bg-primary-glass/30;
+  }
+
+  /* Tipografía de "Etiqueta de Precio" */
+  .text-price-tag {
+    @apply font-black tracking-tighter text-slate-900 flex items-baseline gap-0.5;
+  }
+  .text-price-currency {
+    @apply text-[10px] text-primary self-start mt-1;
+  }
+}
+
+/* --- 13. FIX PARA EL "TAP DELAY" EN MÓVIL --- */
+* {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Evitar que el zoom automático de iPhone rompa el layout en inputs */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* --- 14. TEXTURAS Y ACABADOS DE LUJO --- */
+@layer components {
+
+  /* Papel Micro-Texturizado (Para el fondo de tickets o facturas) */
+  .texture-paper {
+    @apply relative bg-white border border-slate-100 shadow-sm;
+    background-image: radial-gradient(#e2e8f0 0.5px, transparent 0.5px);
+    background-size: 10px 10px;
+  }
+
+  /* El "Glass Morph" de Nueva Generación (Más transparente y brillante) */
+  .glass-superlight {
+    @apply bg-white/40 backdrop-blur-3xl border border-white/60 shadow-glass;
+    box-shadow: 
+      0 8px 32px 0 rgba(230, 0, 126, 0.03),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+  }
+
+  /* Botón de "Confirmación Segura" (Con pulso de éxito) */
+  .btn-success-glow {
+    @apply h-14 w-full bg-emerald-500 text-white font-black rounded-soft
+           flex items-center justify-center gap-2 shadow-[0_10px_20px_rgba(16,185,129,0.3)]
+           active:scale-95 transition-all duration-300;
+  }
+
+  /* Joyería de Interfaz (Badges con relieve) */
+  .jewel-badge {
+    @apply px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest
+           border shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)] flex items-center gap-1.5;
+  }
+  .jewel-pink { @apply bg-primary text-white border-primary-hover shadow-bloom; }
+  .jewel-slate { @apply bg-slate-100 text-slate-500 border-slate-200; }
+
+}
+
+/* --- 15. MICRO-INTERACCIONES PARA EL PULGAR (MOBILE FIRST) --- */
+@layer utilities {
+
+  /* Efecto de "Hundido" al presionar (Súper táctil) */
+  .press-in {
+    @apply transition-transform active:scale-90 active:brightness-95;
+  }
+
+  /* Gradiente de Borde (Solo el borde brilla) */
+  .border-glow {
+    position: relative;
+    background: white;
+    background-clip: padding-box;
+    border: 1px solid transparent;
+  }
+  .border-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    margin: -1px;
+    border-radius: inherit;
+    background: linear-gradient(to right, var(--color-primary), var(--color-info));
+  }
+
+  /* Animación de Entrada "Staggered" (Para listas) */
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .animate-list-item {
+    animation: slideInRight 0.4s var(--ease-out-back) both;
+  }
+
+  /* Sombras de Color (Color-matched shadows) */
+  .shadow-pink-sm { shadow: 0 4px 14px 0 rgba(230, 0, 126, 0.15); }
+  .shadow-blue-sm { shadow: 0 4px 14px 0 rgba(59, 130, 246, 0.15); }
+
+}
+
+/* --- 16. MÁSCARAS DE VISUALIZACIÓN --- */
+.mask-squircle {
+  mask-image: url('data:image/svg+xml;utf8,<svg stroke="black" fill="black" stroke-width="0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C17.5 2 22 6.5 22 12C22 17.5 17.5 22 12 22C6.5 22 2 17.5 2 12C2 6.5 6.5 2 12 2Z"></path></svg>');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+/* --- 17. AJUSTES DE LECTURA (TIPS PARA MARI) --- */
+.text-balance {
+  text-wrap: balance;
+}
+
+.font-num-compact {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
