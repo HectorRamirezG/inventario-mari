@@ -15,8 +15,7 @@
 
     "types": ["vite/client", "vite-plugin-pwa/client"],
 
-    /* ESTO ES LO QUE ARREGLA EL ERROR DE SHADCN */
-    "baseUrl": ".",
+    /* TS 5+ resuelve `paths` relativo al tsconfig sin necesitar baseUrl */
     "paths": {
       "@/*": ["./src/*"]
     },
