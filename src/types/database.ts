@@ -28,4 +28,48 @@ export interface Product {
   variants?: Variant[];
 }
 
+export type SaleStatus = "paid" | "pending" | "cancelled";
+
+export interface SaleItem {
+  id: string;
+  sale_id: string;
+  variant_id: string | null;
+  product_id: string | null;
+  product_name: string | null;
+  variant_name: string | null;
+  qty: number;
+  tier: "menudeo" | "medio" | "mayoreo";
+  unit_price: number;
+  cost_snapshot: number;
+  profit: number;
+  is_bundle?: boolean;
+}
+
+export interface Payment {
+  id: string;
+  sale_id: string;
+  amount: number;
+  method?: string | null;
+  created_at: string;
+}
+
+export interface Sale {
+  id: string;
+  customer_name: string | null;
+  customer_phone?: string | null;
+  customer_address?: string | null;
+  customer_location?: string | null; // Google Maps URL o "lat,lng"
+  notes?: string | null;
+  due_date?: string | null;
+  is_layaway?: boolean;
+  total: number;
+  paid: number;
+  balance: number;
+  status: SaleStatus;
+  created_at: string;
+  // Relaciones embebidas (opcionales)
+  sale_items?: SaleItem[];
+  payments?: Payment[];
+}
+
 export {};

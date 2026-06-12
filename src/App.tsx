@@ -7,21 +7,24 @@ import {
   Package,
   Tag,
   ShoppingCart,
-  Sparkles
+  Sparkles,
+  Bookmark
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
 import PricingPage from "./features/pricing/PricingPage"
 import DashboardPage from "./features/dashboard/DashboardPage"
 import SalesPage from "./features/sales/SalesPage"
+import ApartadosPage from "./features/apartados/ApartadosPage"
 
-type Tab = "dashboard" | "inventario" | "precios" | "ventas"
+type Tab = "dashboard" | "inventario" | "ventas" | "apartados" | "precios"
 
 const TABS = [
   { id: "dashboard", label: "Inicio", icon: LayoutDashboard },
   { id: "inventario", label: "Stock", icon: Package },
-  { id: "precios", label: "Precios", icon: Tag },
-  { id: "ventas", label: "Ventas", icon: ShoppingCart }
+  { id: "ventas", label: "Ventas", icon: ShoppingCart },
+  { id: "apartados", label: "Apartados", icon: Bookmark },
+  { id: "precios", label: "Precios", icon: Tag }
 ] as const
 
 export default function App() {
@@ -108,8 +111,9 @@ export default function App() {
             >
               {tab === "dashboard" && <DashboardPage />}
               {tab === "inventario" && <InventoryPage />}
-              {tab === "precios" && <PricingPage />}
               {tab === "ventas" && <SalesPage />}
+              {tab === "apartados" && <ApartadosPage />}
+              {tab === "precios" && <PricingPage />}
             </motion.div>
           </AnimatePresence>
         </div>

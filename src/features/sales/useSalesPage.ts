@@ -26,9 +26,17 @@ export function useSalesPage() {
   const [config, setConfig] = useState<PricingConfig>(DEFAULT_CONFIG);
 
   const [variants, setVariants] = useState<any[]>([]);
-  const [customer, setCustomer] = useState("");
-  const [paid, setPaid] = useState<number | string>(0);
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  // --- Info del cliente / venta ---
+  const [customer, setCustomer] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [locationUrl, setLocationUrl] = useState("");
+  const [notes, setNotes] = useState("");
+  const [isLayaway, setIsLayaway] = useState(false);
+  const [paid, setPaid] = useState<number | string>(0);
+  const [capturingLocation, setCapturingLocation] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,7 +144,42 @@ export function useSalesPage() {
   const clearCart = useCallback(() => {
     setCart([]);
     setCustomer("");
+    setPhone("");
+    setAddress("");
+    setLocationUrl("");
+    setNotes("");
+    setIsLayaway(false);
     setPaid(0);
+  }, []);
+
+  /* ---------- Captura de GPS → Google Maps URL ---------- */
+  const captureLocation = useCallback(() => {
+    if (!("geolocation" in navigator)) {
+      toast.error("Tu navegador no soporta geolocalización");
+      return;
+    }
+    setCapturingLocation(true);
+    const toastId = toast.loading("Obteniendo ubicación...");
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        const url = `https://www.google.com/maps?q=${lat},${lng}`;
+        setLocationUrl(url);
+        setCapturingLocation(false);
+        toast.success("Ubicación capturada", { id: toastId });
+      },
+      (err) => {
+        setCapturingLocation(false);
+        const msg =
+          err.code === err.PERMISSION_DENIED
+            ? "Permiso de ubicación denegado"
+            : "No se pudo obtener la ubicación";
+        toast.error(msg, { id: toastId });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
   }, []);
 
   /* ---------- Guardar venta ---------- */
@@ -149,30 +192,56 @@ export function useSalesPage() {
       toast.error("Captura el nombre del cliente");
       return;
     }
+    // Apartado: requiere al menos algo de anticipo
+    if (isLayaway && Number(paid) <= 0) {
+      toast.error("Un apartado necesita anticipo");
+      return;
+    }
 
     setLoading(true);
-    const toastId = toast.loading("Procesando venta...");
+    const toastId = toast.loading(
+      isLayaway ? "Guardando apartado..." : "Procesando venta..."
+    );
 
     try {
       await createSale({
         customer: customer.trim(),
+        phone: phone.trim() || null,
+        address: address.trim() || null,
+        location: locationUrl.trim() || null,
+        notes: notes.trim() || null,
+        isLayaway,
         total,
         paid,
         balance,
         items: repricedCart,
       });
 
-      toast.success(
-        balance > 0 ? "Venta guardada (con saldo pendiente)" : "Venta cobrada",
-        { id: toastId }
-      );
+      const msg = isLayaway
+        ? "Apartado guardado"
+        : balance > 0
+        ? "Venta guardada (con saldo pendiente)"
+        : "Venta cobrada";
+      toast.success(msg, { id: toastId });
       clearCart();
     } catch (e: any) {
       toast.error(e?.message ?? "Error al guardar la venta", { id: toastId });
     } finally {
       setLoading(false);
     }
-  }, [repricedCart, customer, total, paid, balance, clearCart]);
+  }, [
+    repricedCart,
+    customer,
+    phone,
+    address,
+    locationUrl,
+    notes,
+    isLayaway,
+    total,
+    paid,
+    balance,
+    clearCart,
+  ]);
 
   return {
     state: {
@@ -181,6 +250,12 @@ export function useSalesPage() {
       total,
       balance,
       customer,
+      phone,
+      address,
+      locationUrl,
+      notes,
+      isLayaway,
+      capturingLocation,
       paid,
       loading,
       cartTier,
@@ -194,6 +269,12 @@ export function useSalesPage() {
       removeFromCart,
       clearCart,
       setCustomer,
+      setPhone,
+      setAddress,
+      setLocationUrl,
+      setNotes,
+      setIsLayaway,
+      captureLocation,
       setPaid,
       handleSave,
     },

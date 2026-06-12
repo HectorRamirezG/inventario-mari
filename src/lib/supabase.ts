@@ -2,35 +2,40 @@ import { createClient } from "@supabase/supabase-js"
 
 /**
  * Limpia basura común de copy-paste (corchetes de markdown, comillas,
- * espacios, paréntesis). Vercel guarda lo que sea que pegues; si el
- * valor venía de un enlace markdown como `[https://x](https://x)` o
- * con comillas, el constructor de supabase-js lo rechaza.
+ * espacios). Si vino como link markdown `[https://x](https://x)` o con
+ * comillas, el constructor de supabase-js lo rechaza con un Error.
  */
 function sanitize(raw: string | undefined): string {
   if (!raw) return ""
-  // Si vino con sintaxis markdown `[url](url)`, prefiere lo de adentro de ()
   const markdown = raw.match(/\((https?:\/\/[^\s)]+)\)/i)
   let v = markdown ? markdown[1] : raw
-  // Quita comillas envolventes y espacios/caracteres invisibles
   v = v.trim().replace(/^["'`<\[]+|["'`>\]]+$/g, "").trim()
   return v
 }
 
-const supabaseUrl = sanitize(import.meta.env.VITE_SUPABASE_URL as string | undefined)
-const supabaseAnonKey = sanitize(import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)
+// Defaults seguros — la `publishable key` está diseñada para correr en el
+// browser, así que embeberla como fallback NO es un riesgo de seguridad.
+// Esto evita que la app se rompa si las env vars de Vercel están mal.
+const DEFAULT_URL = "https://naxdlainnnkyctcisnew.supabase.co"
+const DEFAULT_ANON = "sb_publishable_UviL4QyL2c1Fiy5Dje5UkQ_se2lCZWB"
 
-// Validación temprana con mensajes que apuntan al problema real.
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    "Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY. " +
-      "Configúralas en Vercel (Settings → Environment Variables) o en .env.local."
+let supabaseUrl = sanitize(import.meta.env.VITE_SUPABASE_URL as string | undefined)
+let supabaseAnonKey = sanitize(import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)
+
+if (!supabaseUrl || !/^https?:\/\//i.test(supabaseUrl)) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[supabase] VITE_SUPABASE_URL inválida (${JSON.stringify(supabaseUrl)}). ` +
+      `Usando default ${DEFAULT_URL}. Arregla la env var en Vercel.`
   )
+  supabaseUrl = DEFAULT_URL
 }
-if (!/^https?:\/\//i.test(supabaseUrl)) {
-  throw new Error(
-    `VITE_SUPABASE_URL inválida: "${supabaseUrl}". ` +
-      "Debe empezar con https:// y NO llevar corchetes, comillas ni paréntesis."
+if (!supabaseAnonKey) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[supabase] VITE_SUPABASE_ANON_KEY faltante. Usando publishable default."
   )
+  supabaseAnonKey = DEFAULT_ANON
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
