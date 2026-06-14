@@ -13,42 +13,26 @@ import {
   AlertTriangle,
   MessageCircle,
   Receipt,
+  Printer,
 } from "lucide-react";
 
 import { useApartados, type ApartadosFilter } from "./useApartados";
 import PaymentModal from "./PaymentModal";
+import TicketView from "../../components/ui/TicketView";
 import Badge from "../../components/ui/Badge";
 import type { Sale } from "../../types/database";
 import { sendReceiptByWhatsApp } from "../../lib/receipt";
-
-const money = (n: number) =>
-  new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    minimumFractionDigits: 0,
-  }).format(n || 0);
-
-const dateFmt = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-const daysSince = (iso: string) => {
-  const ms = Date.now() - new Date(iso).getTime();
-  return Math.max(0, Math.floor(ms / 86400000));
-};
-
-const cleanPhone = (raw?: string | null) =>
-  (raw ?? "").replace(/[^\d]/g, "");
+import {
+  formatMoney,
+  formatDateTime,
+  daysSince,
+  cleanPhone,
+  intlPhone,
+} from "../../lib/format";
 
 const waLink = (raw?: string | null) => {
-  const p = cleanPhone(raw);
-  if (!p) return null;
-  // Asume MX (+52) si no trae código país
-  return `https://wa.me/${p.length === 10 ? "52" + p : p}`;
+  const p = intlPhone(raw);
+  return p ? `https://wa.me/${p}` : null;
 };
 
 const FILTERS: { id: ApartadosFilter; label: string; tone: string }[] = [
@@ -60,6 +44,7 @@ const FILTERS: { id: ApartadosFilter; label: string; tone: string }[] = [
 export default function ApartadosPage() {
   const { state, actions } = useApartados();
   const [selected, setSelected] = useState<Sale | null>(null);
+  const [ticketSale, setTicketSale] = useState<Sale | null>(null);
 
   return (
     <div className="px-3 pt-1 pb-28 max-w-5xl mx-auto">
@@ -74,7 +59,7 @@ export default function ApartadosPage() {
             {state.totals.count}{" "}
             {state.totals.count === 1 ? "venta" : "ventas"} ·{" "}
             <span className="text-rose-500">
-              {money(state.totals.balance)} por cobrar
+              {formatMoney(state.totals.balance)} por cobrar
             </span>
           </p>
         </div>
@@ -88,9 +73,9 @@ export default function ApartadosPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <Kpi label="Por cobrar" value={money(state.totals.balance)} tone="rose" />
-        <Kpi label="Cobrado" value={money(state.totals.paid)} tone="emerald" />
-        <Kpi label="Total" value={money(state.totals.total)} tone="slate" />
+        <Kpi label="Por cobrar" value={formatMoney(state.totals.balance)} tone="rose" />
+        <Kpi label="Cobrado" value={formatMoney(state.totals.paid)} tone="emerald" />
+        <Kpi label="Total" value={formatMoney(state.totals.total)} tone="slate" />
       </div>
 
       {/* CONTROLES */}
@@ -178,6 +163,7 @@ export default function ApartadosPage() {
                 key={sale.id}
                 sale={sale}
                 onPay={() => setSelected(sale)}
+                onTicket={() => setTicketSale(sale)}
                 onCancel={() => actions.handleCancelSale(sale.id)}
               />
             ))}
@@ -190,6 +176,12 @@ export default function ApartadosPage() {
         sale={selected}
         onClose={() => setSelected(null)}
         onPay={actions.handleAddPayment}
+      />
+
+      <TicketView
+        open={!!ticketSale}
+        sale={ticketSale}
+        onClose={() => setTicketSale(null)}
       />
     </div>
   );
@@ -224,10 +216,12 @@ function Kpi({
 function SaleCard({
   sale,
   onPay,
+  onTicket,
   onCancel,
 }: {
   sale: Sale;
   onPay: () => void;
+  onTicket: () => void;
   onCancel: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -290,7 +284,7 @@ function SaleCard({
           </div>
           <p className="text-[8px] font-bold text-slate-400 flex items-center gap-1">
             <Clock size={9} />
-            {dateFmt.format(new Date(sale.created_at))}
+            {formatDateTime(sale.created_at)}
             {!isPaid && !isCancelled && days >= 7 && (
               <span className="ml-2 text-rose-500 font-black flex items-center gap-1">
                 <AlertTriangle size={9} />
@@ -309,7 +303,7 @@ function SaleCard({
               balance > 0 ? "text-rose-500" : "text-emerald-600"
             }`}
           >
-            {money(balance)}
+            {formatMoney(balance)}
           </p>
         </div>
       </div>
@@ -318,7 +312,7 @@ function SaleCard({
       <div className="mb-3">
         <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">
           <span>
-            {money(sale.paid)} / {money(sale.total)}
+            {formatMoney(sale.paid)} / {formatMoney(sale.total)}
           </span>
           <span>{progress.toFixed(0)}%</span>
         </div>
@@ -419,7 +413,7 @@ function SaleCard({
                         </span>
                       </div>
                       <span className="font-black tabular-nums shrink-0">
-                        {money(it.qty * it.unit_price)}
+                        {formatMoney(it.qty * it.unit_price)}
                       </span>
                     </div>
                   ))}
@@ -440,13 +434,13 @@ function SaleCard({
                       className="flex items-center justify-between text-[10px] bg-emerald-50 rounded-lg px-2 py-1.5"
                     >
                       <span className="text-slate-600">
-                        {dateFmt.format(new Date(p.created_at))}{" "}
+                        {formatDateTime(p.created_at)}{" "}
                         <span className="text-slate-400 uppercase text-[8px] font-black">
                           {p.method ?? "efectivo"}
                         </span>
                       </span>
                       <span className="font-black tabular-nums text-emerald-700">
-                        +{money(p.amount)}
+                        +{formatMoney(p.amount)}
                       </span>
                     </div>
                   ))}
@@ -471,18 +465,26 @@ function SaleCard({
           )}
           <motion.button
             whileTap={{ scale: 0.96 }}
+            onClick={onTicket}
+            className="h-10 px-3 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 hover:bg-slate-700 transition-colors"
+            title="Ver ticket / imprimir / enviar"
+          >
+            <Printer size={12} /> Ticket
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
             onClick={() => sendReceiptByWhatsApp(sale)}
             className="h-10 px-3 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 hover:bg-emerald-100 transition-colors"
             title="Enviar recibo por WhatsApp"
           >
-            <Receipt size={12} /> Recibo
+            <Receipt size={12} />
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={onCancel}
             className="h-10 px-3 rounded-xl bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
           >
-            <XCircle size={12} /> Cancelar
+            <XCircle size={12} />
           </motion.button>
         </div>
       )}

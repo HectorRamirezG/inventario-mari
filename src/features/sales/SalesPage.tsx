@@ -29,14 +29,14 @@ import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
 import BarcodeScanner from "../../components/ui/BarcodeScanner";
 
-const money = (n: number) =>
-  new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    minimumFractionDigits: 0,
-  }).format(n || 0);
-
-const TIER_TONE: Record<string, { bg: string; text: string; ring: string }> = {
+import { useSalesPage } from "./useSalesPage";
+import { TIER_LABEL } from "./salesTier";
+import Button from "../../components/ui/Button";
+import Badge from "../../components/ui/Badge";
+import BarcodeScanner from "../../components/ui/BarcodeScanner";
+import TicketView from "../../components/ui/TicketView";
+import { formatMoney } from "../../lib/format";
+import { sound } from "../../lib/sound";const TIER_TONE: Record<string, { bg: string; text: string; ring: string }> = {
   menudeo: {
     bg: "bg-slate-100",
     text: "text-slate-600",
@@ -93,9 +93,11 @@ export default function SalesPage() {
       );
       if (match) {
         actions.addToCart(match);
+        sound.scan();
         toast.success(`+ ${match.variant_name}`, { duration: 1500 });
         return true; // cierra scanner
       }
+      sound.error();
       toast.error(`Código "${code}" no encontrado`, { duration: 2000 });
       return false;
     },
@@ -146,7 +148,7 @@ export default function SalesPage() {
           Venta Activa
         </h2>
         <p className="text-sm font-black text-primary tabular-nums">
-          {money(state.total)}
+          {formatMoney(state.total)}
         </p>
       </div>
 
@@ -227,7 +229,7 @@ export default function SalesPage() {
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs font-black italic tabular-nums">
-                        {money(r.price_menudeo || r.price)}
+                        {formatMoney(r.price_menudeo || r.price)}
                       </p>
                       <p
                         className={`text-[8px] font-bold uppercase ${
@@ -298,7 +300,7 @@ export default function SalesPage() {
                   <span
                     className={`text-[9px] font-black tabular-nums ${tone.text}`}
                   >
-                    Ahorras {money(savings)}
+                    Ahorras {formatMoney(savings)}
                   </span>
                 )}
               </div>
@@ -362,7 +364,7 @@ export default function SalesPage() {
                           {item.name}
                         </p>
                         <p className="text-[8px] font-bold text-slate-400 tabular-nums">
-                          {money(item.price)} c/u
+                          {formatMoney(item.price)} c/u
                         </p>
                       </div>
 
@@ -392,7 +394,7 @@ export default function SalesPage() {
 
                       <div className="text-right min-w-[60px]">
                         <p className="text-sm font-black text-slate-900 tabular-nums">
-                          {money(item.qty * item.price)}
+                          {formatMoney(item.qty * item.price)}
                         </p>
                       </div>
 
@@ -583,7 +585,7 @@ export default function SalesPage() {
                 Total
               </span>
               <p className="text-xl font-black text-white tabular-nums">
-                {money(state.total)}
+                {formatMoney(state.total)}
               </p>
             </div>
 
@@ -646,7 +648,7 @@ export default function SalesPage() {
                     balanceNum > 0 ? "text-rose-500" : "text-emerald-500"
                   }
                 >
-                  {money(Math.abs(balanceNum))}
+                  {formatMoney(Math.abs(balanceNum))}
                 </span>
               </div>
             )}
@@ -681,6 +683,13 @@ export default function SalesPage() {
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onScan={handleScan}
+      />
+
+      {/* TICKET de la última venta cerrada */}
+      <TicketView
+        open={!!state.lastSale}
+        sale={state.lastSale}
+        onClose={actions.dismissLastSale}
       />
     </div>
   );

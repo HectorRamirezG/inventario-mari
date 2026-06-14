@@ -14,6 +14,8 @@ import {
   type CartItem,
 } from "./salesTier";
 import type { PricingConfig } from "../pricing/pricingTypes";
+import type { Sale } from "../../types/database";
+import { sound } from "../../lib/sound";
 
 const DEFAULT_CONFIG: PricingConfig = {
   id: 1,
@@ -47,6 +49,10 @@ export function useSalesPage() {
   const [customerSuggestions, setCustomerSuggestions] = useState<
     CustomerSnapshot[]
   >([]);
+
+  // --- Última venta cerrada (para mostrar ticket) ---
+  const [lastSale, setLastSale] = useState<Sale | null>(null);
+  const dismissLastSale = useCallback(() => setLastSale(null), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,6 +310,7 @@ export function useSalesPage() {
       nextTierHint,
       config,
       customerSuggestions,
+      lastSale,
     },
     actions: {
       addToCart,
@@ -321,6 +328,7 @@ export function useSalesPage() {
       setPaid,
       handleSave,
       pickCustomer,
+      dismissLastSale,
     },
   };
 }

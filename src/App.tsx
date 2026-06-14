@@ -10,7 +10,8 @@ import {
   Sparkles,
   Bookmark,
   Plus,
-  Command
+  Command,
+  Settings as SettingsIcon
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
@@ -18,6 +19,7 @@ import PricingPage from "./features/pricing/PricingPage"
 import DashboardPage from "./features/dashboard/DashboardPage"
 import SalesPage from "./features/sales/SalesPage"
 import ApartadosPage from "./features/apartados/ApartadosPage"
+import SettingsPage from "./features/settings/SettingsPage"
 import ThemeToggle from "./components/ui/ThemeToggle"
 import CommandPalette from "./components/ui/CommandPalette"
 import PinGate from "./components/ui/PinGate"
@@ -25,7 +27,7 @@ import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
 import { useRole } from "./lib/useRole"
 
-type Tab = "dashboard" | "inventario" | "ventas" | "apartados" | "precios"
+type Tab = "dashboard" | "inventario" | "ventas" | "apartados" | "precios" | "settings"
 
 const TABS = [
   { id: "dashboard", label: "Inicio", icon: LayoutDashboard, adminOnly: false },
@@ -171,6 +173,19 @@ function AppShell() {
               <Command size={14} />
             </button>
 
+            <button
+              onClick={() => setTab("settings")}
+              aria-label="Configuración"
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
+                tab === "settings"
+                  ? "bg-primary/10 text-primary"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              }`}
+              title="Configuración"
+            >
+              <SettingsIcon size={14} />
+            </button>
+
             <ThemeToggle />
           </div>
         </div>
@@ -192,7 +207,8 @@ function AppShell() {
               {tab === "inventario" && <InventoryPage />}
               {tab === "ventas" && <SalesPage />}
               {tab === "apartados" && <ApartadosPage />}
-              {tab === "precios" && <PricingPage />}
+              {tab === "precios" && isAdmin && <PricingPage />}
+              {tab === "settings" && <SettingsPage />}
             </motion.div>
           </AnimatePresence>
         </div>

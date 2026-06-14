@@ -13,6 +13,7 @@ import {
   Sun,
   RefreshCcw,
   Sparkles,
+  Settings,
 } from "lucide-react"
 import { useTheme } from "../../lib/useTheme"
 
@@ -100,6 +101,14 @@ export default function CommandPalette({ open, onClose }: Props) {
         shortcut: "5",
         group: "Navegación",
         run: () => navigate("precios"),
+      },
+      {
+        id: "go-settings",
+        label: "Configuración",
+        hint: "Tienda y PINs",
+        icon: Settings,
+        group: "Navegación",
+        run: () => navigate("settings"),
       },
       // ── Acciones ──────────────────────────────
       {

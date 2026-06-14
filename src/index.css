@@ -545,6 +545,33 @@
     min-height: 44px;
   }
 
+  /* Input estándar para pantallas de configuración */
+  .settings-input {
+    width: 100%;
+    height: 2.75rem;
+    padding: 0 0.75rem;
+    border-radius: 0.75rem;
+    background: rgb(248 250 252 / 1);
+    border: 1px solid rgb(241 245 249 / 1);
+    font-weight: 700;
+    font-size: 11px;
+    outline: none;
+    transition: all 0.15s ease;
+  }
+  .settings-input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(230, 0, 126, 0.15);
+  }
+  .settings-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  :root[data-theme="dark"] .settings-input {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f1f5f9;
+  }
+
   /* Animación de entrada al hacer pop (carrito, modales pequeños) */
   @keyframes pop-in {
     0% { transform: scale(0.92); opacity: 0; }
@@ -690,4 +717,41 @@
 /* Transición suave al cambiar tema */
 html, body, .bg-white, .text-slate-900, .text-slate-800, .border-slate-100 {
   transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+/* =====================================================================
+   20. PRINT — Ticket térmico 80mm
+   Cuando se imprime el ticket, escondemos todo lo demás y centramos
+   sólo el área #ticket-printable a tamaño de impresora térmica.
+===================================================================== */
+@media print {
+  @page {
+    margin: 4mm;
+    size: 80mm auto; /* impresora térmica común; en PDF da página angosta */
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+  #ticket-printable,
+  #ticket-printable * {
+    visibility: visible !important;
+  }
+  #ticket-printable {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 76mm !important;
+    margin: 0 !important;
+    padding: 4mm !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    font-family: 'Inter', 'Helvetica', monospace !important;
+  }
+  /* Asegura que los toasts/portals no aparezcan */
+  .Toaster,
+  [data-radix-portal] {
+    display: none !important;
+  }
 }
