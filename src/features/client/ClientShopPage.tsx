@@ -26,8 +26,9 @@ import { formatMoney } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
 import { sound } from "../../lib/sound"
 import SmartLocationInput from "../../components/ui/SmartLocationInput"
-import ImageCarousel from "../../components/ui/ImageCarousel"
+import VariantImageCarousel from "../../components/ui/VariantImageCarousel"
 import Skeleton from "../../components/ui/Skeleton"
+import BuySheet, { type BuySheetProduct } from "./BuySheet"
 import {
   useTierThresholds,
   tierForQty,
@@ -141,6 +142,9 @@ export default function ClientShopPage() {
   const [openGuestForm, setOpenGuestForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [guest, setGuest] = useState<GuestInfo>(() => loadGuest())
+
+  // Bottom Sheet de compra (estilo Shein): se abre con el botón "+" de la card
+  const [buySheetProduct, setBuySheetProduct] = useState<PublicProduct | null>(null)
 
   // Si el usuario está logueado, prellena con sus datos
   useEffect(() => {
@@ -283,6 +287,47 @@ export default function ClientShopPage() {
       ]
     })
     toast.success(`+ ${p.name}`, { duration: 1500 })
+  }
+
+  /** Recibe el batch del BuySheet (varias variantes con sus cantidades) */
+  function addBatchToCart(
+    p: PublicProduct,
+    lines: { variantId: string; qty: number }[]
+  ) {
+    if (lines.length === 0) return
+    let added = 0
+    setCart((prev) => {
+      const next = [...prev]
+      for (const { variantId, qty } of lines) {
+        const v = p.variants.find((vv) => vv.id === variantId)
+        if (!v) continue
+        const safeQty = Math.min(qty, v.stock)
+        if (safeQty <= 0) continue
+        added += safeQty
+        const ix = next.findIndex((c) => c.variant_id === variantId)
+        if (ix >= 0) {
+          next[ix] = { ...next[ix], qty: safeQty } // sobrescribe (no acumula): el sheet ya muestra el total
+        } else {
+          next.push({
+            variant_id: v.id,
+            product_id: p.id,
+            product_name: p.name,
+            variant_name: v.variant_name,
+            image_url:
+              (v.image_urls && v.image_urls[0]) ?? v.image_url ?? p.image_url,
+            unit_price: priceOf(v),
+            qty: safeQty,
+            stock: v.stock,
+          })
+        }
+      }
+      return next
+    })
+    sound.success()
+    toast.success(`✨ +${added} ${added === 1 ? "pieza" : "piezas"} al carrito`, {
+      duration: 1600,
+    })
+    setBuySheetProduct(null)
   }
 
   function changeQty(variantId: string, delta: number) {
@@ -499,7 +544,7 @@ export default function ClientShopPage() {
                 key={p.id}
                 product={p}
                 mode={viewMode}
-                onAdd={addToCart}
+                onOpenBuy={() => setBuySheetProduct(p)}
               />
             ))}
           </motion.div>
@@ -813,6 +858,45 @@ export default function ClientShopPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Bottom Sheet de compra: se abre al tocar el "+" de una card */}
+      <BuySheet
+        open={!!buySheetProduct}
+        product={
+          buySheetProduct
+            ? ({
+                id: buySheetProduct.id,
+                name: buySheetProduct.name,
+                category: buySheetProduct.category,
+                image_url: buySheetProduct.image_url,
+                variants: buySheetProduct.variants.map((v) => ({
+                  id: v.id,
+                  product_id: v.product_id,
+                  variant_name: v.variant_name,
+                  stock: v.stock,
+                  price: priceOf(v),
+                  image_url:
+                    (v.image_urls && v.image_urls[0]) ??
+                    v.image_url ??
+                    buySheetProduct.image_url,
+                })),
+              } as BuySheetProduct)
+            : null
+        }
+        initialQty={
+          buySheetProduct
+            ? Object.fromEntries(
+                cart
+                  .filter((c) => c.product_id === buySheetProduct.id)
+                  .map((c) => [c.variant_id, c.qty])
+              )
+            : undefined
+        }
+        onClose={() => setBuySheetProduct(null)}
+        onConfirm={(lines) => {
+          if (buySheetProduct) addBatchToCart(buySheetProduct, lines)
+        }}
+      />
     </div>
   )
 }
@@ -847,12 +931,13 @@ function FieldInput({
 function ProductCardClient({
   product,
   mode = "grid",
-  onAdd,
+  onOpenBuy,
 }: {
   product: PublicProduct
   mode?: "focus" | "grid" | "list"
-  onAdd: (p: PublicProduct, v: PublicVariant) => void
+  onOpenBuy: () => void
 }) {
+  // Variante visible (sincronizada con el carrusel: cambia al swipe y al clic en chip)
   const [selected, setSelected] = useState<string | null>(
     product.variants[0]?.id ?? null
   )
@@ -865,21 +950,30 @@ function ProductCardClient({
 
   const out = variant.stock <= 0
 
-  // Galería: prioriza image_urls de la variante; fallback a image_url
-  const gallery: string[] = (() => {
-    const fromVariant =
-      variant.image_urls && variant.image_urls.length > 0
-        ? variant.image_urls
-        : variant.image_url
-        ? [variant.image_url]
-        : []
-    if (fromVariant.length > 0) return fromVariant
-    if (product.image_url) return [product.image_url]
-    return []
-  })()
+  // "Slices" para VariantImageCarousel: cada variante aporta sus fotos
+  const carouselVariants = product.variants
+    .map((v) => {
+      const imgs =
+        v.image_urls && v.image_urls.length > 0
+          ? v.image_urls
+          : v.image_url
+          ? [v.image_url]
+          : []
+      return { id: v.id, name: v.variant_name, images: imgs }
+    })
+    .filter((v) => v.images.length > 0)
+
+  // Fallback: si NINGÚN variant tiene fotos, caémos al image_url del producto
+  const carouselSafe =
+    carouselVariants.length > 0
+      ? carouselVariants
+      : product.image_url
+      ? [{ id: variant.id, name: variant.variant_name, images: [product.image_url] }]
+      : []
 
   /* ───────── LIST MODE: fila horizontal compacta ───────── */
   if (mode === "list") {
+    const cover = carouselSafe[0]?.images[0]
     return (
       <motion.div
         layoutId={`card-${product.id}`}
@@ -888,13 +982,16 @@ function ProductCardClient({
         transition={{ type: "spring", stiffness: 320, damping: 28 }}
         className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow overflow-hidden flex items-stretch"
       >
-        <motion.div
+        <motion.button
+          type="button"
+          onClick={onOpenBuy}
           layoutId={`img-${product.id}`}
           className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-700/50"
+          aria-label={`Ver ${product.name}`}
         >
-          {gallery[0] ? (
+          {cover ? (
             <img
-              src={gallery[0]}
+              src={cover}
               alt={product.name}
               loading="lazy"
               className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
@@ -904,33 +1001,16 @@ function ProductCardClient({
               <Package size={22} />
             </div>
           )}
-        </motion.div>
+        </motion.button>
         <div className="flex-1 min-w-0 p-2.5 flex flex-col justify-between">
           <div className="min-w-0">
             <p className="text-xs font-black truncate" title={product.name}>
               {product.name}
             </p>
             {product.variants.length > 1 && (
-              <div className="flex gap-1 flex-wrap mt-0.5">
-                {product.variants.slice(0, 4).map((v) => (
-                  <button
-                    key={v.id}
-                    onClick={() => setSelected(v.id)}
-                    className={`px-1.5 py-0 rounded-full text-[8px] font-bold transition-colors ${
-                      v.id === selected
-                        ? "bg-primary text-white"
-                        : "bg-slate-100 dark:bg-slate-700 text-slate-500"
-                    }`}
-                  >
-                    {v.variant_name}
-                  </button>
-                ))}
-                {product.variants.length > 4 && (
-                  <span className="text-[8px] font-bold text-slate-400">
-                    +{product.variants.length - 4}
-                  </span>
-                )}
-              </div>
+              <p className="text-[9px] font-bold text-slate-400">
+                {product.variants.length} tonos disponibles
+              </p>
             )}
           </div>
           <div className="flex items-center justify-between gap-2">
@@ -948,11 +1028,10 @@ function ProductCardClient({
               )}
             </span>
             <button
-              onClick={() => onAdd(product, variant)}
-              disabled={out}
-              className="w-8 h-8 rounded-full text-white flex items-center justify-center disabled:opacity-30 shadow-bloom active:scale-90 transition-transform shrink-0"
+              onClick={onOpenBuy}
+              className="w-8 h-8 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform shrink-0"
               style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
-              aria-label="Agregar al carrito"
+              aria-label="Elegir tonos"
             >
               <Plus size={13} strokeWidth={3} />
             </button>
@@ -962,32 +1041,33 @@ function ProductCardClient({
     )
   }
 
-  /* ───────── GRID & FOCUS: tarjeta clásica con foto cuadrada ───────── */
+  /* ───────── GRID & FOCUS: tarjeta con carrusel agrupado por variante ───────── */
   const isFocus = mode === "focus"
 
   return (
     <motion.div
       layoutId={`card-${product.id}`}
-      whileTap={{ scale: 0.98 }}
+      whileTap={{ scale: 0.99 }}
       layout
       transition={{ type: "spring", stiffness: 280, damping: 26 }}
       className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
     >
       <motion.div layoutId={`img-${product.id}`} className="relative">
-        <ImageCarousel
-          images={gallery}
-          alt={product.name}
+        <VariantImageCarousel
+          variants={carouselSafe}
+          selectedVariantId={selected}
+          onVariantChange={setSelected}
           aspect={isFocus ? "4/3" : "1/1"}
-          enableFullscreen
+          onTap={onOpenBuy}
           className="rounded-none"
         />
         {out && (
-          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
+          <span className="absolute top-2 right-12 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
             Agotado
           </span>
         )}
         {!out && variant.stock <= 3 && (
-          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
+          <span className="absolute top-2 right-12 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
             ¡Últimas {variant.stock}!
           </span>
         )}
@@ -1034,13 +1114,12 @@ function ProductCardClient({
             {formatMoney(price)}
           </span>
           <button
-            onClick={() => onAdd(product, variant)}
-            disabled={out}
+            onClick={onOpenBuy}
             className={`${
               isFocus ? "w-11 h-11" : "w-9 h-9"
-            } rounded-full text-white flex items-center justify-center disabled:opacity-30 shadow-bloom active:scale-90 transition-transform`}
+            } rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform`}
             style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
-            aria-label="Agregar al carrito"
+            aria-label="Elegir tonos"
           >
             <Plus size={14} strokeWidth={3} />
           </button>

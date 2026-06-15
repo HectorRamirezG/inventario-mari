@@ -3,12 +3,37 @@ import type { DashboardStats } from "./dashboardTypes"; // Agregamos 'type' por 
 
 export async function getDashboardStats():Promise<DashboardStats>{
 
-const [pCount,vCount,low,salesData,itemsData]=await Promise.all([
+// Umbral para "vencen en 5 días"
+const soon = new Date()
+soon.setDate(soon.getDate() + 5)
+const soonIso = soon.toISOString().slice(0, 10) // YYYY-MM-DD
+
+const [pCount,vCount,low,salesData,itemsData,shipments,dueLayaways,pendingProofs]=await Promise.all([
 supabase.from("products").select("*",{count:"exact",head:true}).eq("is_active",true),
 supabase.from("variants").select("*",{count:"exact",head:true}).eq("is_active",true),
 supabase.from("variants").select(`stock,is_active,products:products(min_stock,is_active)`),
 supabase.from("sales").select("total,balance"),
-supabase.from("sale_items").select("profit,product_name,qty")
+supabase.from("sale_items").select("profit,product_name,qty"),
+// 1) Pedidos por preparar/enviar: pagados (balance=0) + foráneos + no cancelados
+supabase
+  .from("sales")
+  .select("id", { count: "exact", head: true })
+  .eq("is_foreign_shipping", true)
+  .eq("balance", 0)
+  .neq("status", "cancelled"),
+// 2) Recordatorios de cobro: apartados con saldo y due_date ≤ 5 días
+supabase
+  .from("sales")
+  .select("id", { count: "exact", head: true })
+  .eq("is_layaway", true)
+  .gt("balance", 0)
+  .lte("apartado_due_date", soonIso)
+  .neq("status", "cancelled"),
+// 3) Comprobantes pendientes
+supabase
+  .from("payment_proofs")
+  .select("id", { count: "exact", head: true })
+  .eq("status", "pending"),
 ])
 
 const lowStockCount=(low.data as any[]||[]).filter(x=>
@@ -37,7 +62,10 @@ revenue,
 profit,
 pending,
 operations:salesData.data?.length??0,
-top
+top,
+pendingShipments: shipments.count ?? 0,
+dueLayaways: dueLayaways.count ?? 0,
+pendingProofs: pendingProofs.count ?? 0,
 }
 
 }

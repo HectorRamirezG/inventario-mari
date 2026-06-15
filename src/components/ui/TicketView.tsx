@@ -236,6 +236,11 @@ export default function TicketView({ open, sale, onClose }: Props) {
                         *** PAGADO ***
                       </p>
                     )}
+                    {adj > 0 && (
+                      <p className="text-center text-[10px] font-black uppercase tracking-widest text-emerald-600 mt-1">
+                        🎉 Descuento aplicado: {formatMoneyExact(adj)}
+                      </p>
+                    )}
                   </div>
                 )
               })()}

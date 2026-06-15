@@ -276,6 +276,25 @@ export default function PublicTicketPage() {
                     bold
                   />
                 )}
+                {/* Badge festivo de descuento manual */}
+                {adj > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ type: "spring", stiffness: 320, damping: 22, delay: 0.15 }}
+                    className="mt-3 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700"
+                  >
+                    <span className="text-base" aria-hidden>🎉</span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-widest leading-tight">
+                        ¡Se aplicó un descuento manual!
+                      </p>
+                      <p className="text-[10px] font-bold leading-tight opacity-80">
+                        Mari te apoyó con {formatMoney(adj)} en este pedido ✨
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
               </div>
             )
           })()}

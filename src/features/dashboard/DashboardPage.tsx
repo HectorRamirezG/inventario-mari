@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import {
   RefreshCw, Trophy, AlertTriangle, ArrowUpRight, Target, Zap,
-  ShoppingCart, Star, Wallet, Sun
+  ShoppingCart, Star, Wallet, Sun, Package, Bell, FileCheck2
 } from "lucide-react"
 import {
   ResponsiveContainer, AreaChart, Area, XAxis,
@@ -90,6 +90,13 @@ export default function DashboardPage() {
 
         {/* BANNER DE CICLO ACTIVO */}
         <CycleBanner />
+
+        {/* 3 CARDS DE ACCESO RÁPIDO (operaciones del día) */}
+        <DailyOpsCards
+          shipments={stats?.pendingShipments ?? 0}
+          dueLayaways={stats?.dueLayaways ?? 0}
+          proofs={stats?.pendingProofs ?? 0}
+        />
 
         {/* RESUMEN */}
         <TabsContent value="resumen" className="space-y-6">
@@ -237,5 +244,123 @@ function StatCard({ icon, value, label, alert }: any) {
       <p className="text-lg font-black">{value}</p>
       <p className="text-[9px] uppercase text-slate-400">{label}</p>
     </Card>
+  )
+}
+
+/* DAILY OPS — 3 cards de acceso rápido a los pendientes operativos */
+function DailyOpsCards({
+  shipments,
+  dueLayaways,
+  proofs,
+}: {
+  shipments: number
+  dueLayaways: number
+  proofs: number
+}) {
+  const dispatch = (tab: string) =>
+    window.dispatchEvent(new CustomEvent("app:navigate", { detail: { tab } }))
+
+  const items = [
+    {
+      key: "shipments",
+      label: "Pedidos por enviar",
+      hint: "Pagados foráneos listos",
+      icon: Package,
+      count: shipments,
+      tone:
+        shipments > 0
+          ? "from-sky-500 to-cyan-400 text-white"
+          : "from-slate-100 to-slate-50 text-slate-400",
+      onClick: () => dispatch("pendientes"),
+    },
+    {
+      key: "due",
+      label: "Recordatorios cobro",
+      hint: "Vencen en ≤ 5 días",
+      icon: Bell,
+      count: dueLayaways,
+      tone:
+        dueLayaways > 0
+          ? "from-amber-500 to-orange-400 text-white"
+          : "from-slate-100 to-slate-50 text-slate-400",
+      onClick: () => dispatch("pendientes"),
+    },
+    {
+      key: "proofs",
+      label: "Comprobantes",
+      hint: "Por verificar",
+      icon: FileCheck2,
+      count: proofs,
+      tone:
+        proofs > 0
+          ? "from-fuchsia-500 to-pink-500 text-white"
+          : "from-slate-100 to-slate-50 text-slate-400",
+      onClick: () => dispatch("pendientes"),
+    },
+  ]
+
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      {items.map(({ key, label, hint, icon: Icon, count, tone, onClick }) => {
+        const has = count > 0
+        return (
+          <motion.button
+            key={key}
+            type="button"
+            onClick={onClick}
+            whileTap={{ scale: 0.97 }}
+            whileHover={{ y: -2 }}
+            transition={{ type: "spring", stiffness: 320, damping: 22 }}
+            className={`relative rounded-2xl p-3 sm:p-4 text-left bg-gradient-to-br ${tone} border ${
+              has ? "border-white/30 shadow-bloom" : "border-slate-200/60"
+            } overflow-hidden`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <Icon
+                size={16}
+                strokeWidth={2.5}
+                className={has ? "opacity-95" : ""}
+              />
+              {has && (
+                <motion.span
+                  key={count}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 18 }}
+                  className="text-[9px] font-black uppercase tracking-widest bg-white/25 backdrop-blur px-1.5 py-0.5 rounded-full"
+                >
+                  ¡Ahora!
+                </motion.span>
+              )}
+            </div>
+            <p className="text-2xl sm:text-3xl font-black tabular-nums leading-none">
+              {count}
+            </p>
+            <p
+              className={`text-[10px] font-black uppercase tracking-widest mt-1 ${
+                has ? "opacity-90" : "opacity-70"
+              }`}
+            >
+              {label}
+            </p>
+            <p
+              className={`text-[8px] font-bold mt-0.5 ${
+                has ? "opacity-80" : "opacity-60"
+              }`}
+            >
+              {hint}
+            </p>
+            {has && (
+              <motion.span
+                aria-hidden
+                animate={{ scale: [1, 1.4, 1], opacity: [0.25, 0, 0.25] }}
+                transition={{ duration: 2.8, repeat: Infinity }}
+                className="absolute -top-2 -right-2 w-12 h-12 rounded-full bg-white/30"
+              />
+            )}
+          </motion.button>
+        )
+      })}
+    </div>
   )
 }
