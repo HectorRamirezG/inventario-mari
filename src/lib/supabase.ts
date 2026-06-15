@@ -48,5 +48,40 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    // PKCE es más seguro en móvil y maneja mejor los redirects de
+    // magic link / OAuth. Sin esto, en iOS Safari el callback a veces
+    // dejaba la sesión en un limbo.
+    flowType: "pkce",
+    storageKey: "mari.auth",
+  },
+  realtime: {
+    // Throttle interno; suficiente para nuestro volumen y evita
+    // gastar quota cuando hay muchos toasts simultáneos.
+    params: { eventsPerSecond: 5 },
+    heartbeatIntervalMs: 25_000,
+  },
+  global: {
+    headers: { "x-mari-client": "web-v2" },
   },
 })
+
+// ──────────────────────────────────────────────────────────
+// Refresco automático cuando la app vuelve a foco
+// ──────────────────────────────────────────────────────────
+// En móvil, después de cambiar de app y volver, Supabase a veces
+// queda con un token expirado. Forzamos un getSession() al volver
+// a foco para que onAuthStateChange dispare el refresh.
+if (typeof window !== "undefined") {
+  let lastCheck = 0
+  const refreshIfNeeded = () => {
+    const now = Date.now()
+    if (now - lastCheck < 5_000) return // throttle 5s
+    lastCheck = now
+    supabase.auth.getSession().catch(() => {/* silencio */})
+  }
+  window.addEventListener("focus", refreshIfNeeded)
+  window.addEventListener("online", refreshIfNeeded)
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshIfNeeded()
+  })
+}

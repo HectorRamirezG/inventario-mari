@@ -47,6 +47,7 @@ import CyclesPage from "./features/cycles/CyclesPage"
 import ThemeToggle from "./components/ui/ThemeToggle"
 import CommandPalette from "./components/ui/CommandPalette"
 import ActionHub, { type HubAction } from "./components/ui/ActionHub"
+import NotificationBell from "./components/ui/NotificationBell"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
@@ -387,6 +388,7 @@ function AdminShell() {
               >
                 <Command size={14} />
               </button>
+              <NotificationBell />
               <ThemeToggle />
               <button
                 onClick={() => signOut()}
@@ -420,6 +422,7 @@ function AdminShell() {
               ⌘K
             </kbd>
           </button>
+          <NotificationBell />
         </header>
 
         {/* ─── CONTENIDO ─── */}
@@ -592,6 +595,7 @@ function ShopShell() {
             </div>
           </Link>
           <div className="flex items-center gap-2 shrink-0">
+            {isLogged && <NotificationBell />}
             <ThemeToggle />
             {showAdminLink && (
               <Link

@@ -3,6 +3,7 @@ import { toast } from "react-hot-toast"
 import { Tag, Hash, Package, Sparkles } from "lucide-react"
 import Modal from "../../components/ui/Modal"
 import Button from "../../components/ui/Button"
+import ProductImageUploader from "../../components/ui/ProductImageUploader"
 import { updateVariant } from "./productService"
 import type { Variant } from "../../types/database"
 
@@ -22,6 +23,7 @@ export default function EditVariantModal({
   const [name, setName] = useState("")
   const [sku, setSku] = useState("")
   const [stock, setStock] = useState<number | "">("")
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -29,6 +31,7 @@ export default function EditVariantModal({
       setName(variant.variant_name ?? "")
       setSku(variant.sku ?? "")
       setStock(variant.stock ?? 0)
+      setImageUrl(variant.image_url ?? null)
     }
   }, [variant, open])
 
@@ -41,7 +44,8 @@ export default function EditVariantModal({
       await updateVariant(variant.id, {
         variant_name: name.trim(),
         sku: sku.trim() || null,
-        stock: Number(stock)
+        stock: Number(stock),
+        image_url: imageUrl,
       })
       toast.success("Actualizado")
       onSaved()
@@ -74,6 +78,14 @@ export default function EditVariantModal({
 
         {/* FORM */}
         <div className="flex flex-col gap-4">
+
+          {/* FOTO DE LA VARIANTE */}
+          <ProductImageUploader
+            value={imageUrl}
+            onChange={(url) => setImageUrl(url)}
+            folder={`variants/${variant?.id ?? "new"}`}
+            label="Foto de esta variante"
+          />
 
           {/* NOMBRE */}
           <div className="flex flex-col gap-1">

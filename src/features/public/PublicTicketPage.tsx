@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react"
-import { useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
   Sparkles, Receipt, CheckCircle2, Clock, ArrowRight,
-  CreditCard, MessageCircle,
+  CreditCard, MessageCircle, ArrowLeft, Home,
 } from "lucide-react"
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
+import { useAuth, isStaffOrAdmin } from "../../lib/useAuth"
 
 interface TicketItem {
   id: string
@@ -43,10 +44,19 @@ interface PublicTicket {
 
 export default function PublicTicketPage() {
   const { token } = useParams<{ token: string }>()
+  const navigate = useNavigate()
+  const { session, role } = useAuth()
   const [ticket, setTicket] = useState<PublicTicket | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const store = getStoreInfo()
+
+  /** Vuelve a un home contextual según el usuario logueado. */
+  const goHome = () => {
+    if (session && isStaffOrAdmin(role)) navigate("/admin")
+    else if (session) navigate("/mis-pedidos")
+    else navigate("/")
+  }
 
   useEffect(() => {
     if (!token) {
@@ -92,6 +102,13 @@ export default function PublicTicketPage() {
         <Receipt size={48} className="text-slate-300 mb-3" />
         <h1 className="text-xl font-black mb-1">Ticket no disponible</h1>
         <p className="text-sm text-slate-500">{error ?? "Enlace inválido o caducado."}</p>
+        <button
+          onClick={goHome}
+          className="mt-6 h-11 px-5 rounded-2xl text-white text-xs font-black uppercase tracking-widest shadow-bloom inline-flex items-center gap-2"
+          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+        >
+          <Home size={14} /> Ir al inicio
+        </button>
       </div>
     )
   }
@@ -104,6 +121,19 @@ export default function PublicTicketPage() {
       background: "radial-gradient(at 0% 0%, rgba(230,0,126,0.08) 0%, transparent 40%), radial-gradient(at 100% 100%, rgba(168,85,247,0.08) 0%, transparent 40%), #fafafa"
     }}>
       <div className="max-w-md mx-auto">
+        {/* Botón volver (siempre visible para que nunca quede atrapado) */}
+        <button
+          onClick={goHome}
+          className="mb-3 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-primary transition-colors"
+        >
+          <ArrowLeft size={12} />
+          {session
+            ? isStaffOrAdmin(role)
+              ? "Volver al panel"
+              : "Mis pedidos"
+            : "Volver a la tienda"}
+        </button>
+
         {/* Brand */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}

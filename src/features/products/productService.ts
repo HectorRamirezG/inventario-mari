@@ -56,7 +56,18 @@ export async function updateProduct(productId: string, patch: Partial<Product>) 
 
 export async function updateVariant(
   variantId: string,
-  patch: Partial<Pick<Variant, "variant_name" | "sku" | "cost_override" | "price" | "is_active">>
+  patch: Partial<
+    Pick<
+      Variant,
+      | "variant_name"
+      | "sku"
+      | "cost_override"
+      | "price"
+      | "is_active"
+      | "stock"
+      | "image_url"
+    >
+  >
 ) {
   const { error } = await supabase
     .from("variants")

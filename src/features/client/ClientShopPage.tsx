@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Search,
@@ -93,6 +94,7 @@ function saveGuest(g: GuestInfo) {
  * los datos se guardan en localStorage para no pedirlos de nuevo.
  */
 export default function ClientShopPage() {
+  const navigate = useNavigate()
   const { email: authEmail, fullName: authName, session } = useAuth()
   const isLogged = !!session
 
@@ -276,8 +278,8 @@ export default function ClientShopPage() {
       setCart([])
       setOpenGuestForm(false)
       setOpenCart(false)
-      // Redirige al ticket público
-      window.location.href = `/ticket/${sale.public_token ?? sale.id}`
+      // Navegación SPA hacia el ticket público (no reload)
+      navigate(`/ticket/${sale.public_token ?? sale.id}`)
     } catch (e: any) {
       toast.error(e?.message ?? "No se pudo apartar", { id: tid })
     } finally {
