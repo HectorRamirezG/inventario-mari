@@ -1,174 +1,132 @@
 -- =============================================================
 -- 0018_fix_shipping_and_support.sql
--- Fecha: 2026-06-15
+-- Fecha: 2026-06-15  (revisión 2 — alineado al schema REAL)
 --
--- Sincroniza el schema de Supabase con lo que el frontend YA
--- está leyendo y escribiendo:
---   1. sales.is_foreign_shipping  (boolean)
---   2. sales.shipping_amount      (numeric)  ← NO shipping_cost
---   3. tabla support_tickets       (idempotente)
---   4. RPC create_support_ticket   (devuelve uuid, no json)
---   5. RPC update_support_ticket_status
+-- Diagnóstico real (basado en introspection de Supabase):
+--   ✅ public.sales.is_foreign_shipping  ya existe (boolean, nullable)
+--   ✅ public.sales.shipping_amount      ya existe (numeric, nullable)
+--   ✅ public.support_tickets            ya existe (text libre, sin CHECK)
+--   ✅ create_support_ticket(p_sale_id, p_category, p_description,
+--                            p_image_url) → uuid  ya existe
+--   ✅ update_support_ticket_status(p_ticket_id, p_status) → void
+--                                                    ya existe
 --
--- Es idempotente: se puede correr varias veces sin romper nada.
--- Al final hace NOTIFY pgrst para que PostgREST refresque su
--- schema cache y desaparezcan los 400 / 404.
+-- Entonces los 400/404 NO son por columnas/funciones faltantes,
+-- son por:
+--   1. PostgREST tiene su schema cache pegado → NOTIFY pgrst
+--   2. Posiblemente faltan GRANT EXECUTE para anon en el RPC
+--   3. Posiblemente falta política RLS de INSERT para anon en
+--      support_tickets (los clientes anónimos del /ticket/:token
+--      no están autenticados)
+--   4. Filas viejas con NULL en is_foreign_shipping / shipping_amount
+--      hacen ruido en dashboards/recibos
+--
+-- Este script NO recrea tablas, NO recrea funciones, NO fuerza
+-- NOT NULL ni CHECK rígidos. Solo limpia, asegura permisos y
+-- refresca el cache. Es 100% idempotente.
 -- =============================================================
 
+
 -- -------------------------------------------------------------
--- 1) Columnas faltantes en sales
+-- 1) Backfill defensivo + DEFAULT en sales
+--    No tocamos NOT NULL para no romper filas históricas; sólo
+--    estandarizamos NULL → valor neutro y le ponemos default
+--    para futuros inserts que no manden el campo.
 -- -------------------------------------------------------------
--- El cart del cliente (ClientShopPage) y los tickets (TicketView,
--- PublicTicketPage, receipt.ts) ya leen/escriben estos campos.
+update public.sales
+   set is_foreign_shipping = false
+ where is_foreign_shipping is null;
+
+update public.sales
+   set shipping_amount = 0
+ where shipping_amount is null;
+
 alter table public.sales
-  add column if not exists is_foreign_shipping boolean not null default false;
+  alter column is_foreign_shipping set default false;
 
 alter table public.sales
-  add column if not exists shipping_amount numeric(12, 2) not null default 0;
-
--- Backfill defensivo por si la columna existía sin NOT NULL:
-update public.sales set is_foreign_shipping = coalesce(is_foreign_shipping, false);
-update public.sales set shipping_amount     = coalesce(shipping_amount, 0);
-
-comment on column public.sales.is_foreign_shipping is
-  'Switch del cart del cliente para envío foráneo (mensajería/paquetería).';
-comment on column public.sales.shipping_amount is
-  'Costo de envío sumado al total. Lo calcula el cart y lo usa receipt.ts y TicketView.';
+  alter column shipping_amount set default 0;
 
 
 -- -------------------------------------------------------------
--- 2) Tabla support_tickets (sólo se crea si no existe)
+-- 2) RLS en support_tickets
+--    La tabla YA existe. Solo aseguramos que RLS esté activo y
+--    que existan las dos políticas mínimas:
+--    - SELECT para authenticated  (panel admin/staff)
+--    - INSERT para anon + authenticated  (clientes del ticket
+--      público que NO están autenticados)
 -- -------------------------------------------------------------
-create table if not exists public.support_tickets (
-  id            uuid primary key default gen_random_uuid(),
-  sale_id       uuid null references public.sales(id) on delete set null,
-  customer_name  text null,
-  customer_email text null,
-  customer_phone text null,
-  category      text not null check (category in ('damaged','shipping','comment')),
-  description   text not null,
-  image_url     text null,
-  status        text not null default 'open'
-                check (status in ('open','in_progress','resolved')),
-  resolved_at   timestamptz null,
-  resolved_by   uuid null,
-  created_at    timestamptz not null default now()
-);
-
-create index if not exists support_tickets_status_created_idx
-  on public.support_tickets (status, created_at desc);
-
-create index if not exists support_tickets_sale_idx
-  on public.support_tickets (sale_id);
-
 alter table public.support_tickets enable row level security;
 
--- Lectura autenticada (la UI admin filtra por rol en cliente; si
--- ya tienes una política de role=admin más fina, déjala y borra ésta).
 do $$
 begin
   create policy support_tickets_authed_read
-    on public.support_tickets for select
+    on public.support_tickets
+    for select
     to authenticated
     using (true);
 exception when duplicate_object then null;
 end $$;
 
-
--- -------------------------------------------------------------
--- 3) RPC create_support_ticket
---    Firma EXACTA que llama src/features/support/supportService.ts:
---      supabase.rpc("create_support_ticket", {
---        p_sale_id, p_category, p_description, p_image_url
---      })
---    El frontend hace `return data as string` → debe devolver uuid.
---    SECURITY DEFINER para permitir que clientes anónimos del ticket
---    público (rol `anon`) puedan reportar sin tocar la tabla directo.
--- -------------------------------------------------------------
-create or replace function public.create_support_ticket(
-  p_sale_id     uuid,
-  p_category    text,
-  p_description text,
-  p_image_url   text default null
-)
-returns uuid
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  new_id  uuid;
-  v_name  text;
-  v_email text;
-  v_phone text;
+do $$
 begin
-  -- Validaciones
-  if p_category is null or p_category not in ('damaged','shipping','comment') then
-    raise exception 'Categoría inválida: %', p_category;
-  end if;
+  create policy support_tickets_public_insert
+    on public.support_tickets
+    for insert
+    to anon, authenticated
+    with check (true);
+exception when duplicate_object then null;
+end $$;
 
-  if p_description is null or length(btrim(p_description)) < 3 then
-    raise exception 'Descripción muy corta';
-  end if;
+do $$
+begin
+  create policy support_tickets_authed_update
+    on public.support_tickets
+    for update
+    to authenticated
+    using (true)
+    with check (true);
+exception when duplicate_object then null;
+end $$;
 
-  -- Hidrata datos de contacto desde la venta enlazada (si viene).
-  -- Así la bandeja admin (SupportPage) ve nombre/email/teléfono sin
-  -- pedirlos otra vez al cliente.
-  if p_sale_id is not null then
-    select customer_name, customer_email, customer_phone
-      into v_name, v_email, v_phone
-    from public.sales
-    where id = p_sale_id;
-  end if;
 
-  insert into public.support_tickets (
-    sale_id, customer_name, customer_email, customer_phone,
-    category, description, image_url, status
-  ) values (
-    p_sale_id, v_name, v_email, v_phone,
-    p_category, btrim(p_description), p_image_url, 'open'
-  )
-  returning id into new_id;
-
-  return new_id;
-end;
-$$;
-
-grant execute on function public.create_support_ticket(uuid, text, text, text)
+-- -------------------------------------------------------------
+-- 3) GRANT EXECUTE en los RPCs existentes
+--    No recreamos las funciones (su firma y cuerpo ya están bien
+--    según la introspection). Solo nos aseguramos que anon y
+--    authenticated puedan ejecutarlas — esta es la causa común
+--    del 404 "function not found in schema cache" cuando la
+--    función SÍ existe pero el rol que llama no tiene EXECUTE.
+-- -------------------------------------------------------------
+grant execute on function
+  public.create_support_ticket(uuid, text, text, text)
   to anon, authenticated;
 
-
--- -------------------------------------------------------------
--- 4) RPC update_support_ticket_status (admin marca como atendido)
---    src/features/support/supportService.ts → updateSupportStatus()
--- -------------------------------------------------------------
-create or replace function public.update_support_ticket_status(
-  p_ticket_id uuid,
-  p_status    text
-)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if p_status not in ('open','in_progress','resolved') then
-    raise exception 'Status inválido: %', p_status;
-  end if;
-
-  update public.support_tickets
-     set status      = p_status,
-         resolved_at = case when p_status = 'resolved' then now() else resolved_at end,
-         resolved_by = case when p_status = 'resolved' then auth.uid() else resolved_by end
-   where id = p_ticket_id;
-end;
-$$;
-
-grant execute on function public.update_support_ticket_status(uuid, text)
+grant execute on function
+  public.update_support_ticket_status(uuid, text)
   to authenticated;
 
 
 -- -------------------------------------------------------------
--- 5) Refresca el schema cache de PostgREST → quita los 400/404
+-- 4) Refresca el schema cache de PostgREST
+--    Esto es lo que QUITA literalmente el mensaje
+--    "Could not find ... in the schema cache" sin tener que
+--    reiniciar nada desde el dashboard.
 -- -------------------------------------------------------------
 notify pgrst, 'reload schema';
+
+
+-- -------------------------------------------------------------
+-- VERIFICACIÓN OPCIONAL (corre estas líneas después para validar)
+-- -------------------------------------------------------------
+-- select column_name, is_nullable, column_default
+--   from information_schema.columns
+--  where table_schema = 'public' and table_name = 'sales'
+--    and column_name in ('is_foreign_shipping','shipping_amount');
+--
+-- select polname, polroles::regrole[]
+--   from pg_policy
+--  where polrelid = 'public.support_tickets'::regclass;
+--
+-- select has_function_privilege('anon',
+--   'public.create_support_ticket(uuid,text,text,text)', 'EXECUTE');
