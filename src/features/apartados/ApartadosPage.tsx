@@ -227,14 +227,67 @@ function SaleCard({
   const [expanded, setExpanded] = useState(false);
   const balance = Number(sale.balance) || 0;
   const total = Number(sale.total) || 1;
-  const progress = Math.min(
-    100,
-    Math.max(0, ((Number(sale.paid) || 0) / total) * 100)
-  );
+  const paidAmt = Number(sale.paid) || 0;
+  const progress = Math.min(100, Math.max(0, (paidAmt / total) * 100));
   const isPaid = sale.status === "paid";
   const isCancelled = sale.status === "cancelled";
+  const isLayaway = !!sale.is_layaway;
   const days = daysSince(sale.created_at);
   const wa = waLink(sale.customer_phone);
+
+  // Vencimiento: usa apartado_due_date si existe, si no, asume 30 días.
+  const dueDate = (() => {
+    if (sale.apartado_due_date) return new Date(sale.apartado_due_date);
+    const d = new Date(sale.created_at);
+    d.setDate(d.getDate() + 30);
+    return d;
+  })();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDay = new Date(dueDate);
+  dueDay.setHours(0, 0, 0, 0);
+  const daysLeft = Math.round((dueDay.getTime() - today.getTime()) / 86400000);
+  const overdue = daysLeft < 0;
+  const urgent = !isPaid && !isCancelled && isLayaway && daysLeft <= 3;
+
+  // Abono sugerido = saldo / días restantes (mínimo 1)
+  const suggestedPayment =
+    !isPaid && !isCancelled && balance > 0
+      ? Math.max(50, Math.round(balance / Math.max(1, daysLeft)))
+      : 0;
+
+  // Iniciales del cliente para avatar
+  const initials = (sale.customer_name ?? "??")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? "")
+    .join("");
+
+  // Color de la barra según urgencia
+  const barColor = isPaid
+    ? "bg-emerald-500"
+    : urgent
+    ? "bg-rose-500"
+    : daysLeft <= 7
+    ? "bg-amber-500"
+    : "bg-primary";
+
+  const cardBg = isCancelled
+    ? "bg-slate-50 dark:bg-slate-900 opacity-60"
+    : isPaid
+    ? "bg-emerald-50/40 dark:bg-emerald-500/5"
+    : urgent
+    ? "bg-rose-50/40 dark:bg-rose-500/5"
+    : "bg-white dark:bg-slate-900/60";
+
+  const cardRing = isCancelled
+    ? "border-slate-100 dark:border-slate-800"
+    : isPaid
+    ? "border-emerald-200 dark:border-emerald-500/30"
+    : urgent
+    ? "border-rose-200 dark:border-rose-500/30"
+    : "border-slate-100 dark:border-slate-800";
 
   return (
     <motion.div
@@ -242,100 +295,161 @@ function SaleCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      className={`bg-white rounded-2xl border p-4 shadow-sm relative overflow-hidden ${
-        isCancelled
-          ? "border-slate-100 opacity-60"
-          : isPaid
-          ? "border-emerald-100"
-          : "border-slate-100"
-      }`}
+      className={`relative rounded-2xl border p-4 shadow-sm overflow-hidden transition-colors ${cardBg} ${cardRing}`}
     >
+      {/* Stamp PAGADO (gigante de fondo) */}
+      {isPaid && (
+        <div className="pointer-events-none absolute -right-6 -top-2 rotate-12 select-none">
+          <div className="text-[44px] font-black text-emerald-500/15 tracking-tighter leading-none">
+            PAGADO
+          </div>
+        </div>
+      )}
+
       {/* Cabecera */}
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <p className="text-[12px] font-black text-slate-900 truncate">
+      <div className="flex items-start gap-3 mb-3">
+        {/* Avatar con iniciales */}
+        <div
+          className="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black text-sm shrink-0 shadow-sm"
+          style={{
+            background: isPaid
+              ? "linear-gradient(135deg,#10b981,#34d399)"
+              : urgent
+              ? "linear-gradient(135deg,#ef4444,#fb7185)"
+              : "linear-gradient(135deg,#e6007e,#a855f7)",
+          }}
+        >
+          {initials || "??"}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+            <p className="text-[13px] font-black text-slate-900 dark:text-slate-100 truncate">
               {sale.customer_name ?? "Sin cliente"}
             </p>
-            {sale.is_layaway && (
-              <Badge
-                tone="warn"
-                className="text-[8px] px-2 py-0 rounded-full font-black"
-              >
+            {isLayaway && !isPaid && !isCancelled && (
+              <Badge tone="warn" className="text-[8px] px-1.5 py-0 rounded-full font-black">
                 APARTADO
               </Badge>
             )}
             {isPaid && (
-              <Badge
-                tone="ok"
-                className="text-[8px] px-2 py-0 rounded-full font-black"
-              >
-                PAGADO
+              <Badge tone="ok" className="text-[8px] px-1.5 py-0 rounded-full font-black">
+                ✓ PAGADO
               </Badge>
             )}
             {isCancelled && (
-              <Badge
-                tone="bad"
-                className="text-[8px] px-2 py-0 rounded-full font-black"
-              >
+              <Badge tone="bad" className="text-[8px] px-1.5 py-0 rounded-full font-black">
                 CANCELADO
               </Badge>
             )}
           </div>
-          <p className="text-[8px] font-bold text-slate-400 flex items-center gap-1">
-            <Clock size={9} />
-            {formatDateTime(sale.created_at)}
-            {!isPaid && !isCancelled && days >= 7 && (
-              <span className="ml-2 text-rose-500 font-black flex items-center gap-1">
-                <AlertTriangle size={9} />
-                {days} días
+          <p className="text-[9px] font-bold text-slate-400 flex items-center gap-1 flex-wrap">
+            <Clock size={9} /> {formatDateTime(sale.created_at)}
+            {isLayaway && !isPaid && !isCancelled && (
+              <span
+                className={`ml-1 font-black flex items-center gap-1 ${
+                  urgent
+                    ? "text-rose-600 dark:text-rose-400"
+                    : daysLeft <= 7
+                    ? "text-amber-600"
+                    : "text-slate-500"
+                }`}
+              >
+                {overdue ? (
+                  <>
+                    <AlertTriangle size={9} /> Venció hace {Math.abs(daysLeft)} d
+                  </>
+                ) : (
+                  <>· Vence en {daysLeft} {daysLeft === 1 ? "día" : "días"}</>
+                )}
+              </span>
+            )}
+            {!isLayaway && days >= 7 && !isPaid && !isCancelled && (
+              <span className="ml-1 text-rose-500 font-black flex items-center gap-1">
+                <AlertTriangle size={9} /> {days} días sin cobrar
               </span>
             )}
           </p>
         </div>
 
         <div className="text-right shrink-0">
-          <p className="text-[8px] font-black uppercase text-slate-400">
-            Saldo
-          </p>
+          <p className="text-[8px] font-black uppercase text-slate-400">Saldo</p>
           <p
-            className={`text-sm font-black tabular-nums ${
-              balance > 0 ? "text-rose-500" : "text-emerald-600"
+            className={`text-base font-black tabular-nums leading-none ${
+              balance > 0
+                ? urgent
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-slate-900 dark:text-slate-100"
+                : "text-emerald-600 dark:text-emerald-400"
             }`}
           >
             {formatMoney(balance)}
           </p>
+          <p className="text-[8px] font-bold text-slate-400 mt-0.5">
+            de {formatMoney(total)}
+          </p>
         </div>
       </div>
 
-      {/* Barra de progreso */}
+      {/* Barra de progreso con marca de meta */}
       <div className="mb-3">
-        <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-slate-400 mb-1">
+        <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-slate-500 mb-1">
           <span>
-            {formatMoney(sale.paid)} / {formatMoney(sale.total)}
+            {formatMoney(paidAmt)} <span className="text-slate-300">/</span>{" "}
+            {formatMoney(total)}
           </span>
-          <span>{progress.toFixed(0)}%</span>
+          <span className={isPaid ? "text-emerald-600" : "text-slate-500"}>
+            {progress.toFixed(0)}%
+          </span>
         </div>
-        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div className="relative h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.6, ease: "easeOut" }}
-            className={`h-full ${
-              isPaid ? "bg-emerald-500" : "bg-amber-500"
-            }`}
+            className={`absolute inset-y-0 left-0 ${barColor}`}
           />
+          {/* Marcas de los pagos */}
+          {(sale.payments ?? []).map((p, i) => {
+            // Posición acumulada de cada pago en la barra
+            const sumBefore = (sale.payments ?? [])
+              .slice(0, i + 1)
+              .reduce((acc, pp) => acc + (Number(pp.amount) || 0), 0);
+            const pct = Math.min(100, (sumBefore / total) * 100);
+            return (
+              <div
+                key={p.id}
+                className="absolute top-0 bottom-0 w-px bg-white/80 dark:bg-slate-100/40"
+                style={{ left: `${pct}%` }}
+              />
+            );
+          })}
         </div>
       </div>
 
+      {/* Abono sugerido (solo si hay saldo) */}
+      {suggestedPayment > 0 && isLayaway && (
+        <div className="mb-3 flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-primary/5 dark:bg-primary/10 border border-primary/10">
+          <div className="flex items-center gap-2 min-w-0">
+            <Wallet size={12} className="text-primary shrink-0" />
+            <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate">
+              Abono sugerido para no atrasarse:
+            </p>
+          </div>
+          <p className="text-xs font-black text-primary tabular-nums shrink-0">
+            {formatMoney(suggestedPayment)}
+          </p>
+        </div>
+      )}
+
       {/* Contactos rápidos */}
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-3">
         {wa && (
           <a
             href={wa}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100"
           >
             <MessageCircle size={10} /> WhatsApp
           </a>
@@ -343,7 +457,7 @@ function SaleCard({
         {sale.customer_phone && (
           <a
             href={`tel:${cleanPhone(sale.customer_phone)}`}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-50 text-slate-700 text-[9px] font-black uppercase tracking-widest hover:bg-slate-100"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[9px] font-black uppercase tracking-widest"
           >
             <Phone size={10} /> {sale.customer_phone}
           </a>
@@ -353,21 +467,21 @@ function SaleCard({
             href={sale.customer_location}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-[9px] font-black uppercase tracking-widest hover:bg-blue-100"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-[9px] font-black uppercase tracking-widest hover:bg-blue-100"
           >
-            <MapPin size={10} /> Ubicación
+            <MapPin size={10} /> Pin
           </a>
         )}
       </div>
 
       {sale.customer_address && (
-        <p className="text-[9px] font-bold text-slate-500 mb-2 italic">
+        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 italic">
           📍 {sale.customer_address}
         </p>
       )}
 
       {sale.notes && (
-        <p className="text-[9px] font-bold text-slate-500 mb-2 italic">
+        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 italic">
           💬 {sale.notes}
         </p>
       )}
@@ -375,9 +489,13 @@ function SaleCard({
       {/* Detalle expandible */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 mb-2"
+        className="w-full text-left text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-2"
       >
-        {expanded ? "▲ Ocultar detalle" : `▼ Ver detalle (${sale.sale_items?.length ?? 0} items · ${sale.payments?.length ?? 0} pagos)`}
+        {expanded
+          ? "▲ Ocultar detalle"
+          : `▼ Ver detalle (${sale.sale_items?.length ?? 0} items · ${
+              sale.payments?.length ?? 0
+            } pagos)`}
       </button>
 
       <AnimatePresence initial={false}>
@@ -388,7 +506,6 @@ function SaleCard({
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden mb-3 space-y-3"
           >
-            {/* Items */}
             {sale.sale_items && sale.sale_items.length > 0 && (
               <div>
                 <p className="text-[8px] font-black uppercase text-slate-400 mb-1">
@@ -398,11 +515,11 @@ function SaleCard({
                   {sale.sale_items.map((it) => (
                     <div
                       key={it.id}
-                      className="flex items-center justify-between text-[10px] bg-slate-50 rounded-lg px-2 py-1.5"
+                      className="flex items-center justify-between text-[10px] bg-slate-50 dark:bg-slate-800/60 rounded-lg px-2 py-1.5"
                     >
                       <div className="min-w-0">
                         <span className="font-black">{it.qty}×</span>{" "}
-                        <span className="text-slate-700">
+                        <span className="text-slate-700 dark:text-slate-300">
                           {it.product_name}
                           {it.variant_name && (
                             <span className="text-slate-400">
@@ -421,27 +538,27 @@ function SaleCard({
               </div>
             )}
 
-            {/* Pagos */}
+            {/* Timeline de pagos */}
             {sale.payments && sale.payments.length > 0 && (
               <div>
                 <p className="text-[8px] font-black uppercase text-slate-400 mb-1">
                   Historial de pagos
                 </p>
-                <div className="space-y-1">
+                <div className="relative pl-3 border-l-2 border-emerald-200 dark:border-emerald-500/30 space-y-1.5">
                   {sale.payments.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between text-[10px] bg-emerald-50 rounded-lg px-2 py-1.5"
-                    >
-                      <span className="text-slate-600">
-                        {formatDateTime(p.created_at)}{" "}
-                        <span className="text-slate-400 uppercase text-[8px] font-black">
-                          {p.method ?? "efectivo"}
+                    <div key={p.id} className="relative">
+                      <span className="absolute -left-[14px] top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-100 dark:ring-emerald-500/20" />
+                      <div className="flex items-center justify-between text-[10px] bg-emerald-50/70 dark:bg-emerald-500/10 rounded-lg px-2 py-1.5">
+                        <span className="text-slate-600 dark:text-slate-300">
+                          {formatDateTime(p.created_at)}{" "}
+                          <span className="text-slate-400 uppercase text-[8px] font-black">
+                            {p.method ?? "efectivo"}
+                          </span>
                         </span>
-                      </span>
-                      <span className="font-black tabular-nums text-emerald-700">
-                        +{formatMoney(p.amount)}
-                      </span>
+                        <span className="font-black tabular-nums text-emerald-700 dark:text-emerald-400">
+                          +{formatMoney(p.amount)}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -453,20 +570,27 @@ function SaleCard({
 
       {/* Acciones */}
       {!isCancelled && (
-        <div className="flex gap-2 pt-2 border-t border-slate-100">
+        <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
           {balance > 0 && (
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={onPay}
-              className="flex-1 h-10 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom"
+              className={`flex-1 h-10 rounded-xl text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom ${
+                urgent ? "" : ""
+              }`}
+              style={{
+                background: urgent
+                  ? "linear-gradient(135deg,#ef4444,#f43f5e)"
+                  : "linear-gradient(135deg,#e6007e,#a855f7)",
+              }}
             >
-              <Wallet size={12} /> Abonar
+              <Wallet size={12} /> {urgent ? "Cobrar urgente" : "Abonar"}
             </motion.button>
           )}
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={onTicket}
-            className="h-10 px-3 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 hover:bg-slate-700 transition-colors"
+            className="h-10 px-3 rounded-xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
             title="Ver ticket / imprimir / enviar"
           >
             <Printer size={12} /> Ticket
@@ -474,7 +598,7 @@ function SaleCard({
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={() => sendReceiptByWhatsApp(sale)}
-            className="h-10 px-3 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 hover:bg-emerald-100 transition-colors"
+            className="h-10 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
             title="Enviar recibo por WhatsApp"
           >
             <Receipt size={12} />
@@ -482,7 +606,8 @@ function SaleCard({
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={onCancel}
-            className="h-10 px-3 rounded-xl bg-rose-50 text-rose-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
+            className="h-10 px-3 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
+            title="Cancelar venta"
           >
             <XCircle size={12} />
           </motion.button>

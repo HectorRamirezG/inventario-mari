@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
-import { toast } from "sonner";
+import { toast } from "react-hot-toast";
 
 export function usePricingPage() {
   const [products, setProducts] = useState<any[]>([]);

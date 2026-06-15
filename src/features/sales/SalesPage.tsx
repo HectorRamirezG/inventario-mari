@@ -12,8 +12,6 @@ import {
   X,
   User,
   Phone,
-  MapPin,
-  Navigation,
   StickyNote,
   Bookmark,
   ChevronDown,
@@ -28,13 +26,8 @@ import { TIER_LABEL } from "./salesTier";
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
 import BarcodeScanner from "../../components/ui/BarcodeScanner";
-
-import { useSalesPage } from "./useSalesPage";
-import { TIER_LABEL } from "./salesTier";
-import Button from "../../components/ui/Button";
-import Badge from "../../components/ui/Badge";
-import BarcodeScanner from "../../components/ui/BarcodeScanner";
 import TicketView from "../../components/ui/TicketView";
+import SmartLocationInput from "../../components/ui/SmartLocationInput";
 import { formatMoney } from "../../lib/format";
 import { sound } from "../../lib/sound";const TIER_TONE: Record<string, { bg: string; text: string; ring: string }> = {
   menudeo: {
@@ -501,44 +494,12 @@ export default function SalesPage() {
                       />
                     </div>
 
-                    <div className="relative">
-                      <MapPin
-                        size={12}
-                        className="absolute left-3 top-3 text-slate-300"
-                      />
-                      <textarea
-                        placeholder="Dirección de entrega"
-                        value={state.address}
-                        onChange={(e) => actions.setAddress(e.target.value)}
-                        rows={2}
-                        className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50 text-[11px] font-bold outline-none focus:ring-2 focus:ring-primary/20 resize-none"
-                      />
-                    </div>
-
-                    <button
-                      onClick={actions.captureLocation}
-                      disabled={state.capturingLocation}
-                      className="w-full h-10 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      <Navigation
-                        size={12}
-                        className={state.capturingLocation ? "animate-pulse" : ""}
-                      />
-                      {state.locationUrl
-                        ? "Actualizar ubicación GPS"
-                        : "Capturar ubicación GPS"}
-                    </button>
-
-                    {state.locationUrl && (
-                      <a
-                        href={state.locationUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block text-center text-[9px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
-                      >
-                        Ver en Google Maps ↗
-                      </a>
-                    )}
+                    <SmartLocationInput
+                      address={state.address}
+                      onAddressChange={actions.setAddress}
+                      locationUrl={state.locationUrl}
+                      onLocationUrlChange={actions.setLocationUrl}
+                    />
 
                     <div className="relative">
                       <StickyNote

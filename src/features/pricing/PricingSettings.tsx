@@ -3,7 +3,7 @@ import { Settings, Save, Percent, Truck, Database, ShieldCheck, Cog, Loader2, La
 import Button from "../../components/ui/Button";
 import { getPricingConfig, savePricingConfig } from "./pricingConfigService";
 import type { PricingConfig } from "./pricingTypes";
-import { toast } from "sonner";
+import { toast } from "react-hot-toast";
 
 export default function PricingSettings() {
   const [loading, setLoading] = useState(true);

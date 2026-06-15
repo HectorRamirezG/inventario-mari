@@ -1,13 +1,28 @@
 import { useEffect, useState, useMemo } from "react"
-import { motion } from "framer-motion"
-import { Search, ShoppingBag, Package, Loader2, X, Plus, Minus, Receipt, ArrowRight } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  Search,
+  ShoppingBag,
+  Package,
+  Loader2,
+  X,
+  Plus,
+  Minus,
+  Receipt,
+  ArrowRight,
+  Mail,
+  Phone,
+  User as UserIcon,
+  Sparkles,
+} from "lucide-react"
 import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
+import SmartLocationInput from "../../components/ui/SmartLocationInput"
 
-// Estructura mínima para el catálogo del cliente
+// Estructura mínima del catálogo público
 interface PublicVariant {
   id: string
   product_id: string
@@ -39,17 +54,67 @@ interface CartLine {
   stock: number
 }
 
+interface GuestInfo {
+  name: string
+  email: string
+  phone: string
+  address: string
+  locationUrl: string
+}
+
+const GUEST_KEY = "mari_guest_v1"
+
+function loadGuest(): GuestInfo {
+  try {
+    return {
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+      locationUrl: "",
+      ...JSON.parse(localStorage.getItem(GUEST_KEY) ?? "{}"),
+    }
+  } catch {
+    return { name: "", email: "", phone: "", address: "", locationUrl: "" }
+  }
+}
+
+function saveGuest(g: GuestInfo) {
+  try {
+    localStorage.setItem(GUEST_KEY, JSON.stringify(g))
+  } catch {
+    /* noop */
+  }
+}
+
 /**
- * Página de catálogo para clientes logueados (rol="client").
- * Sólo lee desde las VIEWS *_public (sin costos).
+ * Catálogo público de Mari. Funciona SIN login (anónimo) y con login
+ * (cliente). El anónimo proporciona nombre + email + teléfono al apartar;
+ * los datos se guardan en localStorage para no pedirlos de nuevo.
  */
 export default function ClientShopPage() {
-  const { email, fullName } = useAuth()
+  const { email: authEmail, fullName: authName, session } = useAuth()
+  const isLogged = !!session
+
   const [products, setProducts] = useState<PublicProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
   const [cart, setCart] = useState<CartLine[]>([])
   const [openCart, setOpenCart] = useState(false)
+  const [openGuestForm, setOpenGuestForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [guest, setGuest] = useState<GuestInfo>(() => loadGuest())
+
+  // Si el usuario está logueado, prellena con sus datos
+  useEffect(() => {
+    if (isLogged && authEmail) {
+      setGuest((g) => ({
+        ...g,
+        email: g.email || authEmail,
+        name: g.name || authName || authEmail.split("@")[0],
+      }))
+    }
+  }, [isLogged, authEmail, authName])
 
   useEffect(() => {
     let alive = true
@@ -58,9 +123,7 @@ export default function ClientShopPage() {
         .from("products_public")
         .select("id,name,category,image_url")
         .order("name")
-      const { data: vars } = await supabase
-        .from("variants_public")
-        .select("*")
+      const { data: vars } = await supabase.from("variants_public").select("*")
       if (!alive) return
       const byProduct: Record<string, PublicVariant[]> = {}
       ;(vars ?? []).forEach((v) => {
@@ -86,7 +149,9 @@ export default function ClientShopPage() {
     return products.filter(
       (p) =>
         p.name.toLowerCase().includes(needle) ||
-        p.variants.some((v) => v.variant_name.toLowerCase().includes(needle))
+        p.variants.some((v) =>
+          v.variant_name.toLowerCase().includes(needle)
+        )
     )
   }, [products, q])
 
@@ -104,6 +169,10 @@ export default function ClientShopPage() {
   }
 
   function addToCart(p: PublicProduct, v: PublicVariant) {
+    if (v.stock <= 0) {
+      toast.error("Sin stock")
+      return
+    }
     setCart((prev) => {
       const ix = prev.findIndex((c) => c.variant_id === v.id)
       if (ix >= 0) {
@@ -128,6 +197,7 @@ export default function ClientShopPage() {
         },
       ]
     })
+    toast.success(`+ ${p.name}`, { duration: 1500 })
   }
 
   function changeQty(variantId: string, delta: number) {
@@ -142,19 +212,37 @@ export default function ClientShopPage() {
     )
   }
 
+  /** Inicia el proceso de apartado. Si faltan datos del invitado, abre el modal. */
+  function startCheckout() {
+    if (cart.length === 0) return
+    const needsForm = !guest.name.trim() || !guest.email.trim() || !guest.phone.trim()
+    if (needsForm) {
+      setOpenCart(false)
+      setOpenGuestForm(true)
+    } else {
+      submitLayaway()
+    }
+  }
+
   async function submitLayaway() {
     if (cart.length === 0) return
-    if (!email) {
-      toast.error("Inicia sesión para apartar")
+    if (!guest.name.trim() || !guest.email.trim() || !guest.phone.trim()) {
+      toast.error("Llena tus datos para apartar")
+      setOpenGuestForm(true)
       return
     }
+    setSubmitting(true)
     const total = totalAmt
+    const tid = toast.loading("Creando tu apartado...")
     try {
       const { data: sale, error } = await supabase
         .from("sales")
         .insert({
-          customer_name: fullName ?? email,
-          customer_email: email,
+          customer_name: guest.name.trim(),
+          customer_email: guest.email.trim().toLowerCase(),
+          customer_phone: guest.phone.trim() || null,
+          customer_address: guest.address.trim() || null,
+          customer_location: guest.locationUrl.trim() || null,
           total,
           paid: 0,
           balance: total,
@@ -180,20 +268,27 @@ export default function ClientShopPage() {
         })
         if (itemErr) throw new Error(itemErr.message)
       }
-      toast.success("Apartado creado ✓")
+
+      // Persiste datos del invitado para próximas compras
+      saveGuest(guest)
+
+      toast.success("✨ ¡Apartado creado!", { id: tid })
       setCart([])
+      setOpenGuestForm(false)
       setOpenCart(false)
-      // redirigir a mis pedidos
+      // Redirige al ticket público
       window.location.href = `/ticket/${sale.public_token ?? sale.id}`
     } catch (e: any) {
-      toast.error(e?.message ?? "No se pudo apartar")
+      toast.error(e?.message ?? "No se pudo apartar", { id: tid })
+    } finally {
+      setSubmitting(false)
     }
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="animate-spin text-primary" />
+        <Loader2 className="animate-spin text-primary" size={28} />
       </div>
     )
   }
@@ -202,142 +297,316 @@ export default function ClientShopPage() {
     <div className="pb-32">
       {/* Saludo */}
       <div className="mb-4">
-        <p className="text-xs uppercase tracking-widest text-slate-500 font-black">
-          Hola
+        <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">
+          {isLogged ? "Hola de nuevo" : "Bienvenida"}
         </p>
-        <h1 className="text-2xl font-black tracking-tight">
-          {fullName?.split(" ")[0] ?? "Cliente"}
+        <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
+          {(guest.name || authName)?.split(" ")[0] ?? "Cosmética bonita"}{" "}
+          <Sparkles size={18} className="text-primary" />
         </h1>
-        <p className="text-sm text-slate-500">
-          Arma tu carrito y aparta tus productos.
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Aparta tus productos favoritos sin pagar todo hoy.
         </p>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 rounded-2xl h-12 px-4 mb-4">
+      {/* Buscador */}
+      <div className="flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl h-12 px-4 mb-4 shadow-sm">
         <Search size={16} className="text-slate-400" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Busca lipstick, sombras..."
-          className="bg-transparent outline-none flex-1 text-sm font-semibold"
+          placeholder="Busca lipstick, sombras, base..."
+          className="bg-transparent outline-none flex-1 text-sm font-semibold dark:text-slate-100"
         />
+        {q && (
+          <button
+            onClick={() => setQ("")}
+            className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400"
+            aria-label="Limpiar"
+          >
+            <X size={11} />
+          </button>
+        )}
       </div>
 
-      {/* Bento grid */}
-      <div className="grid grid-cols-2 gap-3">
-        {filtered.map((p) => (
-          <ProductCardClient key={p.id} product={p} onAdd={addToCart} />
-        ))}
-      </div>
+      {/* Catálogo */}
+      {filtered.length === 0 ? (
+        <div className="py-20 text-center">
+          <Package size={36} className="mx-auto text-slate-300 mb-2" />
+          <p className="text-sm font-bold text-slate-500">Sin resultados</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          {filtered.map((p) => (
+            <ProductCardClient key={p.id} product={p} onAdd={addToCart} />
+          ))}
+        </div>
+      )}
 
       {/* FAB carrito */}
-      {cart.length > 0 && (
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          onClick={() => setOpenCart(true)}
-          className="fixed bottom-24 right-4 z-40 h-14 rounded-2xl px-5 text-white font-black flex items-center gap-3 shadow-bloom"
-          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
-        >
-          <ShoppingBag size={18} />
-          <span>{totalQty} · {formatMoney(totalAmt)}</span>
-        </motion.button>
-      )}
+      <AnimatePresence>
+        {cart.length > 0 && (
+          <motion.button
+            initial={{ scale: 0, y: 30 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0 }}
+            onClick={() => setOpenCart(true)}
+            className="fixed bottom-24 right-4 z-40 h-14 rounded-2xl px-5 text-white font-black flex items-center gap-3 shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)]"
+            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+          >
+            <ShoppingBag size={18} />
+            <span>
+              {totalQty} · {formatMoney(totalAmt)}
+            </span>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Drawer carrito */}
-      {openCart && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="fixed inset-0 z-[160]"
-        >
-          <div
-            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
-            onClick={() => setOpenCart(false)}
-          />
+      <AnimatePresence>
+        {openCart && (
           <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            transition={{ type: "spring", damping: 28 }}
-            className="absolute left-0 right-0 bottom-0 bg-white dark:bg-slate-900 rounded-t-3xl pb-safe max-h-[85vh] flex flex-col"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[160]"
           >
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="text-base font-black">Tu carrito</h3>
-              <button
-                onClick={() => setOpenCart(false)}
-                className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center"
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
-              {cart.map((c) => (
-                <div
-                  key={c.variant_id}
-                  className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60"
+            <div
+              className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+              onClick={() => setOpenCart(false)}
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28 }}
+              className="absolute left-0 right-0 bottom-0 bg-white dark:bg-slate-900 rounded-t-3xl pb-safe max-h-[85vh] flex flex-col"
+            >
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800">
+                <h3 className="text-base font-black">Tu carrito</h3>
+                <button
+                  onClick={() => setOpenCart(false)}
+                  className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center"
                 >
-                  <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-300">
-                    {c.image_url ? (
-                      <img
-                        src={c.image_url}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <Package size={18} />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold truncate">{c.product_name}</p>
-                    <p className="text-[10px] text-slate-500 truncate">
-                      {c.variant_name}
-                    </p>
-                    <p className="text-xs font-black text-primary">
-                      {formatMoney(c.unit_price)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => changeQty(c.variant_id, -1)}
-                      className="w-7 h-7 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center"
-                    >
-                      <Minus size={12} />
-                    </button>
-                    <span className="text-sm font-black w-5 text-center">{c.qty}</span>
-                    <button
-                      onClick={() => changeQty(c.variant_id, 1)}
-                      className="w-7 h-7 rounded-full text-white flex items-center justify-center"
-                      style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
-                    >
-                      <Plus size={12} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-              <div className="flex items-center justify-between text-base">
-                <span className="font-bold text-slate-600">Total</span>
-                <span className="font-black text-xl">{formatMoney(totalAmt)}</span>
+                  <X size={14} />
+                </button>
               </div>
-              <button
-                onClick={submitLayaway}
-                className="w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom"
-                style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
-              >
-                <Receipt size={16} />
-                Apartar y generar ticket
-                <ArrowRight size={14} />
-              </button>
-              <p className="text-[10px] text-center text-slate-400">
-                El admin recibirá tu apartado y te contactará por WhatsApp.
-              </p>
-            </div>
+              <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+                {cart.map((c) => (
+                  <div
+                    key={c.variant_id}
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-300">
+                      {c.image_url ? (
+                        <img
+                          src={c.image_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Package size={18} />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold truncate">
+                        {c.product_name}
+                      </p>
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {c.variant_name}
+                      </p>
+                      <p className="text-xs font-black text-primary">
+                        {formatMoney(c.unit_price)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => changeQty(c.variant_id, -1)}
+                        className="w-7 h-7 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center"
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <span className="text-sm font-black w-5 text-center">
+                        {c.qty}
+                      </span>
+                      <button
+                        onClick={() => changeQty(c.variant_id, 1)}
+                        className="w-7 h-7 rounded-full text-white flex items-center justify-center"
+                        style={{
+                          background: "linear-gradient(135deg,#e6007e,#a855f7)",
+                        }}
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                <div className="flex items-center justify-between text-base">
+                  <span className="font-bold text-slate-600 dark:text-slate-300">
+                    Total
+                  </span>
+                  <span className="font-black text-xl">
+                    {formatMoney(totalAmt)}
+                  </span>
+                </div>
+                <button
+                  onClick={startCheckout}
+                  disabled={submitting}
+                  className="w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
+                  style={{
+                    background: "linear-gradient(135deg,#e6007e,#a855f7)",
+                  }}
+                >
+                  <Receipt size={16} />
+                  Apartar y generar ticket
+                  <ArrowRight size={14} />
+                </button>
+                <p className="text-[10px] text-center text-slate-400 dark:text-slate-500">
+                  Mari recibirá tu apartado y te contactará por WhatsApp.
+                </p>
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
+        )}
+      </AnimatePresence>
+
+      {/* Formulario de invitada */}
+      <AnimatePresence>
+        {openGuestForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[170]"
+          >
+            <div
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+              onClick={() => !submitting && setOpenGuestForm(false)}
+            />
+            <motion.div
+              initial={{ y: 30, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 30, opacity: 0 }}
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-premium"
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
+                  style={{
+                    background: "linear-gradient(135deg,#e6007e,#a855f7)",
+                  }}
+                >
+                  <Sparkles className="text-white" size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight">
+                    Datos para tu apartado
+                  </h3>
+                  <p className="text-[10px] text-slate-500">
+                    Mari te contactará por WhatsApp.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <FieldInput
+                  icon={UserIcon}
+                  value={guest.name}
+                  onChange={(v) => setGuest({ ...guest, name: v })}
+                  placeholder="Tu nombre completo"
+                />
+                <FieldInput
+                  icon={Mail}
+                  value={guest.email}
+                  onChange={(v) => setGuest({ ...guest, email: v })}
+                  placeholder="Tu correo"
+                  type="email"
+                />
+                <FieldInput
+                  icon={Phone}
+                  value={guest.phone}
+                  onChange={(v) => setGuest({ ...guest, phone: v })}
+                  placeholder="WhatsApp (10 dígitos)"
+                  type="tel"
+                />
+                <SmartLocationInput
+                  address={guest.address}
+                  onAddressChange={(v) => setGuest({ ...guest, address: v })}
+                  locationUrl={guest.locationUrl}
+                  onLocationUrlChange={(v) =>
+                    setGuest({ ...guest, locationUrl: v })
+                  }
+                />
+              </div>
+
+              <div className="flex gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setOpenGuestForm(false)}
+                  disabled={submitting}
+                  className="flex-1 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-black uppercase tracking-widest"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={submitLayaway}
+                  disabled={submitting}
+                  className="flex-1 h-11 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
+                  style={{
+                    background: "linear-gradient(135deg,#e6007e,#a855f7)",
+                  }}
+                >
+                  {submitting ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <>
+                      Apartar <ArrowRight size={14} />
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-[9px] text-center text-slate-400 mt-3">
+                Total a apartar:{" "}
+                <span className="font-black text-primary">
+                  {formatMoney(totalAmt)}
+                </span>
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
+  )
+}
+
+function FieldInput({
+  icon: Icon,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string }>
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  type?: string
+}) {
+  return (
+    <label className="relative flex items-center bg-slate-50 dark:bg-slate-800/60 rounded-2xl h-12 px-4">
+      <Icon size={14} className="text-slate-400 mr-3" />
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="bg-transparent outline-none flex-1 text-sm font-semibold dark:text-slate-100"
+      />
+    </label>
   )
 }
 
@@ -358,20 +627,26 @@ function ProductCardClient({
 
   if (!variant) return null
 
+  const out = variant.stock <= 0
+
   return (
     <motion.div
       whileTap={{ scale: 0.97 }}
-      className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700"
+      layout
+      className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
     >
       <div
-        className="aspect-square bg-slate-100 dark:bg-slate-700 relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg,#fdf2f8,#faf5ff)" }}
+        className="aspect-square relative overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(135deg,rgba(230,0,126,0.06),rgba(168,85,247,0.08))",
+        }}
       >
-        {product.image_url ? (
+        {product.image_url || variant.image_url ? (
           <img
-            src={product.image_url}
+            src={variant.image_url ?? product.image_url ?? ""}
             alt={product.name}
-            className="w-full h-full object-cover"
+            className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
             loading="lazy"
           />
         ) : (
@@ -379,21 +654,28 @@ function ProductCardClient({
             <Package size={36} />
           </div>
         )}
-        {variant.stock <= 0 && (
-          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase">
+        {out && (
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest">
             Agotado
+          </span>
+        )}
+        {!out && variant.stock <= 3 && (
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest">
+            ¡Últimas {variant.stock}!
           </span>
         )}
       </div>
       <div className="p-3">
-        <p className="text-xs font-black truncate">{product.name}</p>
+        <p className="text-xs font-black truncate" title={product.name}>
+          {product.name}
+        </p>
         {product.variants.length > 1 && (
           <div className="flex flex-wrap gap-1 my-1">
             {product.variants.slice(0, 4).map((v) => (
               <button
                 key={v.id}
                 onClick={() => setSelected(v.id)}
-                className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-colors ${
                   v.id === selected
                     ? "bg-primary text-white"
                     : "bg-slate-100 dark:bg-slate-700 text-slate-500"
@@ -402,6 +684,11 @@ function ProductCardClient({
                 {v.variant_name}
               </button>
             ))}
+            {product.variants.length > 4 && (
+              <span className="px-1.5 py-0.5 text-[9px] font-bold text-slate-400">
+                +{product.variants.length - 4}
+              </span>
+            )}
           </div>
         )}
         <div className="flex items-center justify-between mt-1">
@@ -410,11 +697,14 @@ function ProductCardClient({
           </span>
           <button
             onClick={() => onAdd(product, variant)}
-            disabled={variant.stock <= 0}
-            className="w-8 h-8 rounded-full text-white flex items-center justify-center disabled:opacity-30"
-            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+            disabled={out}
+            className="w-9 h-9 rounded-full text-white flex items-center justify-center disabled:opacity-30 shadow-bloom active:scale-90 transition-transform"
+            style={{
+              background: "linear-gradient(135deg,#e6007e,#a855f7)",
+            }}
+            aria-label="Agregar al carrito"
           >
-            <Plus size={14} />
+            <Plus size={14} strokeWidth={3} />
           </button>
         </div>
       </div>

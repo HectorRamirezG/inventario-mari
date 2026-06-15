@@ -66,6 +66,7 @@ export interface Sale {
   public_token?: string | null;       // Token para ticket público /ticket/:token
   notes?: string | null;
   due_date?: string | null;
+  apartado_due_date?: string | null;  // Fecha límite para liquidar apartado (yyyy-mm-dd)
   is_layaway?: boolean;
   total: number;
   paid: number;

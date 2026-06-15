@@ -74,4 +74,20 @@ export const sound = {
     setTimeout(() => beep(146.83, 160, 0.06), 90)
     vibrate([40, 50, 40])
   },
+  /** Notificación entrante (nuevo apartado, mensaje, etc.). */
+  notify: () => {
+    beep(880, 60, 0.05)
+    setTimeout(() => beep(1108.73, 80, 0.05), 70)
+    vibrate([15, 25, 15])
+  },
+  /**
+   * Atajo genérico: `sound.play("notify")`. Permite que código externo
+   * pase un string sin importar el método concreto. Si el nombre no
+   * existe, hace fallback a `tap`.
+   */
+  play: (name: "tap" | "scan" | "success" | "error" | "notify") => {
+    const fn = (sound as any)[name]
+    if (typeof fn === "function") fn()
+    else (sound as any).tap()
+  },
 }
