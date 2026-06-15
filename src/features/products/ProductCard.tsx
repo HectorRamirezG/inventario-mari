@@ -1,319 +1,360 @@
-import {
-  Trash2,
-  Edit3,
-  PlusCircle,
-  Package,
-  DollarSign,
-  AlertTriangle,
-  Boxes,
-  ChevronDown,
-  Sparkles,
-  TrendingUp
-} from "lucide-react"
-
-import Badge from "../../components/ui/Badge"
+import { useMemo, useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import type { Product } from "../../types/database"
-import { useProductCard } from "./useProductCard"
+import {
+  Edit3,
+  Trash2,
+  Package,
+  Plus,
+  ImageIcon,
+  Layers,
+  TrendingUp,
+  ArrowUp,
+  Sparkles,
+  X,
+  Loader2,
+} from "lucide-react"
+import toast from "react-hot-toast"
 
-import { formatMoney as fmtMoney } from "../../lib/format";
+import VariantImageCarousel from "../../components/ui/VariantImageCarousel"
+import { formatMoney } from "../../lib/format"
+import type { Product, Variant } from "../../types/database"
+import { deleteProduct, updateVariant } from "./productService"
+import { applyMovement } from "../movements/movementService"
 
-const money = fmtMoney
+interface Props {
+  product: Product
+  refresh: () => void
+  /** Abre el ProductDrawer en modo "edit" para este producto */
+  onEdit: (product: Product) => void
+  /** Abre el ProductDrawer en modo "stock" centrado en una variante específica */
+  onQuickStock: (product: Product, variantId: string) => void
+  /** Abre el ProductDrawer en modo "edit" y la tab Variantes para agregar una nueva */
+  onAddVariant: (product: Product) => void
+}
 
+/**
+ * Tarjeta de producto del Admin — estilo TIENDA (espejo de ProductCardClient)
+ * pero con superpoderes: lápiz para abrir el Drawer único, stock visible en
+ * los chips de variante, y botón "+" con popover de acciones rápidas.
+ */
 export default function ProductCard({
   product,
-  onAddVariant,
-  onMove,
+  refresh,
   onEdit,
-  refresh
-}: {
-  product: Product
-  onAddVariant: (productId: string, productName: string) => void
-  onMove: (variantId: string, type: "entrada" | "venta") => void
-  onEdit: (product: Product) => void
-  refresh: () => void
-}) {
-  const ui = useProductCard(product, refresh)
+  onQuickStock,
+  onAddVariant,
+}: Props) {
+  const variants = product.variants ?? []
+  const [selected, setSelected] = useState<string | null>(variants[0]?.id ?? null)
 
-  const prices =
-    product.variants?.map(v => Number(v.price ?? 0)).filter(p => p > 0) ?? []
+  const variant = useMemo(
+    () => variants.find((v) => v.id === selected) ?? variants[0],
+    [variants, selected]
+  )
 
-  const minPrice = prices.length ? Math.min(...prices) : null
+  const totalStock = useMemo(
+    () => variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0),
+    [variants]
+  )
+
+  const minPrice = useMemo(() => {
+    const arr = variants
+      .map((v) => Number(v.price_menudeo ?? v.price ?? 0))
+      .filter((p) => p > 0)
+    return arr.length ? Math.min(...arr) : null
+  }, [variants])
+
+  // Galería para el VariantImageCarousel: cada variante aporta sus fotos
+  const carousel = useMemo(() => {
+    return variants
+      .map((v) => {
+        const imgs =
+          v.image_urls && v.image_urls.length > 0
+            ? v.image_urls
+            : v.image_url
+            ? [v.image_url]
+            : []
+        return { id: v.id, name: v.variant_name, images: imgs }
+      })
+      .filter((v) => v.images.length > 0)
+  }, [variants])
+
+  // Fallback al image_url del producto si no hay nada en variantes
+  const carouselSafe = useMemo(() => {
+    if (carousel.length > 0) return carousel
+    if (product.image_url && variants[0]) {
+      return [
+        {
+          id: variants[0].id,
+          name: variants[0].variant_name,
+          images: [product.image_url],
+        },
+      ]
+    }
+    return []
+  }, [carousel, product.image_url, variants])
+
+  // Popover de acción rápida del botón "+"
+  const [popoverOpen, setPopoverOpen] = useState(false)
+  const popoverRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!popoverOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setPopoverOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onDown)
+    return () => document.removeEventListener("mousedown", onDown)
+  }, [popoverOpen])
+
+  async function handleDelete() {
+    if (!confirm(`¿Eliminar "${product.name}"?`)) return
+    try {
+      await deleteProduct(product.id)
+      toast.success("Producto eliminado")
+      refresh()
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo eliminar")
+    }
+  }
+
+  const lowStock = (product.min_stock ?? 0) > 0 && totalStock <= (product.min_stock ?? 0)
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="bg-white rounded-[2.5rem] border border-pink-50 shadow-premium p-6 space-y-5"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 280, damping: 26 }}
+      className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
     >
-      {/* HEADER */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3 min-w-0 flex-1">
-          {product.image_url ? (
-            <img
-              src={product.image_url}
-              alt={product.name}
-              className="w-14 h-14 rounded-2xl object-cover shrink-0 shadow-sm"
-              loading="lazy"
-            />
-          ) : (
-            <div
-              className="w-14 h-14 rounded-2xl shrink-0 flex items-center justify-center text-primary/40"
-              style={{ background: "linear-gradient(135deg,#fdf2f8,#faf5ff)" }}
-            >
-              <Package size={24} />
-            </div>
-          )}
-          <div className="min-w-0">
-            <h3 className="text-lg font-black text-slate-900 italic leading-tight truncate">
+      {/* Imagen + Carrusel */}
+      <div className="relative">
+        <VariantImageCarousel
+          variants={carouselSafe}
+          selectedVariantId={selected}
+          aspect="1/1"
+          onTap={() => onEdit(product)}
+          className="rounded-none"
+        />
+        {/* Badge stock bajo */}
+        {lowStock && (
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest z-10 shadow-bloom">
+            Stock bajo
+          </span>
+        )}
+        {/* Badge sin costo (admin) */}
+        {product.cost == null && (
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
+            Sin costo
+          </span>
+        )}
+      </div>
+
+      {/* Cuerpo */}
+      <div className="p-3 space-y-2">
+        {/* Título + lápiz */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-black truncate" title={product.name}>
               {product.name}
-            </h3>
-
-            <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">
+            </p>
+            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
               {product.category ?? "General"}
-            </span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onEdit(product)}
+            aria-label="Editar producto"
+            className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center hover:text-primary active:scale-90 transition-all shrink-0"
+            title="Editar producto"
+          >
+            <Edit3 size={13} />
+          </button>
+        </div>
 
-            {product.cost == null && (
-              <Badge tone="rose" className="mt-1 text-[9px] px-2 py-1">
-                Sin costo
-              </Badge>
+        {/* Chips de variantes con stock (clic cambia foto) */}
+        {variants.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {variants.slice(0, 6).map((v) => {
+              const active = v.id === selected
+              const out = (Number(v.stock) || 0) <= 0
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelected(v.id)
+                  }}
+                  className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-colors flex items-center gap-1 ${
+                    active
+                      ? "bg-primary text-white"
+                      : out
+                      ? "bg-rose-50 text-rose-500 dark:bg-rose-500/10"
+                      : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                  }`}
+                  title={`Stock: ${v.stock} pz`}
+                >
+                  <span className="truncate max-w-[120px]">{v.variant_name}</span>
+                  <span
+                    className={`tabular-nums font-black text-[8px] ${
+                      active
+                        ? "opacity-90"
+                        : out
+                        ? "text-rose-500"
+                        : (Number(v.stock) || 0) <= 3
+                        ? "text-amber-600"
+                        : "text-emerald-600"
+                    }`}
+                  >
+                    ({v.stock})
+                  </span>
+                </button>
+              )
+            })}
+            {variants.length > 6 && (
+              <span className="px-1.5 py-0.5 text-[9px] font-bold text-slate-400">
+                +{variants.length - 6}
+              </span>
             )}
           </div>
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => onEdit(product)}
-            className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500"
-          >
-            <Edit3 size={16} />
-          </button>
-
-          <button
-            onClick={ui.handleDelete}
-            className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 hover:text-rose-500"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
-
-      {/* STATS */}
-      <div className="grid grid-cols-3 gap-3">
-        <MiniStat label="Costo" value={product.cost ? money(product.cost) : "—"} />
-        <MiniStat label="Desde" value={minPrice ? money(minPrice) : "—"} highlight />
-        <MiniStat
-          label="Stock"
-          value={ui.totalStock}
-          color={
-            Number(ui.totalStock) <= (product.min_stock ?? 0)
-              ? "text-rose-500"
-              : "text-emerald-500"
-          }
-        />
-      </div>
-
-      {/* TABS */}
-      <div className="flex gap-2 pt-2">
-        <TabButton
-          active={ui.openDetails}
-          onClick={() => ui.setOpenDetails(!ui.openDetails)}
-          label="Detalles"
-        />
-
-        <TabButton
-          active={ui.openVariants}
-          onClick={() => ui.setOpenVariants(!ui.openVariants)}
-          label={`Variantes (${ui.variantCount})`}
-        />
-
-        <button
-          onClick={() => onAddVariant(product.id, product.name)}
-          className="ml-auto w-9 h-9 flex items-center justify-center rounded-xl bg-primary text-white"
-        >
-          <PlusCircle size={16} />
-        </button>
-      </div>
-
-      <AnimatePresence mode="wait">
-        {/* DETALLES */}
-        {ui.openDetails && (
-          <motion.div
-            key="details"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-white border border-slate-100 rounded-2xl p-4 space-y-3"
-          >
-            {ui.margin !== null && (
-              <div className="flex justify-between items-center px-3 py-2 bg-slate-50 rounded-xl">
-                <span className="text-[9px] font-black text-slate-500 flex items-center gap-2">
-                  <TrendingUp size={12} /> Margen
-                </span>
-                <span className="text-sm font-black text-emerald-600">
-                  {ui.margin}%
-                </span>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center px-3 py-2 bg-slate-50 rounded-xl">
-              <span className="text-[9px] font-black text-slate-500 flex items-center gap-2">
-                <Package size={12} /> Stock mínimo
-              </span>
-              <span className="text-sm font-black text-slate-700">
-                {product.min_stock ?? 0} pz
-              </span>
-            </div>
-          </motion.div>
         )}
 
-        {/* VARIANTES */}
-        {ui.openVariants && (
-          <motion.div
-            key="variants"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="space-y-2"
-          >
-            {product.variants?.length ? (
-              product.variants.map((v, i) => {
-                const photos =
-                  (v.image_urls && v.image_urls.length > 0
-                    ? v.image_urls
-                    : v.image_url
-                    ? [v.image_url]
-                    : []) ?? []
-                return (
-                  <div
-                    key={v.id || i}
-                    className="flex items-center justify-between bg-white border border-slate-100 rounded-2xl px-3 py-2.5 shadow-sm gap-2"
-                  >
-                    {/* Mini-galería: portada + badge contador clickeable */}
+        {/* Precio + acciones rápidas */}
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <div className="min-w-0">
+            <span className="text-sm font-black text-primary tabular-nums">
+              {minPrice ? formatMoney(minPrice) : "—"}
+            </span>
+            <span className="ml-2 text-[9px] font-black uppercase text-slate-400">
+              {totalStock} pz total
+            </span>
+          </div>
+
+          {/* Botón "+" con popover de acción rápida */}
+          <div ref={popoverRef} className="relative">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                setPopoverOpen((o) => !o)
+              }}
+              aria-label="Acción rápida"
+              className="w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform"
+              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+            >
+              <Plus size={14} strokeWidth={3} />
+            </button>
+
+            <AnimatePresence>
+              {popoverOpen && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: -6 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: -6 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 26 }}
+                  className="absolute right-0 bottom-full mb-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-[0_20px_60px_-15px_rgba(15,23,42,0.25)] border border-slate-100 dark:border-slate-700 overflow-hidden z-20"
+                >
+                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                      Acción rápida
+                    </p>
+                  </div>
+
+                  {variant && (
                     <button
                       type="button"
-                      onClick={() => onEdit(product)}
-                      className="relative w-14 h-14 rounded-xl overflow-hidden bg-slate-100 shrink-0 group"
-                      title={
-                        photos.length > 0
-                          ? `${photos.length} foto${photos.length > 1 ? "s" : ""} · tap para editar`
-                          : "Agregar fotos"
-                      }
+                      onClick={() => {
+                        setPopoverOpen(false)
+                        if (variant) onQuickStock(product, variant.id)
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors"
                     >
-                      {photos[0] ? (
-                        <img
-                          src={photos[0]}
-                          alt={v.variant_name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-300">
-                          <Package size={20} />
-                        </div>
-                      )}
-                      {photos.length > 1 && (
-                        <span className="absolute bottom-0.5 right-0.5 px-1 py-0 rounded-md bg-black/65 text-white text-[8px] font-black tabular-nums">
-                          +{photos.length - 1}
-                        </span>
-                      )}
-                      {photos.length === 0 && (
-                        <span className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/40 to-transparent text-white text-[7px] font-black uppercase tracking-widest pb-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          + foto
-                        </span>
-                      )}
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                        <ArrowUp size={13} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-black truncate">
+                          Sumar stock
+                        </p>
+                        <p className="text-[9px] font-bold text-slate-400 truncate">
+                          {variant.variant_name}
+                        </p>
+                      </div>
                     </button>
+                  )}
 
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-black text-slate-800 truncate">
-                        {v.variant_name}
-                      </p>
-                      <p className="text-[9px] text-slate-400 truncate">
-                        SKU: {v.sku || "---"}
-                      </p>
-                      {/* Strip de miniaturas (si hay 2+ fotos) */}
-                      {photos.length > 1 && (
-                        <div className="flex gap-0.5 mt-1">
-                          {photos.slice(0, 5).map((url, idx) => (
-                            <img
-                              key={idx}
-                              src={url}
-                              alt=""
-                              loading="lazy"
-                              className="w-5 h-5 rounded object-cover border border-white shadow-sm"
-                            />
-                          ))}
-                        </div>
-                      )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPopoverOpen(false)
+                      onAddVariant(product)
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-pink-50 dark:hover:bg-pink-500/10 transition-colors border-t border-slate-100 dark:border-slate-800"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-pink-100 dark:bg-pink-500/15 text-pink-700 dark:text-pink-300 flex items-center justify-center shrink-0">
+                      <Layers size={13} />
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-right">
-                        <p className="text-[10px] font-black text-emerald-500">
-                          {v.stock} pz
-                        </p>
-                        <p className="text-[10px] font-black text-primary">
-                          {v.price ? money(v.price) : "—"}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => onMove(v.id, "venta")}
-                          className="w-8 h-8 rounded-xl bg-slate-100 text-slate-500"
-                        >
-                          −
-                        </button>
-                        <button
-                          onClick={() => onMove(v.id, "entrada")}
-                          className="w-8 h-8 rounded-xl bg-primary text-white"
-                        >
-                          +
-                        </button>
-                      </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black truncate">
+                        Agregar variante
+                      </p>
+                      <p className="text-[9px] font-bold text-slate-400 truncate">
+                        Nuevo tono / modelo
+                      </p>
                     </div>
-                  </div>
-                )
-              })
-            ) : (
-              <div className="py-6 text-center border border-dashed border-slate-200 rounded-2xl">
-                <p className="text-[10px] text-slate-400">Sin variantes</p>
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPopoverOpen(false)
+                      onEdit(product)
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-t border-slate-100 dark:border-slate-800"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+                      <Edit3 size={13} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black truncate">
+                        Editar todo
+                      </p>
+                      <p className="text-[9px] font-bold text-slate-400 truncate">
+                        Datos, precios, fotos
+                      </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPopoverOpen(false)
+                      handleDelete()
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors border-t border-slate-100 dark:border-slate-800 text-rose-600 dark:text-rose-400"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-500/15 flex items-center justify-center shrink-0">
+                      <Trash2 size={13} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black truncate">
+                        Eliminar
+                      </p>
+                      <p className="text-[9px] font-bold opacity-70 truncate">
+                        Borra el producto
+                      </p>
+                    </div>
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
     </motion.div>
-  )
-}
-
-/* MINI STAT */
-function MiniStat({ label, value, highlight, color }: any) {
-  return (
-    <div className={`rounded-xl p-3 text-center border ${
-      highlight ? "bg-primary/5 border-primary/10" : "bg-white border-slate-100"
-    }`}>
-      <p className="text-[8px] text-slate-400 font-black uppercase">{label}</p>
-      <p className={`text-xs font-black ${color || "text-slate-800"}`}>
-        {value}
-      </p>
-    </div>
-  )
-}
-
-/* TAB BUTTON */
-function TabButton({ active, onClick, label }: any) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase ${
-        active
-          ? "bg-slate-900 text-white"
-          : "bg-slate-100 text-slate-500"
-      }`}
-    >
-      {label}
-    </button>
   )
 }
