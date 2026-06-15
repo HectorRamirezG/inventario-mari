@@ -20,6 +20,7 @@ export function useEditProductModal(
   const [category, setCategory] = useState("")
   const [cost, setCost] = useState<number | "">("")
   const [minStock, setMinStock] = useState<number | "">("")
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const [openVar, setOpenVar] = useState(false)
@@ -43,11 +44,13 @@ export function useEditProductModal(
       setCategory(product.category ?? "")
       setCost(product.cost ?? "")
       setMinStock(product.min_stock ?? "")
+      setImageUrl(product.image_url ?? null)
     } else if (!open) {
       setName("")
       setCategory("")
       setCost("")
       setMinStock("")
+      setImageUrl(null)
       setEditVar(null)
       setOpenVar(false)
     }
@@ -75,7 +78,8 @@ export function useEditProductModal(
         name: name.trim(),
         category: category.trim() || null,
         cost: Number(cost),
-        min_stock: minStock === "" ? 0 : Number(minStock)
+        min_stock: minStock === "" ? 0 : Number(minStock),
+        image_url: imageUrl,
       })
 
       toast.success("Producto actualizado")
@@ -104,6 +108,8 @@ export function useEditProductModal(
     setCost,
     minStock,
     setMinStock,
+    imageUrl,
+    setImageUrl,
     saving,
     save,
     sug,

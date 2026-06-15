@@ -3,26 +3,24 @@ import { motion } from "framer-motion"
 import {
   Settings as SettingsIcon,
   Store,
-  Lock,
+  UserCircle,
   Save,
   RotateCcw,
-  ShieldAlert,
-  KeyRound,
+  LogOut,
+  Mail,
+  Shield,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
 import { useStoreInfo } from "../../lib/useStoreInfo"
-import { useRole, type Role } from "../../lib/useRole"
+import { useAuth } from "../../lib/useAuth"
 
 export default function SettingsPage() {
   const { info, update, reset } = useStoreInfo()
-  const { isAdmin, changePin } = useRole()
+  const { email, role, fullName, signOut } = useAuth()
 
   const [form, setForm] = useState(info)
-  const [pinAdmin, setPinAdmin] = useState("")
-  const [pinCajera, setPinCajera] = useState("")
   const [savingStore, setSavingStore] = useState(false)
-  const [savingPin, setSavingPin] = useState<Role | null>(null)
 
   const handleStoreSave = () => {
     setSavingStore(true)
@@ -37,21 +35,6 @@ export default function SettingsPage() {
     if (!window.confirm("¿Restaurar valores por defecto?")) return
     reset()
     toast.success("Restaurado")
-  }
-
-  const handlePinChange = (which: Role, value: string) => {
-    if (!isAdmin) return
-    setSavingPin(which)
-    try {
-      changePin(which, value)
-      if (which === "admin") setPinAdmin("")
-      else setPinCajera("")
-      toast.success(`PIN de ${which} actualizado`)
-    } catch (e: any) {
-      toast.error(e?.message ?? "Error al cambiar PIN")
-    } finally {
-      setSavingPin(null)
-    }
   }
 
   return (
@@ -139,46 +122,44 @@ export default function SettingsPage() {
         </div>
       </Section>
 
-      {/* SEGURIDAD: PINs */}
+      {/* CUENTA */}
       <Section
-        icon={<Lock size={14} />}
-        title="PINs de acceso"
-        subtitle={
-          isAdmin
-            ? "Cambia los PINs de admin y cajera"
-            : "Sólo el administrador puede cambiar PINs"
-        }
+        icon={<UserCircle size={14} />}
+        title="Mi cuenta"
+        subtitle="Sesión activa de Supabase"
       >
-        {!isAdmin && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 text-amber-700 text-[10px] font-bold">
-            <ShieldAlert size={14} />
-            <span>Inicia sesión como admin para modificar los PINs.</span>
+        <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-slate-50">
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-bloom"
+            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+          >
+            <UserCircle size={22} />
           </div>
-        )}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-black truncate">{fullName ?? email}</p>
+            <p className="text-[10px] text-slate-500 flex items-center gap-1">
+              <Mail size={10} />
+              <span className="truncate">{email}</span>
+            </p>
+            <p className="text-[9px] font-black uppercase tracking-widest text-primary mt-0.5 flex items-center gap-1">
+              <Shield size={9} />
+              Rol: {role}
+            </p>
+          </div>
+        </div>
 
-        <PinChanger
-          role="admin"
-          label="PIN Administrador"
-          value={pinAdmin}
-          onValue={setPinAdmin}
-          onSave={() => handlePinChange("admin", pinAdmin)}
-          saving={savingPin === "admin"}
-          disabled={!isAdmin}
-        />
-        <PinChanger
-          role="cajera"
-          label="PIN Cajera"
-          value={pinCajera}
-          onValue={setPinCajera}
-          onSave={() => handlePinChange("cajera", pinCajera)}
-          saving={savingPin === "cajera"}
-          disabled={!isAdmin}
-        />
+        <button
+          onClick={() => signOut()}
+          className="w-full h-11 mt-3 rounded-xl bg-rose-50 text-rose-600 text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-100"
+        >
+          <LogOut size={14} /> Cerrar sesión
+        </button>
 
         <p className="text-[9px] font-bold text-slate-400 leading-relaxed pt-2">
-          Los PINs viven sólo en este dispositivo (no se sincronizan con Supabase).
-          Si olvidas el PIN admin, borra el localStorage del navegador para resetear
-          a <code className="text-primary">1234</code>.
+          Los roles (<code className="text-primary">admin / staff / client</code>) se
+          asignan automáticamente por correo. Para promover una cajera a{" "}
+          <code className="text-primary">staff</code>, edita su fila en{" "}
+          <code>user_profiles</code> desde Supabase.
         </p>
       </Section>
     </div>
@@ -236,57 +217,5 @@ function Field({
       </span>
       {children}
     </label>
-  )
-}
-
-function PinChanger({
-  role,
-  label,
-  value,
-  onValue,
-  onSave,
-  saving,
-  disabled,
-}: {
-  role: Role
-  label: string
-  value: string
-  onValue: (v: string) => void
-  onSave: () => void
-  saving: boolean
-  disabled: boolean
-}) {
-  return (
-    <div className="flex items-end gap-2">
-      <Field label={label}>
-        <div className="relative">
-          <KeyRound
-            size={12}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300"
-          />
-          <input
-            type="password"
-            inputMode="numeric"
-            pattern="\d*"
-            maxLength={8}
-            value={value}
-            onChange={(e) =>
-              onValue(e.target.value.replace(/\D/g, "").slice(0, 8))
-            }
-            placeholder="4 a 8 dígitos"
-            disabled={disabled}
-            className="settings-input pl-8 tabular-nums tracking-widest"
-            autoComplete="new-password"
-          />
-        </div>
-      </Field>
-      <button
-        onClick={onSave}
-        disabled={disabled || saving || value.length < 4}
-        className="h-11 px-4 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-      >
-        {saving ? "..." : `Cambiar ${role === "admin" ? "Admin" : "Cajera"}`}
-      </button>
-    </div>
   )
 }

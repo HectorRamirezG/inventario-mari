@@ -8,55 +8,90 @@ import {
 import { getStoreInfo } from "./useStoreInfo"
 
 /**
- * Genera un recibo en texto plano (con emoticones discretos) listo
- * para mandar por WhatsApp/Email. Cabe en un solo mensaje.
+ * URL pública del ticket que se abre sin login.
+ * El token viene del trigger `sales_set_public_token` (migración 0007).
+ */
+export function publicTicketUrl(sale: Pick<Sale, "id" | "public_token">): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : ""
+  const token = sale.public_token || sale.id
+  return `${origin}/ticket/${encodeURIComponent(token)}`
+}
+
+const TIER_TAG: Record<string, string> = {
+  menudeo: "Menudeo",
+  medio: "Medio",
+  mayoreo: "Mayoreo",
+}
+
+/**
+ * Genera un recibo listo para WhatsApp con formato premium.
+ * Incluye separadores, emojis y enlace al ticket digital.
  */
 export function buildReceiptText(sale: Sale): string {
   const store = getStoreInfo()
   const lines: string[] = []
-  lines.push(`*${store.name}*`)
+  const sep = "━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  lines.push(`✨ *${store.name}* ✨`)
   if (store.tagline) lines.push(`_${store.tagline}_`)
-  lines.push(`Recibo ${shortId(sale.id)}`)
-  lines.push(`Fecha: ${formatDate(sale.created_at)}`)
+  lines.push(sep)
+  lines.push(`🧾 Recibo: *${shortId(sale.id)}*`)
+  lines.push(`📅 ${formatDate(sale.created_at)}`)
+  if (sale.customer_name) lines.push(`🛍️ Cliente: *${sale.customer_name}*`)
+  if (sale.is_layaway) lines.push(`📌 *APARTADO*`)
   lines.push("")
-  lines.push(`Cliente: ${sale.customer_name ?? "—"}`)
-  lines.push("")
-  lines.push(`--- Productos ---`)
+  lines.push("*Detalle de tu pedido:*")
+  lines.push("──────────────────────────")
+
   for (const it of sale.sale_items ?? []) {
-    const desc = [it.product_name, it.variant_name].filter(Boolean).join(" · ")
-    lines.push(`${it.qty}x ${desc}  —  ${formatMoney(it.qty * it.unit_price)}`)
+    const desc = it.variant_name
+      ? `${it.product_name} — ${it.variant_name}`
+      : it.product_name
+    const tier = it.tier && it.tier !== "menudeo" ? ` [${TIER_TAG[it.tier]}]` : ""
+    lines.push(`• ${it.qty}x ${desc}${tier}`)
+    lines.push(
+      `   ${formatMoney(it.unit_price)} c/u  ➔  *${formatMoney(it.qty * it.unit_price)}*`
+    )
   }
-  lines.push("")
-  lines.push(`Subtotal: *${formatMoney(sale.total)}*`)
+
+  lines.push(sep)
+  lines.push(`💰 *TOTAL:* ${formatMoney(sale.total)} MXN`)
   if (Number(sale.paid) > 0) {
-    lines.push(`Pagado:   ${formatMoney(sale.paid)}`)
+    lines.push(`💵 Pagado: ${formatMoney(sale.paid)} MXN`)
   }
   if (Number(sale.balance) > 0) {
-    lines.push(`Saldo pendiente: *${formatMoney(sale.balance)}*`)
-    if (sale.payment_url) {
-      lines.push("")
-      lines.push(`Liga de pago: ${sale.payment_url}`)
-    }
+    lines.push(`🚨 *Pendiente:* ${formatMoney(sale.balance)} MXN`)
   } else {
-    lines.push(`Estado: PAGADO ✅`)
+    lines.push(`✅ *PAGADO*`)
   }
+
+  lines.push("")
+  lines.push("🔗 *Ver ticket digital:*")
+  lines.push(publicTicketUrl(sale))
+
+  if (sale.payment_url) {
+    lines.push("")
+    lines.push(`💳 *Pagar online:*`)
+    lines.push(sale.payment_url)
+  }
+
   if (sale.notes) {
     lines.push("")
-    lines.push(`Nota: ${sale.notes}`)
+    lines.push(`📝 _${sale.notes}_`)
   }
-  if (store.phone) {
-    lines.push("")
-    lines.push(`Contacto: ${store.phone}`)
-  }
+
+  lines.push(sep)
+  if (store.phone) lines.push(`📞 ${store.phone}`)
+  if (store.address) lines.push(`📍 ${store.address}`)
   lines.push("")
-  lines.push(store.thanks_message)
+  lines.push(`💄 ${store.thanks_message}`)
+
   return lines.join("\n")
 }
 
 /**
  * Abre WhatsApp con el recibo pre-rellenado.
- * - Si hay teléfono, lo manda al chat de ese contacto.
- * - Si no, abre el "share" para que el usuario elija destinatario.
+ * Si hay teléfono → chat directo. Si no → share picker.
  */
 export function sendReceiptByWhatsApp(sale: Sale) {
   const text = encodeURIComponent(buildReceiptText(sale))
@@ -75,4 +110,20 @@ export function sendReceiptByEmail(sale: Sale, to?: string) {
     subject
   )}&body=${encodeURIComponent(body)}`
   window.location.href = href
+}
+
+/**
+ * Copia el enlace público del ticket al portapapeles.
+ * Devuelve la URL para mostrarla en un toast.
+ */
+export async function copyPublicTicketUrl(sale: Sale): Promise<string> {
+  const url = publicTicketUrl(sale)
+  if (typeof navigator !== "undefined" && navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      /* ignore */
+    }
+  }
+  return url
 }

@@ -3,6 +3,7 @@ import Modal from "../../components/ui/Modal"
 import Button from "../../components/ui/Button"
 import Badge from "../../components/ui/Badge"
 import { FieldInput } from "../../components/ui/Field"
+import ProductImageUploader from "../../components/ui/ProductImageUploader"
 import { money } from "../pricing/suggest"
 
 import type { Product } from "../../types/database"
@@ -31,6 +32,18 @@ export default function EditProductModal({
         onClose={onClose}
       >
         <div className="flex flex-col gap-10 max-h-[78vh] overflow-y-auto pb-6">
+
+          {/* FOTO */}
+          <div className="space-y-3">
+            <label className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-400 px-1">
+              Foto del producto
+            </label>
+            <ProductImageUploader
+              value={form.imageUrl}
+              onChange={form.setImageUrl}
+              folder={`products/${product?.id ?? "new"}`}
+            />
+          </div>
 
           {/* GENERAL */}
           <div className="space-y-4">

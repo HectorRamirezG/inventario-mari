@@ -51,20 +51,37 @@ export default function ProductCard({
     >
       {/* HEADER */}
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-black text-slate-900 italic">
-            {product.name}
-          </h3>
-
-          <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">
-            {product.category ?? "General"}
-          </span>
-
-          {product.cost == null && (
-            <Badge tone="rose" className="mt-1 text-[9px] px-2 py-1">
-              Sin costo
-            </Badge>
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className="w-14 h-14 rounded-2xl object-cover shrink-0 shadow-sm"
+              loading="lazy"
+            />
+          ) : (
+            <div
+              className="w-14 h-14 rounded-2xl shrink-0 flex items-center justify-center text-primary/40"
+              style={{ background: "linear-gradient(135deg,#fdf2f8,#faf5ff)" }}
+            >
+              <Package size={24} />
+            </div>
           )}
+          <div className="min-w-0">
+            <h3 className="text-lg font-black text-slate-900 italic leading-tight truncate">
+              {product.name}
+            </h3>
+
+            <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">
+              {product.category ?? "General"}
+            </span>
+
+            {product.cost == null && (
+              <Badge tone="rose" className="mt-1 text-[9px] px-2 py-1">
+                Sin costo
+              </Badge>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2">

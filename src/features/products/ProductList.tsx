@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { Search, FilterX, Sparkles, Boxes, Plus } from "lucide-react"
+import { useEffect } from "react"
 import ProductCard from "./ProductCard"
 import Button from "../../components/ui/Button"
 
@@ -22,6 +23,13 @@ const container = {
 
 export default function ProductList() {
   const ui = useProductList()
+
+  // Permite abrir el modal "Nuevo producto" desde el Action Hub global
+  useEffect(() => {
+    const handler = () => ui.setOpenNewProduct(true)
+    window.addEventListener("products:new", handler)
+    return () => window.removeEventListener("products:new", handler)
+  }, [ui])
 
   return (
     <div className="flex flex-col gap-10 pb-44">

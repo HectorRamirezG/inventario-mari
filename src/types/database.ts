@@ -15,6 +15,7 @@ export interface Variant {
 
   cost_override?: number | null;   // DB
   effective_cost?: number | null;  // CALCULADO
+  image_url?: string | null;       // foto opcional por variante
 }
 
 export interface Product {
@@ -25,6 +26,7 @@ export interface Product {
   price: number | null;
   min_stock: number | null;
   is_active?: boolean;
+  image_url?: string | null;       // foto principal del producto
   variants?: Variant[];
 }
 
@@ -57,9 +59,11 @@ export interface Sale {
   id: string;
   customer_name: string | null;
   customer_phone?: string | null;
+  customer_email?: string | null;     // Para self-shopping (RLS)
   customer_address?: string | null;
-  customer_location?: string | null; // Google Maps URL o "lat,lng"
-  payment_url?: string | null;       // Link de cobro (Mercado Pago, etc.)
+  customer_location?: string | null;  // Google Maps URL o "lat,lng"
+  payment_url?: string | null;        // Link de cobro (Mercado Pago, etc.)
+  public_token?: string | null;       // Token para ticket público /ticket/:token
   notes?: string | null;
   due_date?: string | null;
   is_layaway?: boolean;
@@ -71,6 +75,16 @@ export interface Sale {
   // Relaciones embebidas (opcionales)
   sale_items?: SaleItem[];
   payments?: Payment[];
+}
+
+export type AppRole = "admin" | "staff" | "client" | "anon";
+
+export interface UserProfile {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: AppRole;
+  created_at?: string;
 }
 
 export {};
