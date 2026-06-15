@@ -16,7 +16,7 @@ export default function PricingHistory() {
 
   return (
     <div className="flex flex-col gap-4 pb-44">
-      
+
       {/* 1. SECCIÓN DE BÚSQUEDA Y TÍTULO (No fija) */}
       <div className="px-2 space-y-4">
         <div className="flex items-center justify-between">
@@ -28,8 +28,8 @@ export default function PricingHistory() {
               {filtered.length} registros encontrados
             </p>
           </div>
-          
-          <button 
+
+          <button
             onClick={refresh}
             className={`h-10 w-10 rounded-full bg-white border border-slate-100 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 transition-all ${loading ? 'animate-spin' : ''}`}
           >
@@ -41,8 +41,8 @@ export default function PricingHistory() {
         <div className="relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
           <input
-            type="text" 
-            value={q} 
+            type="text"
+            value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="BUSCAR PRODUCTO..."
             className="w-full h-12 pl-12 pr-6 bg-white border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none shadow-sm focus:ring-2 focus:ring-primary/10 transition-all"
@@ -62,10 +62,10 @@ export default function PricingHistory() {
             const isHighMargin = Number(r.margin_percent) >= 20;
 
             return (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                key={r.id} 
+                key={r.id}
                 className="bg-white p-5 rounded-[2rem] border border-slate-50 shadow-sm relative overflow-hidden group"
               >
                 {/* Indicador visual de margen */}

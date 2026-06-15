@@ -11,6 +11,7 @@ import {
   Wallet,
 } from "lucide-react"
 import toast from "react-hot-toast"
+import confetti from "canvas-confetti"
 
 import { supabase } from "../../lib/supabase"
 import { sound } from "../../lib/sound"
@@ -144,6 +145,21 @@ export default function ReviewProofDrawer({
     try {
       await approveProof(proof.id, Number(amountInput), methodInput)
       sound.success()
+
+      // 🎉 Confetti festivo desde abajo (doble explosión)
+      const fire = (origin: { x: number; y: number }) =>
+        confetti({
+          particleCount: 80,
+          spread: 90,
+          startVelocity: 50,
+          ticks: 200,
+          origin,
+          colors: ["#10b981", "#34d399", "#e6007e", "#fbbf24"],
+          zIndex: 9999,
+        })
+      fire({ x: 0.3, y: 0.85 })
+      setTimeout(() => fire({ x: 0.7, y: 0.85 }), 180)
+
       toast.success("✓ Aprobado · cliente notificado", { id: tid })
       onReviewed?.()
       onClose()
