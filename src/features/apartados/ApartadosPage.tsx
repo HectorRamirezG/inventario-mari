@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bookmark,
@@ -14,10 +14,12 @@ import {
   MessageCircle,
   Receipt,
   Printer,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import { useApartados, type ApartadosFilter } from "./useApartados";
 import PaymentModal from "./PaymentModal";
+import EditSaleAdjustModal from "./EditSaleAdjustModal";
 import TicketView from "../../components/ui/TicketView";
 import Badge from "../../components/ui/Badge";
 import type { Sale } from "../../types/database";
@@ -29,6 +31,10 @@ import {
   cleanPhone,
   intlPhone,
 } from "../../lib/format";
+import {
+  fetchProfilesByEmails,
+  type UserProfileDetail,
+} from "../profile/profileService";
 
 const waLink = (raw?: string | null) => {
   const p = intlPhone(raw);
@@ -45,6 +51,24 @@ export default function ApartadosPage() {
   const { state, actions } = useApartados();
   const [selected, setSelected] = useState<Sale | null>(null);
   const [ticketSale, setTicketSale] = useState<Sale | null>(null);
+  const [adjustSale, setAdjustSale] = useState<Sale | null>(null);
+  const [profiles, setProfiles] = useState<Record<string, UserProfileDetail>>({});
+
+  // Carga lazy de avatars de clientes cuando cambian las ventas mostradas
+  useEffect(() => {
+    const emails = state.sales
+      .map((s) => s.customer_email)
+      .filter((e): e is string => !!e)
+      .map((e) => e.toLowerCase());
+    if (emails.length === 0) return;
+    let alive = true;
+    fetchProfilesByEmails(emails).then((map) => {
+      if (alive) setProfiles((prev) => ({ ...prev, ...map }));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [state.sales]);
 
   return (
     <div className="px-3 pt-1 pb-28 max-w-5xl mx-auto">
@@ -162,8 +186,14 @@ export default function ApartadosPage() {
               <SaleCard
                 key={sale.id}
                 sale={sale}
+                profile={
+                  sale.customer_email
+                    ? profiles[sale.customer_email.toLowerCase()]
+                    : undefined
+                }
                 onPay={() => setSelected(sale)}
                 onTicket={() => setTicketSale(sale)}
+                onAdjust={() => setAdjustSale(sale)}
                 onCancel={() => actions.handleCancelSale(sale.id)}
               />
             ))}
@@ -182,6 +212,13 @@ export default function ApartadosPage() {
         open={!!ticketSale}
         sale={ticketSale}
         onClose={() => setTicketSale(null)}
+      />
+
+      <EditSaleAdjustModal
+        open={!!adjustSale}
+        sale={adjustSale}
+        onClose={() => setAdjustSale(null)}
+        onSaved={actions.refresh}
       />
     </div>
   );
@@ -215,13 +252,17 @@ function Kpi({
 
 function SaleCard({
   sale,
+  profile,
   onPay,
   onTicket,
+  onAdjust,
   onCancel,
 }: {
   sale: Sale;
+  profile?: UserProfileDetail;
   onPay: () => void;
   onTicket: () => void;
+  onAdjust: () => void;
   onCancel: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -308,19 +349,28 @@ function SaleCard({
 
       {/* Cabecera */}
       <div className="flex items-start gap-3 mb-3">
-        {/* Avatar con iniciales */}
-        <div
-          className="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black text-sm shrink-0 shadow-sm"
-          style={{
-            background: isPaid
-              ? "linear-gradient(135deg,#10b981,#34d399)"
-              : urgent
-              ? "linear-gradient(135deg,#ef4444,#fb7185)"
-              : "linear-gradient(135deg,#e6007e,#a855f7)",
-          }}
-        >
-          {initials || "??"}
-        </div>
+        {/* Avatar (foto del cliente si tiene perfil, sino iniciales) */}
+        {profile?.avatar_url ? (
+          <img
+            src={profile.avatar_url}
+            alt={sale.customer_name ?? ""}
+            className="w-11 h-11 rounded-2xl object-cover shrink-0 shadow-sm ring-2 ring-white dark:ring-slate-800"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-black text-sm shrink-0 shadow-sm"
+            style={{
+              background: isPaid
+                ? "linear-gradient(135deg,#10b981,#34d399)"
+                : urgent
+                ? "linear-gradient(135deg,#ef4444,#fb7185)"
+                : "linear-gradient(135deg,#e6007e,#a855f7)",
+            }}
+          >
+            {initials || "??"}
+          </div>
+        )}
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
@@ -589,6 +639,14 @@ function SaleCard({
           )}
           <motion.button
             whileTap={{ scale: 0.96 }}
+            onClick={onAdjust}
+            className="h-10 px-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
+            title="Forzar tier / aplicar descuento → notifica al cliente"
+          >
+            <SlidersHorizontal size={12} />
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
             onClick={onTicket}
             className="h-10 px-3 rounded-xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
             title="Ver ticket / imprimir / enviar"
@@ -597,9 +655,9 @@ function SaleCard({
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.96 }}
-            onClick={() => sendReceiptByWhatsApp(sale)}
+            onClick={() => sendReceiptByWhatsApp(sale, profile?.avatar_url)}
             className="h-10 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
-            title="Enviar recibo por WhatsApp"
+            title="Enviar recibo por WhatsApp (incluye foto del cliente)"
           >
             <Receipt size={12} />
           </motion.button>

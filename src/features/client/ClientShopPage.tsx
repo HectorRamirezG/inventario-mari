@@ -21,9 +21,16 @@ import toast from "react-hot-toast"
 import { supabase } from "../../lib/supabase"
 import { formatMoney } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
+import { sound } from "../../lib/sound"
 import SmartLocationInput from "../../components/ui/SmartLocationInput"
 import ImageCarousel from "../../components/ui/ImageCarousel"
 import Skeleton from "../../components/ui/Skeleton"
+import {
+  useTierThresholds,
+  tierForQty,
+  priceForTier,
+  type TierThresholds,
+} from "../pricing/tierPricingService"
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -100,6 +107,7 @@ export default function ClientShopPage() {
   const navigate = useNavigate()
   const { email: authEmail, fullName: authName, session } = useAuth()
   const isLogged = !!session
+  const thresholds = useTierThresholds()
 
   const [products, setProducts] = useState<PublicProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -164,10 +172,45 @@ export default function ClientShopPage() {
     () => cart.reduce((acc, c) => acc + c.qty, 0),
     [cart]
   )
-  const totalAmt = useMemo(
-    () => cart.reduce((acc, c) => acc + c.qty * c.unit_price, 0),
-    [cart]
+
+  // Tier que aplica al carrito completo (segun cantidad total)
+  const cartTier = useMemo(
+    () => tierForQty(totalQty, thresholds),
+    [totalQty, thresholds]
   )
+
+  // Re-calcular precios de cada línea según el tier activo
+  const repricedCart = useMemo(
+    () =>
+      cart.map((c) => {
+        // Necesitamos los precios originales de la variante para recalcular
+        const variant = products
+          .flatMap((p) => p.variants)
+          .find((v) => v.id === c.variant_id)
+        if (!variant) return c
+        const newPrice = priceForTier(variant, cartTier)
+        return { ...c, unit_price: newPrice }
+      }),
+    [cart, cartTier, products]
+  )
+
+  const totalAmt = useMemo(
+    () => repricedCart.reduce((acc, c) => acc + c.qty * c.unit_price, 0),
+    [repricedCart]
+  )
+
+  // Ahorro vs menudeo (motivacional)
+  const savingsVsMenudeo = useMemo(() => {
+    if (cartTier === "menudeo") return 0
+    const menudeoTotal = cart.reduce((acc, c) => {
+      const variant = products
+        .flatMap((p) => p.variants)
+        .find((v) => v.id === c.variant_id)
+      if (!variant) return acc + c.unit_price * c.qty
+      return acc + priceForTier(variant, "menudeo") * c.qty
+    }, 0)
+    return Math.max(0, menudeoTotal - totalAmt)
+  }, [cart, cartTier, totalAmt, products])
 
   function priceOf(v: PublicVariant): number {
     return v.price_menudeo ?? v.price ?? v.price_medio ?? v.price_mayoreo ?? 0
@@ -261,7 +304,8 @@ export default function ClientShopPage() {
         .single()
       if (error || !sale) throw new Error(error?.message ?? "Sin id")
 
-      for (const c of cart) {
+      // Insertar items con el tier ya calculado y los precios actualizados
+      for (const c of repricedCart) {
         const { error: itemErr } = await supabase.from("sale_items").insert({
           sale_id: sale.id,
           variant_id: c.variant_id,
@@ -269,7 +313,7 @@ export default function ClientShopPage() {
           product_name: c.product_name,
           variant_name: c.variant_name,
           qty: c.qty,
-          tier: "menudeo",
+          tier: cartTier,
           unit_price: c.unit_price,
           cost_snapshot: 0,
           profit: 0,
@@ -280,6 +324,7 @@ export default function ClientShopPage() {
       // Persiste datos del invitado para próximas compras
       saveGuest(guest)
 
+      sound.success()
       toast.success("✨ ¡Apartado creado!", { id: tid })
       setCart([])
       setOpenGuestForm(false)
@@ -287,6 +332,7 @@ export default function ClientShopPage() {
       // Navegación SPA hacia el ticket público (no reload)
       navigate(`/ticket/${sale.public_token ?? sale.id}`)
     } catch (e: any) {
+      sound.error()
       toast.error(e?.message ?? "No se pudo apartar", { id: tid })
     } finally {
       setSubmitting(false)
@@ -319,7 +365,7 @@ export default function ClientShopPage() {
   }
 
   return (
-    <div className="pb-32">
+    <div className="pb-24">
       {/* Saludo */}
       <div className="mb-4">
         <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">
@@ -376,11 +422,11 @@ export default function ClientShopPage() {
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0 }}
             onClick={() => setOpenCart(true)}
-            className="fixed bottom-24 right-4 z-40 h-14 rounded-2xl px-5 text-white font-black flex items-center gap-3 shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)]"
+            className="fixed bottom-16 right-4 z-40 h-12 rounded-2xl px-4 text-white font-black flex items-center gap-2 shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)]"
             style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
           >
-            <ShoppingBag size={18} />
-            <span>
+            <ShoppingBag size={16} />
+            <span className="text-sm">
               {totalQty} · {formatMoney(totalAmt)}
             </span>
           </motion.button>
@@ -417,7 +463,14 @@ export default function ClientShopPage() {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
-                {cart.map((c) => (
+                {/* Banner motivacional de tier */}
+                <CartTierBanner
+                  totalQty={totalQty}
+                  cartTier={cartTier}
+                  thresholds={thresholds}
+                  savings={savingsVsMenudeo}
+                />
+                {repricedCart.map((c) => (
                   <div
                     key={c.variant_id}
                     className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60"
@@ -442,6 +495,11 @@ export default function ClientShopPage() {
                       </p>
                       <p className="text-xs font-black text-primary">
                         {formatMoney(c.unit_price)}
+                        {cartTier !== "menudeo" && (
+                          <span className="ml-1 text-[8px] text-emerald-600 uppercase tracking-widest">
+                            {cartTier}
+                          </span>
+                        )}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -719,6 +777,8 @@ function ProductCardClient({
             )}
           </div>
         )}
+        {/* Pista de tier (mayoreo) */}
+        <TierHint variant={variant} />
         <div className="flex items-center justify-between mt-1">
           <span className="text-sm font-black text-primary">
             {formatMoney(price)}
@@ -737,5 +797,74 @@ function ProductCardClient({
         </div>
       </div>
     </motion.div>
+  )
+}
+
+/* ──────── Banner motivacional dentro del carrito ──────── */
+function CartTierBanner({
+  totalQty,
+  cartTier,
+  thresholds,
+  savings,
+}: {
+  totalQty: number
+  cartTier: "menudeo" | "medio" | "mayoreo"
+  thresholds: TierThresholds
+  savings: number
+}) {
+  if (totalQty === 0) return null
+
+  // Si ya está en mayoreo, celebra el ahorro
+  if (cartTier === "mayoreo") {
+    return (
+      <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/30 p-3">
+        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+          ✨ ¡Precio mayoreo activo!
+        </p>
+        {savings > 0 && (
+          <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">
+            Ahorras {formatMoney(savings)} vs. menudeo 💖
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  const nextNeeded =
+    cartTier === "menudeo"
+      ? thresholds.medio_min_qty - totalQty
+      : thresholds.mayoreo_min_qty - totalQty
+  const nextTier = cartTier === "menudeo" ? "medio" : "mayoreo"
+
+  if (nextNeeded <= 0) return null
+
+  return (
+    <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30 p-3">
+      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
+        🎯 Te faltan {nextNeeded} {nextNeeded === 1 ? "pieza" : "piezas"}
+      </p>
+      <p className="text-xs font-bold text-amber-700 dark:text-amber-300 mt-0.5">
+        Lleva {nextNeeded} más y desbloqueas el precio de{" "}
+        <span className="font-black uppercase">{nextTier}</span>.
+      </p>
+      {savings > 0 && (
+        <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1">
+          Ahora mismo ya ahorras {formatMoney(savings)}.
+        </p>
+      )}
+    </div>
+  )
+}
+
+/* ──────── Pista de tier por variante (en ProductCard) ──────── */
+function TierHint({ variant }: { variant: PublicVariant }) {
+  const thresholds = useTierThresholds()
+  const menudeo = variant.price_menudeo ?? variant.price ?? 0
+  const mayoreo = variant.price_mayoreo
+  if (!mayoreo || mayoreo >= menudeo) return null
+  return (
+    <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 truncate mb-0.5">
+      Lleva {thresholds.mayoreo_min_qty}+ y pagas {formatMoney(mayoreo)} c/u
+    </p>
   )
 }

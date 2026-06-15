@@ -75,7 +75,33 @@ export async function updateVariant(
     .update(patch)
     .eq("id", variantId)
 
-  if (error) throw error
+  if (!error) return
+
+  // Si la columna image_urls aún no existe (DB sin la migración 0012),
+  // reintenta enviando sólo lo legacy. Así el panel sigue funcionando
+  // aunque el usuario no haya corrido el SQL todavía.
+  const msg = error.message ?? ""
+  const isMissingCol =
+    /column .* (does not exist|not found)/i.test(msg) ||
+    /could not find the .* column/i.test(msg) ||
+    /image_urls/.test(msg)
+
+  if (isMissingCol && "image_urls" in patch) {
+    const safe = { ...patch }
+    delete (safe as any).image_urls
+    // Si image_url venía en null, garantiza que se quede null en vez de undefined
+    if (!("image_url" in safe) && Array.isArray(patch.image_urls)) {
+      safe.image_url = patch.image_urls[0] ?? null
+    }
+    const retry = await supabase
+      .from("variants")
+      .update(safe)
+      .eq("id", variantId)
+    if (retry.error) throw retry.error
+    return
+  }
+
+  throw error
 }
 
 export async function createProduct(product: Partial<Product>): Promise<Product> {

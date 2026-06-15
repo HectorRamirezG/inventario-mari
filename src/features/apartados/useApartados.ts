@@ -5,6 +5,7 @@ import {
   cancelSale,
   listApartados,
 } from "./apartadosService";
+import { sound } from "../../lib/sound";
 import type { Sale } from "../../types/database";
 
 export type ApartadosFilter = "pending" | "paid" | "all";
@@ -36,6 +37,13 @@ export function useApartados() {
     refresh();
   }, [refresh]);
 
+  // Auto-refresh cuando admin aprueba un pago desde el drawer global
+  useEffect(() => {
+    const handler = () => refresh();
+    window.addEventListener("mari:apartado-refresh", handler);
+    return () => window.removeEventListener("mari:apartado-refresh", handler);
+  }, [refresh]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return sales;
@@ -65,10 +73,12 @@ export function useApartados() {
       const toastId = toast.loading("Registrando abono...");
       try {
         await addPayment(saleId, amount, method);
-        toast.success("Abono registrado", { id: toastId });
+        sound.success();
+        toast.success("Abono registrado 💖", { id: toastId });
         await refresh();
         return true;
       } catch (e: any) {
+        sound.error();
         toast.error(e?.message ?? "Error al abonar", { id: toastId });
         return false;
       }

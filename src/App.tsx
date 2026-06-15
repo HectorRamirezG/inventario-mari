@@ -49,11 +49,15 @@ import CommandPalette from "./components/ui/CommandPalette"
 import ActionHub, { type HubAction } from "./components/ui/ActionHub"
 import NotificationBell from "./components/ui/NotificationBell"
 import ConnectionBanner from "./components/ui/ConnectionBanner"
+import UserProfileDrawer from "./components/ui/UserProfileDrawer"
+import ReviewProofDrawer from "./components/ui/ReviewProofDrawer"
+import WhatsAppSupportFab from "./components/ui/WhatsAppSupportFab"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
 import { useAuth, isStaffOrAdmin } from "./lib/useAuth"
 import { useRealtimeNotifications } from "./lib/useRealtime"
+import { useMyAvatar } from "./lib/useMyAvatar"
 
 // ──────────────────────────────────────────────────────────────────
 // Menús del shell admin/staff. Etiquetas más cortas y orientadas a acción.
@@ -172,9 +176,27 @@ function AdminShell() {
   const [section, setSection] = useState<AdminSection>("hoy")
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [hubOpen, setHubOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [proofId, setProofId] = useState<string | null>(null)
   const [apartadoBadge, setApartadoBadge] = useState(0)
   const { role, signOut, fullName, email } = useAuth()
+  const avatarUrl = useMyAvatar()
   const isAdmin = role === "admin"
+
+  // Listener global para abrir el drawer de comprobante desde notificaciones
+  // y desde el deep link ?proof=xxx
+  useEffect(() => {
+    const onOpenProof = (e: any) => {
+      const id = e?.detail?.proofId
+      if (id) setProofId(id)
+    }
+    window.addEventListener("mari:open-proof", onOpenProof)
+    // Lectura inicial de la URL ?proof=xxx (caso: click desde notif que cambia URL)
+    const params = new URLSearchParams(window.location.search)
+    const initial = params.get("proof")
+    if (initial) setProofId(initial)
+    return () => window.removeEventListener("mari:open-proof", onOpenProof)
+  }, [])
 
   useGlobalShortcuts()
   useRealtimeNotifications()
@@ -393,11 +415,20 @@ function AdminShell() {
               <NotificationBell />
               <ThemeToggle />
               <button
-                onClick={() => signOut()}
-                aria-label="Salir"
-                className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-rose-50 hover:text-rose-600 flex items-center justify-center"
+                onClick={() => setProfileOpen(true)}
+                aria-label="Mi perfil"
+                className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
+                style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
               >
-                <LogOut size={14} />
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <UserIcon size={14} className="text-white" />
+                )}
               </button>
             </div>
           </div>
@@ -414,21 +445,36 @@ function AdminShell() {
               <span className="text-primary">✨</span>
             </h1>
           </div>
-          <button
-            onClick={() => setPaletteOpen(true)}
-            className="flex items-center gap-2 h-10 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-          >
-            <Command size={13} />
-            <span>Buscar comandos...</span>
-            <kbd className="text-[9px] font-black uppercase tracking-widest bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
-              ⌘K
-            </kbd>
-          </button>
-          <NotificationBell />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="flex items-center gap-2 h-10 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+              <Command size={13} />
+              <span>Buscar comandos...</span>
+              <kbd className="text-[9px] font-black uppercase tracking-widest bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">
+                ⌘K
+              </kbd>
+            </button>
+            <NotificationBell />
+            <button
+              onClick={() => setProfileOpen(true)}
+              aria-label="Mi perfil"
+              className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
+              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+              title={fullName ?? email ?? "Mi perfil"}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <UserIcon size={16} className="text-white" />
+              )}
+            </button>
+          </div>
         </header>
 
         {/* ─── CONTENIDO ─── */}
-        <main className="flex-1 overflow-y-auto scroll-container-ios bg-slate-50/30 dark:bg-slate-950/50">
+        <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios bg-slate-50/30 dark:bg-slate-950/50">
           <div className="w-full max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-6">
             <AnimatePresence mode="wait">
               <motion.div
@@ -437,7 +483,7 @@ function AdminShell() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.15 }}
-                className="pb-32 md:pb-12"
+                className="pb-24 md:pb-12"
               >
                 {section === "hoy" && <DashboardPage />}
                 {section === "catalogo" && <InventoryPage />}
@@ -451,9 +497,9 @@ function AdminShell() {
           </div>
         </main>
 
-        {/* ─── DOCK MÓVIL ─── */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 pb-safe">
-          <div className="relative mx-3 mb-3 h-[68px] rounded-[28px] bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/40 dark:border-slate-700/40 shadow-[0_15px_50px_-10px_rgba(230,0,126,0.25)] flex items-center justify-around">
+        {/* ─── DOCK MÓVIL (delgado, pegado al borde) ─── */}
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 shadow-[0_-8px_30px_-15px_rgba(230,0,126,0.25)]">
+          <div className="relative h-12 flex items-center justify-around pb-safe">
             {visibleMenu.slice(0, 2).map((m) => (
               <DockButton
                 key={m.id}
@@ -472,10 +518,10 @@ function AdminShell() {
               whileTap={{ scale: 0.85 }}
               onClick={() => setHubOpen(true)}
               aria-label="Acciones rápidas"
-              className="relative -mt-8 w-[64px] h-[64px] rounded-full text-white flex items-center justify-center shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)]"
+              className="relative -mt-7 w-[52px] h-[52px] rounded-full text-white flex items-center justify-center shadow-[0_10px_30px_-8px_rgba(230,0,126,0.5)]"
               style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
             >
-              <Plus size={26} strokeWidth={3} />
+              <Plus size={22} strokeWidth={3} />
               <motion.span
                 animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0, 0.4] }}
                 transition={{ duration: 2.4, repeat: Infinity }}
@@ -505,6 +551,26 @@ function AdminShell() {
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ActionHub open={hubOpen} onClose={() => setHubOpen(false)} actions={hubActions} />
+      <UserProfileDrawer open={profileOpen} onClose={() => setProfileOpen(false)} />
+      <ReviewProofDrawer
+        open={!!proofId}
+        proofId={proofId}
+        onClose={() => {
+          setProofId(null)
+          // Limpia ?proof= de la URL si está ahí
+          if (typeof window !== "undefined") {
+            const u = new URL(window.location.href)
+            if (u.searchParams.has("proof")) {
+              u.searchParams.delete("proof")
+              window.history.replaceState({}, "", u.toString())
+            }
+          }
+        }}
+        onReviewed={() => {
+          // Notifica a las tabs activas para refrescar listados
+          window.dispatchEvent(new CustomEvent("mari:apartado-refresh"))
+        }}
+      />
     </div>
   )
 }
@@ -566,10 +632,12 @@ const SHOP_TABS = [
 ] as const
 
 function ShopShell() {
-  const { session, role, fullName, email, signOut } = useAuth()
+  const { session, role, fullName, email } = useAuth()
+  const avatarUrl = useMyAvatar()
   const isLogged = !!session
   const loc = useLocation()
   const navigate = useNavigate()
+  const [profileOpen, setProfileOpen] = useState(false)
 
   const showAdminLink = isLogged && isStaffOrAdmin(role)
 
@@ -610,12 +678,17 @@ function ShopShell() {
             )}
             {isLogged ? (
               <button
-                onClick={() => signOut()}
-                aria-label="Cerrar sesión"
-                className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500"
-                title="Cerrar sesión"
+                onClick={() => setProfileOpen(true)}
+                aria-label="Mi perfil"
+                className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
+                style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                title={fullName ?? email ?? "Mi perfil"}
               >
-                <LogOut size={14} />
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <UserIcon size={14} className="text-white" />
+                )}
               </button>
             ) : (
               <button
@@ -630,8 +703,8 @@ function ShopShell() {
       </header>
 
       {/* CONTENIDO */}
-      <main className="flex-1 overflow-y-auto scroll-container-ios">
-        <div className="max-w-3xl mx-auto px-4 py-4">
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios">
+        <div className="max-w-3xl mx-auto px-4 py-4 pb-20">
           <Routes>
             <Route path="/" element={<ClientShopPage />} />
             <Route
@@ -653,9 +726,9 @@ function ShopShell() {
         </div>
       </main>
 
-      {/* DOCK CLIENTE */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 pb-safe">
-        <div className="relative mx-3 mb-3 h-14 rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-2xl border border-white/40 dark:border-slate-700/50 shadow-[0_15px_40px_-10px_rgba(230,0,126,0.2)] flex items-center justify-around max-w-md mx-auto">
+      {/* DOCK CLIENTE (delgado, pegado al borde) */}
+      <nav className="fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-pink-50 dark:border-slate-800 shadow-[0_-8px_30px_-15px_rgba(230,0,126,0.18)]">
+        <div className="relative h-12 flex items-center justify-around max-w-md mx-auto pb-safe">
             {SHOP_TABS.map((t) => {
               const active = loc.pathname === t.to
               const Icon = t.icon
@@ -701,6 +774,11 @@ function ShopShell() {
             )}
         </div>
       </nav>
+
+      <UserProfileDrawer open={profileOpen} onClose={() => setProfileOpen(false)} />
+
+      {/* FAB de soporte WhatsApp (cliente / anon) */}
+      <WhatsAppSupportFab bottomOffset={64} />
     </div>
   )
 }

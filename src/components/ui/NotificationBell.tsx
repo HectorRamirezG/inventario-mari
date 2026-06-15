@@ -12,6 +12,8 @@ import {
   CheckCircle2,
   XCircle,
   ShoppingBag,
+  Receipt,
+  Sparkles,
 } from "lucide-react"
 
 import { useNotifications, type AppNotification } from "../../features/notifications/notificationsService"
@@ -36,6 +38,9 @@ const ICON: Record<string, typeof CreditCard> = {
   sale_paid: CheckCircle2,
   sale_cancelled: XCircle,
   new_layaway: ShoppingBag,
+  payment_proof_uploaded: Receipt,
+  payment_proof_rejected: XCircle,
+  price_adjusted: Sparkles,
 }
 
 const COLOR: Record<string, string> = {
@@ -46,6 +51,23 @@ const COLOR: Record<string, string> = {
   sale_cancelled:
     "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
   new_layaway: "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  payment_proof_uploaded:
+    "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  payment_proof_rejected:
+    "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  price_adjusted:
+    "bg-pink-50 dark:bg-pink-500/10 text-pink-700 dark:text-pink-300",
+}
+
+/** Etiqueta del CTA según tipo de notificación. */
+function actionLabel(type: string): string | null {
+  if (type === "payment_proof_uploaded") return "Revisar pago"
+  if (type === "new_layaway") return "Ver apartado"
+  if (type === "payment_added") return "Ver pedido"
+  if (type === "price_adjusted") return "Ver pedido"
+  if (type === "payment_proof_rejected") return "Ver pedido"
+  if (type === "sale_paid" || type === "sale_cancelled") return "Ver pedido"
+  return null
 }
 
 /**
@@ -82,13 +104,33 @@ export default function NotificationBell({
   const handleClick = async (n: AppNotification) => {
     if (!n.read_at) await markAsRead(n.id)
     setOpen(false)
+
+    // Acciones especiales: en lugar de navegar, abre el drawer apropiado
+    if (n.type === "payment_proof_uploaded") {
+      const proofId = n.metadata?.proof_id as string | undefined
+      if (proofId) {
+        window.dispatchEvent(
+          new CustomEvent("mari:open-proof", { detail: { proofId } })
+        )
+        return
+      }
+    }
+
     if (n.link) {
-      // Si es ruta interna, usa router; si es URL absoluta, abre en nueva pestaña
       if (/^https?:\/\//i.test(n.link)) {
         window.open(n.link, "_blank")
-      } else {
-        navigate(n.link)
+        return
       }
+      // Para enlaces tipo /admin?proof=xxx → parsear y abrir drawer
+      const url = new URL(n.link, window.location.origin)
+      const proof = url.searchParams.get("proof")
+      if (proof) {
+        window.dispatchEvent(
+          new CustomEvent("mari:open-proof", { detail: { proofId: proof } })
+        )
+        return
+      }
+      navigate(n.link)
     }
   }
 
@@ -185,6 +227,7 @@ export default function NotificationBell({
                     const Icon = ICON[n.type] ?? Bell
                     const tone = COLOR[n.type] ?? "bg-slate-50 text-slate-600"
                     const unreadItem = !n.read_at
+                    const cta = actionLabel(n.type)
                     return (
                       <div
                         key={n.id}
@@ -194,10 +237,7 @@ export default function NotificationBell({
                             : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
                         }`}
                       >
-                        <button
-                          onClick={() => handleClick(n)}
-                          className="flex gap-3 flex-1 text-left min-w-0"
-                        >
+                        <div className="flex gap-3 flex-1 min-w-0">
                           <div
                             className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${tone}`}
                           >
@@ -217,11 +257,26 @@ export default function NotificationBell({
                                 {n.body}
                               </p>
                             )}
-                            <p className="text-[9px] text-slate-400 mt-1 font-bold">
-                              {timeAgo(n.created_at)}
-                            </p>
+                            <div className="flex items-center justify-between gap-2 mt-1.5">
+                              <p className="text-[9px] text-slate-400 font-bold">
+                                {timeAgo(n.created_at)}
+                              </p>
+                              {cta && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleClick(n)}
+                                  className="text-[9px] font-black uppercase tracking-widest text-white px-2.5 py-1 rounded-full shadow-bloom active:scale-95 transition-transform"
+                                  style={{
+                                    background:
+                                      "linear-gradient(135deg,#e6007e,#a855f7)",
+                                  }}
+                                >
+                                  {cta} →
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        </button>
+                        </div>
                         <button
                           onClick={() => removeNotification(n.id)}
                           className="opacity-0 group-hover:opacity-100 sm:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500 self-start"

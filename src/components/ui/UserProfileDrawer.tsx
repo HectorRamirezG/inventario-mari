@@ -1,0 +1,496 @@
+import { useEffect, useState } from "react"
+import { createPortal } from "react-dom"
+import { motion, AnimatePresence, PanInfo } from "framer-motion"
+import {
+  X,
+  User as UserIcon,
+  Mail,
+  Lock,
+  Phone,
+  MapPin,
+  Shield,
+  Save,
+  LogOut,
+  Loader2,
+  Eye,
+  EyeOff,
+} from "lucide-react"
+import toast from "react-hot-toast"
+
+import { useAuth, isStaffOrAdmin } from "../../lib/useAuth"
+import {
+  fetchMyProfile,
+  updateMyProfile,
+  updateMyEmail,
+  updateMyPassword,
+  type UserProfileDetail,
+} from "../../features/profile/profileService"
+import ProductImageUploader from "./ProductImageUploader"
+import Skeleton from "./Skeleton"
+
+interface Props {
+  open: boolean
+  onClose: () => void
+}
+
+/**
+ * Drawer-cortina para ver y editar el perfil del usuario logueado.
+ * Si NO hay sesión, sólo invita a iniciar sesión.
+ */
+export default function UserProfileDrawer({ open, onClose }: Props) {
+  const { user, session, role, email, fullName, signOut } = useAuth()
+  const [profile, setProfile] = useState<UserProfileDetail | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const [name, setName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [address, setAddress] = useState("")
+  const [locationUrl, setLocationUrl] = useState("")
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+
+  const [newEmail, setNewEmail] = useState("")
+  const [newPwd, setNewPwd] = useState("")
+  const [showPwd, setShowPwd] = useState(false)
+  const [pwdSaving, setPwdSaving] = useState(false)
+  const [emailSaving, setEmailSaving] = useState(false)
+
+  // Cargar perfil cuando se abre
+  useEffect(() => {
+    if (!open || !user) return
+    let alive = true
+    setLoading(true)
+    fetchMyProfile(user.id).then((p) => {
+      if (!alive) return
+      setProfile(p)
+      setName(p?.full_name ?? fullName ?? "")
+      setPhone(p?.phone ?? "")
+      setAddress(p?.address ?? "")
+      setLocationUrl(p?.location_url ?? "")
+      setAvatarUrl(p?.avatar_url ?? null)
+      setNewEmail(p?.email ?? email ?? "")
+      setLoading(false)
+    })
+    return () => {
+      alive = false
+    }
+  }, [open, user, fullName, email])
+
+  // Bloquear scroll body
+  useEffect(() => {
+    if (!open) return
+    const original = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = original
+    }
+  }, [open])
+
+  // ESC para cerrar
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, onClose])
+
+  function onDragEnd(_: unknown, info: PanInfo) {
+    if (info.offset.y > 120 || info.velocity.y > 600) onClose()
+  }
+
+  async function handleSave() {
+    if (!user) return
+    setSaving(true)
+    try {
+      await updateMyProfile(user.id, {
+        full_name: name.trim() || null,
+        phone: phone.trim() || null,
+        address: address.trim() || null,
+        location_url: locationUrl.trim() || null,
+        avatar_url: avatarUrl,
+      })
+      toast.success("Perfil actualizado ✓")
+      window.dispatchEvent(new CustomEvent("mari:profile-updated"))
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo guardar")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleChangeEmail() {
+    if (!newEmail.trim() || newEmail === email) return
+    setEmailSaving(true)
+    try {
+      await updateMyEmail(newEmail.trim())
+      toast.success("Te enviamos un correo para confirmar el cambio")
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo cambiar el correo")
+    } finally {
+      setEmailSaving(false)
+    }
+  }
+
+  async function handleChangePassword() {
+    if (!newPwd) return
+    setPwdSaving(true)
+    try {
+      await updateMyPassword(newPwd)
+      setNewPwd("")
+      toast.success("Contraseña actualizada ✓")
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo cambiar")
+    } finally {
+      setPwdSaving(false)
+    }
+  }
+
+  function captureGps() {
+    if (!("geolocation" in navigator)) {
+      toast.error("Tu navegador no soporta GPS")
+      return
+    }
+    const tid = toast.loading("Obteniendo ubicación...")
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(6)
+        const lng = pos.coords.longitude.toFixed(6)
+        setLocationUrl(`https://www.google.com/maps?q=${lat},${lng}`)
+        toast.success("📍 Pin guardado", { id: tid })
+      },
+      (err) => {
+        const msg =
+          err.code === err.PERMISSION_DENIED
+            ? "Permiso denegado"
+            : "No se pudo obtener ubicación"
+        toast.error(msg, { id: tid })
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    )
+  }
+
+  if (typeof document === "undefined") return null
+
+  // Iniciales para fallback de avatar
+  const initials = (name || email || "?")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase() ?? "")
+    .join("")
+
+  return createPortal(
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[220] flex items-end justify-center"
+        >
+          <motion.div
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+            onClick={onClose}
+          />
+
+          <motion.div
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 30, stiffness: 280 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.4 }}
+            onDragEnd={onDragEnd}
+            className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[92vh] flex flex-col touch-pan-y"
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-2 pb-1 shrink-0 cursor-grab active:cursor-grabbing">
+              <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pb-3 shrink-0">
+              <h3 className="text-base font-black tracking-tight">Mi perfil</h3>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Cerrar"
+                className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 active:scale-90"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Contenido scrolleable */}
+            <div className="flex-1 overflow-y-auto px-5 pb-8 scroll-container-ios space-y-5">
+              {!session && (
+                <div className="text-center py-10">
+                  <UserIcon size={36} className="mx-auto text-slate-300 mb-3" />
+                  <p className="font-bold mb-3">No has iniciado sesión</p>
+                  <a
+                    href="/login"
+                    onClick={onClose}
+                    className="inline-flex items-center gap-2 h-11 px-5 rounded-2xl text-white text-xs font-black uppercase tracking-widest shadow-bloom"
+                    style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                  >
+                    Iniciar sesión
+                  </a>
+                </div>
+              )}
+
+              {session && loading && (
+                <div className="space-y-3">
+                  <Skeleton className="h-24 w-24 rounded-3xl mx-auto" />
+                  <Skeleton className="h-4 w-40 mx-auto" rounded="full" />
+                  <Skeleton className="h-12 w-full" rounded="xl" />
+                  <Skeleton className="h-12 w-full" rounded="xl" />
+                  <Skeleton className="h-12 w-full" rounded="xl" />
+                </div>
+              )}
+
+              {session && !loading && (
+                <>
+                  {/* Avatar grande */}
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="relative">
+                      {avatarUrl ? (
+                        <img
+                          src={avatarUrl}
+                          alt="Tu foto"
+                          className="w-24 h-24 rounded-3xl object-cover shadow-bloom"
+                        />
+                      ) : (
+                        <div
+                          className="w-24 h-24 rounded-3xl flex items-center justify-center text-white text-3xl font-black shadow-bloom"
+                          style={{
+                            background:
+                              "linear-gradient(135deg,#e6007e,#a855f7)",
+                          }}
+                        >
+                          {initials || "👤"}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black flex items-center gap-1">
+                      <Shield size={9} />
+                      Rol: {role}
+                      {isStaffOrAdmin(role) && (
+                        <span className="ml-1 text-primary">· panel ✓</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Uploader avatar */}
+                  <ProductImageUploader
+                    value={avatarUrl}
+                    onChange={setAvatarUrl}
+                    folder={`avatars/${user?.id ?? "anon"}`}
+                    label="Cambiar foto de perfil"
+                  />
+
+                  {/* Datos básicos */}
+                  <section className="space-y-3">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                      <UserIcon size={10} /> Datos personales
+                    </h4>
+
+                    <FieldRow
+                      icon={UserIcon}
+                      label="Nombre completo"
+                      value={name}
+                      onChange={setName}
+                      placeholder="Ej. María García"
+                      autoComplete="name"
+                    />
+
+                    <FieldRow
+                      icon={Phone}
+                      label="Teléfono / WhatsApp"
+                      value={phone}
+                      onChange={setPhone}
+                      placeholder="55 1234 5678"
+                      type="tel"
+                      autoComplete="tel"
+                    />
+
+                    <FieldRow
+                      icon={MapPin}
+                      label="Dirección"
+                      value={address}
+                      onChange={setAddress}
+                      placeholder="Calle, número, colonia, CP"
+                      autoComplete="street-address"
+                    />
+
+                    {/* Ubicación con botón GPS rápido */}
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                        <MapPin size={10} /> Ubicación (Google Maps)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          value={locationUrl}
+                          onChange={(e) => setLocationUrl(e.target.value)}
+                          placeholder="Link de Maps o pin GPS"
+                          className="settings-input flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={captureGps}
+                          className="shrink-0 h-11 px-3 rounded-xl bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
+                          title="Usar mi ubicación actual"
+                        >
+                          <MapPin size={12} /> GPS
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="w-full h-12 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
+                      style={{
+                        background:
+                          "linear-gradient(135deg,#e6007e,#a855f7)",
+                      }}
+                    >
+                      {saving ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Save size={14} />
+                      )}
+                      Guardar cambios
+                    </button>
+                  </section>
+
+                  {/* Seguridad — correo */}
+                  <section className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                      <Mail size={10} /> Correo electrónico
+                    </h4>
+                    <FieldRow
+                      icon={Mail}
+                      label=""
+                      value={newEmail}
+                      onChange={setNewEmail}
+                      placeholder="tucorreo@ejemplo.com"
+                      type="email"
+                      autoComplete="email"
+                    />
+                    {newEmail !== email && newEmail.trim() && (
+                      <button
+                        type="button"
+                        onClick={handleChangeEmail}
+                        disabled={emailSaving}
+                        className="w-full h-10 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                      >
+                        {emailSaving ? (
+                          <Loader2 size={12} className="animate-spin inline" />
+                        ) : (
+                          "Cambiar correo"
+                        )}
+                      </button>
+                    )}
+                  </section>
+
+                  {/* Seguridad — contraseña */}
+                  <section className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                      <Lock size={10} /> Cambiar contraseña
+                    </h4>
+                    <div className="relative">
+                      <input
+                        type={showPwd ? "text" : "password"}
+                        value={newPwd}
+                        onChange={(e) => setNewPwd(e.target.value)}
+                        placeholder="Nueva contraseña (min 6 caracteres)"
+                        autoComplete="new-password"
+                        className="settings-input pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPwd((v) => !v)}
+                        aria-label={showPwd ? "Ocultar" : "Mostrar"}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700"
+                      >
+                        {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    {newPwd && (
+                      <button
+                        type="button"
+                        onClick={handleChangePassword}
+                        disabled={pwdSaving || newPwd.length < 6}
+                        className="w-full h-10 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                      >
+                        {pwdSaving ? (
+                          <Loader2 size={12} className="animate-spin inline" />
+                        ) : (
+                          "Actualizar contraseña"
+                        )}
+                      </button>
+                    )}
+                  </section>
+
+                  {/* Cerrar sesión */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await signOut()
+                      onClose()
+                    }}
+                    className="w-full h-11 rounded-2xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 mt-4"
+                  >
+                    <LogOut size={12} /> Cerrar sesión
+                  </button>
+                </>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body
+  )
+}
+
+function FieldRow({
+  icon: Icon,
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  autoComplete,
+}: {
+  icon: typeof UserIcon
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  type?: string
+  autoComplete?: string
+}) {
+  return (
+    <div className="space-y-1.5">
+      {label && (
+        <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+          <Icon size={10} /> {label}
+        </label>
+      )}
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        className="settings-input"
+      />
+    </div>
+  )
+}

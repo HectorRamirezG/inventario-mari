@@ -26,8 +26,10 @@ const TIER_TAG: Record<string, string> = {
 /**
  * Genera un recibo listo para WhatsApp con formato premium.
  * Incluye separadores, emojis y enlace al ticket digital.
+ * @param avatarUrl URL de la foto de perfil del cliente (opcional, útil para
+ *                  que el repartidor sepa a quién busca).
  */
-export function buildReceiptText(sale: Sale): string {
+export function buildReceiptText(sale: Sale, avatarUrl?: string | null): string {
   const store = getStoreInfo()
   const lines: string[] = []
   const sep = "━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -38,6 +40,9 @@ export function buildReceiptText(sale: Sale): string {
   lines.push(`🧾 Recibo: *${shortId(sale.id)}*`)
   lines.push(`📅 ${formatDate(sale.created_at)}`)
   if (sale.customer_name) lines.push(`🛍️ Cliente: *${sale.customer_name}*`)
+  if (avatarUrl) {
+    lines.push(`📸 Foto: ${avatarUrl}`)
+  }
   if (sale.is_layaway) lines.push(`📌 *APARTADO*`)
   lines.push("")
   lines.push("*Detalle de tu pedido:*")
@@ -92,9 +97,10 @@ export function buildReceiptText(sale: Sale): string {
 /**
  * Abre WhatsApp con el recibo pre-rellenado.
  * Si hay teléfono → chat directo. Si no → share picker.
+ * @param avatarUrl Foto del cliente para que el repartidor sepa a quién busca.
  */
-export function sendReceiptByWhatsApp(sale: Sale) {
-  const text = encodeURIComponent(buildReceiptText(sale))
+export function sendReceiptByWhatsApp(sale: Sale, avatarUrl?: string | null) {
+  const text = encodeURIComponent(buildReceiptText(sale, avatarUrl))
   const phone = intlPhone(sale.customer_phone)
   const url = phone
     ? `https://wa.me/${phone}?text=${text}`

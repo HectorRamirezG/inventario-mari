@@ -18,7 +18,9 @@ import toast from "react-hot-toast"
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
+import { useAuth } from "../../lib/useAuth"
 import Skeleton, { SkeletonText } from "./Skeleton"
+import ReportPaymentButton from "./ReportPaymentButton"
 
 interface TicketItem {
   id: string
@@ -65,6 +67,7 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
   const [ticket, setTicket] = useState<PublicTicket | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { email: authEmail } = useAuth()
   const store = getStoreInfo()
 
   useEffect(() => {
@@ -346,6 +349,19 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
                       Pagar saldo
                       <ArrowRight size={14} />
                     </a>
+                  )}
+
+                  {/* Reportar comprobante de pago */}
+                  {!isPaid && (
+                    <ReportPaymentButton
+                      saleId={ticket.id}
+                      balance={Number(ticket.balance) || 0}
+                      customerEmail={authEmail ?? null}
+                      onUploaded={() => {
+                        // Cierra el drawer despu\u00e9s de subir
+                        setTimeout(onClose, 800)
+                      }}
+                    />
                   )}
 
                   {/* WhatsApp */}

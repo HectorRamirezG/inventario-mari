@@ -19,13 +19,13 @@ function ctx(): AudioContext | null {
   }
 }
 
-function beep(frequency: number, durationMs = 80, volume = 0.04) {
+function beep(frequency: number, durationMs = 80, volume = 0.04, type: OscillatorType = "sine") {
   const c = ctx()
   if (!c) return
   try {
     const osc = c.createOscillator()
     const gain = c.createGain()
-    osc.type = "sine"
+    osc.type = type
     osc.frequency.value = frequency
     gain.gain.value = volume
     osc.connect(gain)
@@ -36,6 +36,33 @@ function beep(frequency: number, durationMs = 80, volume = 0.04) {
     osc.stop(c.currentTime + durationMs / 1000)
   } catch {
     /* silencio: feedback es best-effort */
+  }
+}
+
+/** Campana premium con armónico — ideal para venta cerrada / abono cobrado. */
+function bell(baseHz: number, durationMs = 600, volume = 0.06) {
+  const c = ctx()
+  if (!c) return
+  try {
+    // Fundamental + armónico (2.76x) = sonido de campana tibetana
+    const fundamental = c.createOscillator()
+    const harmonic = c.createOscillator()
+    const gain = c.createGain()
+    fundamental.type = "sine"
+    harmonic.type = "sine"
+    fundamental.frequency.value = baseHz
+    harmonic.frequency.value = baseHz * 2.76
+    gain.gain.value = volume
+    fundamental.connect(gain)
+    harmonic.connect(gain)
+    gain.connect(c.destination)
+    fundamental.start()
+    harmonic.start()
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + durationMs / 1000)
+    fundamental.stop(c.currentTime + durationMs / 1000)
+    harmonic.stop(c.currentTime + durationMs / 1000)
+  } catch {
+    /* silencio */
   }
 }
 
@@ -61,12 +88,12 @@ export const sound = {
     beep(880, 60)
     vibrate(20)
   },
-  /** Venta cerrada con éxito. */
+  /** Venta cerrada con éxito — campana premium tipo "cha-ching". */
   success: () => {
-    beep(523.25, 90) // Do
-    setTimeout(() => beep(659.25, 90), 80) // Mi
-    setTimeout(() => beep(783.99, 120), 160) // Sol
-    vibrate([20, 30, 20])
+    // Dos campanas en rápida sucesión = registradora moderna
+    bell(987.77, 350, 0.05) // B5
+    setTimeout(() => bell(1318.51, 500, 0.05), 90) // E6
+    vibrate([15, 30, 15])
   },
   /** Error o validación fallida. */
   error: () => {

@@ -9,6 +9,7 @@ import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
 import { useAuth, isStaffOrAdmin } from "../../lib/useAuth"
+import ReportPaymentButton from "../../components/ui/ReportPaymentButton"
 
 interface TicketItem {
   id: string
@@ -298,6 +299,22 @@ export default function PublicTicketPage() {
             Pagar saldo pendiente
             <ArrowRight size={16} />
           </motion.a>
+        )}
+
+        {/* Reportar comprobante (autoservicio) */}
+        {!isPaid && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="mt-3"
+          >
+            <ReportPaymentButton
+              saleId={ticket.id}
+              balance={Number(ticket.balance) || 0}
+              customerEmail={session ? null : null}
+            />
+          </motion.div>
         )}
 
         {/* CTA: contactar por WhatsApp */}

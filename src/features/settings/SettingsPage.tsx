@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import {
   Settings as SettingsIcon,
@@ -9,18 +9,32 @@ import {
   LogOut,
   Mail,
   Shield,
+  Tag,
+  Loader2,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
 import { useStoreInfo } from "../../lib/useStoreInfo"
 import { useAuth } from "../../lib/useAuth"
+import {
+  useTierThresholds,
+  saveTierThresholds,
+  DEFAULT_THRESHOLDS,
+} from "../pricing/tierPricingService"
 
 export default function SettingsPage() {
   const { info, update, reset } = useStoreInfo()
   const { email, role, fullName, signOut } = useAuth()
+  const thresholds = useTierThresholds()
 
   const [form, setForm] = useState(info)
   const [savingStore, setSavingStore] = useState(false)
+
+  const [tierForm, setTierForm] = useState(thresholds)
+  const [savingTier, setSavingTier] = useState(false)
+  useEffect(() => setTierForm(thresholds), [thresholds])
+
+  const isAdmin = role === "admin"
 
   const handleStoreSave = () => {
     setSavingStore(true)
@@ -37,11 +51,27 @@ export default function SettingsPage() {
     toast.success("Restaurado")
   }
 
+  const handleTierSave = async () => {
+    if (tierForm.medio_min_qty < 2 || tierForm.mayoreo_min_qty <= tierForm.medio_min_qty) {
+      toast.error("Mayoreo debe ser mayor que medio (y medio ≥ 2)")
+      return
+    }
+    setSavingTier(true)
+    try {
+      await saveTierThresholds(tierForm)
+      toast.success("Precios guardados ✓")
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo guardar")
+    } finally {
+      setSavingTier(false)
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-3 pt-1 pb-28">
       {/* HEADER */}
       <div className="mb-4 px-2">
-        <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-slate-900">
+        <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-slate-900 dark:text-slate-100">
           <SettingsIcon size={14} className="text-primary" />
           Configuración
         </h2>
@@ -122,13 +152,69 @@ export default function SettingsPage() {
         </div>
       </Section>
 
+      {/* PRECIOS POR VOLUMEN — solo admin */}
+      {isAdmin && (
+        <Section
+          icon={<Tag size={14} />}
+          title="Precios por volumen"
+          subtitle="Cantidad mínima de piezas para desbloquear cada nivel"
+        >
+          <Field label="Mínimo para precio medio (piezas)">
+            <input
+              type="number"
+              min={2}
+              value={tierForm.medio_min_qty}
+              onChange={(e) =>
+                setTierForm({
+                  ...tierForm,
+                  medio_min_qty: Number(e.target.value) || DEFAULT_THRESHOLDS.medio_min_qty,
+                })
+              }
+              className="settings-input"
+            />
+          </Field>
+          <Field label="Mínimo para precio mayoreo (piezas)">
+            <input
+              type="number"
+              min={tierForm.medio_min_qty + 1}
+              value={tierForm.mayoreo_min_qty}
+              onChange={(e) =>
+                setTierForm({
+                  ...tierForm,
+                  mayoreo_min_qty:
+                    Number(e.target.value) || DEFAULT_THRESHOLDS.mayoreo_min_qty,
+                })
+              }
+              className="settings-input"
+            />
+          </Field>
+          <p className="text-[10px] text-slate-500 leading-relaxed pt-1">
+            Por ej: medio = <b>{tierForm.medio_min_qty}</b>, mayoreo ={" "}
+            <b>{tierForm.mayoreo_min_qty}</b>. El cliente verá un aviso en su
+            carrito de cuántas piezas le faltan para bajar el precio.
+          </p>
+          <button
+            onClick={handleTierSave}
+            disabled={savingTier}
+            className="w-full h-11 mt-1 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom active:scale-95 transition-all disabled:opacity-50"
+          >
+            {savingTier ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Save size={14} />
+            )}{" "}
+            Guardar precios
+          </button>
+        </Section>
+      )}
+
       {/* CUENTA */}
       <Section
         icon={<UserCircle size={14} />}
         title="Mi cuenta"
         subtitle="Sesión activa de Supabase"
       >
-        <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-slate-50">
+        <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60">
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-bloom"
             style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
