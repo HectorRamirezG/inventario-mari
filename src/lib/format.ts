@@ -4,17 +4,16 @@
  * lo cambias aquí y se refleja en toda la app.
  */
 
+// Único formateador: SIEMPRE 2 decimales en pesos mexicanos para
+// que toda la app muestre $1,234.00 / $103.00 / $7,303.00 consistente.
 const mxCurrency = new Intl.NumberFormat("es-MX", {
   style: "currency",
   currency: "MXN",
-  minimumFractionDigits: 0,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 })
 
-const mxCurrencyDecimals = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  minimumFractionDigits: 2,
-})
+const mxCurrencyDecimals = mxCurrency
 
 const mxDateShort = new Intl.DateTimeFormat("es-MX", {
   day: "2-digit",

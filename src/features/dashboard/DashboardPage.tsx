@@ -17,9 +17,7 @@ import { useDashboard } from "./useDashboard"
 import DayCloseView from "./DayCloseView"
 import CycleBanner from "../cycles/CycleBanner"
 import LowStockView from "../inventory/LowStockView"
-
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(v)
+import { formatMoney as formatCurrency } from "../../lib/format"
 
 export default function DashboardPage() {
   const { stats, loading, refresh } = useDashboard()

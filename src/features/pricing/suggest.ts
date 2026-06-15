@@ -1,4 +1,5 @@
 import type { PricingConfig } from "./pricingTypes";
+import { formatMoney } from "../../lib/format";
 
 export function suggestedPrices(cost: number, cfg: PricingConfig) {
   const men = cost * (1 + cfg.margen_menudeo / 100);
@@ -7,8 +8,6 @@ export function suggestedPrices(cost: number, cfg: PricingConfig) {
   return { men, med, may };
 }
 
-export function money(n: number) {
-  return new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(n);
-}
+export const money = formatMoney;
 
 export {};

@@ -5,12 +5,9 @@ import Modal from "../../components/ui/Modal";
 import Button from "../../components/ui/Button";
 import type { Sale } from "../../types/database";
 
-const money = (n: number) =>
-  new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    minimumFractionDigits: 0,
-  }).format(n || 0);
+import { formatMoney as fmtMoney } from "../../lib/format";
+
+const money = fmtMoney
 
 interface Props {
   open: boolean;

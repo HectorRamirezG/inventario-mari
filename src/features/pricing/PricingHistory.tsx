@@ -7,8 +7,9 @@ const fmtDate = (dt: string) =>
     day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
   });
 
-const fmtMoney = (n: any) => 
-  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(Number(n) || 0);
+import { formatMoney } from "../../lib/format";
+
+const fmtMoney = (n: number | string | null | undefined) => formatMoney(n);
 
 export default function PricingHistory() {
   const { q, setQ, filtered, loading, refresh } = usePricingHistory();

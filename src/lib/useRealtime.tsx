@@ -3,6 +3,7 @@ import toast from "react-hot-toast"
 import { supabase } from "./supabase"
 import { sound } from "./sound"
 import { isStaffOrAdmin, useAuth } from "./useAuth"
+import { formatMoney } from "./format"
 
 /**
  * Suscripción global a eventos de Supabase realtime. Solo admin/staff
@@ -38,10 +39,7 @@ export function useRealtimeNotifications() {
           const isLayaway = row.is_layaway === true
           const customer = row.customer_name ?? "Cliente nuevo"
           const total = Number(row.total) || 0
-          const fmt = total.toLocaleString("es-MX", {
-            style: "currency",
-            currency: "MXN",
-          })
+          const fmt = formatMoney(total)
 
           if (isLayaway) {
             sound.play("notify")

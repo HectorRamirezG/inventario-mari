@@ -14,11 +14,7 @@ const fmtDate = (dt: string) =>
     minute: "2-digit",
   });
 
-const fmtMoney = (n: any) =>
-  new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-  }).format(Number(n) || 0);
+import { formatMoney as fmtMoney } from "../../lib/format";
 
 export default function MovementHistoryPage() {
   const {

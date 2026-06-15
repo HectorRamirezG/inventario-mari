@@ -16,11 +16,9 @@ import { motion, AnimatePresence } from "framer-motion"
 import type { Product } from "../../types/database"
 import { useProductCard } from "./useProductCard"
 
-const money = (n: number) =>
-  new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN"
-  }).format(n)
+import { formatMoney as fmtMoney } from "../../lib/format";
+
+const money = fmtMoney
 
 export default function ProductCard({
   product,

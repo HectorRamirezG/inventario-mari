@@ -510,60 +510,20 @@ function SaleCard({
         </div>
       )}
 
-      {/* Contactos rápidos */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {wa && (
-          <a
-            href={wa}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100"
-          >
-            <MessageCircle size={10} /> WhatsApp
-          </a>
-        )}
-        {sale.customer_phone && (
-          <a
-            href={`tel:${cleanPhone(sale.customer_phone)}`}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[9px] font-black uppercase tracking-widest"
-          >
-            <Phone size={10} /> {sale.customer_phone}
-          </a>
-        )}
-        {sale.customer_location && (
-          <a
-            href={sale.customer_location}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-[9px] font-black uppercase tracking-widest hover:bg-blue-100"
-          >
-            <MapPin size={10} /> Pin
-          </a>
-        )}
-      </div>
-
-      {sale.customer_address && (
-        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 italic">
-          📍 {sale.customer_address}
-        </p>
-      )}
-
-      {sale.notes && (
-        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-2 italic">
-          💬 {sale.notes}
-        </p>
-      )}
-
-      {/* Detalle expandible */}
+      {/* Toggle del acordeón */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left text-[8px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-2"
+        className="w-full flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-2 py-1.5"
       >
-        {expanded
-          ? "▲ Ocultar detalle"
-          : `▼ Ver detalle (${sale.sale_items?.length ?? 0} items · ${
-              sale.payments?.length ?? 0
-            } pagos)`}
+        <span>
+          {expanded ? "▲ Ocultar detalle" : "▼ Ver detalle"}
+          <span className="ml-1 normal-case font-bold text-slate-300">
+            ({sale.sale_items?.length ?? 0} items
+            {(sale.payments?.length ?? 0) > 0 &&
+              ` · ${sale.payments?.length} pagos`}
+            )
+          </span>
+        </span>
       </button>
 
       <AnimatePresence initial={false}>
@@ -574,6 +534,50 @@ function SaleCard({
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden mb-3 space-y-3"
           >
+            {/* Contactos rápidos */}
+            <div className="flex flex-wrap gap-1.5">
+              {wa && (
+                <a
+                  href={wa}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100"
+                >
+                  <MessageCircle size={10} /> WhatsApp
+                </a>
+              )}
+              {sale.customer_phone && (
+                <a
+                  href={`tel:${cleanPhone(sale.customer_phone)}`}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[9px] font-black uppercase tracking-widest"
+                >
+                  <Phone size={10} /> {sale.customer_phone}
+                </a>
+              )}
+              {sale.customer_location && (
+                <a
+                  href={sale.customer_location}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-[9px] font-black uppercase tracking-widest hover:bg-blue-100"
+                >
+                  <MapPin size={10} /> Pin
+                </a>
+              )}
+            </div>
+
+            {sale.customer_address && (
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 italic">
+                📍 {sale.customer_address}
+              </p>
+            )}
+
+            {sale.notes && (
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 italic">
+                💬 {sale.notes}
+              </p>
+            )}
+
             {sale.sale_items && sale.sale_items.length > 0 && (
               <div>
                 <p className="text-[8px] font-black uppercase text-slate-400 mb-1">

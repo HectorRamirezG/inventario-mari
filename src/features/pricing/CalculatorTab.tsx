@@ -28,7 +28,8 @@ const CalculatorTab = ({
     new Intl.NumberFormat("es-MX", {
       style: "currency",
       currency: "MXN",
-      minimumFractionDigits: 0
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(n || 0);
 
   return (

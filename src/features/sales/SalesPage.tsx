@@ -140,9 +140,30 @@ export default function SalesPage() {
           <ShoppingCart size={14} className="text-primary" />
           Venta Activa
         </h2>
-        <p className="text-sm font-black text-primary tabular-nums">
-          {formatMoney(state.total)}
-        </p>
+        <div className="flex items-center gap-2">
+          {state.cart.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "¿Vaciar carrito? Se perderán los productos agregados."
+                  )
+                ) {
+                  actions.clearCart()
+                  sound.tap()
+                }
+              }}
+              className="flex items-center gap-1 h-8 px-2.5 rounded-lg bg-rose-50 text-rose-600 text-[9px] font-black uppercase tracking-widest hover:bg-rose-100 active:scale-95 transition-all"
+              title="Vaciar carrito / cancelar venta"
+            >
+              <Trash2 size={11} /> Vaciar
+            </button>
+          )}
+          <p className="text-sm font-black text-primary tabular-nums">
+            {formatMoney(state.total)}
+          </p>
+        </div>
       </div>
 
       <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 items-start">

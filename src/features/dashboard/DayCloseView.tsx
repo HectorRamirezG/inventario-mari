@@ -16,12 +16,9 @@ import {
   type DayCloseStats,
 } from "./dayCloseService"
 
-const money = (n: number) =>
-  new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    minimumFractionDigits: 0,
-  }).format(n || 0)
+import { formatMoney as fmtMoney } from "../../lib/format";
+
+const money = fmtMoney
 
 const dateLong = (iso: string) =>
   new Intl.DateTimeFormat("es-MX", {

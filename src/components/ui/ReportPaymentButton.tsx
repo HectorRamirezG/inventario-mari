@@ -161,9 +161,14 @@ export default function ReportPaymentButton({
               className="w-full h-10 px-3 rounded-xl border-2 border-amber-300 bg-white dark:bg-slate-800 text-sm font-black tabular-nums outline-none focus:border-primary placeholder:text-slate-300"
             />
             {balance > 0 && (
-              <p className="text-[9px] text-slate-500 mt-0.5">
-                Saldo: {formatMoney(balance)}
-              </p>
+              <button
+                type="button"
+                onClick={() => setAmount(Number(balance.toFixed(2)))}
+                className="w-full mt-1 h-7 rounded-lg bg-amber-100 dark:bg-amber-500/15 hover:bg-amber-200 text-amber-800 dark:text-amber-300 text-[9px] font-black uppercase tracking-widest active:scale-95 transition-transform"
+                title="Auto-rellena con el saldo exacto"
+              >
+                💸 Pago total: {formatMoney(balance)}
+              </button>
             )}
           </div>
           <div>
