@@ -16,13 +16,14 @@ function sanitize(raw: string | undefined): string {
 // Defaults seguros — la `publishable key` está diseñada para correr en el
 // browser, así que embeberla como fallback NO es un riesgo de seguridad.
 // Esto evita que la app se rompa si las env vars de Vercel están mal.
-const DEFAULT_URL = "https://naxdlainnnkyctcisnew.supabase.co"
-const DEFAULT_ANON = "sb_publishable_UviL4QyL2c1Fiy5Dje5UkQ_se2lCZWB"
+const DEFAULT_URL = "https://wnnmugdynldfglabaajk.supabase.co"
+const DEFAULT_ANON = "sb_publishable_3_E6hIYD5qRFt_5UHkOC0Q_rEwUqknO"
 
 // URLs viejas / equivocadas: si la env var apunta a una de éstas,
 // la ignoramos y usamos el default correcto.
 const KNOWN_BAD_URLS = [
   "ppvfxgjcrxrtlxdvtijg.supabase.co",
+  "naxdlainnnkyctcisnew.supabase.co",
 ]
 
 let supabaseUrl = sanitize(import.meta.env.VITE_SUPABASE_URL as string | undefined)
