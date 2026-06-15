@@ -18,6 +18,7 @@ import {
   ShoppingCart,
   Bookmark,
   Tag,
+  TrendingUp,
   Settings as SettingsIcon,
   LogOut,
   LogIn,
@@ -41,6 +42,7 @@ import LoginPage from "./features/auth/LoginPage"
 import PublicTicketPage from "./features/public/PublicTicketPage"
 import ClientShopPage from "./features/client/ClientShopPage"
 import ClientOrdersPage from "./features/client/ClientOrdersPage"
+import CyclesPage from "./features/cycles/CyclesPage"
 
 import ThemeToggle from "./components/ui/ThemeToggle"
 import CommandPalette from "./components/ui/CommandPalette"
@@ -59,6 +61,7 @@ type AdminSection =
   | "catalogo"
   | "caja"
   | "pendientes"
+  | "ciclos"
   | "calculadora"
   | "ajustes"
 
@@ -72,6 +75,7 @@ const ADMIN_MENU: {
   { id: "catalogo", label: "Catálogo", icon: Package },
   { id: "caja", label: "Caja", icon: ShoppingCart },
   { id: "pendientes", label: "Pendientes", icon: Bookmark },
+  { id: "ciclos", label: "Ciclos", icon: TrendingUp, adminOnly: true },
   { id: "calculadora", label: "Calculadora", icon: Tag, adminOnly: true },
 ]
 
@@ -178,7 +182,7 @@ function AdminShell() {
   )
 
   useEffect(() => {
-    if (!isAdmin && section === "calculadora") setSection("caja")
+    if (!isAdmin && (section === "calculadora" || section === "ciclos")) setSection("caja")
   }, [isAdmin, section])
 
   useEffect(() => {
@@ -190,6 +194,7 @@ function AdminShell() {
         ventas: "caja",
         apartados: "pendientes",
         precios: "calculadora",
+        ciclos: "ciclos",
         settings: "ajustes",
       }
       const next = (legacy[t] ?? t) as AdminSection
@@ -433,6 +438,7 @@ function AdminShell() {
                 {section === "catalogo" && <InventoryPage />}
                 {section === "caja" && <SalesPage />}
                 {section === "pendientes" && <ApartadosPage />}
+                {section === "ciclos" && isAdmin && <CyclesPage />}
                 {section === "calculadora" && isAdmin && <PricingPage />}
                 {section === "ajustes" && <SettingsPage />}
               </motion.div>

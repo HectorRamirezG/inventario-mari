@@ -15,6 +15,7 @@ import Card from "../../components/ui/Card"
 
 import { useDashboard } from "./useDashboard"
 import DayCloseView from "./DayCloseView"
+import CycleBanner from "../cycles/CycleBanner"
 
 const formatCurrency = (v: number) => 
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(v)
@@ -86,6 +87,9 @@ export default function DashboardPage() {
           <TabsTrigger value="resumen">Resumen</TabsTrigger>
           <TabsTrigger value="analisis">Análisis</TabsTrigger>
         </TabsList>
+
+        {/* BANNER DE CICLO ACTIVO */}
+        <CycleBanner />
 
         {/* RESUMEN */}
         <TabsContent value="resumen" className="space-y-6">
