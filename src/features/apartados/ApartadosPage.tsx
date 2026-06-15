@@ -191,6 +191,7 @@ export default function ApartadosPage() {
                     ? profiles[sale.customer_email.toLowerCase()]
                     : undefined
                 }
+                hasPendingProof={state.pendingProofIds.has(sale.id)}
                 onPay={() => setSelected(sale)}
                 onTicket={() => setTicketSale(sale)}
                 onAdjust={() => setAdjustSale(sale)}
@@ -253,6 +254,7 @@ function Kpi({
 function SaleCard({
   sale,
   profile,
+  hasPendingProof,
   onPay,
   onTicket,
   onAdjust,
@@ -260,6 +262,7 @@ function SaleCard({
 }: {
   sale: Sale;
   profile?: UserProfileDetail;
+  hasPendingProof?: boolean;
   onPay: () => void;
   onTicket: () => void;
   onAdjust: () => void;
@@ -305,14 +308,19 @@ function SaleCard({
     .map((s) => s[0]?.toUpperCase() ?? "")
     .join("");
 
-  // Color de la barra según urgencia
+  // Semáforo: verde = comprobante esperando revisión / rosa-rojo = urgente /
+  // ámbar = próximo a vencer / primary = normal / gris = vencido sin actividad
   const barColor = isPaid
     ? "bg-emerald-500"
+    : hasPendingProof
+    ? "bg-emerald-500"     // 🟢 cliente subió comprobante — atenderlo
+    : overdue
+    ? "bg-slate-400"       // ⚫ vencido sin movimiento
     : urgent
-    ? "bg-rose-500"
+    ? "bg-rose-500"        // 🔴 vence pronto
     : daysLeft <= 7
-    ? "bg-amber-500"
-    : "bg-primary";
+    ? "bg-amber-500"       // 🟡 vence en menos de una semana
+    : "bg-primary";        // 🟣 activo normal
 
   const cardBg = isCancelled
     ? "bg-slate-50 dark:bg-slate-900 opacity-60"
@@ -381,6 +389,16 @@ function SaleCard({
               <Badge tone="warn" className="text-[8px] px-1.5 py-0 rounded-full font-black">
                 APARTADO
               </Badge>
+            )}
+            {hasPendingProof && !isPaid && !isCancelled && (
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="inline-flex items-center gap-1 px-2 py-0 rounded-full bg-emerald-500 text-white text-[8px] font-black uppercase tracking-widest shadow-sm animate-pulse"
+                title="El cliente subió un comprobante esperando validación"
+              >
+                💸 Comprobante
+              </motion.span>
             )}
             {isPaid && (
               <Badge tone="ok" className="text-[8px] px-1.5 py-0 rounded-full font-black">

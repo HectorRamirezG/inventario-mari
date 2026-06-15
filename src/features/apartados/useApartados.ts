@@ -5,6 +5,7 @@ import {
   cancelSale,
   listApartados,
 } from "./apartadosService";
+import { supabase } from "../../lib/supabase";
 import { sound } from "../../lib/sound";
 import type { Sale } from "../../types/database";
 
@@ -16,6 +17,25 @@ export function useApartados() {
   const [filter, setFilter] = useState<ApartadosFilter>("pending");
   const [onlyLayaway, setOnlyLayaway] = useState(false);
   const [search, setSearch] = useState("");
+  // IDs de ventas que tienen al menos un comprobante PENDING sin revisar
+  const [pendingProofIds, setPendingProofIds] = useState<Set<string>>(new Set());
+
+  const refreshProofs = useCallback(async (saleIds: string[]) => {
+    if (saleIds.length === 0) {
+      setPendingProofIds(new Set());
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from("payment_proofs")
+        .select("sale_id")
+        .eq("status", "pending")
+        .in("sale_id", saleIds);
+      setPendingProofIds(new Set((data ?? []).map((p: any) => p.sale_id)));
+    } catch {
+      /* silencio: tabla puede no existir aún */
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -26,12 +46,13 @@ export function useApartados() {
         limit: 200,
       });
       setSales(data);
+      refreshProofs(data.map((s) => s.id));
     } catch (e: any) {
       toast.error(e?.message ?? "Error cargando apartados");
     } finally {
       setLoading(false);
     }
-  }, [filter, onlyLayaway]);
+  }, [filter, onlyLayaway, refreshProofs]);
 
   useEffect(() => {
     refresh();
@@ -116,6 +137,7 @@ export function useApartados() {
       onlyLayaway,
       search,
       totals,
+      pendingProofIds,
     },
     actions: {
       setFilter,
