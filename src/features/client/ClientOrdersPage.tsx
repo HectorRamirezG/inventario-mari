@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
 import { motion } from "framer-motion"
-import { Receipt, Clock, CheckCircle2, ArrowRight, Loader2 } from "lucide-react"
+import { Receipt, Clock, CheckCircle2, ArrowRight } from "lucide-react"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDate, shortId } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
+import TicketDrawer from "../../components/ui/TicketDrawer"
+import Skeleton from "../../components/ui/Skeleton"
 
 interface MyOrder {
   id: string
@@ -22,6 +23,7 @@ export default function ClientOrdersPage() {
   const { email } = useAuth()
   const [orders, setOrders] = useState<MyOrder[]>([])
   const [loading, setLoading] = useState(true)
+  const [ticketToken, setTicketToken] = useState<string | null>(null)
 
   useEffect(() => {
     if (!email) return
@@ -44,8 +46,32 @@ export default function ClientOrdersPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="animate-spin text-primary" />
+      <div className="space-y-3 pb-24">
+        <div>
+          <Skeleton className="h-7 w-40 mb-2" rounded="lg" />
+          <Skeleton className="h-3 w-64" rounded="full" />
+        </div>
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 space-y-3"
+          >
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <Skeleton className="h-2 w-12" rounded="full" />
+                <Skeleton className="h-4 w-20" rounded="md" />
+              </div>
+              <Skeleton className="h-5 w-20" rounded="full" />
+            </div>
+            <Skeleton className="h-3 w-32" rounded="full" />
+            <div className="flex justify-between">
+              <Skeleton className="h-3 w-16" rounded="full" />
+              <Skeleton className="h-4 w-20" rounded="md" />
+            </div>
+            <Skeleton className="h-1.5 w-full" rounded="full" />
+            <Skeleton className="h-9 w-full" rounded="xl" />
+          </div>
+        ))}
       </div>
     )
   }
@@ -124,16 +150,25 @@ export default function ClientOrdersPage() {
                 </div>
               </>
             )}
-            <Link
-              to={`/ticket/${o.public_token ?? o.id}`}
-              className="mt-3 flex items-center justify-center gap-1 h-9 rounded-xl bg-slate-50 dark:bg-slate-700 text-xs font-black"
+            {/* Botón: abre el ticket como cortina, NUNCA cambia de página */}
+            <button
+              type="button"
+              onClick={() => setTicketToken(o.public_token ?? o.id)}
+              className="mt-3 flex items-center justify-center gap-1 h-9 w-full rounded-xl bg-slate-50 dark:bg-slate-700 text-xs font-black active:scale-95 transition-transform"
             >
               Ver ticket
               <ArrowRight size={12} />
-            </Link>
+            </button>
           </motion.div>
         )
       })}
+
+      {/* Ticket en cortina inferior (no rompe SPA) */}
+      <TicketDrawer
+        open={!!ticketToken}
+        token={ticketToken}
+        onClose={() => setTicketToken(null)}
+      />
     </div>
   )
 }

@@ -48,6 +48,7 @@ import ThemeToggle from "./components/ui/ThemeToggle"
 import CommandPalette from "./components/ui/CommandPalette"
 import ActionHub, { type HubAction } from "./components/ui/ActionHub"
 import NotificationBell from "./components/ui/NotificationBell"
+import ConnectionBanner from "./components/ui/ConnectionBanner"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
@@ -99,6 +100,7 @@ export default function App() {
         }}
       />
       <ThemeMount />
+      <ConnectionBanner />
       <Routes>
         {/* Públicas (sin login) */}
         <Route path="/ticket/:token" element={<PublicTicketPage />} />

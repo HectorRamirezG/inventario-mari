@@ -15,7 +15,8 @@ export interface Variant {
 
   cost_override?: number | null;   // DB
   effective_cost?: number | null;  // CALCULADO
-  image_url?: string | null;       // foto opcional por variante
+  image_url?: string | null;       // foto principal (legacy / fallback)
+  image_urls?: string[] | null;    // galería ordenada de fotos
 }
 
 export interface Product {

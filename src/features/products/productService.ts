@@ -66,6 +66,7 @@ export async function updateVariant(
       | "is_active"
       | "stock"
       | "image_url"
+      | "image_urls"
     >
   >
 ) {

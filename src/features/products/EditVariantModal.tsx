@@ -3,7 +3,7 @@ import { toast } from "react-hot-toast"
 import { Tag, Hash, Package, Sparkles } from "lucide-react"
 import Modal from "../../components/ui/Modal"
 import Button from "../../components/ui/Button"
-import ProductImageUploader from "../../components/ui/ProductImageUploader"
+import MultiImageUploader from "../../components/ui/MultiImageUploader"
 import { updateVariant } from "./productService"
 import type { Variant } from "../../types/database"
 
@@ -23,7 +23,7 @@ export default function EditVariantModal({
   const [name, setName] = useState("")
   const [sku, setSku] = useState("")
   const [stock, setStock] = useState<number | "">("")
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [images, setImages] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -31,7 +31,14 @@ export default function EditVariantModal({
       setName(variant.variant_name ?? "")
       setSku(variant.sku ?? "")
       setStock(variant.stock ?? 0)
-      setImageUrl(variant.image_url ?? null)
+      // Si ya tiene image_urls, úsalo; si no, deriva del image_url legacy
+      const arr =
+        variant.image_urls && variant.image_urls.length > 0
+          ? variant.image_urls
+          : variant.image_url
+          ? [variant.image_url]
+          : []
+      setImages(arr)
     }
   }, [variant, open])
 
@@ -45,7 +52,9 @@ export default function EditVariantModal({
         variant_name: name.trim(),
         sku: sku.trim() || null,
         stock: Number(stock),
-        image_url: imageUrl,
+        // Sincronizamos ambos para compatibilidad
+        image_urls: images,
+        image_url: images[0] ?? null,
       })
       toast.success("Actualizado")
       onSaved()
@@ -79,13 +88,22 @@ export default function EditVariantModal({
         {/* FORM */}
         <div className="flex flex-col gap-4">
 
-          {/* FOTO DE LA VARIANTE */}
-          <ProductImageUploader
-            value={imageUrl}
-            onChange={(url) => setImageUrl(url)}
-            folder={`variants/${variant?.id ?? "new"}`}
-            label="Foto de esta variante"
-          />
+          {/* FOTOS DE LA VARIANTE (galería) */}
+          <div>
+            <label className="text-[8px] font-black uppercase text-slate-400 flex items-center gap-1 mb-2">
+              <Sparkles size={10} /> Fotos
+              <span className="text-slate-300 normal-case font-bold tracking-normal">
+                (la 1ª es portada · arrastra para reordenar)
+              </span>
+            </label>
+            <MultiImageUploader
+              value={images}
+              onChange={setImages}
+              folder={`variants/${variant?.id ?? "new"}`}
+              label="Subir fotos"
+              max={6}
+            />
+          </div>
 
           {/* NOMBRE */}
           <div className="flex flex-col gap-1">

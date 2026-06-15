@@ -61,8 +61,40 @@ let inited = false
 function initOnce() {
   if (inited) return
   inited = true
-  supabase.auth.getSession().then(({ data }) => refreshProfile(data.session))
-  supabase.auth.onAuthStateChange((_event, session) => refreshProfile(session))
+  supabase.auth.getSession().then(({ data }) => {
+    // Aseguramos que el canal realtime use el mismo token que las queries
+    supabase.realtime.setAuth(data.session?.access_token ?? null)
+    refreshProfile(data.session)
+  })
+  supabase.auth.onAuthStateChange((event, session) => {
+    // CRÍTICO: si la sesión cambia (login/logout) hay que sincronizar el
+    // token de realtime, porque si no, los canales abiertos siguen
+    // usando el token viejo y RLS los rechaza silenciosamente — esto
+    // es lo que causaba el cuelgue "infinito cargando" al pasar de
+    // anónimo a logueado en celular.
+    supabase.realtime.setAuth(session?.access_token ?? null)
+
+    refreshProfile(session)
+
+    // Notifica a feature pages para que limpien su caché local
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("mari:auth-changed", {
+          detail: { event, hasSession: !!session },
+        })
+      )
+    }
+
+    // Si el usuario cierra sesión, cerramos TODOS los canales realtime
+    // para evitar fugas de memoria + re-suscripciones con token nulo
+    if (event === "SIGNED_OUT") {
+      try {
+        supabase.removeAllChannels()
+      } catch {
+        /* silencio */
+      }
+    }
+  })
 }
 
 /**

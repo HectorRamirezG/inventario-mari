@@ -22,6 +22,8 @@ import { supabase } from "../../lib/supabase"
 import { formatMoney } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
 import SmartLocationInput from "../../components/ui/SmartLocationInput"
+import ImageCarousel from "../../components/ui/ImageCarousel"
+import Skeleton from "../../components/ui/Skeleton"
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -34,6 +36,7 @@ interface PublicVariant {
   price_mayoreo: number | null
   price: number | null
   image_url: string | null
+  image_urls: string[] | null
 }
 
 interface PublicProduct {
@@ -192,7 +195,10 @@ export default function ClientShopPage() {
           product_id: p.id,
           product_name: p.name,
           variant_name: v.variant_name,
-          image_url: v.image_url ?? p.image_url,
+          image_url:
+            (v.image_urls && v.image_urls[0]) ??
+            v.image_url ??
+            p.image_url,
           unit_price: priceOf(v),
           qty: 1,
           stock: v.stock,
@@ -289,8 +295,25 @@ export default function ClientShopPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="animate-spin text-primary" size={28} />
+      <div className="pb-32">
+        {/* Saludo skeleton */}
+        <div className="mb-4 space-y-2">
+          <Skeleton className="h-3 w-20" rounded="full" />
+          <Skeleton className="h-8 w-48" rounded="lg" />
+          <Skeleton className="h-3 w-64" rounded="full" />
+        </div>
+        <Skeleton className="h-12 w-full mb-4" rounded="xl" />
+        <div className="grid grid-cols-2 gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white dark:bg-slate-800/40 rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-700">
+              <Skeleton className="w-full aspect-square" rounded="sm" />
+              <div className="p-3 space-y-2">
+                <Skeleton className="h-3 w-3/4" rounded="full" />
+                <Skeleton className="h-4 w-1/2" rounded="full" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -631,38 +654,41 @@ function ProductCardClient({
 
   const out = variant.stock <= 0
 
+  // Galería: prioriza image_urls de la variante; fallback a image_url; ú
+  // fallback al image_url del producto base.
+  const gallery: string[] = (() => {
+    const fromVariant =
+      variant.image_urls && variant.image_urls.length > 0
+        ? variant.image_urls
+        : variant.image_url
+        ? [variant.image_url]
+        : []
+    if (fromVariant.length > 0) return fromVariant
+    if (product.image_url) return [product.image_url]
+    return []
+  })()
+
   return (
     <motion.div
       whileTap={{ scale: 0.97 }}
       layout
       className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
     >
-      <div
-        className="aspect-square relative overflow-hidden"
-        style={{
-          background:
-            "linear-gradient(135deg,rgba(230,0,126,0.06),rgba(168,85,247,0.08))",
-        }}
-      >
-        {product.image_url || variant.image_url ? (
-          <img
-            src={variant.image_url ?? product.image_url ?? ""}
-            alt={product.name}
-            className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-primary/40">
-            <Package size={36} />
-          </div>
-        )}
+      <div className="relative">
+        <ImageCarousel
+          images={gallery}
+          alt={product.name}
+          aspect="1/1"
+          enableFullscreen
+          className="rounded-none"
+        />
         {out && (
-          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest">
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
             Agotado
           </span>
         )}
         {!out && variant.stock <= 3 && (
-          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest">
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
             ¡Últimas {variant.stock}!
           </span>
         )}
