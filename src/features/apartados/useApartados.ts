@@ -3,6 +3,7 @@ import { toast } from "react-hot-toast";
 import {
   addPayment,
   cancelSale,
+  getLatestProofActivity,
   listApartados,
 } from "./apartadosService";
 import { supabase } from "../../lib/supabase";
@@ -14,24 +15,34 @@ export type ApartadosFilter = "pending" | "paid" | "all";
 export function useApartados() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<ApartadosFilter>("pending");
+  // Default = "all" para no ocultar tarjetas al admin (antes era "pending").
+  const [filter, setFilter] = useState<ApartadosFilter>("all");
   const [onlyLayaway, setOnlyLayaway] = useState(false);
   const [search, setSearch] = useState("");
   // IDs de ventas que tienen al menos un comprobante PENDING sin revisar
   const [pendingProofIds, setPendingProofIds] = useState<Set<string>>(new Set());
+  // Mapa sale_id → ISO date del comprobante más reciente (para ordenar por
+  // última actividad: si un cliente sube un comprobante, su tarjeta brinca
+  // al inicio del tablero).
+  const [latestProofAt, setLatestProofAt] = useState<Record<string, string>>({});
 
   const refreshProofs = useCallback(async (saleIds: string[]) => {
     if (saleIds.length === 0) {
       setPendingProofIds(new Set());
+      setLatestProofAt({});
       return;
     }
     try {
-      const { data } = await supabase
-        .from("payment_proofs")
-        .select("sale_id")
-        .eq("status", "pending")
-        .in("sale_id", saleIds);
-      setPendingProofIds(new Set((data ?? []).map((p: any) => p.sale_id)));
+      const [{ data: pending }, latest] = await Promise.all([
+        supabase
+          .from("payment_proofs")
+          .select("sale_id")
+          .eq("status", "pending")
+          .in("sale_id", saleIds),
+        getLatestProofActivity(saleIds),
+      ]);
+      setPendingProofIds(new Set((pending ?? []).map((p: any) => p.sale_id)));
+      setLatestProofAt(latest);
     } catch {
       /* silencio: tabla puede no existir aún */
     }
@@ -65,16 +76,73 @@ export function useApartados() {
     return () => window.removeEventListener("mari:apartado-refresh", handler);
   }, [refresh]);
 
+  // Realtime: cuando llega un comprobante o pago nuevo, refrescamos
+  // sólo los timestamps de actividad (no toda la lista) para que la
+  // tarjeta correspondiente brinque al inicio sin parpadear.
+  useEffect(() => {
+    if (sales.length === 0) return;
+    const ids = sales.map((s) => s.id);
+    const channel = supabase
+      .channel("apartados-activity")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "payment_proofs" },
+        (payload) => {
+          const sid = (payload.new as any)?.sale_id;
+          if (sid && ids.includes(sid)) refreshProofs(ids);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "payments" },
+        (payload) => {
+          const sid = (payload.new as any)?.sale_id;
+          if (sid && ids.includes(sid)) refresh();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [sales, refresh, refreshProofs]);
+
+  /**
+   * Última actividad de una venta = max(created_at, último pago, último
+   * comprobante). Se usa para ordenar el tablero. Como `sales` no tiene
+   * `updated_at`, ésta es la mejor aproximación.
+   */
+  const lastActivityFor = useCallback(
+    (s: Sale): number => {
+      const ts: number[] = [new Date(s.created_at).getTime()];
+      for (const p of s.payments ?? []) {
+        const t = new Date(p.created_at).getTime();
+        if (Number.isFinite(t)) ts.push(t);
+      }
+      const proof = latestProofAt[s.id];
+      if (proof) {
+        const t = new Date(proof).getTime();
+        if (Number.isFinite(t)) ts.push(t);
+      }
+      return Math.max(...ts);
+    },
+    [latestProofAt]
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return sales;
-    return sales.filter(
-      (s) =>
-        (s.customer_name ?? "").toLowerCase().includes(q) ||
-        (s.customer_phone ?? "").toLowerCase().includes(q) ||
-        (s.notes ?? "").toLowerCase().includes(q)
+    const list = !q
+      ? sales
+      : sales.filter(
+          (s) =>
+            (s.customer_name ?? "").toLowerCase().includes(q) ||
+            (s.customer_phone ?? "").toLowerCase().includes(q) ||
+            (s.notes ?? "").toLowerCase().includes(q)
+        );
+    // Sort descendente por última actividad (tarjeta más fresca al inicio)
+    return [...list].sort(
+      (a, b) => lastActivityFor(b) - lastActivityFor(a)
     );
-  }, [sales, search]);
+  }, [sales, search, lastActivityFor]);
 
   const totals = useMemo(() => {
     return filtered.reduce(

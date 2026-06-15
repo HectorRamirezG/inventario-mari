@@ -80,13 +80,17 @@ export function buildReceiptText(sale: Sale, avatarUrl?: string | null): string 
       )
     }
     if (adj > 0) {
-      lines.push(
-        `💖 ${sale.adjustment_reason || "Descuento Mari"}: -${formatMoney(adj)} MXN`
-      )
+      // Descuento (signo explícito y motivo debajo si existe)
+      lines.push(`💖 Ajuste manual: -${formatMoney(adj)} MXN`)
+      if (sale.adjustment_reason) {
+        lines.push(`   _${sale.adjustment_reason}_`)
+      }
     } else if (adj < 0) {
-      lines.push(
-        `➕ ${sale.adjustment_reason || "Cargo extra"}: +${formatMoney(Math.abs(adj))} MXN`
-      )
+      // Cargo extra
+      lines.push(`➕ Ajuste manual: +${formatMoney(Math.abs(adj))} MXN`)
+      if (sale.adjustment_reason) {
+        lines.push(`   _${sale.adjustment_reason}_`)
+      }
     }
   }
 

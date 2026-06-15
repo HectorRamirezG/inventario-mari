@@ -42,9 +42,9 @@ const waLink = (raw?: string | null) => {
 };
 
 const FILTERS: { id: ApartadosFilter; label: string; tone: string }[] = [
+  { id: "all", label: "Todos", tone: "text-slate-500" },
   { id: "pending", label: "Pendientes", tone: "text-rose-500" },
   { id: "paid", label: "Pagados", tone: "text-emerald-500" },
-  { id: "all", label: "Todos", tone: "text-slate-500" },
 ];
 
 export default function ApartadosPage() {

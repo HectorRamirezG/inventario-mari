@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, FilterX, Sparkles, Boxes, Plus } from "lucide-react"
+import { Search, FilterX, Sparkles, Boxes, Plus, X } from "lucide-react"
 import toast from "react-hot-toast"
 
 import ProductCard from "./ProductCard"
@@ -25,6 +25,10 @@ export default function ProductList() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
+  // Cuando el admin invoca "Nueva variante" desde el Action Hub, mostramos
+  // un banner guía y enfocamos el buscador. Sin modales encimados.
+  const [pickForVariant, setPickForVariant] = useState(false)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   // ÚNICO drawer (todos los flujos pasan por aquí)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -54,6 +58,18 @@ export default function ProductList() {
     const handler = () => openCreate()
     window.addEventListener("products:new", handler)
     return () => window.removeEventListener("products:new", handler)
+  }, [])
+
+  // Modo "elige producto para agregarle variante" desde el Action Hub.
+  // No abre ninguna modal — solo activa el banner guía y enfoca el buscador.
+  useEffect(() => {
+    const handler = () => {
+      setPickForVariant(true)
+      setTimeout(() => searchRef.current?.focus(), 50)
+    }
+    window.addEventListener("products:pick-for-variant", handler)
+    return () =>
+      window.removeEventListener("products:pick-for-variant", handler)
   }, [])
 
   // Re-mapea el drawerProduct cuando se refresca el catálogo (para que
@@ -115,6 +131,7 @@ export default function ProductList() {
     setDrawerProduct(p)
     setDrawerFocusVariant(null)
     setDrawerOpen(true)
+    setPickForVariant(false)
     // El Drawer arrancará en la tab Variantes si recibe focusVariantId, pero
     // queremos forzar Variantes sin variante específica → enviamos null
     // y el ProductDrawer abrirá en general por defecto. Para entrar en
@@ -152,15 +169,45 @@ export default function ProductList() {
         </button>
       </div>
 
+      {/* Banner guía para "Nueva variante" desde el Action Hub */}
+      <AnimatePresence>
+        {pickForVariant && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="mx-1 -mt-2 mb-1 flex items-center gap-2 px-3 py-2 rounded-2xl bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300"
+          >
+            <span className="text-base" aria-hidden>📦</span>
+            <p className="text-[10px] font-black uppercase tracking-widest flex-1 leading-tight">
+              Elige el producto al que quieres agregar una variante
+            </p>
+            <button
+              type="button"
+              onClick={() => setPickForVariant(false)}
+              aria-label="Cancelar"
+              className="w-6 h-6 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-violet-500"
+            >
+              <X size={12} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* SEARCH */}
       <div className="relative px-1">
         <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-slate-300">
           <Search size={16} />
         </div>
         <input
+          ref={searchRef}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar producto, variante o SKU..."
+          placeholder={
+            pickForVariant
+              ? "Busca el producto para agregarle variante..."
+              : "Buscar producto, variante o SKU..."
+          }
           className="w-full h-12 pl-12 pr-5 rounded-[2rem] bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 text-[11px] font-black text-slate-700 dark:text-slate-200 placeholder:text-slate-300 outline-none shadow-sm focus:border-primary/30"
         />
         <AnimatePresence>

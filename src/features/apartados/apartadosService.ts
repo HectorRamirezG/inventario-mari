@@ -8,13 +8,19 @@ import type { Sale } from "../../types/database";
  *
  * Devuelve la venta junto con sus items y pagos para que la UI no tenga
  * que hacer N+1 llamadas por cada apartado.
+ *
+ * NOTA: el ordenamiento por "última actividad" (sale.created_at vs.
+ * pagos vs. comprobantes) se hace del lado cliente en `useApartados`
+ * combinando los timestamps de `getLatestProofActivity` con los pagos
+ * embebidos en la venta. Aquí pedimos por `created_at` DESC para tener
+ * un fallback razonable mientras llega la actividad.
  */
 export async function listApartados(opts: {
   status?: "pending" | "paid" | "cancelled" | "all";
   onlyLayaway?: boolean;
   limit?: number;
 } = {}) {
-  const { status = "pending", onlyLayaway = false, limit = 100 } = opts;
+  const { status = "all", onlyLayaway = false, limit = 200 } = opts;
 
   let q = supabase
     .from("sales")
@@ -35,6 +41,10 @@ export async function listApartados(opts: {
       balance,
       status,
       is_layaway,
+      adjustment_amount,
+      adjustment_reason,
+      shipping_amount,
+      is_foreign_shipping,
       created_at,
       sale_items (
         id,
@@ -67,6 +77,36 @@ export async function listApartados(opts: {
     throw new Error(error.message);
   }
   return (data ?? []) as unknown as Sale[];
+}
+
+/**
+ * Devuelve el `MAX(created_at)` de los comprobantes (`payment_proofs`)
+ * agrupado por `sale_id`. Lo usamos para ordenar el tablero por última
+ * actividad: si un cliente sube un comprobante, su tarjeta brinca al
+ * inicio sin recargar.
+ *
+ * Como Supabase JS no expone GROUP BY directo desde el cliente,
+ * traemos `sale_id` + `created_at` ordenados desc y nos quedamos con el
+ * primero por sale_id. Es O(N) y los volúmenes son pequeños.
+ */
+export async function getLatestProofActivity(
+  saleIds: string[]
+): Promise<Record<string, string>> {
+  if (saleIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("payment_proofs")
+    .select("sale_id, created_at")
+    .in("sale_id", saleIds)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.warn("getLatestProofActivity:", error.message);
+    return {};
+  }
+  const map: Record<string, string> = {};
+  for (const row of (data ?? []) as { sale_id: string; created_at: string }[]) {
+    if (!map[row.sale_id]) map[row.sale_id] = row.created_at;
+  }
+  return map;
 }
 
 /**

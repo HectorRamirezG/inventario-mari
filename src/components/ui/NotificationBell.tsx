@@ -244,7 +244,7 @@ export default function NotificationBell({
                   </p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/60">
                   {items.map((n) => {
                     const Icon = ICON[n.type] ?? Bell
                     const tone = COLOR[n.type] ?? "bg-slate-50/70 text-slate-600"
@@ -259,17 +259,17 @@ export default function NotificationBell({
                     return (
                       <div
                         key={n.id}
-                        className={`relative flex gap-2.5 px-3 py-2 border-b border-slate-50 dark:border-slate-800/60 transition-colors ${
+                        className={`relative flex gap-2 px-2.5 py-1.5 transition-colors ${
                           unreadItem
                             ? "bg-primary/5 dark:bg-primary/10"
                             : `${rowBg} hover:bg-slate-50 dark:hover:bg-slate-800/40`
                         }`}
                       >
-                        <div className="flex gap-2.5 flex-1 min-w-0">
+                        <div className="flex gap-2 flex-1 min-w-0">
                           <div
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tone}`}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${tone}`}
                           >
-                            <Icon size={13} />
+                            <Icon size={12} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
@@ -280,14 +280,14 @@ export default function NotificationBell({
                                 <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
                               )}
                             </div>
-                            {n.body && (
+                            {n.body && !rejectReason && (
                               <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                                 {n.body}
                               </p>
                             )}
                             {rejectReason && (
-                              <div className="mt-1 px-2 py-1 rounded-md bg-rose-50/80 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20">
-                                <p className="text-[9px] font-black uppercase tracking-widest text-rose-700 dark:text-rose-300 opacity-70">
+                              <div className="mt-0.5 px-2 py-0.5 rounded-md bg-rose-100/80 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-rose-700 dark:text-rose-300 opacity-70 leading-none">
                                   Motivo
                                 </p>
                                 <p className="text-[10px] text-rose-700 dark:text-rose-300 leading-tight">
@@ -295,8 +295,8 @@ export default function NotificationBell({
                                 </p>
                               </div>
                             )}
-                            <div className="flex items-center justify-between gap-2 mt-1">
-                              <p className="text-[9px] text-slate-400 font-bold">
+                            <div className="flex items-center justify-between gap-2 mt-0.5">
+                              <p className="text-[9px] text-slate-400 font-bold leading-none">
                                 {timeAgo(n.created_at)}
                               </p>
                               {cta && (
@@ -317,7 +317,7 @@ export default function NotificationBell({
                         </div>
                         <button
                           onClick={() => removeNotification(n.id)}
-                          className="opacity-0 group-hover:opacity-100 sm:opacity-100 w-6 h-6 rounded-md flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500 self-start"
+                          className="opacity-0 group-hover:opacity-100 sm:opacity-100 w-5 h-5 rounded-md flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500 self-start"
                           title="Quitar"
                           aria-label="Quitar notificación"
                         >

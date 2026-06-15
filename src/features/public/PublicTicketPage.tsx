@@ -290,7 +290,10 @@ export default function PublicTicketPage() {
             ))}
           </div>
 
-          {/* Totales — con envío + ajuste desglosado */}
+          {/* Totales — con envío + ajuste desglosado.
+              Si el admin aplicó un ajuste (admin_adjust_sale), se pinta
+              SIEMPRE la fila entre Subtotal y Total con signo explícito
+              y motivo (p_reason) en texto secundario debajo. */}
           {(() => {
             const subtotal = ticket.items.reduce(
               (a, it) => a + Number(it.qty) * Number(it.unit_price),
@@ -299,6 +302,7 @@ export default function PublicTicketPage() {
             const adj = Number(ticket.adjustment_amount) || 0
             const ship = Number(ticket.shipping_amount) || 0
             const isForeign = !!ticket.is_foreign_shipping
+            const reason = (ticket.adjustment_reason ?? "").trim()
             return (
               <div className="bg-slate-50 rounded-2xl p-4 space-y-1">
                 <Row label="Subtotal" value={formatMoney(subtotal)} />
@@ -309,18 +313,8 @@ export default function PublicTicketPage() {
                     success={ship === 0 && isForeign}
                   />
                 )}
-                {adj > 0 && (
-                  <Row
-                    label={ticket.adjustment_reason || "Descuento Mari"}
-                    value={`- ${formatMoney(adj)}`}
-                    discount
-                  />
-                )}
-                {adj < 0 && (
-                  <Row
-                    label={ticket.adjustment_reason || "Cargo extra"}
-                    value={`+ ${formatMoney(Math.abs(adj))}`}
-                  />
+                {adj !== 0 && (
+                  <AdjustmentRow amount={adj} reason={reason} />
                 )}
                 <Row label="Total" value={formatMoney(ticket.total)} bold />
                 {ticket.paid > 0 && (
@@ -489,6 +483,41 @@ function Row({
       >
         {value}
       </span>
+    </div>
+  )
+}
+
+/**
+ * Fila de Ajuste manual entre Subtotal y Total.
+ * Muestra signo explícito (- o +) y debajo, en texto secundario, el motivo
+ * capturado por admin_adjust_sale (p_reason). Si no hay motivo, muestra
+ * el tipo de ajuste para que el cliente entienda la operación.
+ */
+function AdjustmentRow({ amount, reason }: { amount: number; reason: string }) {
+  const isDiscount = amount > 0
+  const sign = isDiscount ? "-" : "+"
+  const tone = isDiscount ? "text-rose-600" : "text-amber-700"
+  const subLabel = isDiscount ? "Descuento" : "Cargo extra"
+  return (
+    <div className="py-0.5">
+      <div className={`flex justify-between text-sm ${tone}`}>
+        <span className="font-bold">Ajuste manual</span>
+        <span className="tabular-nums font-black">
+          {sign}{" "}
+          {new Intl.NumberFormat("es-MX", {
+            style: "currency",
+            currency: "MXN",
+          }).format(Math.abs(amount))}
+        </span>
+      </div>
+      <div className="flex justify-between items-start text-[10px] text-slate-500 mt-0.5">
+        <span className="uppercase tracking-wider font-bold">{subLabel}</span>
+        {reason && (
+          <span className="italic text-right ml-2 max-w-[65%] truncate">
+            "{reason}"
+          </span>
+        )}
+      </div>
     </div>
   )
 }

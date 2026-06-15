@@ -294,6 +294,35 @@ function AdminShell() {
       },
     },
     {
+      id: "new-variant",
+      label: "📦 Nueva variante",
+      caption: "Elige un producto del catálogo",
+      icon: Package,
+      accent: "linear-gradient(135deg,#8b5cf6,#ec4899)",
+      onClick: () => {
+        setSection("catalogo")
+        // El listado del catálogo escucha este evento y guía al admin a
+        // elegir un producto para agregarle variantes sin abrir ventanas
+        // encimadas.
+        setTimeout(
+          () => window.dispatchEvent(new CustomEvent("products:pick-for-variant")),
+          200
+        )
+      },
+    },
+    ...(isAdmin
+      ? [
+          {
+            id: "pricing-calc",
+            label: "🧮 Calculadora rápida",
+            caption: "Precios menudeo / medio / mayoreo",
+            icon: Tag,
+            accent: "linear-gradient(135deg,#f97316,#eab308)",
+            onClick: () => setSection("calculadora"),
+          } as HubAction,
+        ]
+      : []),
+    {
       id: "apartado",
       label: "Cobrar abono",
       caption: "Registrar pago",

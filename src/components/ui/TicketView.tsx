@@ -193,7 +193,10 @@ export default function TicketView({ open, sale, onClose }: Props) {
 
               <Divider />
 
-              {/* Totales — con ajuste/descuento + envío desglosados */}
+              {/* Totales — con ajuste/descuento + envío desglosados.
+                  El ajuste se pinta SIEMPRE que sea != 0 entre Subtotal y TOTAL,
+                  con signo explícito y motivo (p_reason de admin_adjust_sale)
+                  debajo en texto secundario, para máxima transparencia. */}
               {(() => {
                 const items = sale.sale_items ?? []
                 const subtotal = items.reduce(
@@ -203,6 +206,7 @@ export default function TicketView({ open, sale, onClose }: Props) {
                 const adj = Number(sale.adjustment_amount) || 0
                 const ship = Number(sale.shipping_amount) || 0
                 const isForeign = !!sale.is_foreign_shipping
+                const reason = (sale.adjustment_reason ?? "").trim()
                 return (
                   <div className="space-y-1 text-[12px]">
                     <Row label="Subtotal" value={formatMoneyExact(subtotal)} />
@@ -212,17 +216,11 @@ export default function TicketView({ open, sale, onClose }: Props) {
                         value={ship > 0 ? formatMoneyExact(ship) : "¡Gratis! 🎉"}
                       />
                     )}
-                    {adj > 0 && (
-                      <Row
-                        label={sale.adjustment_reason || "Descuento Mari"}
-                        value={`- ${formatMoneyExact(adj)}`}
-                        discount
-                      />
-                    )}
-                    {adj < 0 && (
-                      <Row
-                        label={sale.adjustment_reason || "Cargo extra"}
-                        value={`+ ${formatMoneyExact(Math.abs(adj))}`}
+                    {adj !== 0 && (
+                      <AdjustmentBlock
+                        amount={adj}
+                        reason={reason}
+                        money={formatMoneyExact}
                       />
                     )}
                     <Row label="TOTAL" value={formatMoneyExact(sale.total)} bold />
@@ -369,6 +367,46 @@ function RowKV({ label, value }: { label: string; value: string }) {
     <div className="flex gap-2">
       <span className="font-black uppercase w-14">{label}:</span>
       <span className="flex-1 truncate">{value}</span>
+    </div>
+  )
+}
+
+/**
+ * Bloque de ajuste manual que aparece entre Subtotal y TOTAL.
+ * - Pinta una fila clara: "Ajuste manual" + monto con signo explícito (- o +)
+ * - Debajo, en texto pequeño, el motivo capturado por el admin (p_reason de
+ *   admin_adjust_sale). Esto garantiza que el cliente entienda la operación
+ *   matemática (Subtotal +/- Ajuste = Total).
+ */
+function AdjustmentBlock({
+  amount,
+  reason,
+  money,
+}: {
+  amount: number
+  reason: string
+  money: (n: number) => string
+}) {
+  const isDiscount = amount > 0
+  const label = isDiscount ? "Descuento" : "Cargo extra"
+  const sign = isDiscount ? "-" : "+"
+  const tone = isDiscount ? "text-rose-600" : "text-amber-700"
+  return (
+    <div className="py-0.5">
+      <div className={`flex items-center justify-between ${tone}`}>
+        <span className="uppercase font-black">Ajuste manual</span>
+        <span className="tabular-nums font-black">
+          {sign} {money(Math.abs(amount))}
+        </span>
+      </div>
+      <div className="flex items-center justify-between text-[9px] text-slate-500 leading-tight">
+        <span className="uppercase tracking-wider">{label}</span>
+        {reason && (
+          <span className="italic truncate ml-2 max-w-[60%] text-right">
+            "{reason}"
+          </span>
+        )}
+      </div>
     </div>
   )
 }
