@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Receipt, Clock, CheckCircle2, ArrowRight } from "lucide-react"
+import { Receipt, Clock, CheckCircle2, ArrowRight, LifeBuoy } from "lucide-react"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDate, shortId } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
 import TicketDrawer from "../../components/ui/TicketDrawer"
 import Skeleton from "../../components/ui/Skeleton"
+import SupportModal from "../support/SupportModal"
 
 interface MyOrder {
   id: string
@@ -20,10 +21,12 @@ interface MyOrder {
 }
 
 export default function ClientOrdersPage() {
-  const { email } = useAuth()
+  const { email, fullName } = useAuth()
   const [orders, setOrders] = useState<MyOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [ticketToken, setTicketToken] = useState<string | null>(null)
+  const [openSupport, setOpenSupport] = useState(false)
+  const [supportSaleId, setSupportSaleId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!email) return
@@ -151,14 +154,28 @@ export default function ClientOrdersPage() {
               </>
             )}
             {/* Botón: abre el ticket como cortina, NUNCA cambia de página */}
-            <button
-              type="button"
-              onClick={() => setTicketToken(o.public_token ?? o.id)}
-              className="mt-3 flex items-center justify-center gap-1 h-9 w-full rounded-xl bg-slate-50 dark:bg-slate-700 text-xs font-black active:scale-95 transition-transform"
-            >
-              Ver ticket
-              <ArrowRight size={12} />
-            </button>
+            <div className="flex gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => setTicketToken(o.public_token ?? o.id)}
+                className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl bg-slate-50 dark:bg-slate-700 text-xs font-black active:scale-95 transition-transform"
+              >
+                Ver ticket
+                <ArrowRight size={12} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSupportSaleId(o.id)
+                  setOpenSupport(true)
+                }}
+                title="Reportar problema con este pedido"
+                className="h-9 px-3 rounded-xl bg-primary/10 text-primary text-xs font-black flex items-center gap-1 active:scale-95 transition-transform"
+              >
+                <LifeBuoy size={12} />
+                Ayuda
+              </button>
+            </div>
           </motion.div>
         )
       })}
@@ -168,6 +185,31 @@ export default function ClientOrdersPage() {
         open={!!ticketToken}
         token={ticketToken}
         onClose={() => setTicketToken(null)}
+      />
+
+      {/* FAB de soporte (siempre visible, abajo a la izquierda) */}
+      <motion.button
+        type="button"
+        onClick={() => {
+          setSupportSaleId(null)
+          setOpenSupport(true)
+        }}
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.4 }}
+        whileTap={{ scale: 0.9 }}
+        aria-label="Centro de soporte"
+        title="¿Necesitas ayuda?"
+        className="fixed bottom-16 left-4 z-40 w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-primary shadow-[0_10px_30px_-10px_rgba(15,23,42,0.25)] flex items-center justify-center hover:scale-105 transition-transform"
+      >
+        <LifeBuoy size={18} />
+      </motion.button>
+
+      <SupportModal
+        open={openSupport}
+        saleId={supportSaleId}
+        customerName={fullName ?? email ?? null}
+        onClose={() => setOpenSupport(false)}
       />
     </div>
   )

@@ -18,6 +18,7 @@ import {
   Maximize2,
   LayoutGrid,
   List,
+  LifeBuoy,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -29,6 +30,7 @@ import SmartLocationInput from "../../components/ui/SmartLocationInput"
 import VariantImageCarousel from "../../components/ui/VariantImageCarousel"
 import Skeleton from "../../components/ui/Skeleton"
 import BuySheet, { type BuySheetProduct } from "./BuySheet"
+import SupportModal from "../support/SupportModal"
 import {
   useTierThresholds,
   tierForQty,
@@ -145,6 +147,9 @@ export default function ClientShopPage() {
 
   // Bottom Sheet de compra (estilo Shein): se abre con el botón "+" de la card
   const [buySheetProduct, setBuySheetProduct] = useState<PublicProduct | null>(null)
+
+  // Centro de soporte (cliente logueado o invitado)
+  const [openSupport, setOpenSupport] = useState(false)
 
   // Si el usuario está logueado, prellena con sus datos
   useEffect(() => {
@@ -577,6 +582,21 @@ export default function ClientShopPage() {
         )}
       </AnimatePresence>
 
+      {/* FAB de soporte (siempre visible, izquierda) */}
+      <motion.button
+        type="button"
+        onClick={() => setOpenSupport(true)}
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.4 }}
+        whileTap={{ scale: 0.9 }}
+        aria-label="Centro de soporte"
+        title="¿Necesitas ayuda?"
+        className="fixed bottom-16 left-4 z-40 w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-primary shadow-[0_10px_30px_-10px_rgba(15,23,42,0.25)] flex items-center justify-center hover:scale-105 transition-transform"
+      >
+        <LifeBuoy size={18} />
+      </motion.button>
+
       {/* Drawer carrito */}
       <AnimatePresence>
         {openCart && (
@@ -903,6 +923,14 @@ export default function ClientShopPage() {
         onConfirm={(lines) => {
           if (buySheetProduct) addBatchToCart(buySheetProduct, lines)
         }}
+      />
+
+      {/* Modal de soporte (sin sale_id porque es desde la tienda general) */}
+      <SupportModal
+        open={openSupport}
+        saleId={null}
+        customerName={guest.name || authName || null}
+        onClose={() => setOpenSupport(false)}
       />
     </div>
   )

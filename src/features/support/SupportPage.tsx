@@ -20,6 +20,7 @@ import { toast } from "react-hot-toast"
 import {
   listSupportTickets,
   updateSupportStatus,
+  supportTableReady,
   buildSupportWhatsApp,
   SUPPORT_CATEGORIES,
   type SupportTicket,
@@ -56,6 +57,16 @@ export default function SupportPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SupportTicket | null>(null)
+  const [tableReady, setTableReady] = useState<boolean | null>(null)
+
+  // Detectar si la tabla existe en la DB (única vez al montar)
+  useEffect(() => {
+    let alive = true
+    supportTableReady().then((ok) => alive && setTableReady(ok))
+    return () => {
+      alive = false
+    }
+  }, [])
 
   async function refresh() {
     setLoading(true)
@@ -70,9 +81,14 @@ export default function SupportPage() {
   }
 
   useEffect(() => {
+    if (tableReady === false) {
+      setLoading(false)
+      setTickets([])
+      return
+    }
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab])
+  }, [tab, tableReady])
 
   const groups = useMemo(() => {
     // Agrupar por día para legibilidad
@@ -150,7 +166,21 @@ export default function SupportPage() {
       </div>
 
       {/* LISTA */}
-      {loading ? (
+      {tableReady === false ? (
+        <div className="rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/60 dark:bg-amber-500/10 p-6 text-center">
+          <LifeBuoy size={28} className="mx-auto mb-2 text-amber-500" />
+          <p className="text-sm font-black text-amber-800 dark:text-amber-200">
+            Falta correr la migración SQL
+          </p>
+          <p className="text-[11px] text-amber-700 dark:text-amber-300 max-w-md mx-auto mt-1">
+            Abre Supabase → SQL Editor y corre{" "}
+            <code className="text-[10px] bg-white/60 dark:bg-slate-900/60 px-1.5 py-0.5 rounded">
+              migration_0017_rejection_reason_and_cash_proofs.sql
+            </code>{" "}
+            para activar el módulo de soporte.
+          </p>
+        </div>
+      ) : loading ? (
         <div className="flex justify-center py-20">
           <Loader2 className="animate-spin text-primary" size={28} />
         </div>

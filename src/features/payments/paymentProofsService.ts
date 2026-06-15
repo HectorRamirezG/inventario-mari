@@ -6,12 +6,13 @@ export interface PaymentProof {
   id: string
   sale_id: string
   customer_email: string | null
-  image_url: string
+  image_url: string | null
   amount: number | null
   method: string | null
   reference: string | null
   note: string | null
   status: ProofStatus
+  rejection_reason: string | null
   reviewed_by: string | null
   reviewed_at: string | null
   created_at: string
@@ -20,33 +21,40 @@ export interface PaymentProof {
 /**
  * Sube la imagen al bucket `product-images/proofs/` y crea la fila
  * en `payment_proofs`. El trigger en DB notifica a los admins.
+ *
+ * Cuando `file` es null (caso EFECTIVO), crea el proof sin imagen.
  */
 export async function uploadPaymentProof(input: {
   saleId: string
-  file: File
+  file: File | null
   amount?: number | null
   method?: string | null
   customerEmail?: string | null
   note?: string | null
 }): Promise<PaymentProof> {
-  if (!input.file.type.startsWith("image/")) {
-    throw new Error("Sólo imágenes")
+  let publicUrl: string | null = null
+
+  if (input.file) {
+    if (!input.file.type.startsWith("image/")) {
+      throw new Error("Sólo imágenes")
+    }
+    if (input.file.size > 5 * 1024 * 1024) {
+      throw new Error("La foto pesa más de 5MB")
+    }
+
+    const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg"
+    const path = `proofs/${input.saleId}/${crypto.randomUUID()}.${ext}`
+
+    const { error: upErr } = await supabase.storage
+      .from("product-images")
+      .upload(path, input.file, { cacheControl: "31536000", upsert: false })
+    if (upErr) throw upErr
+
+    const {
+      data: { publicUrl: u },
+    } = supabase.storage.from("product-images").getPublicUrl(path)
+    publicUrl = u
   }
-  if (input.file.size > 5 * 1024 * 1024) {
-    throw new Error("La foto pesa más de 5MB")
-  }
-
-  const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg"
-  const path = `proofs/${input.saleId}/${crypto.randomUUID()}.${ext}`
-
-  const { error: upErr } = await supabase.storage
-    .from("product-images")
-    .upload(path, input.file, { cacheControl: "31536000", upsert: false })
-  if (upErr) throw upErr
-
-  const {
-    data: { publicUrl },
-  } = supabase.storage.from("product-images").getPublicUrl(path)
 
   const { data, error } = await supabase
     .from("payment_proofs")

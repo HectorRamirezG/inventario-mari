@@ -94,22 +94,43 @@ export async function createSupportTicket(input: {
   return data as string
 }
 
-/** Lista para la bandeja admin (orden cronológico) */
+/** Lista para la bandeja admin (orden cronológico). Devuelve [] si la
+ *  tabla aún no existe (la migración 0016 / 0017 no se corrió). */
 export async function listSupportTickets(opts?: {
   status?: SupportStatus | "all"
   limit?: number
 }): Promise<SupportTicket[]> {
   const status = opts?.status ?? "open"
   const limit = opts?.limit ?? 100
-  let q = supabase
+  try {
+    let q = supabase
+      .from("support_tickets")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit)
+    if (status !== "all") q = q.eq("status", status)
+    const { data, error } = await q
+    if (error) {
+      // 404 / tabla inexistente: devolvemos [] silencioso
+      if (/does not exist|not found|404/i.test(error.message)) return []
+      throw error
+    }
+    return (data ?? []) as SupportTicket[]
+  } catch (e: any) {
+    if (/does not exist|not found|404/i.test(e?.message ?? "")) return []
+    throw e
+  }
+}
+
+/** Indica si la tabla de soporte está lista para uso. Se usa en la UI
+ *  para mostrar un mensaje claro cuando el admin no corrió la migración. */
+export async function supportTableReady(): Promise<boolean> {
+  const { error } = await supabase
     .from("support_tickets")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit)
-  if (status !== "all") q = q.eq("status", status)
-  const { data, error } = await q
-  if (error) throw error
-  return (data ?? []) as SupportTicket[]
+    .select("id", { count: "exact", head: true })
+    .limit(1)
+  if (!error) return true
+  return !/does not exist|not found|404/i.test(error.message)
 }
 
 export async function updateSupportStatus(

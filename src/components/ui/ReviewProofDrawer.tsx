@@ -9,6 +9,8 @@ import {
   ExternalLink,
   Maximize2,
   Wallet,
+  Banknote,
+  AlertCircle,
 } from "lucide-react"
 import toast from "react-hot-toast"
 import confetti from "canvas-confetti"
@@ -258,23 +260,36 @@ export default function ReviewProofDrawer({
 
               {!loading && proof && (
                 <>
-                  {/* Foto del comprobante */}
-                  <div className="relative rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800">
-                    <img
-                      src={proof.image_url}
-                      alt="Comprobante"
-                      className="w-full max-h-80 object-contain"
-                      loading="eager"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setFullscreen(true)}
-                      className="absolute top-2 right-2 w-9 h-9 rounded-full bg-black/60 backdrop-blur text-white flex items-center justify-center"
-                      title="Ver en pantalla completa"
-                    >
-                      <Maximize2 size={14} />
-                    </button>
-                  </div>
+                  {/* Foto del comprobante — o placeholder si es efectivo */}
+                  {proof.image_url ? (
+                    <div className="relative rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800">
+                      <img
+                        src={proof.image_url}
+                        alt="Comprobante"
+                        className="w-full max-h-80 object-contain"
+                        loading="eager"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFullscreen(true)}
+                        className="absolute top-2 right-2 w-9 h-9 rounded-full bg-black/60 backdrop-blur text-white flex items-center justify-center"
+                        title="Ver en pantalla completa"
+                      >
+                        <Maximize2 size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-500/10 dark:to-teal-500/10 border border-emerald-200 dark:border-emerald-500/30 p-6 flex flex-col items-center justify-center gap-2 text-emerald-700 dark:text-emerald-300">
+                      <Banknote size={36} />
+                      <p className="text-base font-black">
+                        Pago declarado en EFECTIVO
+                      </p>
+                      <p className="text-[11px] text-center max-w-xs">
+                        El cliente no subió foto porque pagará/pagó en efectivo.
+                        Confirma al recibir el dinero.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Datos del cliente + venta */}
                   {sale && (
@@ -333,23 +348,36 @@ export default function ReviewProofDrawer({
                     </div>
                   )}
 
-                  {/* Status badges */}
+                  {/* Status badges + motivo de rechazo si existe */}
                   {proof.status !== "pending" && (
-                    <div
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
-                        proof.status === "approved"
-                          ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                          : "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300"
-                      }`}
-                    >
-                      {proof.status === "approved" ? (
-                        <CheckCircle2 size={14} />
-                      ) : (
-                        <XCircle size={14} />
+                    <div className="space-y-2">
+                      <div
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
+                          proof.status === "approved"
+                            ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                            : "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300"
+                        }`}
+                      >
+                        {proof.status === "approved" ? (
+                          <CheckCircle2 size={14} />
+                        ) : (
+                          <XCircle size={14} />
+                        )}
+                        <span className="text-xs font-black uppercase tracking-widest">
+                          {proof.status === "approved" ? "Ya aprobado" : "Rechazado"}
+                        </span>
+                      </div>
+                      {proof.status === "rejected" && proof.rejection_reason && (
+                        <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-rose-50/60 dark:bg-rose-500/10 border border-rose-200/60 text-rose-700 dark:text-rose-300">
+                          <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                          <p className="text-[11px] font-bold leading-snug">
+                            <span className="uppercase tracking-widest font-black text-[9px] block opacity-80 mb-0.5">
+                              Motivo registrado
+                            </span>
+                            "{proof.rejection_reason}"
+                          </p>
+                        </div>
                       )}
-                      <span className="text-xs font-black uppercase tracking-widest">
-                        {proof.status === "approved" ? "Ya aprobado" : "Rechazado"}
-                      </span>
                     </div>
                   )}
 

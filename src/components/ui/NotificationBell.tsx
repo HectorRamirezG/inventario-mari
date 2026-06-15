@@ -40,23 +40,45 @@ const ICON: Record<string, typeof CreditCard> = {
   new_layaway: ShoppingBag,
   payment_proof_uploaded: Receipt,
   payment_proof_rejected: XCircle,
+  proof_rejected: XCircle,
   price_adjusted: Sparkles,
+  support_ticket: Bell,
 }
 
+/* Colores pastel ULTRA claros (compactos). El icono lleva su color más
+ * intenso; el fondo es suavísimo para no saturar la lista. */
 const COLOR: Record<string, string> = {
   payment_added:
-    "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   sale_paid:
-    "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   sale_cancelled:
-    "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  new_layaway: "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  new_layaway:
+    "bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
   payment_proof_uploaded:
-    "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    "bg-sky-50/70 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300",
   payment_proof_rejected:
-    "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
+    "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  proof_rejected:
+    "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
   price_adjusted:
-    "bg-pink-50 dark:bg-pink-500/10 text-pink-700 dark:text-pink-300",
+    "bg-pink-50/70 dark:bg-pink-500/10 text-pink-700 dark:text-pink-300",
+  support_ticket:
+    "bg-violet-50/70 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300",
+}
+
+/* Fondo suave del ROW (no del icono) según tipo. Mantiene tipografía esbelta. */
+const ROW_BG: Record<string, string> = {
+  payment_added: "bg-emerald-50/40 dark:bg-emerald-500/5",
+  sale_paid: "bg-emerald-50/40 dark:bg-emerald-500/5",
+  sale_cancelled: "bg-rose-50/40 dark:bg-rose-500/5",
+  new_layaway: "bg-amber-50/40 dark:bg-amber-500/5",
+  payment_proof_uploaded: "bg-sky-50/40 dark:bg-sky-500/5",
+  payment_proof_rejected: "bg-rose-50/40 dark:bg-rose-500/5",
+  proof_rejected: "bg-rose-50/40 dark:bg-rose-500/5",
+  price_adjusted: "bg-pink-50/40 dark:bg-pink-500/5",
+  support_ticket: "bg-violet-50/40 dark:bg-violet-500/5",
 }
 
 /** Etiqueta del CTA según tipo de notificación. */
@@ -225,27 +247,33 @@ export default function NotificationBell({
                 <div className="flex-1 overflow-y-auto">
                   {items.map((n) => {
                     const Icon = ICON[n.type] ?? Bell
-                    const tone = COLOR[n.type] ?? "bg-slate-50 text-slate-600"
+                    const tone = COLOR[n.type] ?? "bg-slate-50/70 text-slate-600"
+                    const rowBg = ROW_BG[n.type] ?? ""
                     const unreadItem = !n.read_at
                     const cta = actionLabel(n.type)
+                    // Si la notif trae motivo de rechazo en metadata o es proof_rejected
+                    const rejectReason: string | null =
+                      (n.type === "proof_rejected" || n.type === "payment_proof_rejected")
+                        ? (n.metadata as any)?.reason ?? n.body ?? null
+                        : null
                     return (
                       <div
                         key={n.id}
-                        className={`relative flex gap-3 px-4 py-3 border-b border-slate-50 dark:border-slate-800/60 transition-colors ${
+                        className={`relative flex gap-2.5 px-3 py-2 border-b border-slate-50 dark:border-slate-800/60 transition-colors ${
                           unreadItem
                             ? "bg-primary/5 dark:bg-primary/10"
-                            : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                            : `${rowBg} hover:bg-slate-50 dark:hover:bg-slate-800/40`
                         }`}
                       >
-                        <div className="flex gap-3 flex-1 min-w-0">
+                        <div className="flex gap-2.5 flex-1 min-w-0">
                           <div
-                            className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${tone}`}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${tone}`}
                           >
-                            <Icon size={14} />
+                            <Icon size={13} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-black truncate">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[11px] font-black truncate leading-tight">
                                 {n.title}
                               </p>
                               {unreadItem && (
@@ -253,11 +281,21 @@ export default function NotificationBell({
                               )}
                             </div>
                             {n.body && (
-                              <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">
+                              <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5 leading-snug">
                                 {n.body}
                               </p>
                             )}
-                            <div className="flex items-center justify-between gap-2 mt-1.5">
+                            {rejectReason && (
+                              <div className="mt-1 px-2 py-1 rounded-md bg-rose-50/80 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-rose-700 dark:text-rose-300 opacity-70">
+                                  Motivo
+                                </p>
+                                <p className="text-[10px] text-rose-700 dark:text-rose-300 leading-tight">
+                                  "{rejectReason}"
+                                </p>
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between gap-2 mt-1">
                               <p className="text-[9px] text-slate-400 font-bold">
                                 {timeAgo(n.created_at)}
                               </p>
@@ -265,7 +303,7 @@ export default function NotificationBell({
                                 <button
                                   type="button"
                                   onClick={() => handleClick(n)}
-                                  className="text-[9px] font-black uppercase tracking-widest text-white px-2.5 py-1 rounded-full shadow-bloom active:scale-95 transition-transform"
+                                  className="text-[9px] font-black uppercase tracking-widest text-white px-2 py-0.5 rounded-full shadow-bloom active:scale-95 transition-transform"
                                   style={{
                                     background:
                                       "linear-gradient(135deg,#e6007e,#a855f7)",
@@ -279,11 +317,11 @@ export default function NotificationBell({
                         </div>
                         <button
                           onClick={() => removeNotification(n.id)}
-                          className="opacity-0 group-hover:opacity-100 sm:opacity-100 w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500 self-start"
+                          className="opacity-0 group-hover:opacity-100 sm:opacity-100 w-6 h-6 rounded-md flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500 self-start"
                           title="Quitar"
                           aria-label="Quitar notificación"
                         >
-                          <Trash2 size={11} />
+                          <Trash2 size={10} />
                         </button>
                       </div>
                     )

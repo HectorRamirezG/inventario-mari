@@ -42,13 +42,22 @@ export async function markAsRead(id: string) {
 }
 
 export async function markAllRead() {
-  await supabase.rpc("mark_all_notifications_read").catch(() => {
-    // fallback si la RPC no existe (migración 0010 no corrida)
-    return supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .is("read_at", null)
-  })
+  // La RPC `mark_all_notifications_read` puede no existir si la migración
+  // 0010 no se corrió. Hacemos try/catch (NO `.catch()` en la promesa de
+  // Supabase: esa promesa no es "thenable nativa" y rompía con
+  // `rpc(...).catch is not a function`).
+  try {
+    const { error } = await supabase.rpc("mark_all_notifications_read")
+    if (!error) return
+    console.warn("[notif] RPC falló, usando fallback:", error.message)
+  } catch (e) {
+    console.warn("[notif] RPC excepción, usando fallback:", e)
+  }
+  // Fallback: marca todas como leídas con UPDATE directo
+  await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .is("read_at", null)
 }
 
 export async function removeNotification(id: string) {

@@ -10,6 +10,9 @@ import {
   ImageIcon,
   Clock,
   Receipt,
+  Banknote,
+  Send,
+  AlertCircle,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -77,13 +80,21 @@ export default function ReportPaymentButton({
   }
 
   async function confirmUpload() {
-    if (!pendingFile) return
     if (!amount || Number(amount) <= 0) {
-      toast.error("Escribe el monto exacto del comprobante")
+      toast.error("Escribe el monto exacto")
+      return
+    }
+    // Para efectivo permitimos pendingFile = null
+    if (method !== "efectivo" && !pendingFile) {
+      toast.error("Sube tu comprobante o cambia a Efectivo")
       return
     }
     setBusy(true)
-    const tid = toast.loading("Subiendo comprobante...")
+    const tid = toast.loading(
+      method === "efectivo" && !pendingFile
+        ? "Registrando pago en efectivo..."
+        : "Subiendo comprobante..."
+    )
     try {
       const proof = await uploadPaymentProof({
         saleId,
@@ -93,7 +104,12 @@ export default function ReportPaymentButton({
         customerEmail: customerEmail ?? null,
       })
       sound.success()
-      toast.success("✓ Comprobante enviado a Mari", { id: tid })
+      toast.success(
+        method === "efectivo"
+          ? "✓ Pago en efectivo registrado · Mari lo confirmará"
+          : "✓ Comprobante enviado a Mari",
+        { id: tid }
+      )
       setAskAmount(false)
       setPendingFile(null)
       setAmount("")
@@ -113,13 +129,14 @@ export default function ReportPaymentButton({
   }
 
   // Vista: confirmar comprobante (con preview)
-  if (askAmount && pendingFile) {
-    const previewUrl = URL.createObjectURL(pendingFile)
+  if (askAmount) {
+    const previewUrl = pendingFile ? URL.createObjectURL(pendingFile) : null
+    const isCash = method === "efectivo"
     return (
       <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 dark:bg-amber-500/10 p-3 space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
-            Confirma tu comprobante
+            {isCash ? "Confirma tu pago en efectivo" : "Confirma tu comprobante"}
           </p>
           <button
             type="button"
@@ -127,7 +144,7 @@ export default function ReportPaymentButton({
               setAskAmount(false)
               setPendingFile(null)
               setAmount("")
-              URL.revokeObjectURL(previewUrl)
+              if (previewUrl) URL.revokeObjectURL(previewUrl)
             }}
             className="w-6 h-6 rounded-full bg-white/80 dark:bg-slate-800 flex items-center justify-center text-slate-500"
             aria-label="Cancelar"
@@ -136,11 +153,20 @@ export default function ReportPaymentButton({
           </button>
         </div>
 
-        <img
-          src={previewUrl}
-          alt="Comprobante"
-          className="w-full max-h-40 object-contain rounded-xl bg-white"
-        />
+        {previewUrl ? (
+          <img
+            src={previewUrl}
+            alt="Comprobante"
+            className="w-full max-h-40 object-contain rounded-xl bg-white"
+          />
+        ) : isCash ? (
+          <div className="py-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 flex items-center justify-center gap-2 text-emerald-700 dark:text-emerald-300">
+            <Banknote size={20} />
+            <p className="text-[11px] font-black uppercase tracking-widest">
+              Pago en efectivo
+            </p>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-2">
           <div>
@@ -189,8 +215,9 @@ export default function ReportPaymentButton({
         </div>
 
         <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-snug">
-          ⚠️ Escribe la cantidad <b>exacta</b> que aparece en tu captura,
-          tal cual la enviaste. Mari lo revisará y abonará tu saldo.
+          {isCash
+            ? "⚠️ Indica el monto exacto que entregarás/entregaste en efectivo. Mari lo confirmará al recibirlo."
+            : "⚠️ Escribe la cantidad exacta que aparece en tu captura, tal cual la enviaste. Mari lo revisará y abonará tu saldo."}
         </p>
 
         <button
@@ -202,21 +229,48 @@ export default function ReportPaymentButton({
         >
           {busy ? (
             <Loader2 size={14} className="animate-spin" />
+          ) : isCash ? (
+            <Send size={14} />
           ) : (
             <CheckCircle2 size={14} />
           )}
-          Enviar a Mari para validar
+          {isCash ? "Registrar pago en efectivo" : "Enviar a Mari para validar"}
         </button>
       </div>
     )
   }
 
-  // Vista normal: botones para subir + microtexto destacado + historial
+  // Vista normal: botón grande para efectivo + dos botones de foto + historial
   return (
     <div className="space-y-3">
       {/* Datos bancarios copiables (sólo si Mari los configuró) */}
       <BankAccountCard />
 
+      {/* OPCIÓN 1: Pago en EFECTIVO (un toque) */}
+      <button
+        type="button"
+        onClick={() => {
+          setPendingFile(null)
+          setMethod("efectivo")
+          setAmount("")
+          setAskAmount(true)
+        }}
+        className="w-full flex items-center gap-3 p-3 rounded-2xl border-2 border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/70 dark:bg-emerald-500/10 hover:bg-emerald-50 active:scale-[0.99] transition-all text-left"
+      >
+        <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-bloom">
+          <Banknote size={18} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-black text-emerald-800 dark:text-emerald-200 leading-tight">
+            Pagaré en efectivo
+          </p>
+          <p className="text-[10px] text-emerald-700/80 dark:text-emerald-200/70 leading-snug mt-0.5">
+            Solo confirma el monto, no necesitas subir foto.
+          </p>
+        </div>
+      </button>
+
+      {/* OPCIÓN 2: Subir comprobante (transferencia / mercadopago) */}
       <div className="rounded-2xl border-2 border-dashed border-amber-300/80 bg-gradient-to-br from-amber-50 to-pink-50/50 dark:from-amber-500/10 dark:to-pink-500/10 p-4">
         <div className="flex items-start gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl bg-amber-400 text-white flex items-center justify-center shrink-0 shadow-bloom">
@@ -224,11 +278,11 @@ export default function ReportPaymentButton({
           </div>
           <div className="min-w-0">
             <p className="text-xs font-black text-amber-900 dark:text-amber-200 leading-tight">
-              ¿Ya pagaste? Sube tu comprobante
+              Pagué por transferencia o Mercado Pago
             </p>
             <p className="text-[10px] text-amber-800/80 dark:text-amber-200/70 leading-snug mt-0.5">
-              Sube aquí la captura de tu transferencia o depósito para que
-              <b> Mari valide tu pago</b> y actualice tu saldo en tiempo real 💖
+              Sube la captura de tu transferencia para que
+              <b> Mari valide tu pago</b> 💖
             </p>
           </div>
         </div>
@@ -298,6 +352,7 @@ function ProofsHistory({
 }
 
 function ProofRow({ proof }: { proof: PaymentProof }) {
+  const isCash = proof.method === "efectivo"
   const tone =
     proof.status === "approved"
       ? "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200/60 text-emerald-700 dark:text-emerald-300"
@@ -316,36 +371,67 @@ function ProofRow({ proof }: { proof: PaymentProof }) {
     hour: "2-digit",
     minute: "2-digit",
   })
+
+  const Wrapper: any = proof.image_url ? "a" : "div"
+  const wrapperProps = proof.image_url
+    ? {
+        href: proof.image_url,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        title: "Ver comprobante",
+      }
+    : {}
+
   return (
-    <a
-      href={proof.image_url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${tone} hover:brightness-105 transition-all active:scale-[0.99]`}
-      title="Ver comprobante"
-    >
-      <img
-        src={proof.image_url}
-        alt="Comprobante"
-        loading="lazy"
-        className="w-10 h-10 rounded-lg object-cover bg-white shrink-0"
-      />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-black uppercase tracking-widest truncate">
-            {label}
-          </p>
-          {proof.amount != null && proof.amount > 0 && (
-            <p className="text-xs font-black tabular-nums shrink-0">
-              {formatMoney(Number(proof.amount))}
+    <div className="space-y-1">
+      <Wrapper
+        {...wrapperProps}
+        className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${tone} hover:brightness-105 transition-all ${proof.image_url ? "active:scale-[0.99]" : ""}`}
+      >
+        {proof.image_url ? (
+          <img
+            src={proof.image_url}
+            alt="Comprobante"
+            loading="lazy"
+            className="w-10 h-10 rounded-lg object-cover bg-white shrink-0"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center shrink-0">
+            <Banknote size={16} className="text-emerald-600" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] font-black uppercase tracking-widest truncate">
+              {label}
             </p>
-          )}
+            {proof.amount != null && proof.amount > 0 && (
+              <p className="text-xs font-black tabular-nums shrink-0">
+                {formatMoney(Number(proof.amount))}
+              </p>
+            )}
+          </div>
+          <p className="text-[9px] opacity-80 flex items-center gap-1 truncate">
+            <Clock size={9} /> {when}
+            {proof.method && <span className="ml-1">· {proof.method}</span>}
+            {isCash && !proof.image_url && (
+              <span className="ml-1 italic">(sin foto)</span>
+            )}
+          </p>
         </div>
-        <p className="text-[9px] opacity-80 flex items-center gap-1 truncate">
-          <Clock size={9} /> {when}
-          {proof.method && <span className="ml-1">· {proof.method}</span>}
-        </p>
-      </div>
-    </a>
+      </Wrapper>
+      {/* Motivo de rechazo (siempre visible si existe) */}
+      {proof.status === "rejected" && proof.rejection_reason && (
+        <div className="flex items-start gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200/60 text-rose-700 dark:text-rose-300">
+          <AlertCircle size={11} className="shrink-0 mt-0.5" />
+          <p className="text-[10px] font-bold leading-snug">
+            <span className="uppercase tracking-widest font-black text-[8px] block opacity-80">
+              Motivo de Mari:
+            </span>
+            {proof.rejection_reason}
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
