@@ -30,6 +30,7 @@ import {
   Store,
   Receipt as ReceiptIcon,
   User as UserIcon,
+  LifeBuoy,
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
@@ -43,6 +44,7 @@ import PublicTicketPage from "./features/public/PublicTicketPage"
 import ClientShopPage from "./features/client/ClientShopPage"
 import ClientOrdersPage from "./features/client/ClientOrdersPage"
 import CyclesPage from "./features/cycles/CyclesPage"
+import SupportPage from "./features/support/SupportPage"
 
 import ThemeToggle from "./components/ui/ThemeToggle"
 import CommandPalette from "./components/ui/CommandPalette"
@@ -69,6 +71,7 @@ type AdminSection =
   | "pendientes"
   | "ciclos"
   | "calculadora"
+  | "soporte"
   | "ajustes"
 
 const ADMIN_MENU: {
@@ -81,6 +84,7 @@ const ADMIN_MENU: {
   { id: "catalogo", label: "Catálogo", icon: Package },
   { id: "caja", label: "Caja", icon: ShoppingCart },
   { id: "pendientes", label: "Pendientes", icon: Bookmark },
+  { id: "soporte", label: "Soporte", icon: LifeBuoy },
   { id: "ciclos", label: "Ciclos", icon: TrendingUp, adminOnly: true },
   { id: "calculadora", label: "Calculadora", icon: Tag, adminOnly: true },
 ]
@@ -225,6 +229,8 @@ function AdminShell() {
         apartados: "pendientes",
         precios: "calculadora",
         ciclos: "ciclos",
+        soporte: "soporte",
+        incidencias: "soporte",
         settings: "ajustes",
       }
       const next = (legacy[t] ?? t) as AdminSection
@@ -494,6 +500,7 @@ function AdminShell() {
                 {section === "catalogo" && <InventoryPage />}
                 {section === "caja" && <SalesPage />}
                 {section === "pendientes" && <ApartadosPage />}
+                {section === "soporte" && <SupportPage />}
                 {section === "ciclos" && isAdmin && <CyclesPage />}
                 {section === "calculadora" && isAdmin && <PricingPage />}
                 {section === "ajustes" && <SettingsPage />}

@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence, PanInfo } from "framer-motion"
-import { X, Plus, Minus, ShoppingBag, Package, Sparkles } from "lucide-react"
+import {
+  X,
+  Plus,
+  Minus,
+  ShoppingBag,
+  Package,
+  Sparkles,
+  AlertTriangle,
+} from "lucide-react"
 
 import { formatMoney } from "../../lib/format"
 
@@ -186,79 +194,102 @@ export default function BuySheet({
                 product.variants.map((v) => {
                   const q = qty[v.id] ?? 0
                   const out = v.stock <= 0
+                  const atMax = !out && q >= v.stock
                   return (
                     <motion.div
                       key={v.id}
                       layout
-                      className={`flex items-center gap-3 p-2.5 rounded-2xl border transition-colors ${
+                      className={`flex flex-col gap-1.5 p-2.5 rounded-2xl border transition-colors ${
                         q > 0
                           ? "bg-primary/5 border-primary/30"
                           : "bg-slate-50 dark:bg-slate-800/60 border-transparent"
                       }`}
                     >
-                      <div className="w-14 h-14 rounded-xl bg-white dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-300 shrink-0">
-                        {v.image_url ? (
-                          <img
-                            src={v.image_url}
-                            alt={v.variant_name}
-                            loading="lazy"
-                            className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
-                          />
-                        ) : (
-                          <Package size={18} />
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 rounded-xl bg-white dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-300 shrink-0">
+                          {v.image_url ? (
+                            <img
+                              src={v.image_url}
+                              alt={v.variant_name}
+                              loading="lazy"
+                              className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
+                            />
+                          ) : (
+                            <Package size={18} />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black truncate">{v.variant_name}</p>
+                          <p className="text-sm font-black text-primary tabular-nums">
+                            {formatMoney(v.price)}
+                          </p>
+                          {out ? (
+                            <p className="text-[9px] font-black uppercase text-rose-500">
+                              Agotado
+                            </p>
+                          ) : v.stock <= 3 ? (
+                            <p className="text-[9px] font-bold text-amber-600 uppercase">
+                              ¡Últimas {v.stock}!
+                            </p>
+                          ) : (
+                            <p className="text-[9px] text-slate-400 font-bold">
+                              {v.stock} disponibles
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => change(v.id, -1, v.stock)}
+                            disabled={q === 0 || out}
+                            aria-label="Restar"
+                            className="w-9 h-9 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-sm border border-slate-200 dark:border-slate-600 disabled:opacity-40 active:scale-90 transition-transform"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <motion.span
+                            key={q}
+                            initial={{ scale: 0.6, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ type: "spring", stiffness: 380, damping: 20 }}
+                            className="w-7 text-center text-sm font-black tabular-nums"
+                          >
+                            {q}
+                          </motion.span>
+                          <button
+                            type="button"
+                            onClick={() => change(v.id, 1, v.stock)}
+                            disabled={out || q >= v.stock}
+                            aria-label="Sumar"
+                            className="w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom disabled:opacity-30 active:scale-90 transition-transform"
+                            style={{
+                              background: "linear-gradient(135deg,#e6007e,#a855f7)",
+                            }}
+                          >
+                            <Plus size={14} strokeWidth={3} />
+                          </button>
+                        </div>
+                      </div>
+                      {/* Cápsula explicativa cuando ya llegó al tope */}
+                      <AnimatePresence>
+                        {atMax && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -4, height: 0 }}
+                            animate={{ opacity: 1, y: 0, height: "auto" }}
+                            exit={{ opacity: 0, y: -4, height: 0 }}
+                            transition={{ type: "spring", stiffness: 320, damping: 22 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-black">
+                              <AlertTriangle size={11} className="shrink-0" />
+                              <span>
+                                Ya llevas las {v.stock} piezas disponibles de
+                                este tono. {v.stock <= 3 ? "¡Aprovéchalas! ✨" : ""}
+                              </span>
+                            </div>
+                          </motion.div>
                         )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-black truncate">{v.variant_name}</p>
-                        <p className="text-sm font-black text-primary tabular-nums">
-                          {formatMoney(v.price)}
-                        </p>
-                        {out ? (
-                          <p className="text-[9px] font-black uppercase text-rose-500">
-                            Agotado
-                          </p>
-                        ) : v.stock <= 3 ? (
-                          <p className="text-[9px] font-bold text-amber-600 uppercase">
-                            ¡Últimas {v.stock}!
-                          </p>
-                        ) : (
-                          <p className="text-[9px] text-slate-400 font-bold">
-                            {v.stock} disponibles
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => change(v.id, -1, v.stock)}
-                          disabled={q === 0 || out}
-                          aria-label="Restar"
-                          className="w-9 h-9 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-sm border border-slate-200 dark:border-slate-600 disabled:opacity-40 active:scale-90 transition-transform"
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <motion.span
-                          key={q}
-                          initial={{ scale: 0.6, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ type: "spring", stiffness: 380, damping: 20 }}
-                          className="w-7 text-center text-sm font-black tabular-nums"
-                        >
-                          {q}
-                        </motion.span>
-                        <button
-                          type="button"
-                          onClick={() => change(v.id, 1, v.stock)}
-                          disabled={out || q >= v.stock}
-                          aria-label="Sumar"
-                          className="w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom disabled:opacity-30 active:scale-90 transition-transform"
-                          style={{
-                            background: "linear-gradient(135deg,#e6007e,#a855f7)",
-                          }}
-                        >
-                          <Plus size={14} strokeWidth={3} />
-                        </button>
-                      </div>
+                      </AnimatePresence>
                     </motion.div>
                   )
                 })

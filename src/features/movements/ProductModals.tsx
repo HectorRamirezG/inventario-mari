@@ -14,6 +14,7 @@ import { motion } from "framer-motion"
 import Modal from "../../components/ui/Modal"
 import Input from "../../components/ui/Input"
 import Button from "../../components/ui/Button"
+import CategoryCombobox from "../../components/ui/CategoryCombobox"
 
 import {
   useCreateProduct,
@@ -45,12 +46,10 @@ export function CreateProductModal({ isOpen, onClose, onSuccess }: any) {
               className="h-12 rounded-[1.5rem] bg-white border border-slate-100 font-black text-[11px]"
             />
 
-            <Input
-              icon={<Tag size={14} className="text-slate-300" />}
+            <CategoryCombobox
               value={f.category}
-              onChange={e => f.setCategory(e.target.value)}
-              placeholder="Categoría"
-              className="h-12 rounded-[1.5rem] bg-white border border-slate-100 font-black text-[11px]"
+              onChange={(v) => f.setCategory(v)}
+              placeholder="Categoría (Rostro, Ojos, Labios...)"
             />
           </div>
         </div>

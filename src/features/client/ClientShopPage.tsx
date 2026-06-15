@@ -333,11 +333,18 @@ export default function ClientShopPage() {
   function changeQty(variantId: string, delta: number) {
     setCart((prev) =>
       prev
-        .map((c) =>
-          c.variant_id === variantId
-            ? { ...c, qty: Math.max(0, Math.min(c.stock, c.qty + delta)) }
-            : c
-        )
+        .map((c) => {
+          if (c.variant_id !== variantId) return c
+          const next = Math.max(0, Math.min(c.stock, c.qty + delta))
+          // Si intentaba sumar y ya estaba al tope, avisamos
+          if (delta > 0 && next === c.qty && c.qty === c.stock) {
+            toast(
+              `Ya llevas las ${c.stock} piezas disponibles de ${c.variant_name} ✨`,
+              { icon: "⚠️", duration: 2200 }
+            )
+          }
+          return { ...c, qty: next }
+        })
         .filter((c) => c.qty > 0)
     )
   }

@@ -131,7 +131,7 @@ export default function ProductList() {
       )}
 
       {/* BOTÓN FLOTANTE (OPCIONAL - MÁS PRO) */}
-      
+
 
       {/* MODALES */}
       <CreateProductModal
@@ -146,6 +146,13 @@ export default function ProductList() {
         product={ui.editProduct}
         onClose={ui.handleCloseEdit}
         onSaved={ui.refresh}
+        knownCategories={Array.from(
+          new Set(
+            (ui.products ?? [])
+              .map((p) => (p.category ?? "").trim())
+              .filter(Boolean)
+          )
+        )}
       />
 
       <CreateVariantModal

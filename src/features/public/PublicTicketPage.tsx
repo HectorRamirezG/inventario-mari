@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { motion } from "framer-motion"
+import { motion, useMotionValue, animate as fmAnimate } from "framer-motion"
 import {
   Sparkles, Receipt, CheckCircle2, Clock, ArrowRight,
-  CreditCard, MessageCircle, ArrowLeft, Home,
+  CreditCard, MessageCircle, ArrowLeft, Home, LifeBuoy,
 } from "lucide-react"
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
 import { useAuth, isStaffOrAdmin } from "../../lib/useAuth"
 import ReportPaymentButton from "../../components/ui/ReportPaymentButton"
-
+import SupportModal from "../support/SupportModal"
 interface TicketItem {
   id: string
   product_name: string
@@ -55,6 +55,7 @@ export default function PublicTicketPage() {
   const [ticket, setTicket] = useState<PublicTicket | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [openSupport, setOpenSupport] = useState(false)
   const store = getStoreInfo()
 
   /** Vuelve a un home contextual según el usuario logueado. */
@@ -89,6 +90,51 @@ export default function PublicTicketPage() {
       alive = false
     }
   }, [token])
+
+  /**
+   * Realtime: cuando admin valida un pago (UPDATE en sales o INSERT en
+   * payments) volvemos a llamar a la RPC y refrescamos los totales. El
+   * cliente ve su saldo cambiar al instante sin recargar.
+   */
+  useEffect(() => {
+    if (!ticket?.id || !token) return
+    const channel = supabase
+      .channel(`ticket-${ticket.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "sales",
+          filter: `id=eq.${ticket.id}`,
+        },
+        async () => {
+          const { data } = await supabase.rpc("get_public_ticket", {
+            p_token: token,
+          })
+          if (data) setTicket(data as PublicTicket)
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "payments",
+          filter: `sale_id=eq.${ticket.id}`,
+        },
+        async () => {
+          const { data } = await supabase.rpc("get_public_ticket", {
+            p_token: token,
+          })
+          if (data) setTicket(data as PublicTicket)
+        }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [ticket?.id, token])
 
   if (loading) {
     return (
@@ -301,27 +347,11 @@ export default function PublicTicketPage() {
 
           {/* Progreso del apartado */}
           {ticket.is_layaway && ticket.total > 0 && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] uppercase tracking-widest text-slate-500 font-black">
-                  Progreso de apartado
-                </span>
-                <span className="text-xs font-black text-primary">
-                  {pct.toFixed(0)}%
-                </span>
-              </div>
-              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${pct}%` }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                  className="h-full rounded-full"
-                  style={{
-                    background: "linear-gradient(90deg,#e6007e,#a855f7)",
-                  }}
-                />
-              </div>
-            </div>
+            <ProgressBlock
+              pct={pct}
+              paid={Number(ticket.paid) || 0}
+              balance={Number(ticket.balance) || 0}
+            />
           )}
 
           {/* Estado */}
@@ -388,10 +418,32 @@ export default function PublicTicketPage() {
           </a>
         )}
 
+        {/* CTA: ¿Necesitas ayuda con tu pedido? (centro de soporte) */}
+        <motion.button
+          type="button"
+          onClick={() => setOpenSupport(true)}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          whileTap={{ scale: 0.98 }}
+          className="mt-3 w-full flex items-center justify-center gap-2 h-12 rounded-2xl bg-white border-2 border-dashed border-primary/40 text-primary font-black text-sm hover:bg-primary/5 transition-colors"
+        >
+          <LifeBuoy size={16} />
+          ¿Necesitas ayuda con tu pedido?
+        </motion.button>
+
         <p className="text-center text-[10px] uppercase tracking-widest text-slate-400 mt-8">
           {store.thanks_message}
         </p>
       </div>
+
+      {/* Modal de incidencias */}
+      <SupportModal
+        open={openSupport}
+        saleId={ticket.id}
+        customerName={ticket.customer_name}
+        onClose={() => setOpenSupport(false)}
+      />
     </div>
   )
 }
@@ -426,5 +478,117 @@ function Row({
         {value}
       </span>
     </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────
+ * Progreso animado del apartado
+ * ─ Barra: ease-out de 0 → pct al montar
+ * ─ Cuando pct cambia (admin valida pago), destello sutil
+ * ─ Saldo + pagado con contador animado (spring)
+ * ───────────────────────────────────────────────────── */
+function ProgressBlock({
+  pct,
+  paid,
+  balance,
+}: {
+  pct: number
+  paid: number
+  balance: number
+}) {
+  const prevPctRef = useRef(pct)
+  const [flash, setFlash] = useState(false)
+
+  useEffect(() => {
+    if (prevPctRef.current === pct) return
+    // Solo dispara destello cuando AUMENTA (cobro nuevo)
+    if (pct > prevPctRef.current) {
+      setFlash(true)
+      const t = setTimeout(() => setFlash(false), 1100)
+      prevPctRef.current = pct
+      return () => clearTimeout(t)
+    }
+    prevPctRef.current = pct
+  }, [pct])
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-black">
+          Progreso de apartado
+        </span>
+        <motion.span
+          key={pct.toFixed(0)}
+          initial={{ scale: 0.9, opacity: 0.6 }}
+          animate={{
+            scale: flash ? [1, 1.18, 1] : 1,
+            opacity: 1,
+            color: flash ? "#10b981" : "#e6007e",
+          }}
+          transition={{ duration: 0.55 }}
+          className="text-xs font-black"
+        >
+          {pct.toFixed(0)}%
+        </motion.span>
+      </div>
+      <div className="relative h-2.5 bg-slate-100 rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{
+            background: "linear-gradient(90deg,#e6007e,#a855f7)",
+          }}
+        />
+        {flash && (
+          <motion.div
+            initial={{ x: "-100%" }}
+            animate={{ x: "120%" }}
+            transition={{ duration: 1.1, ease: "easeOut" }}
+            className="absolute inset-y-0 w-1/2 pointer-events-none"
+            style={{
+              background:
+                "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.65) 50%, transparent 100%)",
+            }}
+          />
+        )}
+      </div>
+      <div className="flex items-center justify-between mt-2 text-[11px]">
+        <span className="text-slate-500 font-bold">
+          Pagado:{" "}
+          <AnimatedMoney value={paid} className="text-emerald-600 font-black" />
+        </span>
+        <span className="text-slate-500 font-bold">
+          Saldo:{" "}
+          <AnimatedMoney value={balance} className="text-rose-600 font-black" />
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** Cuenta numérica animada cuando cambia el valor (spring). */
+function AnimatedMoney({
+  value,
+  className = "",
+}: {
+  value: number
+  className?: string
+}) {
+  const mv = useMotionValue(value)
+  const [display, setDisplay] = useState(value)
+
+  useEffect(() => {
+    const controls = fmAnimate(mv, value, {
+      duration: 0.9,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (latest) => setDisplay(latest as number),
+    })
+    return () => controls.stop()
+  }, [value, mv])
+
+  return (
+    <span className={`tabular-nums ${className}`}>{formatMoney(display)}</span>
   )
 }
