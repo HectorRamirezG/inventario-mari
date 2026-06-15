@@ -172,20 +172,31 @@ export default function ClientShopPage() {
   useEffect(() => {
     let alive = true
     ;(async () => {
+      // OJO: no existe products_public / variants_public en la DB real.
+      // Leemos directo de products + variants (la policy `anon_all` lo permite).
       const { data: prods } = await supabase
-        .from("products_public")
-        .select("id,name,category,image_url")
+        .from("products")
+        .select("id,name,category")
+        .eq("is_active", true)
         .order("name")
-      const { data: vars } = await supabase.from("variants_public").select("*")
+      const { data: vars } = await supabase
+        .from("variants")
+        .select("id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo")
+        .eq("is_active", true)
       if (!alive) return
       const byProduct: Record<string, PublicVariant[]> = {}
-      ;(vars ?? []).forEach((v) => {
+      ;(vars ?? []).forEach((v: any) => {
         if (!byProduct[v.product_id]) byProduct[v.product_id] = []
-        byProduct[v.product_id].push(v as PublicVariant)
+        byProduct[v.product_id].push({
+          ...v,
+          image_url: null,
+          image_urls: null,
+        } as PublicVariant)
       })
       setProducts(
-        (prods ?? []).map((p) => ({
-          ...(p as Omit<PublicProduct, "variants">),
+        (prods ?? []).map((p: any) => ({
+          ...(p as Omit<PublicProduct, "variants" | "image_url">),
+          image_url: null,
           variants: byProduct[p.id] ?? [],
         }))
       )

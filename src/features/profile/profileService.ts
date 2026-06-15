@@ -87,7 +87,7 @@ export async function fetchProfilesByEmails(
   const unique = Array.from(new Set(emails.filter(Boolean)))
   if (unique.length === 0) return {}
   const { data, error } = await supabase
-    .from("client_profiles")
+    .from("user_profiles")
     .select("id,email,full_name,avatar_url,phone,address,location_url,role")
     .in("email", unique)
   if (error) {

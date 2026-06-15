@@ -109,32 +109,55 @@ export async function getLatestProofActivity(
 }
 
 /**
- * Registra un abono a una venta existente vía la RPC `add_sale_payment`.
- * La RPC se encarga de:
- *   - validar que el monto sea > 0
- *   - validar que la venta no esté cancelada
- *   - insertar en `payments`
- *   - recalcular `paid`, `balance` y `status` en `sales`
+ * Registra un abono a una venta existente. NO existe RPC `add_sale_payment`
+ * en la DB real, así que lo hacemos en dos pasos contra las tablas que sí
+ * existen (`payments` + `sales`). Las policies `anon_all` permiten ambas
+ * operaciones desde el cliente autenticado/admin.
  */
 export async function addPayment(
   saleId: string,
   amount: number,
   method: string = "efectivo"
 ) {
-  const { error } = await supabase.rpc("add_sale_payment", {
-    p_sale_id: saleId,
-    p_amount: amount,
-    p_method: method,
-  });
-  if (error) throw new Error(error.message);
+  if (!amount || amount <= 0) throw new Error("Monto inválido");
+
+  // 1) Insertar el abono
+  const { error: payErr } = await supabase
+    .from("payments")
+    .insert({ sale_id: saleId, amount, method });
+  if (payErr) throw new Error(payErr.message);
+
+  // 2) Recalcular paid/balance/status en sales
+  const { data: sale, error: selErr } = await supabase
+    .from("sales")
+    .select("total,paid,status")
+    .eq("id", saleId)
+    .maybeSingle();
+  if (selErr || !sale) throw new Error(selErr?.message ?? "Venta no encontrada");
+
+  const newPaid = Number(sale.paid ?? 0) + Number(amount);
+  const total = Number(sale.total ?? 0);
+  const newBalance = Math.max(0, total - newPaid);
+  const newStatus =
+    sale.status === "cancelled" ? "cancelled" : newBalance <= 0 ? "paid" : "pending";
+
+  const { error: updErr } = await supabase
+    .from("sales")
+    .update({ paid: newPaid, balance: newBalance, status: newStatus })
+    .eq("id", saleId);
+  if (updErr) throw new Error(updErr.message);
 }
 
 /**
- * Cancela una venta y devuelve el stock al inventario.
- * Usa la RPC `cancel_sale` (definida en 0004_apartados_customer.sql).
+ * Cancela una venta. NO existe RPC `cancel_sale` en la DB real, hacemos
+ * UPDATE directo. El trigger `restock_on_sale_cancelled` devuelve el stock
+ * automáticamente al pasar a status='cancelled'.
  */
 export async function cancelSale(saleId: string) {
-  const { error } = await supabase.rpc("cancel_sale", { p_sale_id: saleId });
+  const { error } = await supabase
+    .from("sales")
+    .update({ status: "cancelled" })
+    .eq("id", saleId);
   if (error) throw new Error(error.message);
 }
 
