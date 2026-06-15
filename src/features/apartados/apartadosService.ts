@@ -34,7 +34,6 @@ export async function listApartados(opts: {
       customer_location,
       payment_url,
       public_token,
-      apartado_due_date,
       notes,
       total,
       paid,

@@ -3,18 +3,19 @@ import type { DashboardStats } from "./dashboardTypes";
 
 /**
  * Helper para tomar el resultado de Promise.allSettled sin romper el
- * dashboard si una columna no existe en una DB con migraciones atrasadas
- * (ej. apartado_due_date o is_foreign_shipping).
+ * dashboard si una sub-query falla (RLS, columna inesperada, etc.).
  */
 function settled<T>(r: PromiseSettledResult<T>, fallback: T): T {
   return r.status === "fulfilled" ? r.value : fallback
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  // Umbral para "vencen en 5 días"
-  const soon = new Date()
-  soon.setDate(soon.getDate() + 5)
-  const soonIso = soon.toISOString().slice(0, 10) // YYYY-MM-DD
+  // Umbral para "vencen en 5 días" — asumimos plazo de apartado = 30 días
+  // desde created_at (no existe columna apartado_due_date en la DB real).
+  // Un apartado "vence en 5 días" si created_at <= hoy - 25 días.
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - 25)
+  const cutoffIso = cutoff.toISOString()
 
   const results = await Promise.allSettled([
     supabase.from("products").select("*", { count: "exact", head: true }).eq("is_active", true),
@@ -33,7 +34,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .select("id", { count: "exact", head: true })
       .eq("is_layaway", true)
       .gt("balance", 0)
-      .lte("apartado_due_date", soonIso)
+      .lte("created_at", cutoffIso)
       .neq("status", "cancelled"),
     supabase
       .from("payment_proofs")

@@ -66,8 +66,6 @@ export interface Sale {
   payment_url?: string | null;        // Link de cobro (Mercado Pago, etc.)
   public_token?: string | null;       // Token para ticket público /ticket/:token
   notes?: string | null;
-  due_date?: string | null;
-  apartado_due_date?: string | null;  // Fecha límite para liquidar apartado (yyyy-mm-dd)
   is_layaway?: boolean;
   total: number;
   paid: number;

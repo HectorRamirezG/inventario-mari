@@ -279,9 +279,10 @@ function SaleCard({
   const days = daysSince(sale.created_at);
   const wa = waLink(sale.customer_phone);
 
-  // Vencimiento: usa apartado_due_date si existe, si no, asume 30 días.
+  // Vencimiento: la DB no guarda fecha límite explícita, así que asumimos
+  // plazo estándar de 30 días desde created_at (consistente con las
+  // comunicaciones al cliente).
   const dueDate = (() => {
-    if (sale.apartado_due_date) return new Date(sale.apartado_due_date);
     const d = new Date(sale.created_at);
     d.setDate(d.getDate() + 30);
     return d;
