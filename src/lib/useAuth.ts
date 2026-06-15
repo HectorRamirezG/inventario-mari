@@ -97,7 +97,10 @@ export function useAuth(): AuthState & {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName ?? email } },
+        options: {
+          data: { full_name: fullName ?? email },
+          emailRedirectTo: window.location.origin + "/login",
+        },
       })
       if (error) throw new Error(error.message)
     },
@@ -107,7 +110,10 @@ export function useAuth(): AuthState & {
   const sendMagicLink = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin + "/login" },
+      options: {
+        emailRedirectTo: window.location.origin + "/login",
+        shouldCreateUser: true,
+      },
     })
     if (error) throw new Error(error.message)
   }, [])
