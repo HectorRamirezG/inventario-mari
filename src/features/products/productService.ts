@@ -46,9 +46,11 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 export async function updateProduct(productId: string, patch: Partial<Product>) {
+  const safe = pick(patch, PRODUCT_COLUMNS)
+  if (Object.keys(safe).length === 0) return
   const { error } = await supabase
     .from("products")
-    .update(patch)
+    .update(safe)
     .eq("id", productId)
 
   if (error) throw error
@@ -70,14 +72,17 @@ export async function updateVariant(
     >
   >
 ) {
+  const safePatch = pick(patch, VARIANT_COLUMNS)
+  if (Object.keys(safePatch).length === 0) return
+
   const { error } = await supabase
     .from("variants")
-    .update(patch)
+    .update(safePatch)
     .eq("id", variantId)
 
   if (!error) return
 
-  // Si la columna image_urls aún no existe (DB sin la migración 0012),
+  // Si la columna image_urls aún no existe (DB sin la migración 0028),
   // reintenta enviando sólo lo legacy. Así el panel sigue funcionando
   // aunque el usuario no haya corrido el SQL todavía.
   const msg = error.message ?? ""
@@ -86,16 +91,16 @@ export async function updateVariant(
     /could not find the .* column/i.test(msg) ||
     /image_urls/.test(msg)
 
-  if (isMissingCol && "image_urls" in patch) {
-    const safe = { ...patch }
-    delete (safe as any).image_urls
+  if (isMissingCol && "image_urls" in safePatch) {
+    const retryPatch = { ...safePatch } as Record<string, any>
+    delete retryPatch.image_urls
     // Si image_url venía en null, garantiza que se quede null en vez de undefined
-    if (!("image_url" in safe) && Array.isArray(patch.image_urls)) {
-      safe.image_url = patch.image_urls[0] ?? null
+    if (!("image_url" in retryPatch) && Array.isArray(patch.image_urls)) {
+      retryPatch.image_url = patch.image_urls[0] ?? null
     }
     const retry = await supabase
       .from("variants")
-      .update(safe)
+      .update(retryPatch)
       .eq("id", variantId)
     if (retry.error) throw retry.error
     return
@@ -104,10 +109,47 @@ export async function updateVariant(
   throw error
 }
 
+// Whitelist de columnas reales en `products` (nada de joins ni calculados)
+const PRODUCT_COLUMNS = [
+  "id",
+  "name",
+  "category",
+  "cost",
+  "min_stock",
+  "is_active",
+  "image_url",
+] as const
+
+// Whitelist de columnas reales en `variants`
+const VARIANT_COLUMNS = [
+  "id",
+  "product_id",
+  "variant_name",
+  "sku",
+  "stock",
+  "cost_override",
+  "price",
+  "price_menudeo",
+  "price_medio",
+  "price_mayoreo",
+  "is_active",
+  "image_url",
+  "image_urls",
+] as const
+
+function pick<T extends Record<string, any>>(obj: T, keys: readonly string[]): Partial<T> {
+  const out: Record<string, any> = {}
+  for (const k of keys) {
+    if (k in obj && obj[k] !== undefined) out[k] = obj[k]
+  }
+  return out as Partial<T>
+}
+
 export async function createProduct(product: Partial<Product>): Promise<Product> {
+  const safe = pick(product, PRODUCT_COLUMNS)
   const { data, error } = await supabase
     .from("products")
-    .insert([{ ...product, is_active: true }])
+    .insert([{ ...safe, is_active: true }])
     .select()
     .single()
 
@@ -116,13 +158,14 @@ export async function createProduct(product: Partial<Product>): Promise<Product>
 }
 
 export async function createVariant(variant: Partial<Variant>): Promise<Variant> {
+  const safe = pick(variant, VARIANT_COLUMNS)
   const { data, error } = await supabase
     .from("variants")
     .insert([{
-      ...variant,
+      ...safe,
       price: variant.price ?? 0,
       stock: variant.stock ?? 0,
-      is_active: true
+      is_active: true,
     }])
     .select()
     .single()
