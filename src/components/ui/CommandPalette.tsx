@@ -110,6 +110,30 @@ export default function CommandPalette({ open, onClose }: Props) {
         group: "Navegación",
         run: () => navigate("settings"),
       },
+      {
+        id: "go-shipping",
+        label: "Configurar costos de envío",
+        hint: "Foráneo, local y envío gratis",
+        icon: Settings,
+        group: "Navegación",
+        run: () => navigate("settings"),
+      },
+      {
+        id: "go-overdue",
+        label: "Ver apartados vencidos",
+        hint: "Saldos por cobrar urgentes",
+        icon: Bookmark,
+        group: "Navegación",
+        run: () => navigate("apartados"),
+      },
+      {
+        id: "go-caja",
+        label: "Ir a caja",
+        hint: "Atajo rápido",
+        icon: ShoppingCart,
+        group: "Navegación",
+        run: () => navigate("ventas"),
+      },
       // ── Acciones ──────────────────────────────
       {
         id: "open-scanner",
@@ -119,12 +143,33 @@ export default function CommandPalette({ open, onClose }: Props) {
         group: "Acciones",
         run: () => {
           navigate("ventas")
-          // Dejamos un pequeño delay para que la página cargue antes de abrir
           setTimeout(
             () => window.dispatchEvent(new CustomEvent("sales:open-scanner")),
             150
           )
         },
+      },
+      {
+        id: "new-product",
+        label: "Agregar nuevo producto",
+        hint: "Catálogo → nuevo",
+        icon: Package,
+        group: "Acciones",
+        run: () => {
+          navigate("inventario")
+          setTimeout(
+            () => window.dispatchEvent(new CustomEvent("products:new")),
+            150
+          )
+        },
+      },
+      {
+        id: "open-profile",
+        label: "Mi perfil",
+        hint: "Editar datos / cambiar contraseña",
+        icon: Settings,
+        group: "Acciones",
+        run: () => window.dispatchEvent(new CustomEvent("mari:open-profile")),
       },
       {
         id: "refresh",

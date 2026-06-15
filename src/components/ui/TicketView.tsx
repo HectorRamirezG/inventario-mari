@@ -193,7 +193,7 @@ export default function TicketView({ open, sale, onClose }: Props) {
 
               <Divider />
 
-              {/* Totales — con ajuste/descuento desglosado */}
+              {/* Totales — con ajuste/descuento + envío desglosados */}
               {(() => {
                 const items = sale.sale_items ?? []
                 const subtotal = items.reduce(
@@ -201,14 +201,28 @@ export default function TicketView({ open, sale, onClose }: Props) {
                   0
                 )
                 const adj = Number(sale.adjustment_amount) || 0
+                const ship = Number(sale.shipping_amount) || 0
+                const isForeign = !!sale.is_foreign_shipping
                 return (
                   <div className="space-y-1 text-[12px]">
                     <Row label="Subtotal" value={formatMoneyExact(subtotal)} />
+                    {(isForeign || ship > 0) && (
+                      <Row
+                        label={isForeign ? "Envío foráneo" : "Envío"}
+                        value={ship > 0 ? formatMoneyExact(ship) : "¡Gratis! 🎉"}
+                      />
+                    )}
                     {adj > 0 && (
                       <Row
                         label={sale.adjustment_reason || "Descuento Mari"}
                         value={`- ${formatMoneyExact(adj)}`}
                         discount
+                      />
+                    )}
+                    {adj < 0 && (
+                      <Row
+                        label={sale.adjustment_reason || "Cargo extra"}
+                        value={`+ ${formatMoneyExact(Math.abs(adj))}`}
                       />
                     )}
                     <Row label="TOTAL" value={formatMoneyExact(sale.total)} bold />

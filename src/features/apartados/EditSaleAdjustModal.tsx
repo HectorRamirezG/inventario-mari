@@ -44,28 +44,34 @@ export default function EditSaleAdjustModal({
 }: Props) {
   const [forceTier, setForceTier] = useState<TierForce>("")
   const [adjustment, setAdjustment] = useState<number | "">("")
+  const [adjustSign, setAdjustSign] = useState<"discount" | "charge">("discount")
   const [reason, setReason] = useState("")
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setForceTier("")
-    setAdjustment(sale?.adjustment_amount ? Number(sale.adjustment_amount) : "")
+    const initialAdj = sale?.adjustment_amount ? Number(sale.adjustment_amount) : 0
+    setAdjustSign(initialAdj < 0 ? "charge" : "discount")
+    setAdjustment(initialAdj !== 0 ? Math.abs(initialAdj) : "")
     setReason(sale?.adjustment_reason ?? "")
   }, [open, sale])
 
   async function handleSave() {
     if (!sale) return
-    if (adjustment && Number(adjustment) < 0) {
-      toast.error("El ajuste debe ser positivo (lo que descuentas)")
+    if (adjustment !== "" && Number(adjustment) < 0) {
+      toast.error("Escribe sólo el monto. Usa el selector arriba para sumar o restar.")
       return
     }
     setSaving(true)
     const tid = toast.loading("Aplicando ajuste...")
     try {
+      // Signed: discount → positivo, charge → negativo
+      const signed = adjustment === "" ? 0 :
+        (adjustSign === "discount" ? Number(adjustment) : -Number(adjustment))
       const { data, error } = await supabase.rpc("admin_adjust_sale", {
         p_sale_id: sale.id,
-        p_adjustment: Number(adjustment) || 0,
+        p_adjustment: signed,
         p_reason: reason.trim() || null,
         p_force_tier: forceTier || null,
       })
@@ -75,6 +81,8 @@ export default function EditSaleAdjustModal({
       toast.success(
         savings > 0
           ? `✓ Cliente ahorra ${formatMoney(savings)}`
+          : savings < 0
+          ? `✓ Cargo extra +${formatMoney(Math.abs(savings))}`
           : "✓ Ticket actualizado",
         { id: tid }
       )
@@ -91,7 +99,10 @@ export default function EditSaleAdjustModal({
   if (typeof document === "undefined" || !sale) return null
 
   const currentTotal = Number(sale.total) || 0
-  const proyectedTotal = currentTotal - (Number(adjustment) || 0)
+  const signedAdj = adjustment === "" ? 0 :
+    (adjustSign === "discount" ? Number(adjustment) : -Number(adjustment))
+  const proyectedTotal = currentTotal - signedAdj
+  const isCharge = adjustSign === "charge"
 
   return createPortal(
     <AnimatePresence>
@@ -170,11 +181,38 @@ export default function EditSaleAdjustModal({
                 </p>
               </section>
 
-              {/* Descuento manual */}
+              {/* Descuento manual / Cargo extra */}
               <section className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                  <Wallet size={10} /> Descuento manual al total ($)
+                  <Wallet size={10} /> Ajuste manual al total
                 </label>
+
+                {/* Toggle Descuento vs Cargo */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setAdjustSign("discount")}
+                    className={`h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      adjustSign === "discount"
+                        ? "bg-emerald-500 text-white shadow-[0_10px_30px_-8px_rgba(16,185,129,0.5)]"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-500"
+                    }`}
+                  >
+                    − Descuento
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdjustSign("charge")}
+                    className={`h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      adjustSign === "charge"
+                        ? "bg-amber-500 text-white shadow-[0_10px_30px_-8px_rgba(245,158,11,0.5)]"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-500"
+                    }`}
+                  >
+                    + Cargo extra
+                  </button>
+                </div>
+
                 <input
                   type="number"
                   min={0}
@@ -186,6 +224,11 @@ export default function EditSaleAdjustModal({
                   placeholder="0.00"
                   className="settings-input text-lg font-black tabular-nums"
                 />
+                <p className="text-[10px] text-slate-500 leading-snug">
+                  {isCharge
+                    ? "Ej: $200 por envío de Uber, $150 por empaque especial."
+                    : "Ej: $100 de descuento por pasar a mayoreo."}
+                </p>
               </section>
 
               {/* Razón */}
@@ -204,7 +247,11 @@ export default function EditSaleAdjustModal({
               </section>
 
               {/* Preview */}
-              <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/30 p-3">
+              <div className={`rounded-2xl border p-3 ${
+                isCharge
+                  ? "bg-amber-50 dark:bg-amber-500/10 border-amber-200/60 dark:border-amber-500/30"
+                  : "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200/60 dark:border-emerald-500/30"
+              }`}>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-600 dark:text-slate-300">
                     Total actual
@@ -215,15 +262,19 @@ export default function EditSaleAdjustModal({
                 </div>
                 <div className="flex items-center justify-between text-xs mt-1">
                   <span className="text-slate-600 dark:text-slate-300">
-                    Descuento
+                    {isCharge ? "Cargo extra" : "Descuento"}
                   </span>
-                  <span className="font-black tabular-nums text-rose-500">
-                    -{formatMoney(Number(adjustment) || 0)}
+                  <span className={`font-black tabular-nums ${
+                    isCharge ? "text-amber-700" : "text-rose-500"
+                  }`}>
+                    {isCharge ? "+" : "−"}{formatMoney(Number(adjustment) || 0)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-base mt-2 pt-2 border-t border-emerald-200/60 dark:border-emerald-500/30">
+                <div className="flex items-center justify-between text-base mt-2 pt-2 border-t border-slate-200/40">
                   <span className="font-bold">Nuevo total estimado</span>
-                  <span className="font-black tabular-nums text-emerald-700 dark:text-emerald-300">
+                  <span className={`font-black tabular-nums ${
+                    isCharge ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"
+                  }`}>
                     {formatMoney(Math.max(0, proyectedTotal))}
                   </span>
                 </div>

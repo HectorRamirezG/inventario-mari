@@ -20,6 +20,7 @@ import {
 } from "../../features/payments/paymentProofsService"
 import { sound } from "../../lib/sound"
 import { formatMoney } from "../../lib/format"
+import BankAccountCard from "./BankAccountCard"
 
 interface Props {
   saleId: string
@@ -208,6 +209,9 @@ export default function ReportPaymentButton({
   // Vista normal: botones para subir + microtexto destacado + historial
   return (
     <div className="space-y-3">
+      {/* Datos bancarios copiables (sólo si Mari los configuró) */}
+      <BankAccountCard />
+
       <div className="rounded-2xl border-2 border-dashed border-amber-300/80 bg-gradient-to-br from-amber-50 to-pink-50/50 dark:from-amber-500/10 dark:to-pink-500/10 p-4">
         <div className="flex items-start gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl bg-amber-400 text-white flex items-center justify-center shrink-0 shadow-bloom">

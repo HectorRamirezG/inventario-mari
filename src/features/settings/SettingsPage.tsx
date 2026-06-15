@@ -11,6 +11,8 @@ import {
   Shield,
   Tag,
   Loader2,
+  Truck,
+  Building2,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
@@ -21,6 +23,16 @@ import {
   saveTierThresholds,
   DEFAULT_THRESHOLDS,
 } from "../pricing/tierPricingService"
+import {
+  useShippingConfig,
+  saveShippingConfig,
+  DEFAULT_SHIPPING,
+} from "../pricing/shippingService"
+import {
+  useBankAccount,
+  saveBankAccount,
+  DEFAULT_BANK,
+} from "./bankAccountService"
 
 export default function SettingsPage() {
   const { info, update, reset } = useStoreInfo()
@@ -33,6 +45,16 @@ export default function SettingsPage() {
   const [tierForm, setTierForm] = useState(thresholds)
   const [savingTier, setSavingTier] = useState(false)
   useEffect(() => setTierForm(thresholds), [thresholds])
+
+  const shipping = useShippingConfig()
+  const [shipForm, setShipForm] = useState(shipping)
+  const [savingShip, setSavingShip] = useState(false)
+  useEffect(() => setShipForm(shipping), [shipping])
+
+  const bank = useBankAccount()
+  const [bankForm, setBankForm] = useState(bank)
+  const [savingBank, setSavingBank] = useState(false)
+  useEffect(() => setBankForm(bank), [bank])
 
   const isAdmin = role === "admin"
 
@@ -64,6 +86,34 @@ export default function SettingsPage() {
       toast.error(e?.message ?? "No se pudo guardar")
     } finally {
       setSavingTier(false)
+    }
+  }
+
+  const handleShipSave = async () => {
+    setSavingShip(true)
+    try {
+      await saveShippingConfig({
+        foreign_cost: Number(shipForm.foreign_cost) || DEFAULT_SHIPPING.foreign_cost,
+        free_from:    Number(shipForm.free_from)    || DEFAULT_SHIPPING.free_from,
+        local_cost:   Number(shipForm.local_cost)   || 0,
+      })
+      toast.success("Envíos guardados ✓")
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo guardar")
+    } finally {
+      setSavingShip(false)
+    }
+  }
+
+  const handleBankSave = async () => {
+    setSavingBank(true)
+    try {
+      await saveBankAccount({ ...DEFAULT_BANK, ...bankForm })
+      toast.success("Datos bancarios guardados ✓")
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo guardar")
+    } finally {
+      setSavingBank(false)
     }
   }
 
@@ -204,6 +254,108 @@ export default function SettingsPage() {
               <Save size={14} />
             )}{" "}
             Guardar precios
+          </button>
+        </Section>
+      )}
+
+      {/* ENVÍOS — solo admin */}
+      {isAdmin && (
+        <Section
+          icon={<Truck size={14} />}
+          title="Costos de envío"
+          subtitle="Foráneo, local y umbral para envío gratis"
+        >
+          <Field label="Costo envío foráneo ($)">
+            <input
+              type="number" min={0} step="0.01"
+              value={shipForm.foreign_cost}
+              onChange={(e) => setShipForm({ ...shipForm, foreign_cost: Number(e.target.value) })}
+              className="settings-input"
+            />
+          </Field>
+          <Field label="Envío foráneo GRATIS desde ($)">
+            <input
+              type="number" min={0} step="0.01"
+              value={shipForm.free_from}
+              onChange={(e) => setShipForm({ ...shipForm, free_from: Number(e.target.value) })}
+              className="settings-input"
+            />
+          </Field>
+          <Field label="Costo envío local ($) — 0 = gratis">
+            <input
+              type="number" min={0} step="0.01"
+              value={shipForm.local_cost}
+              onChange={(e) => setShipForm({ ...shipForm, local_cost: Number(e.target.value) })}
+              className="settings-input"
+            />
+          </Field>
+          <p className="text-[10px] text-slate-500 leading-relaxed pt-1">
+            Ejemplo: foráneo <b>${shipForm.foreign_cost}</b>; si el carrito ≥{" "}
+            <b>${shipForm.free_from}</b>, el envío foráneo es <b>GRATIS</b>.
+          </p>
+          <button
+            onClick={handleShipSave}
+            disabled={savingShip}
+            className="w-full h-11 mt-1 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom active:scale-95 disabled:opacity-50"
+          >
+            {savingShip ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Guardar envíos
+          </button>
+        </Section>
+      )}
+
+      {/* CUENTA BANCARIA — solo admin */}
+      {isAdmin && (
+        <Section
+          icon={<Building2 size={14} />}
+          title="Datos para transferencia"
+          subtitle="Lo que el cliente verá al subir un comprobante"
+        >
+          <Field label="Banco">
+            <input
+              type="text" value={bankForm.bank}
+              onChange={(e) => setBankForm({ ...bankForm, bank: e.target.value })}
+              className="settings-input" placeholder="Ej. BBVA"
+            />
+          </Field>
+          <Field label="Titular">
+            <input
+              type="text" value={bankForm.holder}
+              onChange={(e) => setBankForm({ ...bankForm, holder: e.target.value })}
+              className="settings-input" placeholder="Nombre completo"
+            />
+          </Field>
+          <Field label="CLABE">
+            <input
+              type="text" inputMode="numeric" value={bankForm.clabe}
+              onChange={(e) => setBankForm({ ...bankForm, clabe: e.target.value.replace(/\s/g, "") })}
+              className="settings-input" placeholder="18 dígitos"
+              maxLength={18}
+            />
+          </Field>
+          <Field label="Tarjeta (opcional)">
+            <input
+              type="text" inputMode="numeric" value={bankForm.card}
+              onChange={(e) => setBankForm({ ...bankForm, card: e.target.value })}
+              className="settings-input" placeholder="16 dígitos"
+              maxLength={19}
+            />
+          </Field>
+          <Field label="Notas para el cliente (opcional)">
+            <input
+              type="text" value={bankForm.notes}
+              onChange={(e) => setBankForm({ ...bankForm, notes: e.target.value })}
+              className="settings-input"
+              placeholder="Ej: Anota el folio en el concepto"
+            />
+          </Field>
+          <button
+            onClick={handleBankSave}
+            disabled={savingBank}
+            className="w-full h-11 mt-1 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom active:scale-95 disabled:opacity-50"
+          >
+            {savingBank ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Guardar cuenta
           </button>
         </Section>
       )}

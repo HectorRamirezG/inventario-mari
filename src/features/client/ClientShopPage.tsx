@@ -31,6 +31,10 @@ import {
   priceForTier,
   type TierThresholds,
 } from "../pricing/tierPricingService"
+import {
+  useShippingConfig,
+  calcShipping,
+} from "../pricing/shippingService"
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -108,6 +112,8 @@ export default function ClientShopPage() {
   const { email: authEmail, fullName: authName, session } = useAuth()
   const isLogged = !!session
   const thresholds = useTierThresholds()
+  const shippingCfg = useShippingConfig()
+  const [isForeign, setIsForeign] = useState(false)
 
   const [products, setProducts] = useState<PublicProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -194,10 +200,20 @@ export default function ClientShopPage() {
     [cart, cartTier, products]
   )
 
-  const totalAmt = useMemo(
+  // Subtotal (sin envío) — solo items
+  const subtotalAmt = useMemo(
     () => repricedCart.reduce((acc, c) => acc + c.qty * c.unit_price, 0),
     [repricedCart]
   )
+
+  // Envío (foráneo o local) usando la lógica centralizada
+  const shippingCalc = useMemo(
+    () => calcShipping(subtotalAmt, isForeign, shippingCfg),
+    [subtotalAmt, isForeign, shippingCfg]
+  )
+
+  // TOTAL = subtotal + envío
+  const totalAmt = subtotalAmt + shippingCalc.amount
 
   // Ahorro vs menudeo (motivacional)
   const savingsVsMenudeo = useMemo(() => {
@@ -209,8 +225,8 @@ export default function ClientShopPage() {
       if (!variant) return acc + c.unit_price * c.qty
       return acc + priceForTier(variant, "menudeo") * c.qty
     }, 0)
-    return Math.max(0, menudeoTotal - totalAmt)
-  }, [cart, cartTier, totalAmt, products])
+    return Math.max(0, menudeoTotal - subtotalAmt)
+  }, [cart, cartTier, subtotalAmt, products])
 
   function priceOf(v: PublicVariant): number {
     return v.price_menudeo ?? v.price ?? v.price_medio ?? v.price_mayoreo ?? 0
@@ -299,6 +315,8 @@ export default function ClientShopPage() {
           balance: total,
           is_layaway: true,
           status: "pending",
+          shipping_amount: shippingCalc.amount,
+          is_foreign_shipping: isForeign,
         })
         .select()
         .single()
@@ -526,14 +544,73 @@ export default function ClientShopPage() {
                 ))}
               </div>
               <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                <div className="flex items-center justify-between text-base">
-                  <span className="font-bold text-slate-600 dark:text-slate-300">
-                    Total
+                {/* Switch envío foráneo */}
+                <button
+                  type="button"
+                  onClick={() => setIsForeign((v) => !v)}
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border transition-all active:scale-[0.99] ${
+                    isForeign
+                      ? "border-amber-300 bg-amber-50 dark:bg-amber-500/10"
+                      : "border-slate-200 bg-slate-50 dark:bg-slate-800"
+                  }`}
+                >
+                  <div className="text-left min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
+                      📦 Envío foráneo
+                    </p>
+                    <p className="text-[9px] text-slate-500 truncate">
+                      {isForeign
+                        ? shippingCalc.free
+                          ? "¡Te toca gratis! 🎉"
+                          : `Cargo: ${formatMoney(shippingCalc.amount)}`
+                        : "Fuera de CDMX / EdoMex"}
+                    </p>
+                  </div>
+                  <span
+                    className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
+                      isForeign ? "bg-amber-500" : "bg-slate-300"
+                    }`}
+                  >
+                    <motion.span
+                      animate={{ x: isForeign ? 20 : 2 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                      className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow"
+                    />
                   </span>
-                  <span className="font-black text-xl">
-                    {formatMoney(totalAmt)}
-                  </span>
+                </button>
+
+                {/* Desglose */}
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between text-slate-500">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums font-bold">
+                      {formatMoney(subtotalAmt)}
+                    </span>
+                  </div>
+                  {(isForeign || shippingCalc.amount > 0) && (
+                    <div className="flex justify-between text-slate-500">
+                      <span>{isForeign ? "Envío foráneo" : "Envío"}</span>
+                      <span
+                        className={`tabular-nums font-bold ${
+                          shippingCalc.free ? "text-emerald-600" : ""
+                        }`}
+                      >
+                        {shippingCalc.amount > 0
+                          ? formatMoney(shippingCalc.amount)
+                          : "¡Gratis! 🎉"}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-base pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <span className="font-bold text-slate-600 dark:text-slate-300">
+                      Total
+                    </span>
+                    <span className="font-black text-xl">
+                      {formatMoney(totalAmt)}
+                    </span>
+                  </div>
                 </div>
+
                 <button
                   onClick={startCheckout}
                   disabled={submitting}

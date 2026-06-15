@@ -74,9 +74,12 @@ export interface Sale {
   balance: number;
   status: SaleStatus;
   created_at: string;
-  // Ajuste manual del admin
+  // Ajuste manual del admin (positivo = descuento, negativo = cargo extra)
   adjustment_amount?: number | null;
   adjustment_reason?: string | null;
+  // Envío
+  shipping_amount?: number | null;
+  is_foreign_shipping?: boolean | null;
   // Relaciones embebidas (opcionales)
   sale_items?: SaleItem[];
   payments?: Payment[];

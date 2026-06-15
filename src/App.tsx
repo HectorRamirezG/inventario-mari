@@ -191,11 +191,16 @@ function AdminShell() {
       if (id) setProofId(id)
     }
     window.addEventListener("mari:open-proof", onOpenProof)
+    const onOpenProfile = () => setProfileOpen(true)
+    window.addEventListener("mari:open-profile", onOpenProfile)
     // Lectura inicial de la URL ?proof=xxx (caso: click desde notif que cambia URL)
     const params = new URLSearchParams(window.location.search)
     const initial = params.get("proof")
     if (initial) setProofId(initial)
-    return () => window.removeEventListener("mari:open-proof", onOpenProof)
+    return () => {
+      window.removeEventListener("mari:open-proof", onOpenProof)
+      window.removeEventListener("mari:open-profile", onOpenProfile)
+    }
   }, [])
 
   useGlobalShortcuts()

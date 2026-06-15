@@ -46,6 +46,8 @@ interface PublicTicket {
   notes: string | null
   adjustment_amount?: number | null
   adjustment_reason?: string | null
+  shipping_amount?: number | null
+  is_foreign_shipping?: boolean | null
   created_at: string
   items: TicketItem[]
   payments: { amount: number; method: string | null; created_at: string }[]
@@ -273,21 +275,36 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
                     ))}
                   </div>
 
-                  {/* Totales — con ajuste desglosado */}
+                  {/* Totales — con envío + ajuste desglosado */}
                   {(() => {
                     const subtotal = ticket.items.reduce(
                       (a, it) => a + Number(it.qty) * Number(it.unit_price),
                       0
                     )
                     const adj = Number(ticket.adjustment_amount) || 0
+                    const ship = Number(ticket.shipping_amount) || 0
+                    const isForeign = !!ticket.is_foreign_shipping
                     return (
                       <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 space-y-1.5">
                         <Row label="Subtotal" value={formatMoney(subtotal)} />
+                        {(isForeign || ship > 0) && (
+                          <Row
+                            label={isForeign ? "Envío foráneo" : "Envío"}
+                            value={ship > 0 ? formatMoney(ship) : "¡Gratis! 🎉"}
+                            success={ship === 0 && isForeign}
+                          />
+                        )}
                         {adj > 0 && (
                           <Row
                             label={ticket.adjustment_reason || "Descuento Mari"}
                             value={`- ${formatMoney(adj)}`}
                             discount
+                          />
+                        )}
+                        {adj < 0 && (
+                          <Row
+                            label={ticket.adjustment_reason || "Cargo extra"}
+                            value={`+ ${formatMoney(Math.abs(adj))}`}
                           />
                         )}
                         <Row

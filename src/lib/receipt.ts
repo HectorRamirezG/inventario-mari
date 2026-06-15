@@ -61,17 +61,33 @@ export function buildReceiptText(sale: Sale, avatarUrl?: string | null): string 
 
   lines.push(sep)
 
-  // Subtotal (suma de items) + descuento/ajuste + total
+  // Subtotal + envío + descuento/cargo + total
   const itemsSum = (sale.sale_items ?? []).reduce(
     (a, it) => a + Number(it.qty) * Number(it.unit_price),
     0
   )
   const adj = Number(sale.adjustment_amount) || 0
-  if (adj > 0) {
+  const ship = Number(sale.shipping_amount) || 0
+  const isForeign = !!sale.is_foreign_shipping
+
+  if (adj !== 0 || ship > 0 || isForeign) {
     lines.push(`Subtotal: ${formatMoney(itemsSum)} MXN`)
-    lines.push(
-      `💖 ${sale.adjustment_reason || "Descuento Mari"}: -${formatMoney(adj)} MXN`
-    )
+    if (isForeign || ship > 0) {
+      lines.push(
+        `📦 Envío${isForeign ? " foráneo" : ""}: ${
+          ship > 0 ? `${formatMoney(ship)} MXN` : "¡Gratis! 🎉"
+        }`
+      )
+    }
+    if (adj > 0) {
+      lines.push(
+        `💖 ${sale.adjustment_reason || "Descuento Mari"}: -${formatMoney(adj)} MXN`
+      )
+    } else if (adj < 0) {
+      lines.push(
+        `➕ ${sale.adjustment_reason || "Cargo extra"}: +${formatMoney(Math.abs(adj))} MXN`
+      )
+    }
   }
 
   lines.push(`💰 *TOTAL:* ${formatMoney(sale.total)} MXN`)
