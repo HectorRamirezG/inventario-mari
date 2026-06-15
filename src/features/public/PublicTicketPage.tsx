@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { motion, useMotionValue, animate as fmAnimate } from "framer-motion"
+import { motion } from "framer-motion"
 import {
   Sparkles, Receipt, CheckCircle2, Clock, ArrowRight,
   CreditCard, MessageCircle, ArrowLeft, Home, LifeBuoy,
@@ -95,9 +95,30 @@ export default function PublicTicketPage() {
    * Realtime: cuando admin valida un pago (UPDATE en sales o INSERT en
    * payments) volvemos a llamar a la RPC y refrescamos los totales. El
    * cliente ve su saldo cambiar al instante sin recargar.
+   *
+   * IMPORTANTE: solo actualizamos si paid/balance/status realmente cambian
+   * para evitar bucles de renderizado por updates ruidosos.
    */
   useEffect(() => {
     if (!ticket?.id || !token) return
+    let alive = true
+    const apply = async () => {
+      const { data } = await supabase.rpc("get_public_ticket", { p_token: token })
+      if (!alive || !data) return
+      const incoming = data as PublicTicket
+      setTicket((prev) => {
+        if (!prev) return incoming
+        // Skip si nada cambia (evita re-render → evita bucle de animaciones)
+        if (
+          prev.paid === incoming.paid &&
+          prev.balance === incoming.balance &&
+          prev.status === incoming.status
+        ) {
+          return prev
+        }
+        return incoming
+      })
+    }
     const channel = supabase
       .channel(`ticket-${ticket.id}`)
       .on(
@@ -108,12 +129,7 @@ export default function PublicTicketPage() {
           table: "sales",
           filter: `id=eq.${ticket.id}`,
         },
-        async () => {
-          const { data } = await supabase.rpc("get_public_ticket", {
-            p_token: token,
-          })
-          if (data) setTicket(data as PublicTicket)
-        }
+        apply
       )
       .on(
         "postgres_changes",
@@ -123,15 +139,11 @@ export default function PublicTicketPage() {
           table: "payments",
           filter: `sale_id=eq.${ticket.id}`,
         },
-        async () => {
-          const { data } = await supabase.rpc("get_public_ticket", {
-            p_token: token,
-          })
-          if (data) setTicket(data as PublicTicket)
-        }
+        apply
       )
       .subscribe()
     return () => {
+      alive = false
       supabase.removeChannel(channel)
     }
   }, [ticket?.id, token])
@@ -518,11 +530,8 @@ function ProgressBlock({
           Progreso de apartado
         </span>
         <motion.span
-          key={pct.toFixed(0)}
-          initial={{ scale: 0.9, opacity: 0.6 }}
           animate={{
             scale: flash ? [1, 1.18, 1] : 1,
-            opacity: 1,
             color: flash ? "#10b981" : "#e6007e",
           }}
           transition={{ duration: 0.55 }}
@@ -568,7 +577,10 @@ function ProgressBlock({
   )
 }
 
-/** Cuenta numérica animada cuando cambia el valor (spring). */
+/**
+ * Cuenta numérica animada con requestAnimationFrame manual (sin framer
+ * motionValue). Es estable y no causa bucles de renderizado.
+ */
 function AnimatedMoney({
   value,
   className = "",
@@ -576,17 +588,43 @@ function AnimatedMoney({
   value: number
   className?: string
 }) {
-  const mv = useMotionValue(value)
   const [display, setDisplay] = useState(value)
+  const fromRef = useRef(value)
 
   useEffect(() => {
-    const controls = fmAnimate(mv, value, {
-      duration: 0.9,
-      ease: [0.22, 1, 0.36, 1],
-      onUpdate: (latest) => setDisplay(latest as number),
-    })
-    return () => controls.stop()
-  }, [value, mv])
+    // Si el target es igual al display actual, no anima nada
+    if (value === display) {
+      fromRef.current = value
+      return
+    }
+    const from = display
+    fromRef.current = from
+    const duration = 700
+    const startTs = performance.now()
+    let rafId = 0
+    let cancelled = false
+
+    const tick = (now: number) => {
+      if (cancelled) return
+      const t = Math.min(1, (now - startTs) / duration)
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3)
+      const current = from + (value - from) * eased
+      setDisplay(current)
+      if (t < 1) {
+        rafId = requestAnimationFrame(tick)
+      } else {
+        setDisplay(value)
+      }
+    }
+    rafId = requestAnimationFrame(tick)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(rafId)
+    }
+    // Sólo re-anima cuando `value` cambia (no en cada render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
 
   return (
     <span className={`tabular-nums ${className}`}>{formatMoney(display)}</span>

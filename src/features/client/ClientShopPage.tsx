@@ -28,6 +28,7 @@ import { useAuth } from "../../lib/useAuth"
 import { sound } from "../../lib/sound"
 import SmartLocationInput from "../../components/ui/SmartLocationInput"
 import VariantImageCarousel from "../../components/ui/VariantImageCarousel"
+import ProductLightbox, { type LightboxSlide } from "../../components/ui/ProductLightbox"
 import Skeleton from "../../components/ui/Skeleton"
 import BuySheet, { type BuySheetProduct } from "./BuySheet"
 import SupportModal from "../support/SupportModal"
@@ -147,6 +148,12 @@ export default function ClientShopPage() {
 
   // Bottom Sheet de compra (estilo Shein): se abre con el botón "+" de la card
   const [buySheetProduct, setBuySheetProduct] = useState<PublicProduct | null>(null)
+  const [buySheetPreselectedVariant, setBuySheetPreselectedVariant] =
+    useState<string | null>(null)
+
+  // Lightbox fullscreen (clic en imagen de la card)
+  const [lightboxProduct, setLightboxProduct] = useState<PublicProduct | null>(null)
+  const [lightboxStartVariant, setLightboxStartVariant] = useState<string | null>(null)
 
   // Centro de soporte (cliente logueado o invitado)
   const [openSupport, setOpenSupport] = useState(false)
@@ -556,7 +563,14 @@ export default function ClientShopPage() {
                 key={p.id}
                 product={p}
                 mode={viewMode}
-                onOpenBuy={() => setBuySheetProduct(p)}
+                onOpenLightbox={(variantId) => {
+                  setLightboxStartVariant(variantId)
+                  setLightboxProduct(p)
+                }}
+                onOpenBuy={(variantId) => {
+                  setBuySheetPreselectedVariant(variantId)
+                  setBuySheetProduct(p)
+                }}
               />
             ))}
           </motion.div>
@@ -912,16 +926,92 @@ export default function ClientShopPage() {
         }
         initialQty={
           buySheetProduct
-            ? Object.fromEntries(
-                cart
-                  .filter((c) => c.product_id === buySheetProduct.id)
-                  .map((c) => [c.variant_id, c.qty])
-              )
+            ? (() => {
+                // 1) Pre-llenar con lo que ya esté en el carrito
+                const fromCart = Object.fromEntries(
+                  cart
+                    .filter((c) => c.product_id === buySheetProduct.id)
+                    .map((c) => [c.variant_id, c.qty])
+                )
+                // 2) Si hay variante preseleccionada (clic en chip o lightbox)
+                //    y no estaba en el carrito, arrancar con 1
+                if (
+                  buySheetPreselectedVariant &&
+                  fromCart[buySheetPreselectedVariant] === undefined
+                ) {
+                  fromCart[buySheetPreselectedVariant] = 1
+                }
+                return fromCart
+              })()
             : undefined
         }
-        onClose={() => setBuySheetProduct(null)}
+        onClose={() => {
+          setBuySheetProduct(null)
+          setBuySheetPreselectedVariant(null)
+        }}
         onConfirm={(lines) => {
           if (buySheetProduct) addBatchToCart(buySheetProduct, lines)
+          setBuySheetPreselectedVariant(null)
+        }}
+      />
+
+      {/* Lightbox fullscreen: se abre al tocar la imagen de una card */}
+      <ProductLightbox
+        open={!!lightboxProduct}
+        slides={
+          lightboxProduct
+            ? (() => {
+                const out: LightboxSlide[] = []
+                for (const v of lightboxProduct.variants) {
+                  const imgs =
+                    v.image_urls && v.image_urls.length > 0
+                      ? v.image_urls
+                      : v.image_url
+                      ? [v.image_url]
+                      : []
+                  imgs.forEach((url) =>
+                    out.push({ url, variantId: v.id, variantName: v.variant_name })
+                  )
+                }
+                // Fallback al image_url del producto si no hay nada por variante
+                if (out.length === 0 && lightboxProduct.image_url) {
+                  out.push({
+                    url: lightboxProduct.image_url,
+                    variantId: lightboxProduct.variants[0]?.id ?? "",
+                    variantName: lightboxProduct.variants[0]?.variant_name ?? "",
+                  })
+                }
+                return out
+              })()
+            : []
+        }
+        startIndex={
+          lightboxProduct && lightboxStartVariant
+            ? Math.max(
+                0,
+                lightboxProduct.variants
+                  .flatMap((v) =>
+                    (v.image_urls && v.image_urls.length > 0
+                      ? v.image_urls
+                      : v.image_url
+                      ? [v.image_url]
+                      : []
+                    ).map((url) => ({ url, variantId: v.id }))
+                  )
+                  .findIndex((s) => s.variantId === lightboxStartVariant)
+              )
+            : 0
+        }
+        onClose={() => {
+          setLightboxProduct(null)
+          setLightboxStartVariant(null)
+        }}
+        onOpenBuy={() => {
+          if (lightboxProduct) {
+            setBuySheetPreselectedVariant(lightboxStartVariant)
+            setBuySheetProduct(lightboxProduct)
+            setLightboxProduct(null)
+          }
         }}
       />
 
@@ -966,13 +1056,17 @@ function FieldInput({
 function ProductCardClient({
   product,
   mode = "grid",
+  onOpenLightbox,
   onOpenBuy,
 }: {
   product: PublicProduct
   mode?: "focus" | "grid" | "list"
-  onOpenBuy: () => void
+  /** Click en la imagen → abre lightbox fullscreen */
+  onOpenLightbox: (variantId: string) => void
+  /** Click en el botón "+" → abre BuySheet preseleccionando la variante activa */
+  onOpenBuy: (variantId: string) => void
 }) {
-  // Variante visible (sincronizada con el carrusel: cambia al swipe y al clic en chip)
+  // Variante visible (sincronizada con los chips: cambia al clic en chip)
   const [selected, setSelected] = useState<string | null>(
     product.variants[0]?.id ?? null
   )
@@ -1019,7 +1113,7 @@ function ProductCardClient({
       >
         <motion.button
           type="button"
-          onClick={onOpenBuy}
+          onClick={() => variant && onOpenLightbox(variant.id)}
           layoutId={`img-${product.id}`}
           className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-700/50"
           aria-label={`Ver ${product.name}`}
@@ -1063,7 +1157,7 @@ function ProductCardClient({
               )}
             </span>
             <button
-              onClick={onOpenBuy}
+              onClick={() => variant && onOpenBuy(variant.id)}
               className="w-8 h-8 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform shrink-0"
               style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
               aria-label="Elegir tonos"
@@ -1091,9 +1185,8 @@ function ProductCardClient({
         <VariantImageCarousel
           variants={carouselSafe}
           selectedVariantId={selected}
-          onVariantChange={setSelected}
           aspect={isFocus ? "4/3" : "1/1"}
-          onTap={onOpenBuy}
+          onTap={() => variant && onOpenLightbox(variant.id)}
           className="rounded-none"
         />
         {out && (
@@ -1119,7 +1212,12 @@ function ProductCardClient({
             {product.variants.slice(0, isFocus ? 8 : 4).map((v) => (
               <button
                 key={v.id}
-                onClick={() => setSelected(v.id)}
+                type="button"
+                onClick={(e) => {
+                  // Solo cambia la imagen activa; NO abre nada.
+                  e.stopPropagation()
+                  setSelected(v.id)
+                }}
                 className={`px-2 py-0.5 rounded-full ${
                   isFocus ? "text-[10px]" : "text-[9px]"
                 } font-bold transition-colors ${
@@ -1149,12 +1247,16 @@ function ProductCardClient({
             {formatMoney(price)}
           </span>
           <button
-            onClick={onOpenBuy}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              if (variant) onOpenBuy(variant.id)
+            }}
             className={`${
               isFocus ? "w-11 h-11" : "w-9 h-9"
             } rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform`}
             style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
-            aria-label="Elegir tonos"
+            aria-label="Agregar al carrito"
           >
             <Plus size={14} strokeWidth={3} />
           </button>
