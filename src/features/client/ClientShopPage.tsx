@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import {
   Search,
   ShoppingBag,
@@ -15,6 +15,9 @@ import {
   Phone,
   User as UserIcon,
   Sparkles,
+  Maximize2,
+  LayoutGrid,
+  List,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -114,6 +117,21 @@ export default function ClientShopPage() {
   const thresholds = useTierThresholds()
   const shippingCfg = useShippingConfig()
   const [isForeign, setIsForeign] = useState(false)
+
+  // Layout switcher persistente
+  type ViewMode = "focus" | "grid" | "list"
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "grid"
+    const saved = localStorage.getItem("mari_shop_view") as ViewMode | null
+    return saved && ["focus", "grid", "list"].includes(saved) ? saved : "grid"
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem("mari_shop_view", viewMode)
+    } catch {
+      /* noop */
+    }
+  }, [viewMode])
 
   const [products, setProducts] = useState<PublicProduct[]>([])
   const [loading, setLoading] = useState(true)
@@ -418,6 +436,46 @@ export default function ClientShopPage() {
         )}
       </div>
 
+      {/* Layout switcher */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">
+          {filtered.length} {filtered.length === 1 ? "producto" : "productos"}
+        </p>
+        <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-full p-0.5">
+          {([
+            { id: "focus", label: "Focus", icon: Maximize2 },
+            { id: "grid",  label: "Grid",  icon: LayoutGrid },
+            { id: "list",  label: "Lista", icon: List },
+          ] as { id: ViewMode; label: string; icon: typeof List }[]).map((m) => {
+            const Icon = m.icon
+            const active = viewMode === m.id
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setViewMode(m.id)}
+                aria-label={`Vista ${m.label}`}
+                className={`relative flex items-center justify-center w-9 h-8 rounded-full transition-colors ${
+                  active
+                    ? "text-white"
+                    : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                }`}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="shop-view-pill"
+                    className="absolute inset-0 rounded-full"
+                    style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                    transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                  />
+                )}
+                <Icon size={12} className="relative z-10" />
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Catálogo */}
       {filtered.length === 0 ? (
         <div className="py-20 text-center">
@@ -425,11 +483,27 @@ export default function ClientShopPage() {
           <p className="text-sm font-bold text-slate-500">Sin resultados</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3">
-          {filtered.map((p) => (
-            <ProductCardClient key={p.id} product={p} onAdd={addToCart} />
-          ))}
-        </div>
+        <LayoutGroup id="shop-catalog">
+          <motion.div
+            layout
+            className={
+              viewMode === "focus"
+                ? "flex flex-col gap-3"
+                : viewMode === "grid"
+                ? "grid grid-cols-2 gap-3"
+                : "flex flex-col gap-2"
+            }
+          >
+            {filtered.map((p) => (
+              <ProductCardClient
+                key={p.id}
+                product={p}
+                mode={viewMode}
+                onAdd={addToCart}
+              />
+            ))}
+          </motion.div>
+        </LayoutGroup>
       )}
 
       {/* FAB carrito */}
@@ -772,9 +846,11 @@ function FieldInput({
 
 function ProductCardClient({
   product,
+  mode = "grid",
   onAdd,
 }: {
   product: PublicProduct
+  mode?: "focus" | "grid" | "list"
   onAdd: (p: PublicProduct, v: PublicVariant) => void
 }) {
   const [selected, setSelected] = useState<string | null>(
@@ -789,8 +865,7 @@ function ProductCardClient({
 
   const out = variant.stock <= 0
 
-  // Galería: prioriza image_urls de la variante; fallback a image_url; ú
-  // fallback al image_url del producto base.
+  // Galería: prioriza image_urls de la variante; fallback a image_url
   const gallery: string[] = (() => {
     const fromVariant =
       variant.image_urls && variant.image_urls.length > 0
@@ -803,17 +878,106 @@ function ProductCardClient({
     return []
   })()
 
+  /* ───────── LIST MODE: fila horizontal compacta ───────── */
+  if (mode === "list") {
+    return (
+      <motion.div
+        layoutId={`card-${product.id}`}
+        whileTap={{ scale: 0.98 }}
+        layout
+        transition={{ type: "spring", stiffness: 320, damping: 28 }}
+        className="bg-white dark:bg-slate-800/60 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow overflow-hidden flex items-stretch"
+      >
+        <motion.div
+          layoutId={`img-${product.id}`}
+          className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-700/50"
+        >
+          {gallery[0] ? (
+            <img
+              src={gallery[0]}
+              alt={product.name}
+              loading="lazy"
+              className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-slate-300">
+              <Package size={22} />
+            </div>
+          )}
+        </motion.div>
+        <div className="flex-1 min-w-0 p-2.5 flex flex-col justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-black truncate" title={product.name}>
+              {product.name}
+            </p>
+            {product.variants.length > 1 && (
+              <div className="flex gap-1 flex-wrap mt-0.5">
+                {product.variants.slice(0, 4).map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => setSelected(v.id)}
+                    className={`px-1.5 py-0 rounded-full text-[8px] font-bold transition-colors ${
+                      v.id === selected
+                        ? "bg-primary text-white"
+                        : "bg-slate-100 dark:bg-slate-700 text-slate-500"
+                    }`}
+                  >
+                    {v.variant_name}
+                  </button>
+                ))}
+                {product.variants.length > 4 && (
+                  <span className="text-[8px] font-bold text-slate-400">
+                    +{product.variants.length - 4}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-black text-primary truncate">
+              {formatMoney(price)}
+              {!out && variant.stock <= 3 && (
+                <span className="ml-1.5 text-[8px] text-amber-600 font-bold uppercase">
+                  · {variant.stock} pz
+                </span>
+              )}
+              {out && (
+                <span className="ml-1.5 text-[8px] text-rose-500 font-black uppercase">
+                  Agotado
+                </span>
+              )}
+            </span>
+            <button
+              onClick={() => onAdd(product, variant)}
+              disabled={out}
+              className="w-8 h-8 rounded-full text-white flex items-center justify-center disabled:opacity-30 shadow-bloom active:scale-90 transition-transform shrink-0"
+              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+              aria-label="Agregar al carrito"
+            >
+              <Plus size={13} strokeWidth={3} />
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
+
+  /* ───────── GRID & FOCUS: tarjeta clásica con foto cuadrada ───────── */
+  const isFocus = mode === "focus"
+
   return (
     <motion.div
-      whileTap={{ scale: 0.97 }}
+      layoutId={`card-${product.id}`}
+      whileTap={{ scale: 0.98 }}
       layout
+      transition={{ type: "spring", stiffness: 280, damping: 26 }}
       className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
     >
-      <div className="relative">
+      <motion.div layoutId={`img-${product.id}`} className="relative">
         <ImageCarousel
           images={gallery}
           alt={product.name}
-          aspect="1/1"
+          aspect={isFocus ? "4/3" : "1/1"}
           enableFullscreen
           className="rounded-none"
         />
@@ -827,18 +991,23 @@ function ProductCardClient({
             ¡Últimas {variant.stock}!
           </span>
         )}
-      </div>
-      <div className="p-3">
-        <p className="text-xs font-black truncate" title={product.name}>
+      </motion.div>
+      <div className={isFocus ? "p-4" : "p-3"}>
+        <p
+          className={`font-black truncate ${isFocus ? "text-base" : "text-xs"}`}
+          title={product.name}
+        >
           {product.name}
         </p>
         {product.variants.length > 1 && (
           <div className="flex flex-wrap gap-1 my-1">
-            {product.variants.slice(0, 4).map((v) => (
+            {product.variants.slice(0, isFocus ? 8 : 4).map((v) => (
               <button
                 key={v.id}
                 onClick={() => setSelected(v.id)}
-                className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-colors ${
+                className={`px-2 py-0.5 rounded-full ${
+                  isFocus ? "text-[10px]" : "text-[9px]"
+                } font-bold transition-colors ${
                   v.id === selected
                     ? "bg-primary text-white"
                     : "bg-slate-100 dark:bg-slate-700 text-slate-500"
@@ -847,9 +1016,9 @@ function ProductCardClient({
                 {v.variant_name}
               </button>
             ))}
-            {product.variants.length > 4 && (
+            {product.variants.length > (isFocus ? 8 : 4) && (
               <span className="px-1.5 py-0.5 text-[9px] font-bold text-slate-400">
-                +{product.variants.length - 4}
+                +{product.variants.length - (isFocus ? 8 : 4)}
               </span>
             )}
           </div>
@@ -857,16 +1026,20 @@ function ProductCardClient({
         {/* Pista de tier (mayoreo) */}
         <TierHint variant={variant} />
         <div className="flex items-center justify-between mt-1">
-          <span className="text-sm font-black text-primary">
+          <span
+            className={`font-black text-primary ${
+              isFocus ? "text-lg" : "text-sm"
+            }`}
+          >
             {formatMoney(price)}
           </span>
           <button
             onClick={() => onAdd(product, variant)}
             disabled={out}
-            className="w-9 h-9 rounded-full text-white flex items-center justify-center disabled:opacity-30 shadow-bloom active:scale-90 transition-transform"
-            style={{
-              background: "linear-gradient(135deg,#e6007e,#a855f7)",
-            }}
+            className={`${
+              isFocus ? "w-11 h-11" : "w-9 h-9"
+            } rounded-full text-white flex items-center justify-center disabled:opacity-30 shadow-bloom active:scale-90 transition-transform`}
+            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
             aria-label="Agregar al carrito"
           >
             <Plus size={14} strokeWidth={3} />
