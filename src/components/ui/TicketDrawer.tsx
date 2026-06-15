@@ -36,6 +36,7 @@ interface PublicTicket {
   public_token: string
   customer_name: string | null
   customer_phone: string | null
+  customer_avatar?: string | null
   total: number
   paid: number
   balance: number
@@ -43,6 +44,8 @@ interface PublicTicket {
   is_layaway: boolean
   payment_url: string | null
   notes: string | null
+  adjustment_amount?: number | null
+  adjustment_reason?: string | null
   created_at: string
   items: TicketItem[]
   payments: { amount: number; method: string | null; created_at: string }[]
@@ -270,25 +273,46 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
                     ))}
                   </div>
 
-                  {/* Totales */}
-                  <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 space-y-1.5">
-                    <Row label="Total" value={formatMoney(ticket.total)} bold />
-                    {ticket.paid > 0 && (
-                      <Row
-                        label="Pagado"
-                        value={formatMoney(ticket.paid)}
-                        success
-                      />
-                    )}
-                    {ticket.balance > 0 && (
-                      <Row
-                        label="Pendiente"
-                        value={formatMoney(ticket.balance)}
-                        danger
-                        bold
-                      />
-                    )}
-                  </div>
+                  {/* Totales — con ajuste desglosado */}
+                  {(() => {
+                    const subtotal = ticket.items.reduce(
+                      (a, it) => a + Number(it.qty) * Number(it.unit_price),
+                      0
+                    )
+                    const adj = Number(ticket.adjustment_amount) || 0
+                    return (
+                      <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 space-y-1.5">
+                        <Row label="Subtotal" value={formatMoney(subtotal)} />
+                        {adj > 0 && (
+                          <Row
+                            label={ticket.adjustment_reason || "Descuento Mari"}
+                            value={`- ${formatMoney(adj)}`}
+                            discount
+                          />
+                        )}
+                        <Row
+                          label="Total"
+                          value={formatMoney(ticket.total)}
+                          bold
+                        />
+                        {ticket.paid > 0 && (
+                          <Row
+                            label="Pagado"
+                            value={formatMoney(ticket.paid)}
+                            success
+                          />
+                        )}
+                        {ticket.balance > 0 && (
+                          <Row
+                            label="Pendiente"
+                            value={formatMoney(ticket.balance)}
+                            danger
+                            bold
+                          />
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* Progreso */}
                   {ticket.is_layaway && ticket.total > 0 && (
@@ -425,12 +449,14 @@ function Row({
   bold,
   success,
   danger,
+  discount,
 }: {
   label: string
   value: string
   bold?: boolean
   success?: boolean
   danger?: boolean
+  discount?: boolean
 }) {
   return (
     <div className="flex justify-between text-sm">
@@ -442,7 +468,7 @@ function Row({
           bold ? "font-black" : "font-bold"
         } ${success ? "text-emerald-600 dark:text-emerald-400" : ""} ${
           danger ? "text-rose-600 dark:text-rose-400" : ""
-        }`}
+        } ${discount ? "text-rose-600 dark:text-rose-400" : ""}`}
       >
         {value}
       </span>

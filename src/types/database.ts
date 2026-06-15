@@ -74,6 +74,9 @@ export interface Sale {
   balance: number;
   status: SaleStatus;
   created_at: string;
+  // Ajuste manual del admin
+  adjustment_amount?: number | null;
+  adjustment_reason?: string | null;
   // Relaciones embebidas (opcionales)
   sale_items?: SaleItem[];
   payments?: Payment[];

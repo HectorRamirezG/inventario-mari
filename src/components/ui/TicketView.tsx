@@ -193,24 +193,38 @@ export default function TicketView({ open, sale, onClose }: Props) {
 
               <Divider />
 
-              {/* Totales */}
-              <div className="space-y-1 text-[12px]">
-                <Row label="Subtotal" value={formatMoneyExact(sale.total)} />
-                {Number(sale.paid) > 0 && (
-                  <Row label="Pagado" value={formatMoneyExact(sale.paid)} />
-                )}
-                {balance > 0 ? (
-                  <Row
-                    label="SALDO"
-                    value={formatMoneyExact(balance)}
-                    bold
-                  />
-                ) : (
-                  <p className="text-center font-black mt-1 tracking-widest">
-                    *** PAGADO ***
-                  </p>
-                )}
-              </div>
+              {/* Totales — con ajuste/descuento desglosado */}
+              {(() => {
+                const items = sale.sale_items ?? []
+                const subtotal = items.reduce(
+                  (acc, it) => acc + Number(it.qty) * Number(it.unit_price),
+                  0
+                )
+                const adj = Number(sale.adjustment_amount) || 0
+                return (
+                  <div className="space-y-1 text-[12px]">
+                    <Row label="Subtotal" value={formatMoneyExact(subtotal)} />
+                    {adj > 0 && (
+                      <Row
+                        label={sale.adjustment_reason || "Descuento Mari"}
+                        value={`- ${formatMoneyExact(adj)}`}
+                        discount
+                      />
+                    )}
+                    <Row label="TOTAL" value={formatMoneyExact(sale.total)} bold />
+                    {Number(sale.paid) > 0 && (
+                      <Row label="Pagado" value={formatMoneyExact(sale.paid)} />
+                    )}
+                    {balance > 0 ? (
+                      <Row label="SALDO" value={formatMoneyExact(balance)} bold />
+                    ) : (
+                      <p className="text-center font-black mt-1 tracking-widest">
+                        *** PAGADO ***
+                      </p>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Pagos */}
               {sale.payments && sale.payments.length > 0 && (
@@ -312,16 +326,18 @@ function Row({
   label,
   value,
   bold = false,
+  discount = false,
 }: {
   label: string
   value: string
   bold?: boolean
+  discount?: boolean
 }) {
   return (
     <div
       className={`flex items-center justify-between ${
         bold ? "font-black text-[14px]" : ""
-      }`}
+      } ${discount ? "text-rose-600" : ""}`}
     >
       <span className="uppercase">{label}</span>
       <span className="tabular-nums">{value}</span>

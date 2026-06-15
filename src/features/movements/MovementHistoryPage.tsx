@@ -1,7 +1,10 @@
 import { Search, Calendar, User, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useMovementHistoryPage } from "./useMovementHistoryPage";
-import AbonoModal from "./AbonoModal"; // Importación al mismo nivel
+import PaymentModal from "../apartados/PaymentModal";
+import { addPayment } from "../apartados/apartadosService";
+import { sound } from "../../lib/sound";
+import toast from "react-hot-toast";
 
 const fmtDate = (dt: string) =>
   new Date(dt).toLocaleString("es-MX", {
@@ -20,9 +23,41 @@ const fmtMoney = (n: any) =>
 export default function MovementHistoryPage() {
   const {
     type, setType, q, setQ, filtered, loading,
-    selectedSale, setSelectedSale, montoAbono, setMontoAbono,
-    isSavingAbono, ejecutarAbono
+    selectedSale, setSelectedSale,
   } = useMovementHistoryPage();
+
+  // Adaptamos el row del historial al shape `Sale` que usa PaymentModal.
+  const saleForModal = selectedSale
+    ? {
+        id: selectedSale.sale_id ?? selectedSale.id,
+        customer_name: selectedSale.customer ?? selectedSale.customer_name ?? null,
+        customer_phone: selectedSale.customer_phone ?? null,
+        total: Number(selectedSale.total) || 0,
+        paid: Number(selectedSale.paid) || 0,
+        balance: Number(selectedSale.balance) || 0,
+        status: selectedSale.status ?? "pending",
+        is_layaway: !!selectedSale.is_layaway,
+        created_at: selectedSale.created_at ?? new Date().toISOString(),
+      } as any
+    : null;
+
+  async function handlePay(saleId: string, amount: number, method: string) {
+    const tid = toast.loading("Registrando abono...");
+    try {
+      await addPayment(saleId, amount, method);
+      sound.success();
+      toast.success("Abono registrado 💖", { id: tid });
+      // refresca el listado disparando un cambio en el filtro
+      setSelectedSale(null);
+      // Aviso global por si otras vistas se quieren refrescar
+      window.dispatchEvent(new CustomEvent("mari:apartado-refresh"));
+      return true;
+    } catch (e: any) {
+      sound.error();
+      toast.error(e?.message ?? "Error al abonar", { id: tid });
+      return false;
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4 pb-44 px-2 max-w-2xl mx-auto">
@@ -135,14 +170,11 @@ export default function MovementHistoryPage() {
         )}
       </div>
 
-      <AbonoModal 
-        selectedSale={selectedSale}
-        setSelectedSale={setSelectedSale}
-        montoAbono={montoAbono}
-        setMontoAbono={setMontoAbono}
-        isSavingAbono={isSavingAbono}
-        ejecutarAbono={ejecutarAbono}
-        fmtMoney={fmtMoney}
+      <PaymentModal
+        open={!!selectedSale}
+        sale={saleForModal}
+        onClose={() => setSelectedSale(null)}
+        onPay={handlePay}
       />
     </div>
   );

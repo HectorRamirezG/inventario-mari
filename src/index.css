@@ -729,11 +729,19 @@ html, body, .bg-white, .text-slate-900, .text-slate-800, .border-slate-100 {
    20. PRINT — Ticket térmico 80mm
    Cuando se imprime el ticket, escondemos todo lo demás y centramos
    sólo el área #ticket-printable a tamaño de impresora térmica.
+   Usamos fuente MONOESPACIADA en print para alineación perfecta de
+   columnas y números (como ticket de tienda real).
 ===================================================================== */
 @media print {
   @page {
     margin: 4mm;
     size: 80mm auto; /* impresora térmica común; en PDF da página angosta */
+  }
+
+  html, body {
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   body * {
@@ -742,6 +750,10 @@ html, body, .bg-white, .text-slate-900, .text-slate-800, .border-slate-100 {
   #ticket-printable,
   #ticket-printable * {
     visibility: visible !important;
+    color: black !important;
+    /* Forzar monoespaciado para alineación de columnas */
+    font-family: "JetBrains Mono", "SF Mono", "Menlo", "Consolas",
+                 ui-monospace, monospace !important;
   }
   #ticket-printable {
     position: absolute !important;
@@ -750,14 +762,21 @@ html, body, .bg-white, .text-slate-900, .text-slate-800, .border-slate-100 {
     margin: 0 !important;
     padding: 4mm !important;
     background: white !important;
-    color: black !important;
     box-shadow: none !important;
     border-radius: 0 !important;
-    font-family: 'Inter', 'Helvetica', monospace !important;
+    font-size: 11px !important;
+    line-height: 1.35 !important;
   }
   /* Asegura que los toasts/portals no aparezcan */
   .Toaster,
-  [data-radix-portal] {
+  [data-radix-portal],
+  [data-sonner-toaster],
+  .fixed {
     display: none !important;
+  }
+  /* Pero el ticket sí, aunque esté en un portal fixed */
+  #ticket-printable,
+  #ticket-printable * {
+    display: revert !important;
   }
 }

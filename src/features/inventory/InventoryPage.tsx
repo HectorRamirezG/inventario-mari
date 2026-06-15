@@ -1,20 +1,14 @@
 import { useState, useEffect } from "react";
-import {
-  List,
-  History,
-  AlertTriangle,
-} from "lucide-react";
+import { List, History } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import ProductList from "../products/ProductList";
 import MovementHistoryPage from "../movements/MovementHistoryPage";
-import LowStockView from "./LowStockView";
 
-type InventoryTab = "catalogo" | "bajo" | "historial";
+type InventoryTab = "catalogo" | "historial";
 
 const TABS = [
   { id: "catalogo" as const, label: "Catálogo", icon: List },
-  { id: "bajo" as const, label: "Bajo stock", icon: AlertTriangle },
   { id: "historial" as const, label: "Movimientos", icon: History },
 ];
 
@@ -32,10 +26,12 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-75px)] bg-[#FFFAFA] text-slate-900 overflow-hidden">
+    // Sin h-[calc(100vh-..)] ni overflow-hidden: ese contenedor cortaba
+    // el scroll del shell padre. Ahora fluye como contenido normal.
+    <div className="flex flex-col text-slate-900">
 
       {/* HEADER COMPACTO */}
-      <header className="shrink-0 bg-white/80 backdrop-blur-xl border-b border-pink-50 px-4 pt-1 pb-2 z-50">
+      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-pink-50 px-1 pt-1 pb-2 -mx-1">
         <nav className="flex bg-white border border-pink-50 p-1 rounded-[1.8rem] shadow-sm">
           {TABS.map(tab => {
             const isActive = activeTab === tab.id;
@@ -65,8 +61,8 @@ export default function InventoryPage() {
         </nav>
       </header>
 
-      {/* MAIN */}
-      <main className="flex-1 overflow-y-auto px-3 pt-3 scroll-smooth">
+      {/* MAIN — sin h fijo, deja al shell padre manejar el scroll */}
+      <main className="pt-3">
         <AnimatePresence mode="wait">
           {activeTab === "catalogo" && (
             <motion.div
@@ -80,23 +76,11 @@ export default function InventoryPage() {
             </motion.div>
           )}
 
-          {activeTab === "bajo" && (
-            <motion.div
-              key="bajo"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 8 }}
-              transition={{ duration: 0.18 }}
-            >
-              <LowStockView />
-            </motion.div>
-          )}
-
           {activeTab === "historial" && (
             <motion.div
               key="historial"
               initial={{ opacity: 0, x: 8 }}
-              animate={{ opacity: 1, x: 0 }}
+              animate={{ opacity: 1, x: -8 }}
               exit={{ opacity: 0, x: -8 }}
               transition={{ duration: 0.18 }}
             >
@@ -104,11 +88,7 @@ export default function InventoryPage() {
             </motion.div>
           )}
         </AnimatePresence>
-
-        <div className="h-28" />
       </main>
-
-      <div className="shrink-0 h-4 bg-gradient-to-t from-[#FFFAFA] to-transparent pointer-events-none" />
     </div>
   );
 }

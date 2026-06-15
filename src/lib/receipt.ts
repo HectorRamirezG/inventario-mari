@@ -60,6 +60,20 @@ export function buildReceiptText(sale: Sale, avatarUrl?: string | null): string 
   }
 
   lines.push(sep)
+
+  // Subtotal (suma de items) + descuento/ajuste + total
+  const itemsSum = (sale.sale_items ?? []).reduce(
+    (a, it) => a + Number(it.qty) * Number(it.unit_price),
+    0
+  )
+  const adj = Number(sale.adjustment_amount) || 0
+  if (adj > 0) {
+    lines.push(`Subtotal: ${formatMoney(itemsSum)} MXN`)
+    lines.push(
+      `💖 ${sale.adjustment_reason || "Descuento Mari"}: -${formatMoney(adj)} MXN`
+    )
+  }
+
   lines.push(`💰 *TOTAL:* ${formatMoney(sale.total)} MXN`)
   if (Number(sale.paid) > 0) {
     lines.push(`💵 Pagado: ${formatMoney(sale.paid)} MXN`)

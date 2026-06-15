@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react"
-import { 
-  RefreshCw, Trophy, AlertTriangle, ArrowUpRight, Target, Zap, 
-  ShoppingCart, Star, Wallet, Sun 
+import {
+  RefreshCw, Trophy, AlertTriangle, ArrowUpRight, Target, Zap,
+  ShoppingCart, Star, Wallet, Sun
 } from "lucide-react"
-import { 
-  ResponsiveContainer, AreaChart, Area, XAxis, 
-  YAxis, Tooltip as RechartsTooltip, CartesianGrid 
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis,
+  YAxis, Tooltip as RechartsTooltip, CartesianGrid
 } from "recharts"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/Tabs"
 import Skeleton from "../../components/ui/Skeleton"
@@ -16,13 +16,15 @@ import Card from "../../components/ui/Card"
 import { useDashboard } from "./useDashboard"
 import DayCloseView from "./DayCloseView"
 import CycleBanner from "../cycles/CycleBanner"
+import LowStockView from "../inventory/LowStockView"
 
-const formatCurrency = (v: number) => 
+const formatCurrency = (v: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" }).format(v)
 
 export default function DashboardPage() {
   const { stats, loading, refresh } = useDashboard()
   const [dayCloseOpen, setDayCloseOpen] = useState(false)
+  const [showLowStock, setShowLowStock] = useState(false)
 
   const chartData = useMemo(() => {
     if (!stats?.top) return []
@@ -126,8 +128,45 @@ export default function DashboardPage() {
             <StatCard icon={<Zap size={16} />} value={stats?.operations || 0} label="Ventas" />
             <StatCard icon={<Target size={16} />} value={formatCurrency(ticketPromedio)} label="Ticket" />
             <StatCard icon={<Trophy size={16} />} value={`${cobroEficiencia.toFixed(0)}%`} label="Cobro" />
-            <StatCard icon={<AlertTriangle size={16} />} value={stats?.lowStock || 0} label="Stock" alert={stats?.lowStock} />
+            <button
+              type="button"
+              onClick={() => setShowLowStock((v) => !v)}
+              className={`text-left p-4 rounded-2xl border transition-all active:scale-[0.98] ${
+                (stats?.lowStock ?? 0) > 0
+                  ? "border-rose-200 bg-rose-50 hover:bg-rose-100"
+                  : "border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <AlertTriangle
+                  size={16}
+                  className={(stats?.lowStock ?? 0) > 0 ? "text-rose-600" : "text-emerald-600"}
+                />
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+                  {showLowStock ? "Ocultar" : "Ver"}
+                </span>
+              </div>
+              <p className="text-lg font-black text-center">{stats?.lowStock || 0}</p>
+              <p className="text-[9px] uppercase text-slate-400 text-center">Stock bajo</p>
+            </button>
           </div>
+
+          {/* Panel expandible de stock crítico */}
+          <AnimatePresence>
+            {showLowStock && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-1 mt-1">
+                  <LowStockView />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
         </TabsContent>
 

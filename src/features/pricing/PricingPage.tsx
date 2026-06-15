@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { 
-  Calculator, 
-  History, 
-  Settings 
+import {
+  Calculator,
+  History,
+  Settings
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -13,14 +13,14 @@ import PricingSettings from "./PricingSettings";
 
 export default function PricingPage() {
   const [activeTab, setActiveTab] = useState<"precios" | "historial" | "config">("precios");
-  
-  const { 
-    products, 
-    addRow, 
-    removeRow, 
-    updateRow, 
-    computed, 
-    saveAnalysis 
+
+  const {
+    products,
+    addRow,
+    removeRow,
+    updateRow,
+    computed,
+    saveAnalysis
   } = usePricingPage();
 
   const tabs = [
@@ -30,11 +30,11 @@ export default function PricingPage() {
   ] as const;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-75px)] bg-[#FFFAFA] text-slate-900 overflow-hidden">
-      
+    <div className="flex flex-col text-slate-900">
+
       {/* 🔥 HEADER COMPACTO */}
-      <header className="shrink-0 bg-white/80 backdrop-blur-xl border-b border-pink-50 px-4 pt-1 pb-2 z-50">
-        
+      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-pink-50 px-1 pt-1 pb-2 -mx-1">
+
         <nav className="flex bg-white border border-pink-50 p-1 rounded-[1.8rem] shadow-sm">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -48,7 +48,7 @@ export default function PricingPage() {
                 }`}
               >
                 {isActive && (
-                  <motion.div 
+                  <motion.div
                     layoutId="activeTab"
                     className="absolute inset-0 bg-slate-900 rounded-[1.4rem]"
                     transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
@@ -65,8 +65,8 @@ export default function PricingPage() {
         </nav>
       </header>
 
-      {/* 🔥 MAIN */}
-      <main className="flex-1 overflow-y-auto px-3 pt-1 scroll-smooth">
+      {/* 🔥 MAIN — sin h fijo, fluye con el shell padre */}
+      <main className="pt-1">
         <AnimatePresence mode="wait">
 
           {activeTab === "precios" && (
@@ -77,7 +77,7 @@ export default function PricingPage() {
               exit={{ opacity: 0, x: 8 }}
               transition={{ duration: 0.18 }}
             >
-              <CalculatorTab 
+              <CalculatorTab
                 products={products}
                 rows={computed}
                 onAdd={addRow}
@@ -113,13 +113,7 @@ export default function PricingPage() {
           )}
 
         </AnimatePresence>
-
-        {/* 🔥 ESPACIO PARA BOTÓN */}
-        <div className="h-28" />
       </main>
-
-      {/* 🔥 GRADIENT FIX */}
-      <div className="shrink-0 h-4 bg-gradient-to-t from-[#FFFAFA] to-transparent pointer-events-none" />
     </div>
   );
 }

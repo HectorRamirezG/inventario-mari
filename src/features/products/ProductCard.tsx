@@ -180,47 +180,104 @@ export default function ProductCard({
             className="space-y-2"
           >
             {product.variants?.length ? (
-              product.variants.map((v, i) => (
-                <div
-                  key={v.id || i}
-                  className="flex items-center justify-between bg-white border border-slate-100 rounded-2xl px-4 py-3 shadow-sm"
-                >
-                  <div>
-                    <p className="text-xs font-black text-slate-800">
-                      {v.variant_name}
-                    </p>
-                    <p className="text-[9px] text-slate-400">
-                      SKU: {v.sku || "---"}
-                    </p>
-                  </div>
+              product.variants.map((v, i) => {
+                const photos =
+                  (v.image_urls && v.image_urls.length > 0
+                    ? v.image_urls
+                    : v.image_url
+                    ? [v.image_url]
+                    : []) ?? []
+                return (
+                  <div
+                    key={v.id || i}
+                    className="flex items-center justify-between bg-white border border-slate-100 rounded-2xl px-3 py-2.5 shadow-sm gap-2"
+                  >
+                    {/* Mini-galería: portada + badge contador clickeable */}
+                    <button
+                      type="button"
+                      onClick={() => onEdit(product)}
+                      className="relative w-14 h-14 rounded-xl overflow-hidden bg-slate-100 shrink-0 group"
+                      title={
+                        photos.length > 0
+                          ? `${photos.length} foto${photos.length > 1 ? "s" : ""} · tap para editar`
+                          : "Agregar fotos"
+                      }
+                    >
+                      {photos[0] ? (
+                        <img
+                          src={photos[0]}
+                          alt={v.variant_name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-300">
+                          <Package size={20} />
+                        </div>
+                      )}
+                      {photos.length > 1 && (
+                        <span className="absolute bottom-0.5 right-0.5 px-1 py-0 rounded-md bg-black/65 text-white text-[8px] font-black tabular-nums">
+                          +{photos.length - 1}
+                        </span>
+                      )}
+                      {photos.length === 0 && (
+                        <span className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/40 to-transparent text-white text-[7px] font-black uppercase tracking-widest pb-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          + foto
+                        </span>
+                      )}
+                    </button>
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-emerald-500">
-                        {v.stock} pz
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-black text-slate-800 truncate">
+                        {v.variant_name}
                       </p>
-                      <p className="text-[10px] font-black text-primary">
-                        {v.price ? money(v.price) : "—"}
+                      <p className="text-[9px] text-slate-400 truncate">
+                        SKU: {v.sku || "---"}
                       </p>
+                      {/* Strip de miniaturas (si hay 2+ fotos) */}
+                      {photos.length > 1 && (
+                        <div className="flex gap-0.5 mt-1">
+                          {photos.slice(0, 5).map((url, idx) => (
+                            <img
+                              key={idx}
+                              src={url}
+                              alt=""
+                              loading="lazy"
+                              className="w-5 h-5 rounded object-cover border border-white shadow-sm"
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => onMove(v.id, "venta")}
-                        className="w-9 h-9 rounded-xl bg-slate-100 text-slate-500"
-                      >
-                        −
-                      </button>
-                      <button
-                        onClick={() => onMove(v.id, "entrada")}
-                        className="w-9 h-9 rounded-xl bg-primary text-white"
-                      >
-                        +
-                      </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-right">
+                        <p className="text-[10px] font-black text-emerald-500">
+                          {v.stock} pz
+                        </p>
+                        <p className="text-[10px] font-black text-primary">
+                          {v.price ? money(v.price) : "—"}
+                        </p>
+                      </div>
+
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => onMove(v.id, "venta")}
+                          className="w-8 h-8 rounded-xl bg-slate-100 text-slate-500"
+                        >
+                          −
+                        </button>
+                        <button
+                          onClick={() => onMove(v.id, "entrada")}
+                          className="w-8 h-8 rounded-xl bg-primary text-white"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             ) : (
               <div className="py-6 text-center border border-dashed border-slate-200 rounded-2xl">
                 <p className="text-[10px] text-slate-400">Sin variantes</p>
