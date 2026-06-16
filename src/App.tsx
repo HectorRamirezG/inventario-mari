@@ -241,6 +241,7 @@ function AdminShell() {
         ciclos: "ciclos",
         soporte: "soporte",
         incidencias: "soporte",
+        reglas: "reglas",
         settings: "ajustes",
       }
       const next = (legacy[t] ?? t) as AdminSection

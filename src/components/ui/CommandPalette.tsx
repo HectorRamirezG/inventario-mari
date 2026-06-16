@@ -14,8 +14,20 @@ import {
   RefreshCcw,
   Sparkles,
   Settings,
+  TrendingUp,
+  LifeBuoy,
+  ScrollText,
+  Plus,
+  User as UserIcon,
+  Calculator,
+  Wifi,
+  Receipt,
+  X,
+  CircleDollarSign,
 } from "lucide-react"
+import toast from "react-hot-toast"
 import { useTheme } from "../../lib/useTheme"
+import { supabase } from "../../lib/supabase"
 
 interface Command {
   id: string
@@ -23,12 +35,15 @@ interface Command {
   hint?: string
   icon: React.ComponentType<{ size?: number; className?: string }>
   shortcut?: string
-  group: "Navegación" | "Acciones" | "Tema"
+  group: "Navegación" | "Acciones" | "Diagnóstico" | "Tema"
   run: () => void
 }
 
 const navigate = (tab: string) =>
   window.dispatchEvent(new CustomEvent("app:navigate", { detail: { tab } }))
+
+const dispatch = (name: string, detail?: any) =>
+  window.dispatchEvent(new CustomEvent(name, { detail }))
 
 interface Props {
   open: boolean
@@ -37,7 +52,11 @@ interface Props {
 
 /**
  * Command palette estilo Linear / Raycast. Se invoca con Cmd/Ctrl+K.
- * Filtrado fuzzy simple por substring case-insensitive.
+ * Filtrado fuzzy por substring case-insensitive.
+ *
+ * Atajos numéricos (1..7) abren las pestañas principales aun con la
+ * palette CERRADA — los maneja `useGlobalShortcuts`. La palette muestra
+ * la pista del atajo en cada fila.
  */
 export default function CommandPalette({ open, onClose }: Props) {
   const [query, setQuery] = useState("")
@@ -56,133 +75,217 @@ export default function CommandPalette({ open, onClose }: Props) {
 
   const allCommands: Command[] = useMemo(
     () => [
-      // ── Navegación ────────────────────────────
+      /* ─────────── Navegación (atajos 1..7) ─────────── */
       {
-        id: "go-dashboard",
-        label: "Ir a Inicio",
-        hint: "Dashboard general",
-        icon: LayoutDashboard,
-        shortcut: "1",
-        group: "Navegación",
-        run: () => navigate("dashboard"),
-      },
-      {
-        id: "go-stock",
-        label: "Ir a Stock",
-        hint: "Catálogo de productos",
-        icon: Package,
-        shortcut: "2",
-        group: "Navegación",
-        run: () => navigate("inventario"),
-      },
-      {
-        id: "go-ventas",
-        label: "Nueva venta",
-        hint: "Caja activa",
+        id: "go-caja",
+        label: "Caja viva",
+        hint: "Procesar nueva venta",
         icon: ShoppingCart,
-        shortcut: "3",
+        shortcut: "1",
         group: "Navegación",
         run: () => navigate("ventas"),
       },
       {
         id: "go-apartados",
-        label: "Ver apartados",
-        hint: "Cobros pendientes",
+        label: "Pendientes / Apartados",
+        hint: "Control de saldos y abonos",
         icon: Bookmark,
-        shortcut: "4",
+        shortcut: "2",
         group: "Navegación",
         run: () => navigate("apartados"),
       },
       {
-        id: "go-precios",
-        label: "Calculadora de precios",
-        hint: "Análisis y configuración",
-        icon: Tag,
+        id: "go-catalogo",
+        label: "Catálogo admin",
+        hint: "Productos, variantes y stock",
+        icon: Package,
+        shortcut: "3",
+        group: "Navegación",
+        run: () => navigate("inventario"),
+      },
+      {
+        id: "go-ciclos",
+        label: "Ciclos de inventario",
+        hint: "Gastos operativos y break-even",
+        icon: TrendingUp,
+        shortcut: "4",
+        group: "Navegación",
+        run: () => navigate("ciclos"),
+      },
+      {
+        id: "go-soporte",
+        label: "Buzón de incidencias",
+        hint: "Tickets de clientes",
+        icon: LifeBuoy,
         shortcut: "5",
+        group: "Navegación",
+        run: () => navigate("soporte"),
+      },
+      {
+        id: "go-reglas",
+        label: "Políticas del negocio",
+        hint: "Reglas globales (ventana de reclamo, cancelaciones, etc.)",
+        icon: ScrollText,
+        shortcut: "6",
+        group: "Navegación",
+        run: () => navigate("reglas"),
+      },
+      {
+        id: "go-calculadora",
+        label: "Calculadora de precios",
+        hint: "Aplica menudeo/medio/mayoreo a variantes",
+        icon: Calculator,
+        shortcut: "7",
         group: "Navegación",
         run: () => navigate("precios"),
       },
       {
+        id: "go-dashboard",
+        label: "Dashboard / Hoy",
+        hint: "Resumen del día",
+        icon: LayoutDashboard,
+        shortcut: "g d",
+        group: "Navegación",
+        run: () => navigate("dashboard"),
+      },
+      {
         id: "go-settings",
-        label: "Configuración",
-        hint: "Tienda y PINs",
+        label: "Configuración general",
+        hint: "Tienda, banco, envío, márgenes",
         icon: Settings,
         group: "Navegación",
         run: () => navigate("settings"),
       },
-      {
-        id: "go-shipping",
-        label: "Configurar costos de envío",
-        hint: "Foráneo, local y envío gratis",
-        icon: Settings,
-        group: "Navegación",
-        run: () => navigate("settings"),
-      },
-      {
-        id: "go-overdue",
-        label: "Ver apartados vencidos",
-        hint: "Saldos por cobrar urgentes",
-        icon: Bookmark,
-        group: "Navegación",
-        run: () => navigate("apartados"),
-      },
-      {
-        id: "go-caja",
-        label: "Ir a caja",
-        hint: "Atajo rápido",
-        icon: ShoppingCart,
-        group: "Navegación",
-        run: () => navigate("ventas"),
-      },
-      // ── Acciones ──────────────────────────────
+
+      /* ─────────── Acciones transaccionales ─────────── */
       {
         id: "open-scanner",
-        label: "Escanear código",
-        hint: "Abre la cámara para escanear SKU",
+        label: "Escanear código de barras",
+        hint: "Abre la cámara para sumar al carrito",
         icon: ScanLine,
         group: "Acciones",
         run: () => {
           navigate("ventas")
-          setTimeout(
-            () => window.dispatchEvent(new CustomEvent("sales:open-scanner")),
-            150
-          )
+          setTimeout(() => dispatch("sales:open-scanner"), 150)
         },
       },
       {
         id: "new-product",
-        label: "Agregar nuevo producto",
-        hint: "Catálogo → nuevo",
-        icon: Package,
+        label: "Nuevo producto",
+        hint: "Abre el drawer de creación",
+        icon: Plus,
         group: "Acciones",
         run: () => {
           navigate("inventario")
-          setTimeout(
-            () => window.dispatchEvent(new CustomEvent("products:new")),
-            150
-          )
+          setTimeout(() => dispatch("products:new"), 150)
+        },
+      },
+      {
+        id: "focus-customer",
+        label: "Buscar cliente en caja",
+        hint: "Foco al campo de nombre/teléfono",
+        icon: UserIcon,
+        group: "Acciones",
+        run: () => {
+          navigate("ventas")
+          setTimeout(() => dispatch("sales:focus-customer"), 200)
+        },
+      },
+      {
+        id: "clear-cart",
+        label: "Limpiar carrito de caja",
+        hint: "Vacía la venta en curso",
+        icon: X,
+        group: "Acciones",
+        run: () => dispatch("sales:clear-cart"),
+      },
+      {
+        id: "day-close",
+        label: "Corte de caja express",
+        hint: "Resumen del día actual",
+        icon: CircleDollarSign,
+        group: "Acciones",
+        run: () => {
+          navigate("dashboard")
+          setTimeout(() => dispatch("dashboard:open-day-close"), 150)
+        },
+      },
+      {
+        id: "overdue",
+        label: "Apartados vencidos",
+        hint: "Solo los que pasaron del plazo",
+        icon: Receipt,
+        group: "Acciones",
+        run: () => {
+          navigate("apartados")
+          setTimeout(() => dispatch("apartados:filter-overdue"), 150)
         },
       },
       {
         id: "open-profile",
         label: "Mi perfil",
-        hint: "Editar datos / cambiar contraseña",
-        icon: Settings,
+        hint: "Editar datos, cambiar contraseña",
+        icon: UserIcon,
         group: "Acciones",
-        run: () => window.dispatchEvent(new CustomEvent("mari:open-profile")),
+        run: () => dispatch("mari:open-profile"),
+      },
+
+      /* ─────────── Diagnóstico ─────────── */
+      {
+        id: "ping-supabase",
+        label: "Verificar conexión Supabase",
+        hint: "Test de latencia + realtime",
+        icon: Wifi,
+        group: "Diagnóstico",
+        run: async () => {
+          const tid = toast.loading("Probando Supabase…")
+          const t0 = performance.now()
+          try {
+            const { error } = await supabase
+              .from("pricing_config")
+              .select("id", { count: "exact", head: true })
+              .limit(1)
+            const ms = Math.round(performance.now() - t0)
+            if (error) {
+              toast.error(`Error: ${error.message}`, { id: tid })
+            } else {
+              const rt =
+                supabase.realtime.isConnected?.() === false
+                  ? "realtime desconectado"
+                  : "realtime OK"
+              toast.success(`Supabase ${ms}ms · ${rt}`, { id: tid })
+            }
+          } catch (e: any) {
+            toast.error(e?.message ?? "Sin red", { id: tid })
+          }
+        },
       },
       {
-        id: "refresh",
-        label: "Recargar datos",
-        hint: "Vuelve a leer de Supabase",
+        id: "force-sync",
+        label: "Forzar sincronización",
+        hint: "Recarga estados globales sin refresh",
         icon: RefreshCcw,
-        group: "Acciones",
+        group: "Diagnóstico",
+        run: () => {
+          dispatch("mari:apartado-refresh")
+          dispatch("mari:catalog-refresh")
+          dispatch("mari:notif-refresh")
+          toast.success("Sincronización solicitada")
+        },
+      },
+      {
+        id: "hard-reload",
+        label: "Recargar página",
+        hint: "Reload completo del navegador",
+        icon: RefreshCcw,
+        group: "Diagnóstico",
         run: () => window.location.reload(),
       },
-      // ── Tema ───────────────────────────────────
+
+      /* ─────────── Tema ─────────── */
       {
         id: "theme-toggle",
-        label: effective === "dark" ? "Modo claro" : "Modo oscuro",
+        label: effective === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro",
         hint: "Alternar tema",
         icon: effective === "dark" ? Sun : Moon,
         group: "Tema",
@@ -206,7 +309,8 @@ export default function CommandPalette({ open, onClose }: Props) {
     return allCommands.filter(
       (c) =>
         c.label.toLowerCase().includes(q) ||
-        (c.hint ?? "").toLowerCase().includes(q)
+        (c.hint ?? "").toLowerCase().includes(q) ||
+        c.group.toLowerCase().includes(q)
     )
   }, [query, allCommands])
 
@@ -268,10 +372,10 @@ export default function CommandPalette({ open, onClose }: Props) {
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.96, y: -10, opacity: 0 }}
             transition={{ type: "spring", damping: 24, stiffness: 320 }}
-            className="relative w-full max-w-lg bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden"
+            className="relative w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl overflow-hidden"
           >
             {/* Input */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
               <Search size={16} className="text-slate-400 shrink-0" />
               <input
                 ref={inputRef}
@@ -280,16 +384,16 @@ export default function CommandPalette({ open, onClose }: Props) {
                   setQuery(e.target.value)
                   setActive(0)
                 }}
-                placeholder="Buscar comandos…"
-                className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-slate-900 placeholder:text-slate-400"
+                placeholder="Buscar comandos, acciones, módulos…"
+                className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
               />
-              <kbd className="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-[9px] font-black uppercase tracking-widest text-slate-500">
+              <kbd className="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
                 Esc
               </kbd>
             </div>
 
             {/* Lista */}
-            <div className="max-h-[400px] overflow-y-auto custom-scrollbar py-2">
+            <div className="max-h-[420px] overflow-y-auto custom-scrollbar py-2">
               {filtered.length === 0 ? (
                 <p className="px-4 py-8 text-center text-[10px] font-black uppercase tracking-widest text-slate-300">
                   Sin resultados
@@ -313,20 +417,22 @@ export default function CommandPalette({ open, onClose }: Props) {
                             onClose()
                           }}
                           className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                            isActive ? "bg-primary/10" : "bg-transparent"
+                            isActive
+                              ? "bg-primary/10"
+                              : "bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60"
                           }`}
                         >
                           <div
                             className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
                               isActive
                                 ? "bg-primary text-white"
-                                : "bg-slate-100 text-slate-500"
+                                : "bg-slate-100 dark:bg-slate-800 text-slate-500"
                             }`}
                           >
                             <Icon size={14} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-black text-slate-800 truncate">
+                            <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 truncate">
                               {c.label}
                             </p>
                             {c.hint && (
@@ -336,7 +442,7 @@ export default function CommandPalette({ open, onClose }: Props) {
                             )}
                           </div>
                           {c.shortcut && (
-                            <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-[9px] font-black text-slate-500">
+                            <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-black text-slate-500 dark:text-slate-400">
                               {c.shortcut}
                             </kbd>
                           )}
@@ -349,23 +455,29 @@ export default function CommandPalette({ open, onClose }: Props) {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 bg-slate-50">
+            <div className="flex items-center justify-between px-4 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
               <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-widest text-slate-400">
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200">
+                  <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                     ↑↓
                   </kbd>
                   Mover
                 </span>
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-200">
+                  <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                     ↵
                   </kbd>
                   Ejecutar
                 </span>
+                <span className="hidden md:flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    1–7
+                  </kbd>
+                  Módulos
+                </span>
               </div>
               <span className="text-[9px] font-black uppercase tracking-widest text-primary">
-                Mari Inv
+                <Tag size={9} className="inline mr-0.5" /> Mari OS
               </span>
             </div>
           </motion.div>

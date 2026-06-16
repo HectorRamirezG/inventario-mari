@@ -73,7 +73,16 @@ export function useApartados() {
   useEffect(() => {
     const handler = () => refresh();
     window.addEventListener("mari:apartado-refresh", handler);
-    return () => window.removeEventListener("mari:apartado-refresh", handler);
+    // Atajo desde la paleta de comandos: filtrar solo apartados pendientes
+    const overdueHandler = () => {
+      setFilter("pending");
+      setOnlyLayaway(true);
+    };
+    window.addEventListener("apartados:filter-overdue", overdueHandler);
+    return () => {
+      window.removeEventListener("mari:apartado-refresh", handler);
+      window.removeEventListener("apartados:filter-overdue", overdueHandler);
+    };
   }, [refresh]);
 
   // Realtime: cuando llega un comprobante o pago nuevo, refrescamos

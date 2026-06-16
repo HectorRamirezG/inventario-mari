@@ -2,17 +2,19 @@ import { useEffect } from "react"
 
 /**
  * Atajos de teclado globales.
- * - 1..5 → cambia de pestaña
- * - g d/i/v/a/p → "go to ___" (estilo Vim)
+ * - 1..7 → cambia de pestaña principal
+ * - g d/i/v/a/p/s/c/r → "go to ___" (estilo Vim)
  *
  * Ignora atajos cuando hay un input/textarea con foco para no romper escritura.
  */
 const TAB_BY_NUMBER: Record<string, string> = {
-  "1": "dashboard",
-  "2": "inventario",
-  "3": "ventas",
-  "4": "apartados",
-  "5": "precios",
+  "1": "ventas",      // Caja
+  "2": "apartados",   // Pendientes
+  "3": "inventario",  // Catálogo
+  "4": "ciclos",      // Ciclos
+  "5": "soporte",     // Incidencias
+  "6": "reglas",      // Políticas
+  "7": "precios",     // Calculadora
 }
 
 const TAB_BY_LETTER: Record<string, string> = {
@@ -21,6 +23,9 @@ const TAB_BY_LETTER: Record<string, string> = {
   v: "ventas",
   a: "apartados",
   p: "precios",
+  s: "soporte",
+  c: "ciclos",
+  r: "reglas",
 }
 
 export function useGlobalShortcuts() {

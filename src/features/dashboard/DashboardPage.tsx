@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   RefreshCw, Trophy, AlertTriangle, ArrowUpRight, Target, Zap,
   ShoppingCart, Star, Wallet, Sun, Package, Bell, FileCheck2
@@ -23,6 +23,13 @@ export default function DashboardPage() {
   const { stats, loading, refresh } = useDashboard()
   const [dayCloseOpen, setDayCloseOpen] = useState(false)
   const [showLowStock, setShowLowStock] = useState(false)
+
+  // Atajo desde la paleta de comandos
+  useEffect(() => {
+    const handler = () => setDayCloseOpen(true)
+    window.addEventListener("dashboard:open-day-close", handler)
+    return () => window.removeEventListener("dashboard:open-day-close", handler)
+  }, [])
 
   const chartData = useMemo(() => {
     if (!stats?.top) return []

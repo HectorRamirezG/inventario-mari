@@ -59,10 +59,31 @@ export default function SalesPage() {
 
   // Permite abrir el scanner desde otras partes (ej. CommandPalette)
   useEffect(() => {
-    const handler = () => setScannerOpen(true);
-    window.addEventListener("sales:open-scanner", handler);
-    return () => window.removeEventListener("sales:open-scanner", handler);
-  }, []);
+    const onScanner = () => setScannerOpen(true);
+    const onClearCart = () => {
+      if (state.cart.length === 0) return;
+      actions.clearCart();
+      sound.tap();
+    };
+    const onFocusCustomer = () => {
+      setShowCustomer(true);
+      // Esperamos a que el panel se expanda para enfocar el input por nombre
+      setTimeout(() => {
+        const el = document.querySelector<HTMLInputElement>(
+          "input[placeholder*='Nombre del cliente']"
+        );
+        el?.focus();
+      }, 250);
+    };
+    window.addEventListener("sales:open-scanner", onScanner);
+    window.addEventListener("sales:clear-cart", onClearCart);
+    window.addEventListener("sales:focus-customer", onFocusCustomer);
+    return () => {
+      window.removeEventListener("sales:open-scanner", onScanner);
+      window.removeEventListener("sales:clear-cart", onClearCart);
+      window.removeEventListener("sales:focus-customer", onFocusCustomer);
+    };
+  }, [actions, state.cart.length]);
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
