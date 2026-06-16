@@ -16,6 +16,7 @@ import {
 import toast from "react-hot-toast"
 
 import VariantImageCarousel from "../../components/ui/VariantImageCarousel"
+import ProductLightbox, { type LightboxSlide } from "../../components/ui/ProductLightbox"
 import { formatMoney } from "../../lib/format"
 import type { Product, Variant } from "../../types/database"
 import { deleteProduct, updateVariant } from "./productService"
@@ -114,6 +115,52 @@ export default function ProductCard({
     return () => document.removeEventListener("mousedown", onDown)
   }, [popoverOpen])
 
+  // Slides para el Lightbox: aplana TODAS las fotos de TODAS las variantes
+  // (foto principal del producto primero si existe y no la repite ninguna
+  // variante)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [lightboxStart, setLightboxStart] = useState(0)
+  const lightboxSlides = useMemo<LightboxSlide[]>(() => {
+    const out: LightboxSlide[] = []
+    const seen = new Set<string>()
+    // Incluir cada variante con sus imágenes propias
+    variants.forEach((v) => {
+      const own =
+        v.image_urls && v.image_urls.length > 0
+          ? v.image_urls
+          : v.image_url
+          ? [v.image_url]
+          : []
+      own.forEach((url) => {
+        if (!url || seen.has(url)) return
+        seen.add(url)
+        out.push({ url, variantId: v.id, variantName: v.variant_name })
+      })
+    })
+    // Fallback al producto si todavía no hay fotos
+    if (out.length === 0 && product.image_url) {
+      out.push({
+        url: product.image_url,
+        variantId: variants[0]?.id ?? "_main",
+        variantName: product.name,
+      })
+    }
+    return out
+  }, [variants, product.image_url, product.name])
+
+  function openLightbox() {
+    if (lightboxSlides.length === 0) {
+      onEdit(product)
+      return
+    }
+    // Empieza en la primera foto de la variante seleccionada (si existe)
+    const idx = selected
+      ? lightboxSlides.findIndex((s) => s.variantId === selected)
+      : 0
+    setLightboxStart(idx >= 0 ? idx : 0)
+    setLightboxOpen(true)
+  }
+
   async function handleDelete() {
     if (!confirm(`¿Eliminar "${product.name}"?`)) return
     try {
@@ -141,9 +188,15 @@ export default function ProductCard({
           variants={carouselSafe}
           selectedVariantId={selected}
           aspect="1/1"
-          onTap={() => onEdit(product)}
+          onTap={openLightbox}
           className="rounded-none"
         />
+        {/* Contador de fotos reales (solo si hay >1) */}
+        {lightboxSlides.length > 1 && (
+          <span className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur text-white text-[9px] font-black tabular-nums shadow">
+            {lightboxSlides.length} fotos
+          </span>
+        )}
         {/* Badge stock bajo */}
         {lowStock && (
           <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest z-10 shadow-bloom">
@@ -361,6 +414,15 @@ export default function ProductCard({
           </div>
         </div>
       </div>
+
+      {/* Lightbox: muestra TODAS las fotos de TODAS las variantes */}
+      <ProductLightbox
+        open={lightboxOpen}
+        slides={lightboxSlides}
+        startIndex={lightboxStart}
+        onClose={() => setLightboxOpen(false)}
+        onVariantChange={(vid) => setSelected(vid)}
+      />
     </motion.div>
   )
 }

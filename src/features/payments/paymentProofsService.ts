@@ -2,6 +2,15 @@ import { supabase } from "../../lib/supabase"
 
 export type ProofStatus = "pending" | "approved" | "rejected"
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function assertSaleId(saleId: unknown): asserts saleId is string {
+  if (typeof saleId !== "string" || !UUID_RE.test(saleId)) {
+    throw new Error("Venta no identificada (sale_id inválido)")
+  }
+}
+
 export interface PaymentProof {
   id: string
   sale_id: string
@@ -32,6 +41,7 @@ export async function uploadPaymentProof(input: {
   customerEmail?: string | null
   note?: string | null
 }): Promise<PaymentProof> {
+  assertSaleId(input.saleId)
   let publicUrl: string | null = null
 
   if (input.file) {
@@ -88,6 +98,7 @@ export async function getProofById(id: string): Promise<PaymentProof | null> {
 }
 
 export async function listProofsForSale(saleId: string): Promise<PaymentProof[]> {
+  if (typeof saleId !== "string" || !UUID_RE.test(saleId)) return []
   const { data, error } = await supabase
     .from("payment_proofs")
     .select("*")

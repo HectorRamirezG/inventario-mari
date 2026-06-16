@@ -55,11 +55,24 @@ export default function ReportPaymentButton({
   const [method, setMethod] = useState("transferencia")
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Validación estricta de UUID — bloquea CUALQUIER request con sale_id
+  // inválido (undefined/null/"undefined"/cadenas malformadas).
+  // Sin esto, listProofsForSale dispara `?sale_id=eq.undefined` → 400
+  // y uploadPaymentProof inserta sale_id NULL → viola NOT NULL.
+  const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  const validSaleId = typeof saleId === "string" && UUID_RE.test(saleId)
+
   // Historial de proofs para esta venta (visible en la parte inferior)
   const [history, setHistory] = useState<PaymentProof[]>([])
   const [loadingHistory, setLoadingHistory] = useState(true)
 
   const refreshHistory = async () => {
+    if (!validSaleId) {
+      setHistory([])
+      setLoadingHistory(false)
+      return
+    }
     setLoadingHistory(true)
     try {
       setHistory(await listProofsForSale(saleId))
@@ -74,12 +87,20 @@ export default function ReportPaymentButton({
 
   function onFileChosen(file: File | undefined) {
     if (!file) return
+    if (!validSaleId) {
+      toast.error("No se pudo identificar la venta. Recarga la página.")
+      return
+    }
     setPendingFile(file)
     setAmount("") // 🔒 reset SIEMPRE a vacío al elegir nueva foto
     setAskAmount(true)
   }
 
   async function confirmUpload() {
+    if (!validSaleId) {
+      toast.error("Venta no identificada — recarga la página")
+      return
+    }
     if (!amount || Number(amount) <= 0) {
       toast.error("Escribe el monto exacto")
       return
