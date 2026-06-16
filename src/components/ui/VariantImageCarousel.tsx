@@ -95,7 +95,11 @@ export default function VariantImageCarousel({
         />
       </AnimatePresence>
 
-      {/* Etiqueta flotante con el nombre de la variante activa */}
+      {/* Etiqueta flotante con el nombre de la variante activa.
+          Se posiciona BOTTOM-LEFT para no chocar con los badges promocionales
+          (Nuevo / Oferta) que ProductCardClient pinta en top-left.
+          Si hay múltiples fotos (dots visibles abajo) la subimos un piso
+          para no chocar contra los dots. */}
       {variants.length > 1 && (
         <AnimatePresence mode="wait">
           <motion.div
@@ -104,15 +108,17 @@ export default function VariantImageCarousel({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ type: "spring", stiffness: 380, damping: 28 }}
-            className="absolute top-2 left-2 z-10 px-2.5 py-1 rounded-full text-white text-[9px] font-black uppercase tracking-widest shadow pointer-events-none"
-            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+            className={`absolute left-2 z-10 max-w-[55%] truncate px-2.5 py-1 rounded-full bg-black/55 backdrop-blur text-white text-[9px] font-black uppercase tracking-widest shadow pointer-events-none ${
+              hasMany ? "bottom-7" : "bottom-2"
+            }`}
           >
             {active.name}
           </motion.div>
         </AnimatePresence>
       )}
 
-      {/* Contador X/N */}
+      {/* Contador X/N (esquina superior derecha — top-left lo ocupan los
+          badges promocionales NUEVO/OFERTA que pinta ProductCardClient) */}
       {hasMany && (
         <span className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full bg-black/45 backdrop-blur text-white text-[9px] font-black tabular-nums pointer-events-none">
           {safeIdx + 1}/{totalInActive}

@@ -1278,15 +1278,16 @@ function ProductCardClient({
             </div>
           )}
           {(isNew || onOffer) && (
-            <div className="absolute top-1 left-1 flex flex-col items-start gap-0.5">
-              {isNew && (
-                <span className="px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 text-[7px] font-black uppercase tracking-widest shadow-sm">
-                  Nuevo
-                </span>
-              )}
-              {onOffer && (
+            <div className="absolute top-1 left-1">
+              {/* En thumb chico (80x80) solo mostramos UN badge prioritario:
+                  oferta gana sobre nuevo para empujar acción de compra. */}
+              {onOffer ? (
                 <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[7px] font-black uppercase tracking-widest shadow-sm">
                   -{discountPct}%
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 text-[7px] font-black uppercase tracking-widest shadow-sm">
+                  Nuevo
                 </span>
               )}
             </div>
@@ -1350,28 +1351,23 @@ function ProductCardClient({
           onTap={() => variant && onOpenLightbox(variant.id)}
           className="rounded-none"
         />
-        {/* Badges esquina superior izquierda: NUEVO / OFERTA */}
-        <div className="absolute top-2 left-2 z-10 flex flex-col items-start gap-1">
-          {isNew && (
-            <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200 text-[9px] font-black uppercase tracking-widest shadow-sm border border-sky-200/60">
-              Nuevo
-            </span>
-          )}
-          {onOffer && (
-            <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-200 text-[9px] font-black uppercase tracking-widest shadow-sm border border-rose-200/60">
-              -{discountPct}% mayoreo
-            </span>
-          )}
-        </div>
-        {out && (
-          <span className="absolute top-2 right-12 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
-            Agotado
-          </span>
-        )}
-        {!out && variant.stock <= 3 && (
-          <span className="absolute top-2 right-12 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
-            ¡Últimas {variant.stock}!
-          </span>
+        {/* Badges esquina superior izquierda: NUEVO / OFERTA.
+            Layout en fila (flex-wrap) para no apilarse verticalmente y
+            no competir contra el contador X/N que vive en top-right ni
+            contra la etiqueta de variante que ahora vive en bottom-left. */}
+        {(isNew || onOffer) && (
+          <div className="absolute top-2 left-2 z-10 flex flex-wrap items-start gap-1 max-w-[75%]">
+            {isNew && (
+              <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200 text-[9px] font-black uppercase tracking-widest shadow-sm border border-sky-200/60">
+                Nuevo
+              </span>
+            )}
+            {onOffer && (
+              <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-200 text-[9px] font-black uppercase tracking-widest shadow-sm border border-rose-200/60">
+                -{discountPct}%
+              </span>
+            )}
+          </div>
         )}
       </motion.div>
       <div className={isFocus ? "p-4" : "p-3"}>
@@ -1412,14 +1408,28 @@ function ProductCardClient({
         )}
         {/* Pista de tier (mayoreo) */}
         <TierHint variant={variant} />
-        <div className="flex items-center justify-between mt-1">
-          <span
-            className={`font-black text-primary ${
-              isFocus ? "text-lg" : "text-sm"
-            }`}
-          >
-            {formatMoney(price)}
-          </span>
+        <div className="flex items-center justify-between gap-2 mt-1">
+          <div className="min-w-0 flex-1">
+            <span
+              className={`block font-black text-primary leading-tight ${
+                isFocus ? "text-lg" : "text-sm"
+              }`}
+            >
+              {formatMoney(price)}
+            </span>
+            {/* Indicador de stock inline (antes era pill flotante sobre la
+                imagen, ahora vive junto al precio para que la foto quede
+                limpia y la urgencia se vea junto al CTA). */}
+            {out ? (
+              <span className="inline-block text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 mt-0.5">
+                Agotado
+              </span>
+            ) : variant.stock <= 3 ? (
+              <span className="inline-block text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mt-0.5">
+                ¡Solo {variant.stock} {variant.stock === 1 ? "pieza" : "piezas"}!
+              </span>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={(e) => {
@@ -1428,7 +1438,7 @@ function ProductCardClient({
             }}
             className={`${
               isFocus ? "w-11 h-11" : "w-9 h-9"
-            } rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform`}
+            } shrink-0 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform`}
             style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
             aria-label="Agregar al carrito"
           >
