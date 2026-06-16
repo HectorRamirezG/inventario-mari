@@ -176,12 +176,12 @@ export default function ClientShopPage() {
       // Leemos directo de products + variants (la policy `anon_all` lo permite).
       const { data: prods } = await supabase
         .from("products")
-        .select("id,name,category")
+        .select("id,name,category,image_url")
         .eq("is_active", true)
         .order("name")
       const { data: vars } = await supabase
         .from("variants")
-        .select("id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo")
+        .select("id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls")
         .eq("is_active", true)
       if (!alive) return
       const byProduct: Record<string, PublicVariant[]> = {}
@@ -189,14 +189,14 @@ export default function ClientShopPage() {
         if (!byProduct[v.product_id]) byProduct[v.product_id] = []
         byProduct[v.product_id].push({
           ...v,
-          image_url: null,
-          image_urls: null,
+          image_url: v.image_url ?? null,
+          image_urls: v.image_urls ?? null,
         } as PublicVariant)
       })
       setProducts(
         (prods ?? []).map((p: any) => ({
-          ...(p as Omit<PublicProduct, "variants" | "image_url">),
-          image_url: null,
+          ...(p as Omit<PublicProduct, "variants">),
+          image_url: p.image_url ?? null,
           variants: byProduct[p.id] ?? [],
         }))
       )

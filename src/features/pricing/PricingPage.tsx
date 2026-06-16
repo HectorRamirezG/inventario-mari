@@ -20,7 +20,8 @@ export default function PricingPage() {
     removeRow,
     updateRow,
     computed,
-    saveAnalysis
+    saveAnalysis,
+    isSaving
   } = usePricingPage();
 
   const tabs = [
@@ -84,6 +85,7 @@ export default function PricingPage() {
                 onRemove={removeRow}
                 onUpdate={updateRow}
                 onSave={saveAnalysis}
+                isSaving={isSaving}
               />
             </motion.div>
           )}

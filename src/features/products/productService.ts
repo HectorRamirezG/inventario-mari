@@ -11,14 +11,21 @@ export async function getProducts(): Promise<Product[]> {
       cost,
       min_stock,
       is_active,
+      image_url,
       variants (
         id,
+        product_id,
         variant_name,
         sku,
         stock,
         is_active,
         cost_override,
-        price
+        price,
+        price_menudeo,
+        price_medio,
+        price_mayoreo,
+        image_url,
+        image_urls
       )
     `)
     .order("created_at", { ascending: false })

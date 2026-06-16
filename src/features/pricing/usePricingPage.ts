@@ -21,7 +21,8 @@ export function usePricingPage() {
       variantId: "",
       quantity: 1,
       manualPrice: "",
-      manualExtraCost: ""
+      manualExtraCost: "",
+      tierApplied: "menudeo"
     }
   ]);
 
@@ -52,14 +53,14 @@ export function usePricingPage() {
     return rows.map((r) => {
       const product = products.find(p => p.id === r.productId) || null;
 
-      // 🔥 AQUÍ ESTÁ EL FIX REAL
       const variant =
         product?.variants?.find((v: any) => v.id === r.variantId) ||
-        product?.variants?.[0] ||
         null;
 
+      // El costo real viene de cost_override en la variante (si lo tiene)
+      // o del cost del producto. NUNCA de variant.cost (no existe).
       const costBase = Number(
-        variant?.cost ?? product?.cost ?? 0
+        variant?.cost_override ?? product?.cost ?? 0
       );
 
       const globalExtra = Number(cfg?.costo_extra || 0);
@@ -86,24 +87,22 @@ export function usePricingPage() {
 
       const qty = Number(r.quantity) || 0;
 
-      let tierApplied: "menudeo" | "medio" | "mayoreo" = "menudeo";
-      let marginApplied = m_menudeo;
+      // Tier sugerido por cantidad (solo para resaltar uno)
+      let tierByQty: "menudeo" | "medio" | "mayoreo" = "menudeo";
+      if (qty >= Number(cfg.umbral_mayoreo)) tierByQty = "mayoreo";
+      else if (qty >= Number(cfg.umbral_medio)) tierByQty = "medio";
 
-      if (qty >= Number(cfg.umbral_mayoreo)) {
-        marginApplied = m_mayoreo;
-        tierApplied = "mayoreo";
-      } else if (qty >= Number(cfg.umbral_medio)) {
-        marginApplied = m_medio;
-        tierApplied = "medio";
-      }
+      // Tier activo = el que el usuario eligió, o el sugerido por qty.
+      const tierApplied: "menudeo" | "medio" | "mayoreo" =
+        r.tierApplied || tierByQty;
 
-      const suggestedPrice =
-        totalOperatingCost / (1 - marginApplied);
+      const tierPrice = suggestedPrices[tierApplied];
 
+      // Precio final: si capturó manualPrice usa ese, si no el del tier elegido.
       const finalPrice =
         Number(r.manualPrice) > 0
           ? Number(r.manualPrice)
-          : suggestedPrice;
+          : tierPrice;
 
       const profit = finalPrice - totalOperatingCost;
 
@@ -134,7 +133,8 @@ export function usePricingPage() {
         variantId: "",
         quantity: 1,
         manualPrice: "",
-        manualExtraCost: ""
+        manualExtraCost: "",
+        tierApplied: "menudeo"
       }
     ]);
 
@@ -148,77 +148,94 @@ export function usePricingPage() {
       )
     );
 
+  // Aplica los 3 precios calculados a la(s) variante(s) reales y registra
+  // historial en pricing_operations. Si la fila tiene variantId → solo esa.
+  // Si NO tiene variantId → aplica a TODAS las variantes activas del producto.
   const saveAnalysis = async () => {
-    const toastId = toast.loading(
-      "Sincronizando precios y registrando historial..."
-    );
+    const validRows = computed.filter(r => r.productId !== "");
+    if (validRows.length === 0) {
+      toast.error("Selecciona al menos un producto");
+      return;
+    }
+
+    const toastId = toast.loading("Aplicando precios a las variantes...");
     setIsSaving(true);
 
     try {
-      const validRows = computed.filter(
-        r => r.productId !== ""
-      );
-
-      if (validRows.length === 0) {
-        toast.error("Selecciona al menos un producto", {
-          id: toastId
-        });
-        setIsSaving(false);
-        return;
-      }
+      let variantsUpdated = 0;
 
       for (const r of validRows) {
-        if (r.variantId) {
-          const { error: vError } = await supabase
-            .from("variants")
-            .update({
-              price: Number(r.finalPrice)
-            })
-            .eq("id", r.variantId);
+        const sp = r.suggestedPrices;
+        const priceBase = Number(r.finalPrice) || Number(sp[r.tierApplied]) || 0;
 
-          if (vError)
-            throw new Error(
-              `Error en tabla variants: ${vError.message}`
-            );
+        const priceUpdate = {
+          price: priceBase,
+          price_menudeo: Number(sp.menudeo) || 0,
+          price_medio: Number(sp.medio) || 0,
+          price_mayoreo: Number(sp.mayoreo) || 0,
+        };
+
+        // Determinar qué variantes actualizar
+        const targetVariantIds: string[] = r.variantId
+          ? [r.variantId]
+          : (r.product?.variants ?? [])
+              .filter((v: any) => v.is_active !== false)
+              .map((v: any) => v.id);
+
+        if (targetVariantIds.length === 0) {
+          throw new Error(
+            `"${r.product?.name}" no tiene variantes para aplicar precios`
+          );
         }
 
+        const { error: vError } = await supabase
+          .from("variants")
+          .update(priceUpdate)
+          .in("id", targetVariantIds);
+
+        if (vError) {
+          throw new Error(`Error actualizando variantes: ${vError.message}`);
+        }
+
+        variantsUpdated += targetVariantIds.length;
+
+        // Historial — una fila por aplicación
         const { error: histError } = await supabase
           .from("pricing_operations")
           .insert([
             {
               product_id: r.productId,
-              product_name_snapshot:
-                r.product?.name || "Sin nombre",
+              variant_id: r.variantId || null,
+              product_name_snapshot: r.product?.name || "Sin nombre",
               variant_name_snapshot:
                 r.variant?.variant_name ||
-                r.variant?.name ||
-                "Único",
+                (r.variantId ? "Variante" : "Todas las variantes"),
               quantity: Number(r.quantity) || 0,
-              cost_unit:
-                Number(r.totalOperatingCost) || 0,
-              price_applied:
-                Number(r.finalPrice) || 0,
+              extra_cost: Number(r.manualExtraCost) || 0,
+              cost_unit: Number(r.totalOperatingCost) || 0,
+              cost_final: Number(r.totalOperatingCost) || 0,
+              price_menudeo: Number(sp.menudeo) || 0,
+              price_medio: Number(sp.medio) || 0,
+              price_mayoreo: Number(sp.mayoreo) || 0,
+              price_applied: priceBase,
               tier: r.tierApplied || "menudeo",
-              total:
-                Number(r.finalPrice) *
-                (Number(r.quantity) || 0),
-              margin_percent:
-                Number(r.realMarginPercent) || 0,
-              created_at: new Date().toISOString()
+              total: priceBase * (Number(r.quantity) || 0),
+              margin_percent: Number(r.realMarginPercent) || 0,
             }
           ]);
 
         if (histError) {
           console.error(histError);
-          throw new Error(
-            `Error en historial: ${histError.message}`
-          );
+          throw new Error(`Error guardando historial: ${histError.message}`);
         }
       }
 
-      toast.success("Análisis guardado con éxito.", {
-        id: toastId
-      });
+      toast.success(
+        `Precios aplicados a ${variantsUpdated} ${
+          variantsUpdated === 1 ? "variante" : "variantes"
+        } ✓`,
+        { id: toastId }
+      );
 
       await fetchData();
 
@@ -229,15 +246,13 @@ export function usePricingPage() {
           variantId: "",
           quantity: 1,
           manualPrice: "",
-          manualExtraCost: ""
+          manualExtraCost: "",
+          tierApplied: "menudeo"
         }
       ]);
     } catch (error: any) {
       console.error(error);
-      toast.error(
-        error.message || "Error desconocido",
-        { id: toastId }
-      );
+      toast.error(error.message || "Error desconocido", { id: toastId });
     } finally {
       setIsSaving(false);
     }

@@ -389,31 +389,41 @@ const CalculatorTab = ({
         </AnimatePresence>
       </div>
 
-      {/* SAVE */}
+      {/* SAVE — botón principal que ACTUALIZA la BD */}
       {rows.length > 0 && (
-        <div className="pt-2 pb-2">
-          <div className="bg-white border border-slate-100 rounded-2xl p-3 shadow-sm flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-[9px] text-slate-400 uppercase">
-                Análisis
-              </span>
-              <p className="text-sm font-black">
-                {rows.length} {rows.length === 1 ? "producto" : "productos"}
-              </p>
-            </div>
-            <Button
-              onClick={onSave}
-              disabled={isSaving}
-              className="h-10 px-4 rounded-xl bg-slate-900 text-white text-xs font-black flex items-center gap-2"
-            >
-              {isSaving ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Save size={13} />
-              )}
-              Guardar
-            </Button>
+        <div className="pt-2 pb-2 space-y-2">
+          <div className="bg-gradient-to-r from-primary/10 via-pink-50 to-purple-50 dark:from-primary/20 dark:via-pink-500/10 dark:to-purple-500/10 border border-primary/20 rounded-2xl p-3 flex items-start gap-2">
+            <Sparkles size={14} className="text-primary shrink-0 mt-0.5" />
+            <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 leading-snug">
+              Al guardar, los tres precios (menudeo / medio / mayoreo) se{" "}
+              <span className="text-primary font-black">
+                aplicarán directamente
+              </span>{" "}
+              a la variante seleccionada. Si no eliges variante, se aplican a
+              todas las del producto.
+            </p>
           </div>
+
+          <Button
+            onClick={onSave}
+            disabled={isSaving}
+            className="w-full h-14 rounded-2xl bg-gradient-to-r from-primary to-purple-600 text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom active:scale-[0.98] disabled:opacity-60"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Aplicando precios...
+              </>
+            ) : (
+              <>
+                <Save size={14} />
+                Guardar y Aplicar Precios
+                <span className="ml-1 px-2 py-0.5 rounded-full bg-white/20 text-[9px]">
+                  {rows.length} {rows.length === 1 ? "producto" : "productos"}
+                </span>
+              </>
+            )}
+          </Button>
         </div>
       )}
     </div>
