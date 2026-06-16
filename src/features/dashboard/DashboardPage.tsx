@@ -1,17 +1,43 @@
 import { useEffect, useMemo, useState } from "react"
 import {
-  RefreshCw, Trophy, AlertTriangle, ArrowUpRight, Target, Zap,
-  ShoppingCart, Star, Wallet, Sun, Package, Bell, FileCheck2
+  RefreshCw,
+  Trophy,
+  AlertTriangle,
+  Target,
+  Zap,
+  ShoppingCart,
+  Wallet,
+  Sun,
+  Package,
+  Bell,
+  FileCheck2,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  Tag,
+  CreditCard,
+  Banknote,
+  Smartphone,
+  Building2,
+  HelpCircle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Sparkles,
+  PiggyBank,
 } from "lucide-react"
 import {
-  ResponsiveContainer, AreaChart, Area, XAxis,
-  YAxis, Tooltip as RechartsTooltip, CartesianGrid
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  CartesianGrid,
 } from "recharts"
 import { motion, AnimatePresence } from "framer-motion"
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/Tabs"
 import Skeleton from "../../components/ui/Skeleton"
-import Card from "../../components/ui/Card"
 
 import { useDashboard } from "./useDashboard"
 import DayCloseView from "./DayCloseView"
@@ -19,8 +45,11 @@ import CycleBanner from "../cycles/CycleBanner"
 import LowStockView from "../inventory/LowStockView"
 import { formatMoney as formatCurrency } from "../../lib/format"
 
+type PeriodDays = 7 | 30 | 90
+
 export default function DashboardPage() {
-  const { stats, loading, refresh } = useDashboard()
+  const [period, setPeriod] = useState<PeriodDays>(30)
+  const { stats, loading, refresh } = useDashboard(period)
   const [dayCloseOpen, setDayCloseOpen] = useState(false)
   const [showLowStock, setShowLowStock] = useState(false)
 
@@ -31,46 +60,56 @@ export default function DashboardPage() {
     return () => window.removeEventListener("dashboard:open-day-close", handler)
   }, [])
 
-  const chartData = useMemo(() => {
-    if (!stats?.top) return []
-    return stats.top.map(p => ({
-      name: (p.name || "S/N").slice(0, 8),
-      ventas: p.qty || 0,
-      fullName: p.name || "S/N"
-    }))
-  }, [stats])
+  // ── Derivados financieros claros ────────────────────────────────
+  const revenue = stats?.revenue ?? 0
+  const profit = stats?.profit ?? 0
+  const pending = stats?.pending ?? 0
+  const operations = stats?.operations ?? 0
+  const cogs = Math.max(0, revenue - profit) // costo aproximado de mercancía vendida
+  const margin = revenue > 0 ? (profit / revenue) * 100 : 0
+  const ticket = operations > 0 ? revenue / operations : 0
+  const cobroEficiencia = revenue > 0 ? ((revenue - pending) / revenue) * 100 : 100
 
-  const ticketPromedio = stats ? (stats.revenue / (stats.operations || 1)) : 0
-  const cobroEficiencia = stats ? (100 - (stats.pending / (stats.revenue || 1) * 100)) : 0
+  // Variación vs período anterior
+  const revGrowth = pctChange(revenue, stats?.prevRevenue ?? 0)
+  const profitGrowth = pctChange(profit, stats?.prevProfit ?? 0)
+  const opsGrowth = pctChange(operations, stats?.prevOperations ?? 0)
 
   if (dayCloseOpen) {
     return <DayCloseView onClose={() => setDayCloseOpen(false)} />
   }
 
-  if (loading) return (
-    <div className="p-6 space-y-6">
-      <Skeleton className="h-40 w-full rounded-3xl" />
-      <div className="grid grid-cols-2 gap-4">
-        {[1,2,3,4].map(i => <Skeleton key={i} className="h-28 rounded-2xl" />)}
+  if (loading && !stats) {
+    return (
+      <div className="p-6 space-y-6">
+        <Skeleton className="h-40 w-full" rounded="lg" />
+        <div className="grid grid-cols-2 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-28" rounded="lg" />
+          ))}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
-    <div className="max-w-[900px] mx-auto space-y-6 pb-28 px-2">
-
+    <div className="max-w-[960px] mx-auto space-y-6 pb-28 px-2">
       {/* HEADER */}
-      <div className="flex items-center justify-between px-2">
-        <div>
+      <div className="flex items-end justify-between gap-3 px-2 flex-wrap">
+        <div className="min-w-0">
+          <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black leading-none mb-1">
+            Centro financiero
+          </p>
           <h2 className="text-2xl font-black tracking-tight">
-            Resumen <span className="text-primary">Financiero</span>
+            Resumen <span className="text-primary">Pro</span>
           </h2>
-          <p className="text-[9px] uppercase tracking-widest text-slate-400 mt-1">
-            Estado actual
+          <p className="text-[11px] text-slate-500 mt-1">
+            Tus números reales — ingresos, costo, ganancia y por cobrar.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <PeriodSwitcher value={period} onChange={setPeriod} />
           <button
             onClick={() => setDayCloseOpen(true)}
             className="h-10 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom active:scale-95 transition-transform"
@@ -80,86 +119,87 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={refresh}
-            className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-primary active:scale-90"
+            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-primary active:scale-90"
             aria-label="Refrescar"
           >
-            <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
       </div>
 
-      <Tabs defaultValue="resumen" className="space-y-6">
+      {/* BANNER DE CICLO ACTIVO */}
+      <CycleBanner />
 
-        <TabsList className="grid grid-cols-2 bg-slate-100 p-1 rounded-xl text-[10px] font-black uppercase">
+      {/* 3 CARDS DE ACCESO RÁPIDO (operaciones del día) */}
+      <DailyOpsCards
+        shipments={stats?.pendingShipments ?? 0}
+        dueLayaways={stats?.dueLayaways ?? 0}
+        proofs={stats?.pendingProofs ?? 0}
+      />
+
+      <Tabs defaultValue="resumen" className="space-y-6">
+        <TabsList className="grid grid-cols-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-[10px] font-black uppercase">
           <TabsTrigger value="resumen">Resumen</TabsTrigger>
           <TabsTrigger value="analisis">Análisis</TabsTrigger>
         </TabsList>
 
-        {/* BANNER DE CICLO ACTIVO */}
-        <CycleBanner />
+        {/* ════════════════ RESUMEN ════════════════ */}
+        <TabsContent value="resumen" className="space-y-5">
+          {/* HERO FINANCIERO */}
+          <FinanceHero
+            revenue={revenue}
+            cogs={cogs}
+            profit={profit}
+            pending={pending}
+            margin={margin}
+            revGrowth={revGrowth}
+            profitGrowth={profitGrowth}
+            periodLabel={periodLabelFor(period)}
+          />
 
-        {/* 3 CARDS DE ACCESO RÁPIDO (operaciones del día) */}
-        <DailyOpsCards
-          shipments={stats?.pendingShipments ?? 0}
-          dueLayaways={stats?.dueLayaways ?? 0}
-          proofs={stats?.pendingProofs ?? 0}
-        />
-
-        {/* RESUMEN */}
-        <TabsContent value="resumen" className="space-y-6">
-
-          {/* CAPITAL */}
-          <section className="surface-card p-6">
-
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] font-black uppercase text-primary/60 flex items-center gap-1">
-                <Star size={10} /> Capital
-              </span>
-              <Wallet size={18} className="text-primary/30" />
-            </div>
-
-            <h3 className="text-3xl font-black tracking-tight tabular-nums">
-              {formatCurrency(stats?.profit || 0)}
-            </h3>
-
-            <div className="grid grid-cols-2 gap-2 mt-4 text-center">
-              <div className="bg-slate-50 rounded-xl p-3">
-                <p className="text-[9px] uppercase text-slate-400">Ingresos</p>
-                <p className="font-black text-sm">{formatCurrency(stats?.revenue || 0)}</p>
-              </div>
-              <div className="bg-slate-50 rounded-xl p-3">
-                <p className="text-[9px] uppercase text-slate-400">Pendiente</p>
-                <p className="font-black text-sm text-rose-500">{formatCurrency(stats?.pending || 0)}</p>
-              </div>
-            </div>
-
-          </section>
-
-          {/* MÉTRICAS */}
-          <div className="grid grid-cols-2 gap-3">
-            <StatCard icon={<Zap size={16} />} value={stats?.operations || 0} label="Ventas" />
-            <StatCard icon={<Target size={16} />} value={formatCurrency(ticketPromedio)} label="Ticket" />
-            <StatCard icon={<Trophy size={16} />} value={`${cobroEficiencia.toFixed(0)}%`} label="Cobro" />
+          {/* KPIs operativos */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard
+              icon={<Zap size={16} />}
+              value={operations}
+              label="Ventas"
+              growth={opsGrowth}
+            />
+            <StatCard
+              icon={<Target size={16} />}
+              value={formatCurrency(ticket)}
+              label="Ticket promedio"
+            />
+            <StatCard
+              icon={<Trophy size={16} />}
+              value={`${cobroEficiencia.toFixed(0)}%`}
+              label="Cobrado del total"
+              tone={cobroEficiencia >= 90 ? "emerald" : cobroEficiencia >= 70 ? "amber" : "rose"}
+            />
             <button
               type="button"
               onClick={() => setShowLowStock((v) => !v)}
               className={`text-left p-4 rounded-2xl border transition-all active:scale-[0.98] ${
                 (stats?.lowStock ?? 0) > 0
-                  ? "border-rose-200 bg-rose-50 hover:bg-rose-100"
-                  : "border-emerald-200 bg-emerald-50 hover:bg-emerald-100"
+                  ? "border-rose-200 bg-rose-50 dark:bg-rose-500/10 dark:border-rose-500/30 hover:bg-rose-100 dark:hover:bg-rose-500/15"
+                  : "border-emerald-200 bg-emerald-50 dark:bg-emerald-500/10 dark:border-emerald-500/30"
               }`}
             >
               <div className="flex items-center justify-between mb-1">
                 <AlertTriangle
                   size={16}
-                  className={(stats?.lowStock ?? 0) > 0 ? "text-rose-600" : "text-emerald-600"}
+                  className={
+                    (stats?.lowStock ?? 0) > 0
+                      ? "text-rose-600 dark:text-rose-400"
+                      : "text-emerald-600 dark:text-emerald-400"
+                  }
                 />
                 <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
                   {showLowStock ? "Ocultar" : "Ver"}
                 </span>
               </div>
-              <p className="text-lg font-black text-center">{stats?.lowStock || 0}</p>
-              <p className="text-[9px] uppercase text-slate-400 text-center">Stock bajo</p>
+              <p className="text-lg font-black">{stats?.lowStock || 0}</p>
+              <p className="text-[9px] uppercase text-slate-400">Stock bajo</p>
             </button>
           </div>
 
@@ -173,88 +213,715 @@ export default function DashboardPage() {
                 transition={{ duration: 0.25 }}
                 className="overflow-hidden"
               >
-                <div className="surface-card p-1 mt-1">
+                <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-1">
                   <LowStockView />
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
+          {/* Tendencia diaria */}
+          <TrendChart
+            data={stats?.trend ?? []}
+            periodLabel={periodLabelFor(period)}
+          />
+
+          {/* Valor de inventario */}
+          <InventoryValueCard
+            value={stats?.inventoryValue ?? 0}
+            products={stats?.products ?? 0}
+            variants={stats?.variants ?? 0}
+          />
         </TabsContent>
 
-        {/* ANALISIS */}
-        <TabsContent value="analisis" className="space-y-6">
+        {/* ════════════════ ANÁLISIS ════════════════ */}
+        <TabsContent value="analisis" className="space-y-5">
+          {/* Métodos de pago */}
+          <PaymentMethodsCard methods={stats?.paymentMethods ?? []} />
 
-          {/* CHART */}
-          <div className="surface-card p-5">
+          {/* Top clientes */}
+          <TopList
+            title="Mejores clientes"
+            icon={Users}
+            tone="from-fuchsia-500 to-pink-500"
+            empty="Aún no hay ventas en este período."
+            items={(stats?.topCustomers ?? []).map((c) => ({
+              key: c.name,
+              left: c.name,
+              right: formatCurrency(c.total),
+              sub: `${c.orders} ${c.orders === 1 ? "compra" : "compras"}`,
+            }))}
+          />
 
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-sm font-black">
-                Rotación
-              </h4>
-              <ShoppingCart size={16} className="text-primary/40" />
-            </div>
+          {/* Top productos */}
+          <TopList
+            title="Productos más vendidos"
+            icon={ShoppingCart}
+            tone="from-primary to-purple-500"
+            empty="Aún no hay ventas en este período."
+            items={(stats?.top ?? []).map((p) => ({
+              key: p.name,
+              left: p.name,
+              right: `${p.qty}`,
+              sub: `${p.qty === 1 ? "unidad" : "unidades"}`,
+            }))}
+          />
 
-            <div className="h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#e6007e" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#e6007e" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#fce7f3" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} fontSize={10} />
-                  <YAxis hide />
-                  <RechartsTooltip />
-                  <Area type="monotone" dataKey="ventas" stroke="#e6007e" fill="url(#g)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* RANKING */}
-          <div className="surface-card p-5 space-y-3">
-
-            <h4 className="text-sm font-black">Top productos</h4>
-
-            {stats?.top?.slice(0,5).map((p, i) => (
-              <div key={i} className="flex justify-between items-center text-sm">
-                <span className="font-semibold truncate max-w-[60%]">
-                  {p.name}
-                </span>
-                <span className="text-primary font-black">
-                  {p.qty}
-                </span>
-              </div>
-            ))}
-
-          </div>
-
+          {/* Categorías */}
+          <TopList
+            title="Categorías líderes"
+            icon={Tag}
+            tone="from-amber-500 to-orange-400"
+            empty="Aún no hay ventas en este período."
+            items={(stats?.topCategories ?? []).map((c) => ({
+              key: c.category,
+              left: c.category,
+              right: formatCurrency(c.revenue),
+              sub: `${c.qty} ${c.qty === 1 ? "pieza" : "piezas"}`,
+            }))}
+          />
         </TabsContent>
-
       </Tabs>
     </div>
   )
 }
 
-/* STAT CARD */
-function StatCard({ icon, value, label, alert }: any) {
+/* ═══════════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════════ */
+
+function pctChange(current: number, previous: number): number | null {
+  if (previous <= 0) return current > 0 ? null : 0 // sin baseline = no se puede calcular
+  return ((current - previous) / previous) * 100
+}
+
+function periodLabelFor(period: PeriodDays): string {
+  if (period === 7) return "Últimos 7 días"
+  if (period === 90) return "Últimos 90 días"
+  return "Últimos 30 días"
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PERIOD SWITCHER
+   ═══════════════════════════════════════════════════════════════════ */
+
+function PeriodSwitcher({
+  value,
+  onChange,
+}: {
+  value: PeriodDays
+  onChange: (v: PeriodDays) => void
+}) {
+  const opts: PeriodDays[] = [7, 30, 90]
   return (
-    <Card className={`p-4 rounded-2xl text-center border ${
-      alert ? "border-rose-200 bg-rose-50 dark:bg-rose-500/10 dark:border-rose-500/40" : "surface-card"
-    }`}>
-      <div className="flex justify-center mb-2 text-primary">
-        {icon}
-      </div>
-      <p className="text-lg font-black">{value}</p>
-      <p className="text-[9px] uppercase text-slate-400">{label}</p>
-    </Card>
+    <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5">
+      {opts.map((d) => {
+        const active = value === d
+        return (
+          <button
+            key={d}
+            type="button"
+            onClick={() => onChange(d)}
+            className={`relative h-9 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${
+              active
+                ? "text-white"
+                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
+            }`}
+          >
+            {active && (
+              <motion.span
+                layoutId="period-pill"
+                className="absolute inset-0 rounded-lg bg-primary shadow-bloom"
+                transition={{ type: "spring", stiffness: 380, damping: 28 }}
+              />
+            )}
+            <span className="relative z-10">{d}d</span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
-/* DAILY OPS — 3 cards de acceso rápido a los pendientes operativos */
+/* ═══════════════════════════════════════════════════════════════════
+   FINANCE HERO — ingresos / costo / ganancia / por cobrar
+   Con leyenda explícita que aclara que "por cobrar" NO es pérdida.
+   ═══════════════════════════════════════════════════════════════════ */
+
+function FinanceHero({
+  revenue,
+  cogs,
+  profit,
+  pending,
+  margin,
+  revGrowth,
+  profitGrowth,
+  periodLabel,
+}: {
+  revenue: number
+  cogs: number
+  profit: number
+  pending: number
+  margin: number
+  revGrowth: number | null
+  profitGrowth: number | null
+  periodLabel: string
+}) {
+  return (
+    <section className="rounded-3xl overflow-hidden border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-premium">
+      {/* Banda de color */}
+      <div
+        className="h-1.5"
+        style={{ background: "linear-gradient(90deg,#e6007e,#a855f7)" }}
+      />
+
+      <div className="p-5 md:p-6">
+        {/* Cabecera */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black leading-none">
+              Ganancia neta · {periodLabel}
+            </p>
+            <h3 className="text-3xl md:text-4xl font-black tracking-tight tabular-nums mt-1">
+              {formatCurrency(profit)}
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+              <Sparkles size={11} className="text-primary" />
+              Margen <strong className="text-slate-700 dark:text-slate-200">{margin.toFixed(1)}%</strong> sobre ingresos
+            </p>
+          </div>
+          <Wallet size={22} className="text-primary/30 shrink-0" />
+        </div>
+
+        {/* Comparativa con período anterior */}
+        <div className="flex flex-wrap gap-3 mb-5">
+          <GrowthChip label="Ingresos" pct={revGrowth} />
+          <GrowthChip label="Ganancia" pct={profitGrowth} />
+        </div>
+
+        {/* Desglose financiero */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <FinTile
+            tone="primary"
+            label="Ingresos"
+            value={formatCurrency(revenue)}
+            icon={ArrowUpRight}
+            hint="Total vendido"
+          />
+          <FinTile
+            tone="slate"
+            label="Costo (COGS)"
+            value={formatCurrency(cogs)}
+            icon={Tag}
+            hint="Lo que te costó"
+          />
+          <FinTile
+            tone="emerald"
+            label="Ganancia"
+            value={formatCurrency(profit)}
+            icon={TrendingUp}
+            hint={`${margin.toFixed(0)}% de margen`}
+          />
+          <FinTile
+            tone="amber"
+            label="Por cobrar"
+            value={formatCurrency(pending)}
+            icon={PiggyBank}
+            hint="Dinero que te deben"
+          />
+        </div>
+
+        {/* Aclaración crítica: "por cobrar" NO es pérdida */}
+        {pending > 0 && (
+          <div className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 p-3">
+            <HelpCircle
+              size={14}
+              className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
+            />
+            <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-snug">
+              <strong>"Por cobrar" no es pérdida:</strong> son apartados con
+              saldo que te van a llegar conforme tus clientes paguen. La{" "}
+              <strong>ganancia ya considera</strong> la mercancía vendida — los
+              abonos pendientes son flujo de caja a futuro.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function FinTile({
+  tone,
+  label,
+  value,
+  icon: Icon,
+  hint,
+}: {
+  tone: "primary" | "slate" | "emerald" | "amber"
+  label: string
+  value: string
+  icon: typeof TrendingUp
+  hint?: string
+}) {
+  const cls = {
+    primary:
+      "bg-primary/8 text-primary border-primary/15 dark:bg-primary/15 dark:border-primary/30",
+    slate:
+      "bg-slate-50 text-slate-700 border-slate-100 dark:bg-slate-800/60 dark:text-slate-200 dark:border-slate-700",
+    emerald:
+      "bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
+    amber:
+      "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
+  }[tone]
+  return (
+    <div className={`rounded-2xl px-3 py-3 border ${cls}`}>
+      <div className="flex items-center justify-between mb-1">
+        <Icon size={12} className="opacity-70" />
+        <span className="text-[8px] font-black uppercase tracking-widest opacity-70">
+          {label}
+        </span>
+      </div>
+      <p className="text-sm md:text-base font-black tabular-nums leading-tight">
+        {value}
+      </p>
+      {hint && (
+        <p className="text-[9px] font-bold opacity-60 mt-0.5 leading-tight">
+          {hint}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function GrowthChip({ label, pct }: { label: string; pct: number | null }) {
+  if (pct === null) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 text-[9px] font-black uppercase tracking-widest">
+        {label} · sin comparativa
+      </span>
+    )
+  }
+  const up = pct >= 0
+  const Icon = up ? ArrowUpRight : ArrowDownRight
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black tabular-nums uppercase tracking-widest ${
+        up
+          ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+          : "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300"
+      }`}
+    >
+      <Icon size={11} />
+      {label} {up ? "+" : ""}
+      {pct.toFixed(0)}%
+    </span>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STAT CARD
+   ═══════════════════════════════════════════════════════════════════ */
+
+function StatCard({
+  icon,
+  value,
+  label,
+  growth,
+  tone = "slate",
+}: {
+  icon: React.ReactNode
+  value: React.ReactNode
+  label: string
+  growth?: number | null
+  tone?: "slate" | "emerald" | "amber" | "rose"
+}) {
+  const toneCls = {
+    slate: "bg-white dark:bg-slate-800/60 border-slate-100 dark:border-slate-700",
+    emerald:
+      "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-100 dark:border-emerald-500/30",
+    amber:
+      "bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/30",
+    rose:
+      "bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/30",
+  }[tone]
+  return (
+    <div className={`p-4 rounded-2xl border text-center ${toneCls}`}>
+      <div className="flex justify-center mb-2 text-primary">{icon}</div>
+      <p className="text-lg font-black tabular-nums leading-none">{value}</p>
+      <p className="text-[9px] uppercase tracking-widest text-slate-400 mt-1">
+        {label}
+      </p>
+      {growth !== undefined && growth !== null && (
+        <p
+          className={`text-[9px] font-black uppercase tracking-widest mt-1 ${
+            growth >= 0 ? "text-emerald-600" : "text-rose-600"
+          }`}
+        >
+          {growth >= 0 ? "▲" : "▼"} {Math.abs(growth).toFixed(0)}%
+        </p>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TREND CHART — ingresos + ganancia por día
+   ═══════════════════════════════════════════════════════════════════ */
+
+function TrendChart({
+  data,
+  periodLabel,
+}: {
+  data: { date: string; label: string; revenue: number; profit: number; operations: number }[]
+  periodLabel: string
+}) {
+  // Limita los ticks visibles del eje X según cantidad de datos
+  const tickEvery = useMemo(() => {
+    if (data.length <= 10) return 1
+    if (data.length <= 30) return 5
+    return 10
+  }, [data.length])
+
+  const customTickFormatter = (label: string, index: number) => {
+    if (index % tickEvery === 0) return label
+    return ""
+  }
+
+  return (
+    <section className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h4 className="text-sm font-black flex items-center gap-1.5">
+            <TrendingUp size={14} className="text-primary" />
+            Tendencia
+          </h4>
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+            {periodLabel}
+          </p>
+        </div>
+        <Legend />
+      </div>
+
+      <div className="h-[240px]">
+        {data.length === 0 ? (
+          <EmptyChart />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 4 }}>
+              <defs>
+                <linearGradient id="grad-revenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#e6007e" stopOpacity={0.45} />
+                  <stop offset="95%" stopColor="#e6007e" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="grad-profit" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.45} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                fontSize={10}
+                interval={0}
+                tickFormatter={(v: any, i: number) =>
+                  customTickFormatter(String(v), i)
+                }
+              />
+              <YAxis
+                hide
+                yAxisId="left"
+                tickFormatter={(v) => String(v)}
+              />
+              <RechartsTooltip
+                contentStyle={{
+                  borderRadius: 12,
+                  border: "1px solid #f1f5f9",
+                  fontSize: 11,
+                  fontWeight: 700,
+                }}
+                formatter={(v: any, key: string) => [
+                  typeof v === "number" ? formatCurrency(v) : v,
+                  key === "revenue" ? "Ingresos" : "Ganancia",
+                ]}
+              />
+              <Area
+                yAxisId="left"
+                type="monotone"
+                dataKey="revenue"
+                stroke="#e6007e"
+                strokeWidth={2}
+                fill="url(#grad-revenue)"
+              />
+              <Area
+                yAxisId="left"
+                type="monotone"
+                dataKey="profit"
+                stroke="#10b981"
+                strokeWidth={2}
+                fill="url(#grad-profit)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function Legend() {
+  return (
+    <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest">
+      <span className="flex items-center gap-1.5 text-primary">
+        <span className="w-2.5 h-2.5 rounded-full bg-primary" />
+        Ingresos
+      </span>
+      <span className="flex items-center gap-1.5 text-emerald-600">
+        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+        Ganancia
+      </span>
+    </div>
+  )
+}
+
+function EmptyChart() {
+  return (
+    <div className="h-full flex flex-col items-center justify-center text-slate-400">
+      <TrendingDown size={28} className="mb-2 opacity-50" />
+      <p className="text-xs font-black uppercase tracking-widest">
+        Sin ventas en este período
+      </p>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INVENTORY VALUE
+   ═══════════════════════════════════════════════════════════════════ */
+
+function InventoryValueCard({
+  value,
+  products,
+  variants,
+}: {
+  value: number
+  products: number
+  variants: number
+}) {
+  return (
+    <section className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-pink-50/40 dark:from-slate-900/60 dark:to-pink-500/5 p-5 flex items-center gap-4">
+      <div
+        className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-bloom shrink-0"
+        style={{ background: "linear-gradient(135deg,#0f172a,#475569)" }}
+      >
+        <Package size={20} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black leading-none">
+          Inventario activo (al costo)
+        </p>
+        <p className="text-2xl font-black tabular-nums mt-1">
+          {formatCurrency(value)}
+        </p>
+        <p className="text-[10px] text-slate-500 mt-1">
+          {products} {products === 1 ? "producto" : "productos"} ·{" "}
+          {variants} {variants === 1 ? "variante" : "variantes"}
+        </p>
+      </div>
+    </section>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PAYMENT METHODS
+   ═══════════════════════════════════════════════════════════════════ */
+
+function PaymentMethodsCard({
+  methods,
+}: {
+  methods: { method: string; amount: number; count: number }[]
+}) {
+  const total = methods.reduce((a, b) => a + b.amount, 0)
+
+  return (
+    <section className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-black flex items-center gap-1.5">
+          <CreditCard size={14} className="text-primary" />
+          Cómo te pagaron
+        </h4>
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          {formatCurrency(total)} total
+        </span>
+      </div>
+
+      {methods.length === 0 ? (
+        <p className="text-[11px] text-slate-400 italic">
+          Sin pagos registrados en este período.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {methods.map((m) => {
+            const pct = total > 0 ? (m.amount / total) * 100 : 0
+            const meta = methodMeta(m.method)
+            const Icon = meta.icon
+            return (
+              <div key={m.method} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center ${meta.bg} ${meta.fg} shrink-0`}
+                  >
+                    <Icon size={13} />
+                  </div>
+                  <span className="text-xs font-black flex-1 capitalize truncate">
+                    {meta.label}
+                  </span>
+                  <span className="text-xs font-black tabular-nums shrink-0">
+                    {formatCurrency(m.amount)}
+                  </span>
+                  <span className="text-[10px] font-black tabular-nums text-slate-400 w-10 text-right shrink-0">
+                    {pct.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden ml-9">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    className={`h-full ${meta.bar}`}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function methodMeta(method: string): {
+  label: string
+  icon: typeof Banknote
+  bg: string
+  fg: string
+  bar: string
+} {
+  const m = method.toLowerCase()
+  if (m.includes("efectivo") || m.includes("cash")) {
+    return {
+      label: "Efectivo",
+      icon: Banknote,
+      bg: "bg-emerald-100 dark:bg-emerald-500/15",
+      fg: "text-emerald-700 dark:text-emerald-300",
+      bar: "bg-gradient-to-r from-emerald-400 to-emerald-500",
+    }
+  }
+  if (m.includes("transfer")) {
+    return {
+      label: "Transferencia",
+      icon: Building2,
+      bg: "bg-sky-100 dark:bg-sky-500/15",
+      fg: "text-sky-700 dark:text-sky-300",
+      bar: "bg-gradient-to-r from-sky-400 to-sky-500",
+    }
+  }
+  if (m.includes("tarjeta") || m.includes("card")) {
+    return {
+      label: "Tarjeta",
+      icon: CreditCard,
+      bg: "bg-fuchsia-100 dark:bg-fuchsia-500/15",
+      fg: "text-fuchsia-700 dark:text-fuchsia-300",
+      bar: "bg-gradient-to-r from-fuchsia-400 to-pink-500",
+    }
+  }
+  if (m.includes("oxxo") || m.includes("conveniencia")) {
+    return {
+      label: "OXXO",
+      icon: Building2,
+      bg: "bg-orange-100 dark:bg-orange-500/15",
+      fg: "text-orange-700 dark:text-orange-300",
+      bar: "bg-gradient-to-r from-orange-400 to-orange-500",
+    }
+  }
+  if (m.includes("paypal") || m.includes("mercado") || m.includes("digital")) {
+    return {
+      label: "Pago digital",
+      icon: Smartphone,
+      bg: "bg-indigo-100 dark:bg-indigo-500/15",
+      fg: "text-indigo-700 dark:text-indigo-300",
+      bar: "bg-gradient-to-r from-indigo-400 to-indigo-500",
+    }
+  }
+  return {
+    label: method || "Otro",
+    icon: HelpCircle,
+    bg: "bg-slate-100 dark:bg-slate-800",
+    fg: "text-slate-600 dark:text-slate-300",
+    bar: "bg-gradient-to-r from-slate-400 to-slate-500",
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOP LIST (clientes / productos / categorías)
+   ═══════════════════════════════════════════════════════════════════ */
+
+function TopList({
+  title,
+  icon: Icon,
+  tone,
+  empty,
+  items,
+}: {
+  title: string
+  icon: typeof Users
+  tone: string // gradient classes "from-x to-y"
+  empty: string
+  items: { key: string; left: string; right: string; sub: string }[]
+}) {
+  return (
+    <section className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <div
+          className={`w-8 h-8 rounded-xl bg-gradient-to-br ${tone} text-white flex items-center justify-center shadow-bloom`}
+        >
+          <Icon size={14} />
+        </div>
+        <h4 className="text-sm font-black">{title}</h4>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-[11px] text-slate-400 italic">{empty}</p>
+      ) : (
+        <ol className="space-y-2">
+          {items.map((it, i) => (
+            <li
+              key={it.key}
+              className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50"
+            >
+              <span className="w-6 h-6 rounded-lg bg-white dark:bg-slate-700 text-[10px] font-black flex items-center justify-center text-slate-500 shrink-0">
+                {i + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-black truncate">{it.left}</p>
+                <p className="text-[9px] text-slate-400">{it.sub}</p>
+              </div>
+              <span className="text-xs font-black tabular-nums text-primary shrink-0">
+                {it.right}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DAILY OPS — 3 cards de acceso rápido a los pendientes operativos
+   ═══════════════════════════════════════════════════════════════════ */
+
 function DailyOpsCards({
   shipments,
   dueLayaways,
@@ -277,7 +944,7 @@ function DailyOpsCards({
       tone:
         shipments > 0
           ? "from-sky-500 to-cyan-400 text-white"
-          : "from-slate-100 to-slate-50 text-slate-400",
+          : "from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/60 text-slate-400",
       onClick: () => dispatch("pendientes"),
     },
     {
@@ -289,7 +956,7 @@ function DailyOpsCards({
       tone:
         dueLayaways > 0
           ? "from-amber-500 to-orange-400 text-white"
-          : "from-slate-100 to-slate-50 text-slate-400",
+          : "from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/60 text-slate-400",
       onClick: () => dispatch("pendientes"),
     },
     {
@@ -301,7 +968,7 @@ function DailyOpsCards({
       tone:
         proofs > 0
           ? "from-fuchsia-500 to-pink-500 text-white"
-          : "from-slate-100 to-slate-50 text-slate-400",
+          : "from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-800/60 text-slate-400",
       onClick: () => dispatch("pendientes"),
     },
   ]
@@ -319,7 +986,7 @@ function DailyOpsCards({
             whileHover={{ y: -2 }}
             transition={{ type: "spring", stiffness: 320, damping: 22 }}
             className={`relative rounded-2xl p-3 sm:p-4 text-left bg-gradient-to-br ${tone} border ${
-              has ? "border-white/30 shadow-bloom" : "border-slate-200/60"
+              has ? "border-white/30 shadow-bloom" : "border-slate-200/60 dark:border-slate-700/60"
             } overflow-hidden`}
           >
             <div className="flex items-center justify-between mb-2">

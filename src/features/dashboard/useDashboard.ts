@@ -1,16 +1,16 @@
 // src/features/dashboard/useDashboard.ts
 import { useEffect, useState } from "react"
 import { getDashboardStats } from "./dashboardService"
-import type { DashboardStats } from "./dashboardTypes" // Agrega 'type' aquí
+import type { DashboardStats } from "./dashboardTypes"
 
-export function useDashboard() {
+export function useDashboard(periodDays = 30) {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
 
   async function refresh() {
     setLoading(true)
     try {
-      const data = await getDashboardStats()
+      const data = await getDashboardStats(periodDays)
       setStats(data)
     } catch (error) {
       console.error("Error en dashboard:", error)
@@ -21,7 +21,8 @@ export function useDashboard() {
 
   useEffect(() => {
     refresh()
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodDays])
 
   return { stats, loading, refresh }
 }

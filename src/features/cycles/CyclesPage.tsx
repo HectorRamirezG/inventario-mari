@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Calendar,
@@ -16,6 +16,7 @@ import {
   Clock,
   History,
   X,
+  Wand2,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -24,6 +25,7 @@ import {
   addCapitalInjection,
   addExpense,
   closeCycle,
+  estimateCurrentInventoryCost,
   EXPENSE_CATEGORIES,
   openCycle,
   suggestNextCycleName,
@@ -447,6 +449,20 @@ function DetailMini({ label, value }: { label: string; value: string }) {
    Empty state
    ========================================================= */
 function NoActiveCycle({ onOpen }: { onOpen: () => void }) {
+  // Pre-detectamos el inventario actual para que el primer ciclo se vea
+  // motivacional ("vas a empezar midiendo $X de inversión") en vez de
+  // sentirse abstracto.
+  const [autoCost, setAutoCost] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    estimateCurrentInventoryCost().then((v) => {
+      if (alive) setAutoCost(v)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -460,19 +476,33 @@ function NoActiveCycle({ onOpen }: { onOpen: () => void }) {
         <PlayCircle className="text-white" size={26} />
       </div>
       <h3 className="text-base font-black tracking-tight mb-1">
-        No tienes un ciclo abierto
+        Aún no abres un ciclo
       </h3>
       <p className="text-xs text-slate-500 mb-4 max-w-sm mx-auto">
-        Abre un ciclo para empezar a medir cuándo recuperas la inversión
-        y cuándo lo que entra ya es ganancia libre.
+        Un ciclo te dice <strong>cuándo recuperas tu inversión</strong> y a
+        partir de qué momento cada venta ya es ganancia libre.
       </p>
-      <button
-        onClick={onOpen}
-        className="h-11 px-5 rounded-2xl text-white text-xs font-black uppercase tracking-widest shadow-bloom inline-flex items-center gap-2"
-        style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
-      >
-        <Plus size={14} /> Abrir mi primer ciclo
-      </button>
+
+      {autoCost !== null && autoCost > 0 && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/8 text-primary text-[10px] font-black uppercase tracking-widest mb-4"
+        >
+          <Wand2 size={11} />
+          Ya detectamos {formatMoney(autoCost)} de inventario
+        </motion.div>
+      )}
+
+      <div>
+        <button
+          onClick={onOpen}
+          className="h-11 px-5 rounded-2xl text-white text-xs font-black uppercase tracking-widest shadow-bloom inline-flex items-center gap-2"
+          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+        >
+          <Plus size={14} /> Abrir mi primer ciclo
+        </button>
+      </div>
     </motion.div>
   )
 }
@@ -673,6 +703,40 @@ function OpenCycleModal({
   const [notes, setNotes] = useState("")
   const [busy, setBusy] = useState(false)
 
+  // Auto-detección del costo actual del inventario al montar el modal.
+  // Si la query devuelve algo > 0, lo mostramos como sugerencia con un
+  // CTA "Usar este monto" para que el admin no tenga que escribirlo a mano.
+  const [autoCost, setAutoCost] = useState<number | null>(null)
+  const [autoLoading, setAutoLoading] = useState(true)
+  useEffect(() => {
+    let alive = true
+    setAutoLoading(true)
+    estimateCurrentInventoryCost()
+      .then((v) => {
+        if (alive) setAutoCost(v)
+      })
+      .finally(() => {
+        if (alive) setAutoLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Si el admin no escribió override, la BD lo calcula sola. Pero queremos
+  // mostrar en el resumen visual lo que se va a registrar.
+  const willUseOpening = (() => {
+    const manual = parseFloat(openingOverride)
+    if (Number.isFinite(manual) && manual >= 0) return manual
+    return autoCost ?? 0
+  })()
+  const newLotNum = parseFloat(newLot) || 0
+  const investmentPreview = willUseOpening + newLotNum
+
+  const applyAuto = () => {
+    if (autoCost !== null) setOpeningOverride(autoCost.toFixed(2))
+  }
+
   const submit = async () => {
     if (!name.trim()) return toast.error("Pon un nombre al ciclo")
     setBusy(true)
@@ -680,7 +744,7 @@ function OpenCycleModal({
     try {
       await openCycle({
         name: name.trim(),
-        newLotCost: parseFloat(newLot) || 0,
+        newLotCost: newLotNum,
         openingInventoryCost:
           openingOverride.trim() === "" ? null : parseFloat(openingOverride),
         notes: notes.trim() || null,
@@ -696,29 +760,78 @@ function OpenCycleModal({
 
   return (
     <ModalShell title="Abrir nuevo ciclo" icon={PlayCircle} onClose={onClose} disabled={busy}>
+      {/* Banner auto-detección */}
+      {!autoLoading && autoCost !== null && autoCost > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 rounded-2xl bg-gradient-to-br from-primary/5 to-purple-500/5 border border-primary/15 p-3 flex items-start gap-3"
+        >
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shadow-bloom shrink-0"
+            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+          >
+            <Wand2 className="text-white" size={14} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-primary">
+              Detectamos tu inventario
+            </p>
+            <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-snug">
+              Tu stock actual vale aproximadamente{" "}
+              <strong className="tabular-nums">{formatMoney(autoCost)}</strong>
+              . Lo usamos como inversión inicial salvo que escribas otra cifra.
+            </p>
+            {openingOverride.trim() === "" ? (
+              <p className="text-[9px] text-primary/80 mt-1 italic">
+                ✓ Aplicado automáticamente
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={applyAuto}
+                className="text-[9px] font-black uppercase tracking-widest text-primary mt-1 hover:underline"
+              >
+                Restaurar valor detectado
+              </button>
+            )}
+          </div>
+        </motion.div>
+      )}
+
       <div className="space-y-3">
         <Field
           label="Nombre del ciclo"
           value={name}
           onChange={setName}
           placeholder="Junio 2026"
+          hint="Se sugiere el mes actual. Cámbialo si quieres."
         />
         <Field
-          label="Costo del lote nuevo comprado"
+          label="Costo del lote nuevo (opcional)"
           value={newLot}
           onChange={setNewLot}
           placeholder="0"
           type="number"
           prefix="$"
+          hint="Lo que pagaste por la mercancía nueva que metes en este ciclo."
         />
         <Field
-          label="Costo del inventario heredado (opcional)"
+          label={
+            autoCost !== null && autoCost > 0
+              ? "Inventario heredado (auto-detectado)"
+              : "Inventario heredado (opcional)"
+          }
           value={openingOverride}
           onChange={setOpeningOverride}
-          placeholder="Auto (calcula del stock actual)"
+          placeholder={
+            autoCost !== null && autoCost > 0
+              ? `Auto: ${formatMoney(autoCost)}`
+              : "0"
+          }
           type="number"
           prefix="$"
-          hint="Déjalo vacío para que se calcule automático con tu stock × costo."
+          hint="Vacío = se calcula solo con tu stock actual × costo."
         />
         <Field
           label="Notas (opcional)"
@@ -727,6 +840,28 @@ function OpenCycleModal({
           placeholder="Compras de temporada, etc."
         />
       </div>
+
+      {/* Resumen claro de qué se va a registrar */}
+      <div className="mt-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-3 space-y-1">
+        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">
+          Inversión inicial registrada
+        </p>
+        <div className="flex justify-between text-[11px] font-bold text-slate-500">
+          <span>Inventario heredado</span>
+          <span className="tabular-nums">{formatMoney(willUseOpening)}</span>
+        </div>
+        <div className="flex justify-between text-[11px] font-bold text-slate-500">
+          <span>+ Lote nuevo</span>
+          <span className="tabular-nums">{formatMoney(newLotNum)}</span>
+        </div>
+        <div className="flex justify-between pt-1.5 mt-1.5 border-t border-slate-200 dark:border-slate-700">
+          <span className="text-xs font-black">Total inversión</span>
+          <span className="text-base font-black text-primary tabular-nums">
+            {formatMoney(investmentPreview)}
+          </span>
+        </div>
+      </div>
+
       <button
         onClick={submit}
         disabled={busy}
@@ -917,6 +1052,23 @@ function CloseCycleModal({
   const [nextName, setNextName] = useState(suggestNextCycleName(cycle.name))
   const [busy, setBusy] = useState(false)
 
+  // Re-cálculo en vivo del costo de inventario remanente, por si las
+  // ventas/movimientos cambiaron desde que se generó el snapshot. Si la
+  // query devuelve algo válido, se usa como sugerencia editable.
+  const [liveCost, setLiveCost] = useState<number | null>(null)
+  useEffect(() => {
+    let alive = true
+    estimateCurrentInventoryCost().then((v) => {
+      if (alive && v !== null) {
+        setLiveCost(v)
+        setClosing(v.toFixed(2))
+      }
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const closingNum = parseFloat(closing) || 0
   const netFinal = snapshot.revenue - snapshot.cogs - snapshot.expenses
 
@@ -972,7 +1124,11 @@ function CloseCycleModal({
         onChange={setClosing}
         type="number"
         prefix="$"
-        hint="Este monto se hereda al siguiente ciclo como inversión inicial."
+        hint={
+          liveCost !== null
+            ? `Auto-calculado en vivo: ${formatMoney(liveCost)}. Edítalo si haces ajuste manual.`
+            : "Este monto se hereda al siguiente ciclo como inversión inicial."
+        }
       />
 
       <label className="flex items-center gap-2 mt-3 cursor-pointer">

@@ -1,0 +1,44 @@
+feat(dashboard+cycles): version PRO con KPIs comparativos, tendencia, metodos de pago y auto-detect de inventario
+
+DASHBOARD PRO (src/features/dashboard/*)
+
+dashboardTypes.ts:
+- Nuevos campos: prevRevenue, prevProfit, prevOperations (comparativa periodo anterior)
+- trend[] = 30 dias con date/label/revenue/profit/operations
+- paymentMethods[], topCustomers[], topCategories[], inventoryValue
+
+dashboardService.ts:
+- Funcion periodRange(days) calcula ventana actual y anterior
+- lastNDays(days) genera labels en es-MX para chart
+- getDashboardStats(periodDays=30): 11 queries en paralelo (Promise.allSettled)
+- Calcula tendencia diaria agrupando ventas + items + ganancia por fecha
+- Top clientes por monto total, top categorias por revenue
+- Pagos agrupados por metodo
+- Valor de inventario activo = sum(stock * cost_effective) de variants activas
+
+useDashboard(periodDays): acepta period como argumento, re-fetch al cambiar
+
+DashboardPage.tsx (reescrito completo):
+- PeriodSwitcher 7d/30d/90d arriba a la derecha
+- FinanceHero claro: Ingresos / Costo (COGS) / Ganancia / Por cobrar con tooltip critico aclarando que 'Por cobrar' NO es perdida, es flujo futuro
+- GrowthChip muestra +/- % vs periodo anterior (verde/rojo + flecha)
+- KPIs operativos: Ventas, Ticket promedio, % Cobrado, Stock bajo
+- TrendChart con dos areas (ingresos rosa + ganancia verde) y leyenda
+- InventoryValueCard: valor de stock al costo + conteo productos/variantes
+- Tab Analisis: PaymentMethodsCard con barras de %, TopList para clientes/productos/categorias
+- methodMeta() mapea efectivo/transferencia/tarjeta/OXXO/digital a icono+color
+- Empty states en cada bloque (sin datos del periodo)
+
+CICLOS PRO (src/features/cycles/*)
+
+cyclesService.ts:
+- Nueva funcion estimateCurrentInventoryCost(): suma stock * cost de variants activas. Falla suave (return null) si la query revienta.
+
+CyclesPage.tsx:
+- NoActiveCycle: pre-detecta inventario y muestra chip 'Ya detectamos $X de inventario' para motivar al admin a abrir su primer ciclo con confianza.
+- OpenCycleModal: 
+  * Banner ambar con auto-deteccion del inventario actual (Wand2 icon)
+  * Si dejas vacio el override, usa el auto-cost. CTA 'Restaurar valor detectado' si lo modificaste manualmente.
+  * Resumen visual en vivo: Inventario heredado + Lote nuevo = Total inversion
+  * Hints en cada campo explicando que significa
+- CloseCycleModal: re-calcula en vivo el costo del inventario remanente al abrir y lo aplica como valor sugerido. Hint indica el monto calculado para que el admin pueda editar si hace ajuste manual.

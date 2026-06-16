@@ -193,3 +193,36 @@ export function suggestNextCycleName(currentName?: string | null): string {
   }
   return base
 }
+
+/**
+ * Calcula el costo actual del inventario sumando stock × cost (con
+ * cost_override si existe) sobre todas las variantes activas. Lo usamos
+ * para pre-llenar el costo inicial cuando el admin abre su primer ciclo
+ * y como sugerencia para el costo de inventario remanente al cerrar.
+ *
+ * Falla suave: si la query rompe (RLS, etc.), retorna null para que el
+ * modal siga funcionando con input manual.
+ */
+export async function estimateCurrentInventoryCost(): Promise<number | null> {
+  try {
+    const { data, error } = await supabase
+      .from("variants")
+      .select("stock,is_active,cost_override,products:products(is_active,cost)")
+    if (error) {
+      console.warn("[estimateCurrentInventoryCost]", error.message)
+      return null
+    }
+    let total = 0
+    for (const v of (data ?? []) as any[]) {
+      if (!v.is_active || !v.products?.is_active) continue
+      const stk = Number(v.stock) || 0
+      const cost = Number(v.cost_override ?? v.products?.cost ?? 0) || 0
+      total += stk * cost
+    }
+    return Math.round(total * 100) / 100
+  } catch (e) {
+    console.warn("[estimateCurrentInventoryCost] catch", e)
+    return null
+  }
+}
+
