@@ -86,9 +86,19 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
         p_token: token,
       })
       if (!alive) return
-      if (error) setError(error.message)
-      else if (!data) setError("Ticket no encontrado")
-      else setTicket(data as PublicTicket)
+      if (error) {
+        setError(error.message)
+      } else if (!data) {
+        setError("Ticket no encontrado")
+      } else {
+        // Tolerante a ambos formatos: { sale: {...}, items, payments } o aplanado
+        const raw = data as any
+        const flat: any = raw?.sale ? { ...raw.sale } : { ...raw }
+        flat.items = raw?.items ?? raw?.sale?.items ?? flat.items ?? []
+        flat.payments = raw?.payments ?? raw?.sale?.payments ?? flat.payments ?? []
+        if (!flat.id) setError("Ticket inválido")
+        else setTicket(flat as PublicTicket)
+      }
       setLoading(false)
     })()
     return () => {

@@ -14,6 +14,7 @@ import {
   ShoppingBag,
   Receipt,
   Sparkles,
+  LifeBuoy,
 } from "lucide-react"
 
 import { useNotifications, type AppNotification } from "../../features/notifications/notificationsService"
@@ -43,6 +44,7 @@ const ICON: Record<string, typeof CreditCard> = {
   proof_rejected: XCircle,
   price_adjusted: Sparkles,
   support_ticket: Bell,
+  support_resolved: LifeBuoy,
 }
 
 /* Colores pastel ULTRA claros (compactos). El icono lleva su color más
@@ -66,6 +68,8 @@ const COLOR: Record<string, string> = {
     "bg-pink-50/70 dark:bg-pink-500/10 text-pink-700 dark:text-pink-300",
   support_ticket:
     "bg-violet-50/70 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  support_resolved:
+    "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
 }
 
 /* Fondo suave del ROW (no del icono) según tipo. Mantiene tipografía esbelta. */
@@ -79,6 +83,7 @@ const ROW_BG: Record<string, string> = {
   proof_rejected: "bg-rose-50/40 dark:bg-rose-500/5",
   price_adjusted: "bg-pink-50/40 dark:bg-pink-500/5",
   support_ticket: "bg-violet-50/40 dark:bg-violet-500/5",
+  support_resolved: "bg-emerald-50/40 dark:bg-emerald-500/5",
 }
 
 /** Etiqueta del CTA según tipo de notificación. */

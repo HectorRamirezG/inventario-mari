@@ -82,7 +82,20 @@ export default function PublicTicketPage() {
       } else if (!data) {
         setError("Ticket no encontrado")
       } else {
-        setTicket(data as PublicTicket)
+        // El RPC puede devolver dos formatos según la versión instalada:
+        //   A) Plano: { id, total, ..., items, payments }
+        //   B) Anidado: { sale: { id, total, ... }, items, payments }
+        // Aplanamos aquí para que el resto del componente siempre acceda
+        // a ticket.id, ticket.total, etc. sin importar la forma.
+        const raw = data as any
+        const flat: any = raw?.sale ? { ...raw.sale } : { ...raw }
+        flat.items = raw?.items ?? raw?.sale?.items ?? flat.items ?? []
+        flat.payments = raw?.payments ?? raw?.sale?.payments ?? flat.payments ?? []
+        if (!flat.id) {
+          setError("Ticket inválido (sin id)")
+        } else {
+          setTicket(flat as PublicTicket)
+        }
       }
       setLoading(false)
     })()
@@ -105,7 +118,12 @@ export default function PublicTicketPage() {
     const apply = async () => {
       const { data } = await supabase.rpc("get_public_ticket", { p_token: token })
       if (!alive || !data) return
-      const incoming = data as PublicTicket
+      const raw = data as any
+      const flat: any = raw?.sale ? { ...raw.sale } : { ...raw }
+      flat.items = raw?.items ?? raw?.sale?.items ?? flat.items ?? []
+      flat.payments = raw?.payments ?? raw?.sale?.payments ?? flat.payments ?? []
+      if (!flat.id) return
+      const incoming = flat as PublicTicket
       setTicket((prev) => {
         if (!prev) return incoming
         // Skip si nada cambia (evita re-render → evita bucle de animaciones)

@@ -44,6 +44,7 @@ import LoginPage from "./features/auth/LoginPage"
 import PublicTicketPage from "./features/public/PublicTicketPage"
 import ClientShopPage from "./features/client/ClientShopPage"
 import ClientOrdersPage from "./features/client/ClientOrdersPage"
+import MyReportsPage from "./features/client/MyReportsPage"
 import CyclesPage from "./features/cycles/CyclesPage"
 import SupportPage from "./features/support/SupportPage"
 
@@ -680,6 +681,7 @@ function DockButton({
 const SHOP_TABS = [
   { to: "/", label: "Tienda", icon: Store, requiresAuth: false },
   { to: "/mis-pedidos", label: "Mis pedidos", icon: ReceiptIcon, requiresAuth: true },
+  { to: "/mis-reportes", label: "Reportes", icon: LifeBuoy, requiresAuth: true },
 ] as const
 
 function ShopShell() {
@@ -768,6 +770,20 @@ function ShopShell() {
                     to="/login"
                     replace
                     state={{ from: "/mis-pedidos" }}
+                  />
+                )
+              }
+            />
+            <Route
+              path="/mis-reportes"
+              element={
+                isLogged ? (
+                  <MyReportsPage />
+                ) : (
+                  <Navigate
+                    to="/login"
+                    replace
+                    state={{ from: "/mis-reportes" }}
                   />
                 )
               }

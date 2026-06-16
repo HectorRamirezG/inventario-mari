@@ -22,6 +22,8 @@ import {
   updateSupportStatus,
   supportTableReady,
   buildSupportWhatsApp,
+  buildSupportResolutionWhatsApp,
+  resolveTicket,
   SUPPORT_CATEGORIES,
   type SupportTicket,
   type SupportStatus,
@@ -114,6 +116,23 @@ export default function SupportPage() {
       refresh()
     } catch (e: any) {
       toast.error(e?.message ?? "No se pudo actualizar")
+    }
+  }
+
+  async function handleResolve(ticket: SupportTicket, message: string) {
+    try {
+      await resolveTicket(ticket, message)
+      toast.success(
+        ticket.customer_email
+          ? "Resuelta · cliente notificado"
+          : "Resuelta"
+      )
+      setSelected((s) =>
+        s && s.id === ticket.id ? { ...s, status: "resolved" } : s
+      )
+      refresh()
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo resolver")
     }
   }
 
@@ -276,6 +295,7 @@ export default function SupportPage() {
         ticket={selected}
         onClose={() => setSelected(null)}
         onStatus={changeStatus}
+        onResolve={handleResolve}
       />
     </div>
   )
@@ -288,11 +308,18 @@ function TicketDrawer({
   ticket,
   onClose,
   onStatus,
+  onResolve,
 }: {
   ticket: SupportTicket | null
   onClose: () => void
   onStatus: (id: string, status: SupportStatus) => void
+  onResolve: (ticket: SupportTicket, message: string) => void | Promise<void>
 }) {
+  const [resolveMessage, setResolveMessage] = useState("")
+
+  useEffect(() => {
+    setResolveMessage("")
+  }, [ticket?.id])
   // Bloquear scroll body
   useEffect(() => {
     if (!ticket) return
@@ -445,7 +472,23 @@ function TicketDrawer({
 
             {/* Footer acciones */}
             <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 shrink-0 space-y-2">
-              {/* CTA principal */}
+              {/* Campo de respuesta (visible mientras NO está resuelta) */}
+              {ticket.status !== "resolved" && (
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    Respuesta para el cliente (opcional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={resolveMessage}
+                    onChange={(e) => setResolveMessage(e.target.value)}
+                    placeholder="Ej. Te enviamos pieza de reemplazo, llega el jueves."
+                    className="field-input h-auto py-2 text-[11px] resize-none"
+                  />
+                </div>
+              )}
+
+              {/* CTA principal (abrir caso por WA) */}
               {ticket.customer_phone ? (
                 <a
                   href={waHref}
@@ -459,7 +502,7 @@ function TicketDrawer({
                   }}
                 >
                   <MessageCircle size={16} />
-                  Resolver por WhatsApp
+                  Abrir caso por WhatsApp
                 </a>
               ) : (
                 <p className="text-[10px] text-center text-slate-400 italic">
@@ -473,7 +516,7 @@ function TicketDrawer({
                   <button
                     type="button"
                     onClick={() => onStatus(ticket.id, "in_progress")}
-                    className="h-10 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
+                    className="h-10 rounded-xl bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-500/10 dark:border-sky-500/40 dark:text-sky-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
                   >
                     <Clock size={11} /> Marcar en curso
                   </button>
@@ -481,11 +524,21 @@ function TicketDrawer({
                 {ticket.status !== "resolved" && (
                   <button
                     type="button"
-                    onClick={() => onStatus(ticket.id, "resolved")}
-                    className="h-10 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
+                    onClick={() => onResolve(ticket, resolveMessage)}
+                    className="h-10 rounded-xl bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-[0_10px_30px_-8px_rgba(16,185,129,0.5)] active:scale-95"
                   >
-                    <CheckCircle2 size={11} /> Resolver
+                    <CheckCircle2 size={11} /> Resolver y notificar
                   </button>
+                )}
+                {ticket.customer_phone && resolveMessage.trim().length > 0 && ticket.status !== "resolved" && (
+                  <a
+                    href={buildSupportResolutionWhatsApp(ticket, resolveMessage)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="col-span-2 h-10 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/40 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5"
+                  >
+                    <MessageCircle size={11} /> Enviar resolución por WhatsApp
+                  </a>
                 )}
                 {ticket.status === "resolved" && (
                   <button

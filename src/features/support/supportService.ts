@@ -145,6 +145,104 @@ export async function updateSupportStatus(
 }
 
 /**
+ * Resuelve la incidencia y notifica al cliente con un mensaje de
+ * respuesta visible en su buzón. Hace 3 cosas:
+ *   1) Update del estatus vía RPC oficial.
+ *   2) Si la columna `resolution_message` existe en support_tickets,
+ *      la guarda con el texto del admin.
+ *   3) Inserta en `notifications` para el cliente (recipient_email +
+ *      recipient_role='client'). Si falla por RLS hace fallback silencioso.
+ */
+export async function resolveTicket(
+  ticket: SupportTicket,
+  message: string
+): Promise<void> {
+  // 1) Cambia el estatus
+  await updateSupportStatus(ticket.id, "resolved")
+
+  // 2) Persiste el mensaje (si existe columna)
+  if (message.trim()) {
+    try {
+      await supabase
+        .from("support_tickets")
+        .update({ resolution_message: message.trim() })
+        .eq("id", ticket.id)
+    } catch {
+      /* columna puede no existir todavía — no rompemos */
+    }
+  }
+
+  // 3) Notificación al cliente
+  if (ticket.customer_email) {
+    try {
+      await supabase.from("notifications").insert({
+        recipient_email: ticket.customer_email,
+        recipient_role: "client",
+        type: "support_resolved",
+        title: "Tu reporte fue resuelto",
+        body: message.trim() || "Mari resolvió tu incidencia. Si necesitas más ayuda, escríbele.",
+        link: ticket.sale_id ? `/mis-pedidos` : null,
+        metadata: {
+          ticket_id: ticket.id,
+          sale_id: ticket.sale_id,
+          category: ticket.category,
+          resolution_message: message.trim() || null,
+        },
+      })
+    } catch (e: any) {
+      console.warn("[support] notif insert fallo:", e?.message)
+    }
+  }
+}
+
+/** Lista las incidencias del cliente logueado (por email). */
+export async function listMyTickets(
+  email: string
+): Promise<SupportTicket[]> {
+  if (!email) return []
+  try {
+    const { data, error } = await supabase
+      .from("support_tickets")
+      .select("*")
+      .eq("customer_email", email)
+      .order("created_at", { ascending: false })
+      .limit(50)
+    if (error) {
+      if (/does not exist|not found|404/i.test(error.message)) return []
+      throw error
+    }
+    return (data ?? []) as SupportTicket[]
+  } catch (e: any) {
+    if (/does not exist|not found|404/i.test(e?.message ?? "")) return []
+    throw e
+  }
+}
+
+/**
+ * Construye un href de wa.me con la plantilla de RESOLUCIÓN ya redactada.
+ * Diferente a buildSupportWhatsApp (que es para abrir el caso).
+ */
+export function buildSupportResolutionWhatsApp(
+  ticket: SupportTicket,
+  message: string
+): string {
+  const phone = (ticket.customer_phone ?? "").replace(/\D/g, "")
+  if (!phone) return ""
+  const fullPhone = phone.length === 10 ? `52${phone}` : phone
+
+  const nameLine = ticket.customer_name ? `, ${ticket.customer_name.split(" ")[0]}` : ""
+  const folio = ticket.sale_id ? ` (folio ${ticket.sale_id.slice(0, 8).toUpperCase()})` : ""
+  const lines = [
+    `Hola${nameLine}, soy Mari.`,
+    `Tu reporte${folio} ya fue resuelto:`,
+    "",
+    message.trim() || "Listo, todo arreglado. Cualquier cosa avísame.",
+  ]
+  const text = lines.join("\n")
+  return `https://wa.me/${fullPhone}?text=${encodeURIComponent(text)}`
+}
+
+/**
  * Mensaje pre-llenado de WhatsApp para que admin resuelva rápido.
  * Devuelve href listo para `<a href=...>`.
  */
