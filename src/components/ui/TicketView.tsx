@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Printer, MessageCircle, Mail, Copy, Check, Image as ImageIcon } from "lucide-react"
+import { X, MessageCircle, Copy, Check, Image as ImageIcon } from "lucide-react"
 import { useState } from "react"
 import { toast } from "react-hot-toast"
 
@@ -24,9 +24,9 @@ interface Props {
 }
 
 /**
- * Ticket de venta imprimible. Diseñado para impresora térmica de 80mm
- * (320px) y también se ve bien en pantalla. Usa CSS print para esconder
- * lo demás cuando el usuario imprime.
+ * Ticket de venta. Diseñado para verse bien en pantalla y como imagen
+ * compartida por WhatsApp. Ya NO incluye flujos de impresión ni email:
+ * el negocio comparte exclusivamente como imagen / WhatsApp.
  */
 export default function TicketView({ open, sale, onClose }: Props) {
   const ticketRef = useRef<HTMLDivElement>(null)
@@ -44,21 +44,6 @@ export default function TicketView({ open, sale, onClose }: Props) {
   }, [open])
 
   if (typeof document === "undefined" || !sale) return null
-
-  const handlePrint = () => {
-    document.body.classList.add("printing-ticket")
-    window.print()
-    setTimeout(() => document.body.classList.remove("printing-ticket"), 500)
-  }
-
-  const handleEmail = () => {
-    const subject = `Recibo Mari ${shortId(sale.id)}`
-    const body = buildReceiptText(sale)
-    const href = `mailto:?subject=${encodeURIComponent(
-      subject
-    )}&body=${encodeURIComponent(body)}`
-    window.location.href = href
-  }
 
   const handleCopy = async () => {
     try {
@@ -299,7 +284,7 @@ export default function TicketView({ open, sale, onClose }: Props) {
             </div>
 
             {/* Acciones secundarias */}
-            <div className="grid grid-cols-5 gap-2 print:hidden">
+            <div className="grid grid-cols-3 gap-2 print:hidden">
               <ActionBtn
                 icon={<ImageIcon size={14} />}
                 label="Imagen"
@@ -317,20 +302,10 @@ export default function TicketView({ open, sale, onClose }: Props) {
                 tone="emerald"
               />
               <ActionBtn
-                icon={<Printer size={14} />}
-                label="Imprimir"
-                onClick={handlePrint}
-              />
-              <ActionBtn
                 icon={<MessageCircle size={14} />}
                 label="WhatsApp"
                 onClick={() => sendReceiptByWhatsApp(sale)}
                 disabled={!phone && !sale.customer_phone}
-              />
-              <ActionBtn
-                icon={<Mail size={14} />}
-                label="Email"
-                onClick={handleEmail}
               />
               <ActionBtn
                 icon={copied ? <Check size={14} /> : <Copy size={14} />}

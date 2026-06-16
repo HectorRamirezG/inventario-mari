@@ -252,7 +252,22 @@ function SaleCard({
   const isCancelled = sale.status === "cancelled";
   const isLayaway = !!sale.is_layaway;
   const days = daysSince(sale.created_at);
-  const wa = waLink(sale.customer_phone);
+
+  // Teléfono efectivo del cliente:
+  // 1) Si tiene perfil registrado y el perfil trae teléfono, ese gana —
+  //    refleja el dato más actualizado (el cliente pudo corregir el que
+  //    capturó al apartar).
+  // 2) Si no hay perfil o el perfil no tiene teléfono, usamos el snapshot
+  //    que quedó en la venta (sale.customer_phone).
+  const profilePhone = (profile?.phone ?? "").trim();
+  const salePhone = (sale.customer_phone ?? "").trim();
+  const effectivePhone = profilePhone || salePhone || null;
+  // Marca de "número actualizado en perfil" cuando difiere del snapshot.
+  const phoneWasUpdated =
+    !!profilePhone &&
+    !!salePhone &&
+    cleanPhone(profilePhone) !== cleanPhone(salePhone);
+  const wa = waLink(effectivePhone);
 
   // Vencimiento: la DB no guarda fecha límite explícita, así que asumimos
   // plazo estándar de 30 días desde created_at (consistente con las
@@ -522,12 +537,22 @@ function SaleCard({
                   <MessageCircle size={10} /> WhatsApp
                 </a>
               )}
-              {sale.customer_phone && (
+              {effectivePhone && (
                 <a
-                  href={`tel:${cleanPhone(sale.customer_phone)}`}
+                  href={`tel:${cleanPhone(effectivePhone)}`}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[9px] font-black uppercase tracking-widest"
+                  title={
+                    phoneWasUpdated
+                      ? `Número actualizado en perfil. Original en venta: ${salePhone}`
+                      : undefined
+                  }
                 >
-                  <Phone size={10} /> {sale.customer_phone}
+                  <Phone size={10} /> {effectivePhone}
+                  {phoneWasUpdated && (
+                    <span className="ml-1 text-[7px] text-emerald-600 dark:text-emerald-400 normal-case font-bold">
+                      ✓ actualizado
+                    </span>
+                  )}
                 </a>
               )}
               {sale.customer_location && (

@@ -2,6 +2,85 @@ import html2canvas from "html2canvas"
 import toast from "react-hot-toast"
 
 /**
+ * html2canvas v1 no soporta funciones `oklch()` (color space que Tailwind v4
+ * usa por defecto para sus paletas). Cuando el parser interno de html2canvas
+ * se topa con `oklch(...)` revienta con:
+ *   "Attempting to parse an unsupported color function 'oklch'"
+ *
+ * Workaround: antes de renderizar, walk del DOM clonado y resolver cada
+ * color computado a `rgb()` usando un canvas auxiliar (el browser SÍ entiende
+ * `oklch` y lo convierte automáticamente cuando lo asignamos a `fillStyle`).
+ * Aplicamos el resultado como inline style en el clon, sin tocar el DOM real.
+ *
+ * Solo procesamos propiedades de color (color, background, border-color,
+ * fill, stroke, etc.) para no inflar el clon con cientos de props inline.
+ */
+const COLOR_PROPS = [
+  "color",
+  "background-color",
+  "border-top-color",
+  "border-right-color",
+  "border-bottom-color",
+  "border-left-color",
+  "outline-color",
+  "text-decoration-color",
+  "fill",
+  "stroke",
+  "caret-color",
+  "column-rule-color",
+] as const
+
+const colorResolverCanvas = document.createElement("canvas")
+const colorResolverCtx = colorResolverCanvas.getContext("2d")
+
+/** Convierte cualquier color CSS (oklch, oklab, color(), hex, hsl...) a rgb()
+ *  usando el parser nativo del browser via ctx.fillStyle. Si falla, devuelve
+ *  el valor original para no perder información. */
+function resolveColor(value: string): string {
+  if (!value || value === "none" || value === "transparent") return value
+  // Atajos: si ya es rgb/rgba/hex, no hace falta convertir.
+  if (/^(#|rgb|rgba|hsl|hsla)/i.test(value.trim())) return value
+  if (!colorResolverCtx) return value
+  try {
+    colorResolverCtx.fillStyle = "#000"
+    colorResolverCtx.fillStyle = value
+    return colorResolverCtx.fillStyle as string
+  } catch {
+    return value
+  }
+}
+
+/** Walks el clon aplicando estilos resueltos. Solo toca color props. */
+function resolveOklchColors(root: HTMLElement) {
+  const all = root.querySelectorAll<HTMLElement>("*")
+  const nodes: HTMLElement[] = [root, ...Array.from(all)]
+  for (const el of nodes) {
+    const cs = window.getComputedStyle(el)
+    for (const prop of COLOR_PROPS) {
+      const computed = cs.getPropertyValue(prop)
+      if (!computed) continue
+      // Solo necesitamos reescribir si el valor original o el computado
+      // contiene oklch/oklab (computed values en navegadores modernos suelen
+      // preservar el color space original).
+      if (!/oklch|oklab|color\(/i.test(computed)) continue
+      const resolved = resolveColor(computed)
+      if (resolved && resolved !== computed) {
+        el.style.setProperty(prop, resolved)
+      }
+    }
+    // Gradient backgrounds (background-image) también pueden traer oklch
+    const bgImage = cs.getPropertyValue("background-image")
+    if (bgImage && /oklch|oklab|color\(/i.test(bgImage)) {
+      const replaced = bgImage.replace(
+        /(oklch|oklab|color)\([^)]*\)/gi,
+        (m) => resolveColor(m)
+      )
+      el.style.setProperty("background-image", replaced)
+    }
+  }
+}
+
+/**
  * Captura un nodo del DOM como PNG. Devuelve un Blob.
  * Útil para tickets, comprobantes, comandas.
  */
@@ -11,6 +90,15 @@ export async function nodeToBlob(node: HTMLElement, scale = 2): Promise<Blob | n
     backgroundColor: "#ffffff",
     useCORS: true,
     logging: false,
+    onclone: (_doc, clonedRoot) => {
+      try {
+        resolveOklchColors(clonedRoot as HTMLElement)
+      } catch (e) {
+        // Si la conversión falla por alguna razón, dejamos que html2canvas
+        // intente; en el peor caso saldrá el error original.
+        console.warn("[shareImage] resolveOklchColors failed", e)
+      }
+    },
   })
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"))
 }
