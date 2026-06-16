@@ -72,6 +72,9 @@ export async function updateVariant(
       | "sku"
       | "cost_override"
       | "price"
+      | "price_menudeo"
+      | "price_medio"
+      | "price_mayoreo"
       | "is_active"
       | "stock"
       | "image_url"
@@ -93,6 +96,7 @@ export async function updateVariant(
   // reintenta enviando sólo lo legacy. Así el panel sigue funcionando
   // aunque el usuario no haya corrido el SQL todavía.
   const msg = error.message ?? ""
+  console.warn("[updateVariant] error:", msg)
   const isMissingCol =
     /column .* (does not exist|not found)/i.test(msg) ||
     /could not find the .* column/i.test(msg) ||

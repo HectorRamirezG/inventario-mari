@@ -262,10 +262,89 @@ export default function ReportPaymentButton({
   }
 
   // Vista normal: botón grande para efectivo + dos botones de foto + historial
+  // Estado del comprobante más reciente (si existe) para mostrar banner arriba
+  const lastPending = history.find(
+    (p) => p.status === "pending" || p.status === "pending_verification"
+  )
+  const lastApproved = history.find((p) => p.status === "approved")
+  const lastRejected = history.find((p) => p.status === "rejected")
+
   return (
     <div className="space-y-3">
-      {/* Datos bancarios copiables (sólo si Mari los configuró) */}
-      <BankAccountCard />
+      {/* BANNER DE ESTADO — el cliente NUNCA debe pensar 'no se envió' */}
+      {lastPending && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-500/15 dark:to-yellow-500/15 border-2 border-amber-300 dark:border-amber-500/40 p-3 flex items-start gap-2.5"
+        >
+          <div className="relative w-9 h-9 rounded-xl bg-amber-400 text-white flex items-center justify-center shrink-0 shadow-bloom">
+            <Loader2 size={16} className="animate-spin" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black text-amber-800 dark:text-amber-200 leading-tight">
+              {lastPending.method === "efectivo"
+                ? "Pago en efectivo declarado · Mari lo confirmará al recibirlo"
+                : "Comprobante enviado · Mari lo está validando"}
+            </p>
+            <p className="text-[10px] font-bold text-amber-700/80 dark:text-amber-200/70 leading-snug mt-0.5">
+              {lastPending.amount && lastPending.amount > 0
+                ? `Monto: ${formatMoney(Number(lastPending.amount))} · `
+                : ""}
+              Recibirás una notificación cuando se apruebe.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {!lastPending && lastApproved && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border-2 border-emerald-200 dark:border-emerald-500/40 p-3 flex items-center gap-2.5"
+        >
+          <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+            <CheckCircle2 size={16} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black text-emerald-800 dark:text-emerald-200 leading-tight">
+              Pago aprobado por Mari
+            </p>
+            <p className="text-[10px] font-bold text-emerald-700/80 dark:text-emerald-200/70 leading-tight mt-0.5">
+              {formatMoney(Number(lastApproved.amount) || 0)} ·{" "}
+              {lastApproved.method ?? "—"}
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {!lastPending && !lastApproved && lastRejected && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-rose-50 dark:bg-rose-500/10 border-2 border-rose-200 dark:border-rose-500/40 p-3 flex items-start gap-2.5"
+        >
+          <div className="w-9 h-9 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0">
+            <AlertCircle size={16} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black text-rose-800 dark:text-rose-200 leading-tight">
+              Tu pago anterior fue rechazado
+            </p>
+            {lastRejected.rejection_reason && (
+              <p className="text-[10px] font-bold text-rose-700/80 dark:text-rose-200/70 leading-snug mt-0.5">
+                Motivo: {lastRejected.rejection_reason}
+              </p>
+            )}
+            <p className="text-[10px] font-bold text-rose-700/80 dark:text-rose-200/70 leading-snug mt-0.5">
+              Vuelve a enviar el comprobante o cambia el método abajo.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* HISTORIAL — ahora arriba para que se vea sin scroll */}
+      <ProofsHistory items={history} loading={loadingHistory} />
 
       {/* OPCIÓN 1: Pago en EFECTIVO (un toque) */}
       <button
@@ -303,9 +382,14 @@ export default function ReportPaymentButton({
             </p>
             <p className="text-[10px] text-amber-800/80 dark:text-amber-200/70 leading-snug mt-0.5">
               Sube la captura de tu transferencia para que
-              <b> Mari valide tu pago</b> 💖
+              <b> Mari valide tu pago</b>.
             </p>
           </div>
+        </div>
+
+        {/* Datos bancarios copiables (sólo si Mari los configuró) */}
+        <div className="mb-3">
+          <BankAccountCard />
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -340,9 +424,6 @@ export default function ReportPaymentButton({
           lo verá.
         </p>
       </div>
-
-      {/* HISTORIAL */}
-      <ProofsHistory items={history} loading={loadingHistory} />
     </div>
   )
 }

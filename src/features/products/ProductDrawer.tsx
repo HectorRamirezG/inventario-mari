@@ -759,6 +759,26 @@ function VariantAccordion({
   )
   const [saving, setSaving] = useState(false)
 
+  // Re-sincroniza con el prop cuando cambia (ej. después de onSaved → refetch).
+  // Sin esto el formulario queda con datos viejos al guardar y reabrir.
+  useEffect(() => {
+    setVName(variant.variant_name ?? "")
+    setSku(variant.sku ?? "")
+    setStock(Number(variant.stock) || 0)
+    setPm(variant.price_menudeo ?? "")
+    setPmd(variant.price_medio ?? "")
+    setPma(variant.price_mayoreo ?? "")
+    setImages(
+      variant.image_urls && variant.image_urls.length > 0
+        ? variant.image_urls
+        : variant.image_url
+        ? [variant.image_url]
+        : []
+    )
+  }, [variant.id, variant.variant_name, variant.sku, variant.stock,
+      variant.price_menudeo, variant.price_medio, variant.price_mayoreo,
+      variant.image_url, JSON.stringify(variant.image_urls ?? [])])
+
   // Sugeridos calculados desde el costo del producto (referencia)
   const sug = useMemo(() => {
     if (!pricingCfg) return null
@@ -817,9 +837,14 @@ function VariantAccordion({
         image_urls: images,
         image_url: images[0] ?? null,
       } as any)
-      toast.success("Variante actualizada")
+      toast.success(
+        images.length > 0
+          ? `Variante actualizada · ${images.length} ${images.length === 1 ? "foto" : "fotos"}`
+          : "Variante actualizada"
+      )
       onSaved()
     } catch (e: any) {
+      console.error("[VariantAccordion.handleSave]", e)
       toast.error(e?.message ?? "Error guardando")
     } finally {
       setSaving(false)
