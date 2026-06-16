@@ -64,6 +64,12 @@ export function useSalesPage() {
   const [customerSuggestions, setCustomerSuggestions] = useState<
     CustomerSnapshot[]
   >([]);
+  // Snapshot del cliente "elegido" desde las sugerencias — sirve para
+  // mostrar tarjeta de cliente recurrente en la caja (compras totales,
+  // saldo pendiente, última visita).
+  const [selectedHistory, setSelectedHistory] = useState<CustomerSnapshot | null>(
+    null
+  );
 
   // --- Última venta cerrada (para mostrar ticket) ---
   const [lastSale, setLastSale] = useState<Sale | null>(null);
@@ -185,6 +191,7 @@ export function useSalesPage() {
     setIsLayaway(false);
     setPaid(0);
     setCustomerSuggestions([]);
+    setSelectedHistory(null);
     setDeliveryMethod("mostrador");
     setDeliveryZone("");
     setDeliveryStation("");
@@ -203,6 +210,14 @@ export function useSalesPage() {
       setCustomerSuggestions([]);
       return;
     }
+    // Si el admin editó el nombre y ya no coincide con el cliente seleccionado,
+    // ocultamos la tarjeta de cliente recurrente para no confundir.
+    if (
+      selectedHistory &&
+      selectedHistory.name.trim().toLowerCase() !== q.toLowerCase()
+    ) {
+      setSelectedHistory(null);
+    }
     let cancelled = false;
     const t = setTimeout(() => {
       searchCustomers(q, 5).then((res) => {
@@ -213,7 +228,7 @@ export function useSalesPage() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [customer]);
+  }, [customer, selectedHistory]);
 
   /** Auto-rellena teléfono/dirección/ubicación al elegir un cliente sugerido */
   const pickCustomer = useCallback((c: CustomerSnapshot) => {
@@ -222,6 +237,7 @@ export function useSalesPage() {
     if (c.address) setAddress(c.address);
     if (c.location) setLocationUrl(c.location);
     setCustomerSuggestions([]);
+    setSelectedHistory(c);
   }, []);
 
   /* ---------- Captura de GPS → Google Maps URL ---------- */
@@ -425,6 +441,7 @@ export function useSalesPage() {
       nextTierHint,
       config,
       customerSuggestions,
+      selectedHistory,
       lastSale,
       // delivery
       deliveryMethod,

@@ -460,11 +460,16 @@ export default function SalesPage() {
               onClick={() => setShowCustomer((v) => !v)}
               className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors"
             >
-              <div className="flex items-center gap-2">
-                <User size={12} className="text-primary" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-700">
+              <div className="flex items-center gap-2 min-w-0">
+                <User size={12} className="text-primary shrink-0" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 truncate">
                   Cliente {state.customer && `· ${state.customer}`}
                 </span>
+                {state.selectedHistory && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[8px] font-black uppercase tracking-widest shrink-0">
+                    Recurrente
+                  </span>
+                )}
               </div>
               <motion.div animate={{ rotate: showCustomer ? 180 : 0 }}>
                 <ChevronDown size={14} className="text-slate-400" />
@@ -480,6 +485,13 @@ export default function SalesPage() {
                   className="overflow-hidden"
                 >
                   <div className="pt-3 space-y-2">
+                    {/* Tarjeta de cliente recurrente — visible cuando se eligió
+                        un cliente de las sugerencias. Muestra historial para
+                        que el admin tenga contexto antes de cobrar. */}
+                    {state.selectedHistory && (
+                      <CustomerHistoryCard snap={state.selectedHistory} />
+                    )}
+
                     <div className="relative">
                       <User
                         size={12}
@@ -556,13 +568,20 @@ export default function SalesPage() {
                         className="absolute left-3 top-3 text-slate-300"
                       />
                       <textarea
-                        placeholder="Notas (opcional)"
+                        placeholder="Nota para el ticket (ej. envoltura para regalo, fecha de entrega...)"
                         value={state.notes}
                         onChange={(e) => actions.setNotes(e.target.value)}
                         rows={2}
                         className="w-full pl-8 pr-3 py-2 rounded-xl bg-slate-50 text-[11px] font-bold outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                       />
                     </div>
+
+                    {/* Recordatorio sutil: dirección + ubicación + nota se
+                        incluyen en el ticket que ve el cliente. */}
+                    <p className="text-[9px] font-bold text-slate-400 italic px-1 flex items-center gap-1">
+                      <Sparkles size={9} className="text-primary" />
+                      Dirección, ubicación y nota aparecen en el ticket del cliente.
+                    </p>
 
                     {/* Liga de pago (Mercado Pago, Stripe, etc.) */}
                     <div className="relative">
@@ -870,4 +889,104 @@ function DeliveryBlock({ state, actions }: { state: any; actions: any }) {
       </AnimatePresence>
     </div>
   );
+}
+
+/* ════════════════════════ CustomerHistoryCard ════════════════════════
+   Tarjeta visible cuando el admin elige un cliente recurrente desde
+   las sugerencias. Sirve para tener contexto sin ir a otra pantalla:
+   compras totales, saldo pendiente, monto vida, última visita.
+   ════════════════════════════════════════════════════════════════════ */
+function CustomerHistoryCard({
+  snap,
+}: {
+  snap: {
+    name: string
+    visits: number
+    total_spent: number
+    pending_balance: number
+    last_visit: string | null
+  }
+}) {
+  const hasDebt = snap.pending_balance > 0
+  const lastVisitText = (() => {
+    if (!snap.last_visit) return null
+    const days = Math.max(
+      0,
+      Math.round((Date.now() - new Date(snap.last_visit).getTime()) / 86400000)
+    )
+    if (days === 0) return "hoy"
+    if (days === 1) return "ayer"
+    if (days < 30) return `hace ${days} días`
+    if (days < 60) return "hace 1 mes"
+    return `hace ${Math.round(days / 30)} meses`
+  })()
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`rounded-2xl p-3 border ${
+        hasDebt
+          ? "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30"
+          : "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Sparkles
+            size={11}
+            className={
+              hasDebt
+                ? "text-amber-600 dark:text-amber-400 shrink-0"
+                : "text-emerald-600 dark:text-emerald-400 shrink-0"
+            }
+          />
+          <p
+            className={`text-[10px] font-black uppercase tracking-widest truncate ${
+              hasDebt
+                ? "text-amber-700 dark:text-amber-300"
+                : "text-emerald-700 dark:text-emerald-300"
+            }`}
+          >
+            Cliente con historial
+          </p>
+        </div>
+        {lastVisitText && (
+          <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500 shrink-0">
+            Última: {lastVisitText}
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <div>
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+            Compras
+          </p>
+          <p className="text-sm font-black tabular-nums">{snap.visits}</p>
+        </div>
+        <div>
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+            Acumulado
+          </p>
+          <p className="text-sm font-black tabular-nums">
+            {formatMoney(snap.total_spent)}
+          </p>
+        </div>
+        <div>
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+            Adeudo
+          </p>
+          <p
+            className={`text-sm font-black tabular-nums ${
+              hasDebt
+                ? "text-amber-700 dark:text-amber-400"
+                : "text-emerald-600 dark:text-emerald-400"
+            }`}
+          >
+            {hasDebt ? formatMoney(snap.pending_balance) : "✓"}
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  )
 }

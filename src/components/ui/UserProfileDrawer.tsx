@@ -7,7 +7,6 @@ import {
   Mail,
   Lock,
   Phone,
-  MapPin,
   Shield,
   Save,
   LogOut,
@@ -26,6 +25,7 @@ import {
   type UserProfileDetail,
 } from "../../features/profile/profileService"
 import ProductImageUploader from "./ProductImageUploader"
+import SmartLocationInput from "./SmartLocationInput"
 import Skeleton from "./Skeleton"
 
 interface Props {
@@ -145,30 +145,6 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
     } finally {
       setPwdSaving(false)
     }
-  }
-
-  function captureGps() {
-    if (!("geolocation" in navigator)) {
-      toast.error("Tu navegador no soporta GPS")
-      return
-    }
-    const tid = toast.loading("Obteniendo ubicación...")
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude.toFixed(6)
-        const lng = pos.coords.longitude.toFixed(6)
-        setLocationUrl(`https://www.google.com/maps?q=${lat},${lng}`)
-        toast.success("📍 Pin guardado", { id: tid })
-      },
-      (err) => {
-        const msg =
-          err.code === err.PERMISSION_DENIED
-            ? "Permiso denegado"
-            : "No se pudo obtener ubicación"
-        toast.error(msg, { id: tid })
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    )
   }
 
   if (typeof document === "undefined") return null
@@ -316,37 +292,26 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                       autoComplete="tel"
                     />
 
-                    <FieldRow
-                      icon={MapPin}
-                      label="Dirección"
-                      value={address}
-                      onChange={setAddress}
-                      placeholder="Calle, número, colonia, CP"
-                      autoComplete="street-address"
+                    {/* Ubicación con el componente bonito: input de dirección
+                        + opciones de pegar link de Maps / GPS / abrir en Maps.
+                        Misma UX que la caja del admin. */}
+                    <SmartLocationInput
+                      address={address}
+                      onAddressChange={setAddress}
+                      locationUrl={locationUrl}
+                      onLocationUrlChange={setLocationUrl}
                     />
 
-                    {/* Ubicación con botón GPS rápido */}
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-                        <MapPin size={10} /> Ubicación (Google Maps)
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="url"
-                          value={locationUrl}
-                          onChange={(e) => setLocationUrl(e.target.value)}
-                          placeholder="Link de Maps o pin GPS"
-                          className="settings-input flex-1"
-                        />
-                        <button
-                          type="button"
-                          onClick={captureGps}
-                          className="shrink-0 h-11 px-3 rounded-xl bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
-                          title="Usar mi ubicación actual"
-                        >
-                          <MapPin size={12} /> GPS
-                        </button>
-                      </div>
+                    {/* Aclaración: estos datos se autocompletan al apartar */}
+                    <div className="rounded-2xl bg-pink-50/60 dark:bg-pink-500/10 border border-pink-100 dark:border-pink-500/20 px-3 py-2 flex items-start gap-2">
+                      <UserIcon
+                        size={11}
+                        className="text-pink-600 dark:text-pink-300 shrink-0 mt-0.5"
+                      />
+                      <p className="text-[10px] font-bold text-pink-700 dark:text-pink-300 leading-snug">
+                        Cuando apartes, estos datos llenan automático el
+                        formulario y aparecen en tu ticket.
+                      </p>
                     </div>
 
                     <button

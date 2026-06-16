@@ -127,6 +127,22 @@ export default function TicketView({ open, sale, onClose }: Props) {
                 {sale.customer_phone && (
                   <RowKV label="Tel" value={sale.customer_phone} />
                 )}
+                {sale.customer_address && (
+                  <RowKV label="Dir" value={sale.customer_address} />
+                )}
+                {sale.customer_location && (
+                  <div className="flex gap-2">
+                    <span className="font-black uppercase w-14">Pin:</span>
+                    <a
+                      href={sale.customer_location}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 truncate underline text-primary"
+                    >
+                      Abrir ubicación en Maps
+                    </a>
+                  </div>
+                )}
                 {sale.is_layaway && (
                   <p className="text-center font-black mt-1 text-[10px] tracking-widest">
                     *** APARTADO ***
