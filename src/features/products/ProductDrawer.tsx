@@ -1038,7 +1038,15 @@ function VariantAccordion({
             <div className="p-3 pt-1 space-y-3 border-t border-slate-100 dark:border-slate-700">
               {/* Galería de fotos de la variante */}
               <div className="space-y-1">
-                <Label>Fotos (la 1ª es la portada)</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Fotos (la 1ª es la portada)</Label>
+                  {dirty && (
+                    <span className="text-[8px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                      <Sparkles size={8} />
+                      Sin guardar
+                    </span>
+                  )}
+                </div>
                 <MultiImageUploader
                   value={images}
                   onChange={setImages}
@@ -1046,6 +1054,9 @@ function VariantAccordion({
                   label="Subir fotos"
                   max={6}
                 />
+                <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 italic pl-1">
+                  💡 Las fotos se suben al instante. Pulsa <span className="text-primary font-black">Guardar variante</span> abajo para que el cliente las vea en la tienda.
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-2">

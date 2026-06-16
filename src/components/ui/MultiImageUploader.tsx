@@ -56,7 +56,8 @@ export default function MultiImageUploader({
       .from("product-images")
       .upload(path, file, { cacheControl: "31536000", upsert: false })
     if (error) {
-      toast.error(error.message)
+      console.error("[MultiImageUploader.upload]", { path, error })
+      toast.error(`No se pudo subir "${file.name}": ${error.message}`)
       return null
     }
     const {
@@ -73,6 +74,9 @@ export default function MultiImageUploader({
       return
     }
     setUploading(true)
+    const tid = toast.loading(
+      arr.length === 1 ? "Subiendo foto..." : `Subiendo ${arr.length} fotos...`
+    )
     try {
       const uploaded: string[] = []
       for (const f of arr) {
@@ -83,9 +87,15 @@ export default function MultiImageUploader({
         onChange([...value, ...uploaded])
         toast.success(
           uploaded.length === 1
-            ? "Foto subida ✓"
-            : `${uploaded.length} fotos subidas ✓`
+            ? "Foto agregada · pulsa Guardar para persistir"
+            : `${uploaded.length} fotos agregadas · pulsa Guardar para persistir`,
+          { id: tid, duration: 3500 }
         )
+      } else {
+        // Ningún archivo se subió correctamente
+        toast.error("No se subió ninguna foto. Revisa permisos / tamaño.", {
+          id: tid,
+        })
       }
     } finally {
       setUploading(false)
