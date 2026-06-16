@@ -91,7 +91,7 @@ export function useRealtimeNotifications() {
           if (before.status !== "paid" && after.status === "paid") {
             sound.play("success")
             toast.success(
-              `✅ Apartado pagado · ${after.customer_name ?? "Cliente"}`,
+              `Apartado pagado · ${after.customer_name ?? "Cliente"}`,
               { duration: 4500 }
             )
           }

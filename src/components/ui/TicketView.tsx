@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Printer, MessageCircle, Mail, Copy, Check } from "lucide-react"
+import { X, Printer, MessageCircle, Mail, Copy, Check, Image as ImageIcon } from "lucide-react"
 import { useState } from "react"
 import { toast } from "react-hot-toast"
 
@@ -15,6 +15,7 @@ import {
 } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
 import { buildReceiptText, sendReceiptByWhatsApp } from "../../lib/receipt"
+import { shareTicketImage } from "../../lib/shareImage"
 
 interface Props {
   open: boolean
@@ -213,7 +214,7 @@ export default function TicketView({ open, sale, onClose }: Props) {
                     {(isForeign || ship > 0) && (
                       <Row
                         label={isForeign ? "Envío foráneo" : "Envío"}
-                        value={ship > 0 ? formatMoneyExact(ship) : "¡Gratis! 🎉"}
+                        value={ship > 0 ? formatMoneyExact(ship) : "Gratis"}
                       />
                     )}
                     {adj !== 0 && (
@@ -236,7 +237,7 @@ export default function TicketView({ open, sale, onClose }: Props) {
                     )}
                     {adj > 0 && (
                       <p className="text-center text-[10px] font-black uppercase tracking-widest text-emerald-600 mt-1">
-                        🎉 Descuento aplicado: {formatMoneyExact(adj)}
+                        Descuento aplicado: {formatMoneyExact(adj)}
                       </p>
                     )}
                   </div>
@@ -298,7 +299,23 @@ export default function TicketView({ open, sale, onClose }: Props) {
             </div>
 
             {/* Acciones secundarias */}
-            <div className="grid grid-cols-4 gap-2 print:hidden">
+            <div className="grid grid-cols-5 gap-2 print:hidden">
+              <ActionBtn
+                icon={<ImageIcon size={14} />}
+                label="Imagen"
+                onClick={() =>
+                  shareTicketImage({
+                    node: ticketRef.current,
+                    filename: `ticket-${shortId(sale.id)}.png`,
+                    text: buildReceiptText(sale),
+                    whatsappPhone: sale.customer_phone,
+                    fallbackUrl: sale.public_token
+                      ? `${window.location.origin}/ticket/${sale.public_token}`
+                      : null,
+                  })
+                }
+                tone="emerald"
+              />
               <ActionBtn
                 icon={<Printer size={14} />}
                 label="Imprimir"
@@ -308,7 +325,6 @@ export default function TicketView({ open, sale, onClose }: Props) {
                 icon={<MessageCircle size={14} />}
                 label="WhatsApp"
                 onClick={() => sendReceiptByWhatsApp(sale)}
-                tone="emerald"
                 disabled={!phone && !sale.customer_phone}
               />
               <ActionBtn

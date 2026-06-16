@@ -13,6 +13,9 @@ export interface CreateSalePayload {
   paid: number | string;
   balance: number;
   items: CartItem[];
+  // Envío / entrega
+  shipping_amount?: number | null;
+  is_foreign_shipping?: boolean | null;
 }
 
 /**
@@ -52,6 +55,8 @@ export async function createSale(payload: CreateSalePayload) {
       paid: paidNum,
       balance: payload.balance,
       status: payload.balance > 0 ? "pending" : "paid",
+      shipping_amount: payload.shipping_amount ?? 0,
+      is_foreign_shipping: !!payload.is_foreign_shipping,
     })
     .select()
     .single();

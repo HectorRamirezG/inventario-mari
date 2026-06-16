@@ -33,7 +33,7 @@ export default function PricingPage() {
   return (
     <div className="flex flex-col text-slate-900">
 
-      {/* 🔥 HEADER COMPACTO */}
+      {/* HEADER */}
       <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-pink-50 px-1 pt-1 pb-2 -mx-1">
 
         <nav className="flex bg-white border border-pink-50 p-1 rounded-[1.8rem] shadow-sm">
@@ -66,7 +66,7 @@ export default function PricingPage() {
         </nav>
       </header>
 
-      {/* 🔥 MAIN — sin h fijo, fluye con el shell padre */}
+      {/* MAIN */}
       <main className="pt-1">
         <AnimatePresence mode="wait">
 

@@ -16,6 +16,9 @@ import {
   Bookmark,
   ChevronDown,
   ScanLine,
+  Store,
+  MapPin,
+  Truck,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
@@ -562,6 +565,11 @@ export default function SalesPage() {
 
           {/* TOTAL Y FORMULARIO */}
           <div className="space-y-3 pt-3 border-t border-slate-100">
+            {/* MÉTODO DE ENTREGA */}
+            {state.cart.length > 0 && (
+              <DeliveryBlock state={state} actions={actions} />
+            )}
+
             <div className="bg-slate-900 rounded-2xl px-4 py-3 flex items-center justify-between shadow-lg">
               <span className="text-[10px] text-slate-400 uppercase font-black">
                 Total
@@ -673,6 +681,168 @@ export default function SalesPage() {
         sale={state.lastSale}
         onClose={actions.dismissLastSale}
       />
+    </div>
+  );
+}
+/* ════════════════════════ DeliveryBlock ════════════════════════ */
+function DeliveryBlock({ state, actions }: { state: any; actions: any }) {
+  const method = state.deliveryMethod as "mostrador" | "personal" | "foraneo";
+
+  const opts = [
+    { id: "mostrador", label: "Mostrador", icon: Store },
+    { id: "personal", label: "Entrega", icon: MapPin },
+    { id: "foraneo", label: "Envío", icon: Truck },
+  ] as const;
+
+  return (
+    <div className="space-y-2 rounded-2xl bg-slate-50 border border-slate-100 p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+          Método de entrega
+        </span>
+        {method !== "mostrador" && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+              Costo envío
+            </span>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="0"
+              value={state.shippingAmount}
+              onChange={(e) =>
+                actions.setShippingAmount(
+                  e.target.value === "" ? "" : Number(e.target.value)
+                )
+              }
+              className="w-20 h-7 px-2 rounded-lg bg-white border border-slate-200 text-[10px] font-black text-right tabular-nums outline-none focus:border-primary"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-1.5">
+        {opts.map((o) => {
+          const Icon = o.icon;
+          const active = method === o.id;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => actions.setDeliveryMethod(o.id)}
+              className={`h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
+                active
+                  ? "bg-primary text-white shadow-bloom"
+                  : "bg-white text-slate-500 border border-slate-100 hover:border-primary/30"
+              }`}
+            >
+              <Icon size={13} />
+              <span className="text-[8px] font-black uppercase tracking-widest">
+                {o.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {method === "personal" && (
+          <motion.div
+            key="personal"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-2 pt-2">
+              <div className="grid grid-cols-2 gap-1.5">
+                {(
+                  [
+                    { id: "cdmx_metro", label: "CDMX · Metro" },
+                    { id: "edomex", label: "Edo. de México" },
+                  ] as const
+                ).map((z) => (
+                  <button
+                    key={z.id}
+                    type="button"
+                    onClick={() => actions.setDeliveryZone(z.id)}
+                    className={`h-9 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                      state.deliveryZone === z.id
+                        ? "bg-slate-900 text-white"
+                        : "bg-white text-slate-500 border border-slate-200"
+                    }`}
+                  >
+                    {z.label}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                placeholder={
+                  state.deliveryZone === "cdmx_metro"
+                    ? "Estación de metro (ej. Pantitlán)"
+                    : "Punto de entrega"
+                }
+                value={state.deliveryStation}
+                onChange={(e) => actions.setDeliveryStation(e.target.value)}
+                className="w-full h-10 px-3 rounded-lg bg-white border border-slate-200 text-[11px] font-bold outline-none focus:border-primary"
+              />
+              <input
+                type="text"
+                placeholder="Horario (ej. Sábado 4-6pm)"
+                value={state.deliverySchedule}
+                onChange={(e) => actions.setDeliverySchedule(e.target.value)}
+                className="w-full h-10 px-3 rounded-lg bg-white border border-slate-200 text-[11px] font-bold outline-none focus:border-primary"
+              />
+            </div>
+          </motion.div>
+        )}
+
+        {method === "foraneo" && (
+          <motion.div
+            key="foraneo"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="space-y-2 pt-2">
+              <input
+                type="text"
+                placeholder="Calle y número *"
+                value={state.shippingStreet}
+                onChange={(e) => actions.setShippingStreet(e.target.value)}
+                className="w-full h-10 px-3 rounded-lg bg-white border border-slate-200 text-[11px] font-bold outline-none focus:border-primary"
+              />
+              <div className="grid grid-cols-2 gap-1.5">
+                <input
+                  type="text"
+                  placeholder="Colonia *"
+                  value={state.shippingColonia}
+                  onChange={(e) => actions.setShippingColonia(e.target.value)}
+                  className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-[11px] font-bold outline-none focus:border-primary"
+                />
+                <input
+                  type="text"
+                  placeholder="CP *"
+                  inputMode="numeric"
+                  value={state.shippingZip}
+                  onChange={(e) => actions.setShippingZip(e.target.value)}
+                  className="h-10 px-3 rounded-lg bg-white border border-slate-200 text-[11px] font-bold outline-none focus:border-primary"
+                />
+              </div>
+              <input
+                type="text"
+                placeholder="Referencias (puerta, color, etc.)"
+                value={state.shippingRefs}
+                onChange={(e) => actions.setShippingRefs(e.target.value)}
+                className="w-full h-10 px-3 rounded-lg bg-white border border-slate-200 text-[11px] font-bold outline-none focus:border-primary"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

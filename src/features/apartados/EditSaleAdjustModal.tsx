@@ -1,21 +1,22 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createPortal } from "react-dom"
 import {
   X,
   Loader2,
-  Tag,
   Wallet,
   Send,
-  Sparkles,
-  AlertCircle,
+  Layers,
+  Minus,
+  Plus,
+  RotateCcw,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
 import { sound } from "../../lib/sound"
 import { formatMoney } from "../../lib/format"
-import type { Sale } from "../../types/database"
+import type { Sale, SaleItem } from "../../types/database"
 
 interface Props {
   open: boolean
@@ -24,73 +25,194 @@ interface Props {
   onSaved: () => void
 }
 
-type TierForce = "" | "menudeo" | "medio" | "mayoreo"
+type Tier = "menudeo" | "medio" | "mayoreo"
+const TIER_LIST: Tier[] = ["menudeo", "medio", "mayoreo"]
+const TIER_LABEL: Record<Tier, string> = {
+  menudeo: "Menudeo",
+  medio: "Medio",
+  mayoreo: "Mayoreo",
+}
 
-/**
- * Modal de admin para ajustar un ticket existente:
- *   - Forzar un tier global (recalcula precios desde la tabla variants)
- *   - Aplicar un ajuste manual al total (descuento por lealtad, etc.)
- *
- * Llama la RPC `admin_adjust_sale` que:
- *   - Valida que sea admin/staff
- *   - Recalcula items + total + balance
- *   - Inserta una notificación al cliente (price_adjusted)
- */
+interface PricedItem extends SaleItem {
+  price_menudeo: number | null
+  price_medio: number | null
+  price_mayoreo: number | null
+}
+
 export default function EditSaleAdjustModal({
   open,
   sale,
   onClose,
   onSaved,
 }: Props) {
-  const [forceTier, setForceTier] = useState<TierForce>("")
+  const [items, setItems] = useState<PricedItem[]>([])
   const [adjustment, setAdjustment] = useState<number | "">("")
   const [adjustSign, setAdjustSign] = useState<"discount" | "charge">("discount")
   const [reason, setReason] = useState("")
+  const [loadingItems, setLoadingItems] = useState(false)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!open) return
-    setForceTier("")
-    const initialAdj = sale?.adjustment_amount ? Number(sale.adjustment_amount) : 0
+    if (!open || !sale) return
+    const initialAdj = Number(sale.adjustment_amount) || 0
     setAdjustSign(initialAdj < 0 ? "charge" : "discount")
     setAdjustment(initialAdj !== 0 ? Math.abs(initialAdj) : "")
-    setReason(sale?.adjustment_reason ?? "")
-  }, [open, sale])
+    setReason(sale.adjustment_reason ?? "")
+    setItems([])
+    loadItems(sale)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sale?.id])
+
+  async function loadItems(s: Sale) {
+    setLoadingItems(true)
+    try {
+      const { data: rawItems, error } = await supabase
+        .from("sale_items")
+        .select("*")
+        .eq("sale_id", s.id)
+        .order("id")
+      if (error) throw error
+      const baseItems = (rawItems ?? []) as SaleItem[]
+      const variantIds = baseItems
+        .map((i) => i.variant_id)
+        .filter((v): v is string => !!v)
+      if (variantIds.length === 0) {
+        setItems(baseItems.map((i) => fillEmptyPrices(i)))
+        return
+      }
+      const { data: variants } = await supabase
+        .from("variants")
+        .select("id, price_menudeo, price_medio, price_mayoreo")
+        .in("id", variantIds)
+      const vmap = new Map(
+        (variants ?? []).map((v: any) => [v.id, v])
+      )
+      const enriched: PricedItem[] = baseItems.map((i) => {
+        const v: any = i.variant_id ? vmap.get(i.variant_id) : null
+        return {
+          ...i,
+          price_menudeo: Number(v?.price_menudeo) || null,
+          price_medio: Number(v?.price_medio) || null,
+          price_mayoreo: Number(v?.price_mayoreo) || null,
+        }
+      })
+      setItems(enriched)
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudieron cargar las líneas")
+    } finally {
+      setLoadingItems(false)
+    }
+  }
+
+  function fillEmptyPrices(i: SaleItem): PricedItem {
+    return { ...i, price_menudeo: null, price_medio: null, price_mayoreo: null }
+  }
+
+  function setLineTier(item: PricedItem, tier: Tier) {
+    const price =
+      tier === "menudeo"
+        ? item.price_menudeo
+        : tier === "medio"
+        ? item.price_medio
+        : item.price_mayoreo
+    if (!price || price <= 0) {
+      toast.error(`No hay precio ${tier} configurado para "${item.variant_name}"`)
+      return
+    }
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === item.id ? { ...it, tier, unit_price: price } : it
+      )
+    )
+  }
+
+  function setLineQty(item: PricedItem, qty: number) {
+    if (qty < 1) return
+    setItems((prev) =>
+      prev.map((it) => (it.id === item.id ? { ...it, qty } : it))
+    )
+  }
+
+  function resetLines() {
+    if (sale) loadItems(sale)
+  }
+
+  /* ---------- Cálculo del nuevo subtotal y signed adjustment ---------- */
+  const newSubtotal = useMemo(
+    () => items.reduce((acc, it) => acc + Number(it.qty) * Number(it.unit_price), 0),
+    [items]
+  )
+  const signedAdj = useMemo(() => {
+    const n = Number(adjustment) || 0
+    return adjustSign === "discount" ? n : -n
+  }, [adjustment, adjustSign])
+  const projectedTotal = Math.max(0, newSubtotal - signedAdj)
 
   async function handleSave() {
     if (!sale) return
-    if (adjustment !== "" && Number(adjustment) < 0) {
-      toast.error("Escribe sólo el monto. Usa el selector arriba para sumar o restar.")
-      return
-    }
     setSaving(true)
-    const tid = toast.loading("Aplicando ajuste...")
+    const tid = toast.loading("Aplicando cambios...")
     try {
-      // Signed: discount → positivo, charge → negativo
-      const signed = adjustment === "" ? 0 :
-        (adjustSign === "discount" ? Number(adjustment) : -Number(adjustment))
-      const { data, error } = await supabase.rpc("admin_adjust_sale", {
-        p_sale_id: sale.id,
-        p_adjustment: signed,
-        p_reason: reason.trim() || null,
-        p_force_tier: forceTier || null,
+      // 1) Si hay líneas modificadas, actualizamos sale_items + total/balance
+      const original = (sale.sale_items ?? []) as SaleItem[]
+      const dirtyLines = items.filter((it) => {
+        const o = original.find((x) => x.id === it.id)
+        if (!o) return true
+        return (
+          Number(o.qty) !== Number(it.qty) ||
+          Number(o.unit_price) !== Number(it.unit_price) ||
+          o.tier !== it.tier
+        )
       })
-      if (error) throw error
+
+      for (const it of dirtyLines) {
+        const profit = (Number(it.unit_price) - Number(it.cost_snapshot)) * Number(it.qty)
+        const { error } = await supabase
+          .from("sale_items")
+          .update({
+            qty: it.qty,
+            unit_price: it.unit_price,
+            tier: it.tier,
+            profit,
+          })
+          .eq("id", it.id)
+        if (error) throw error
+      }
+
+      if (dirtyLines.length > 0) {
+        // Recalcular total y balance manualmente (la sale tiene total guardado).
+        const paid = Number(sale.paid) || 0
+        const total = newSubtotal
+        const balance = Math.max(0, total - signedAdj - paid)
+        const { error: upErr } = await supabase
+          .from("sales")
+          .update({
+            total,
+            balance,
+            status: balance <= 0 ? "paid" : "pending",
+            adjustment_amount: signedAdj || null,
+            adjustment_reason: reason.trim() || null,
+          })
+          .eq("id", sale.id)
+        if (upErr) throw upErr
+      } else {
+        // Solo ajuste manual → usar la RPC oficial
+        const { error } = await supabase.rpc("admin_adjust_sale", {
+          p_sale_id: sale.id,
+          p_adjustment: signedAdj,
+          p_reason: reason.trim() || null,
+          p_force_tier: null,
+        })
+        if (error) throw error
+      }
+
       sound.success()
-      const savings = (data as any)?.savings ?? 0
-      toast.success(
-        savings > 0
-          ? `✓ Cliente ahorra ${formatMoney(savings)}`
-          : savings < 0
-          ? `✓ Cargo extra +${formatMoney(Math.abs(savings))}`
-          : "✓ Ticket actualizado",
-        { id: tid }
-      )
+      toast.success("Ticket actualizado", { id: tid })
       onSaved()
       onClose()
     } catch (e: any) {
       sound.error()
-      toast.error(e?.message ?? "No se pudo ajustar", { id: tid })
+      toast.error(e?.message ?? "No se pudo guardar", { id: tid })
     } finally {
       setSaving(false)
     }
@@ -99,10 +221,9 @@ export default function EditSaleAdjustModal({
   if (typeof document === "undefined" || !sale) return null
 
   const currentTotal = Number(sale.total) || 0
-  const signedAdj = adjustment === "" ? 0 :
-    (adjustSign === "discount" ? Number(adjustment) : -Number(adjustment))
-  const proyectedTotal = currentTotal - signedAdj
   const isCharge = adjustSign === "charge"
+  const adjLabel = isCharge ? "Cargo extra" : "Descuento"
+  const adjSign = isCharge ? "+" : "−"
 
   return createPortal(
     <AnimatePresence>
@@ -153,63 +274,72 @@ export default function EditSaleAdjustModal({
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios space-y-5">
-              {/* Forzar tier */}
+              {/* LÍNEAS DEL TICKET — control de tier/qty por partida */}
               <section className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                  <Tag size={10} /> Forzar nivel de precio
-                </label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {(["", "menudeo", "medio", "mayoreo"] as const).map((t) => (
-                    <button
-                      key={t || "none"}
-                      type="button"
-                      onClick={() => setForceTier(t)}
-                      className={`h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                        forceTier === t
-                          ? "bg-primary text-white shadow-bloom"
-                          : "bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100"
-                      }`}
-                    >
-                      {t === "" ? "Sin cambio" : t}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
+                    <Layers size={10} /> Líneas del ticket
+                  </label>
+                  <button
+                    type="button"
+                    onClick={resetLines}
+                    disabled={loadingItems}
+                    className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-primary flex items-center gap-1"
+                  >
+                    <RotateCcw size={10} /> Restablecer
+                  </button>
                 </div>
-                <p className="text-[10px] text-slate-400 leading-relaxed">
-                  {forceTier
-                    ? `Los precios de todos los items se recalcularán al nivel "${forceTier}".`
-                    : "No se cambiarán los precios unitarios."}
-                </p>
+
+                {loadingItems ? (
+                  <div className="py-6 text-center">
+                    <Loader2 size={18} className="animate-spin mx-auto text-slate-300" />
+                  </div>
+                ) : items.length === 0 ? (
+                  <p className="text-[10px] text-slate-400 text-center py-4">
+                    Sin partidas
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {items.map((it) => (
+                      <LineRow
+                        key={it.id}
+                        item={it}
+                        onChangeTier={(t) => setLineTier(it, t)}
+                        onChangeQty={(q) => setLineQty(it, q)}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
 
-              {/* Descuento manual / Cargo extra */}
+              {/* Ajuste manual */}
               <section className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
                   <Wallet size={10} /> Ajuste manual al total
                 </label>
 
-                {/* Toggle Descuento vs Cargo */}
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
                     type="button"
                     onClick={() => setAdjustSign("discount")}
-                    className={`h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    className={`h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 ${
                       adjustSign === "discount"
                         ? "bg-emerald-500 text-white shadow-[0_10px_30px_-8px_rgba(16,185,129,0.5)]"
                         : "bg-slate-50 dark:bg-slate-800 text-slate-500"
                     }`}
                   >
-                    − Descuento
+                    <Minus size={11} strokeWidth={3} /> Descuento
                   </button>
                   <button
                     type="button"
                     onClick={() => setAdjustSign("charge")}
-                    className={`h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    className={`h-10 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 ${
                       adjustSign === "charge"
                         ? "bg-amber-500 text-white shadow-[0_10px_30px_-8px_rgba(245,158,11,0.5)]"
                         : "bg-slate-50 dark:bg-slate-800 text-slate-500"
                     }`}
                   >
-                    + Cargo extra
+                    <Plus size={11} strokeWidth={3} /> Cargo extra
                   </button>
                 </div>
 
@@ -222,75 +352,64 @@ export default function EditSaleAdjustModal({
                     setAdjustment(e.target.value === "" ? "" : Number(e.target.value))
                   }
                   placeholder="0.00"
-                  className="settings-input text-lg font-black tabular-nums"
+                  className="w-full h-12 px-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-primary outline-none text-lg font-black tabular-nums text-center"
                 />
                 <p className="text-[10px] text-slate-500 leading-snug">
                   {isCharge
-                    ? "Ej: $200 por envío de Uber, $150 por empaque especial."
-                    : "Ej: $100 de descuento por pasar a mayoreo."}
+                    ? "Suma al total. Ej: envío Uber, empaque especial."
+                    : "Resta del total. Ej: descuento por lealtad."}
                 </p>
               </section>
 
-              {/* Razón */}
+              {/* Motivo */}
               <section className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                  <Sparkles size={10} /> Motivo (lo verá el cliente en su notificación)
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  Motivo (lo verá el cliente en la notificación)
                 </label>
                 <input
                   type="text"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  placeholder="Ej: Descuento por lealtad 💖"
+                  placeholder="Ej: Descuento por compra recurrente"
                   maxLength={120}
-                  className="settings-input"
+                  className="w-full h-11 px-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:border-primary outline-none text-sm font-bold"
                 />
               </section>
 
-              {/* Preview */}
-              <div className={`rounded-2xl border p-3 ${
-                isCharge
-                  ? "bg-amber-50 dark:bg-amber-500/10 border-amber-200/60 dark:border-amber-500/30"
-                  : "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200/60 dark:border-emerald-500/30"
-              }`}>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-600 dark:text-slate-300">
-                    Total actual
-                  </span>
-                  <span className="font-black tabular-nums">
-                    {formatMoney(currentTotal)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs mt-1">
-                  <span className="text-slate-600 dark:text-slate-300">
-                    {isCharge ? "Cargo extra" : "Descuento"}
-                  </span>
-                  <span className={`font-black tabular-nums ${
-                    isCharge ? "text-amber-700" : "text-rose-500"
-                  }`}>
-                    {isCharge ? "+" : "−"}{formatMoney(Number(adjustment) || 0)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-base mt-2 pt-2 border-t border-slate-200/40">
-                  <span className="font-bold">Nuevo total estimado</span>
-                  <span className={`font-black tabular-nums ${
-                    isCharge ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300"
-                  }`}>
-                    {formatMoney(Math.max(0, proyectedTotal))}
-                  </span>
-                </div>
-                {forceTier && (
-                  <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-2 flex items-center gap-1">
-                    <AlertCircle size={10} />
-                    Los precios unitarios también cambiarán al tier{" "}
-                    <b>{forceTier}</b>; el total final puede variar.
-                  </p>
+              {/* Resumen */}
+              <div
+                className={`rounded-2xl border p-3 ${
+                  isCharge
+                    ? "bg-amber-50 dark:bg-amber-500/10 border-amber-200/60 dark:border-amber-500/30"
+                    : "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200/60 dark:border-emerald-500/30"
+                }`}
+              >
+                <SummaryRow label="Subtotal nuevo" value={formatMoney(newSubtotal)} />
+                {Number(adjustment) > 0 && (
+                  <SummaryRow
+                    label={adjLabel}
+                    value={`${adjSign}${formatMoney(Number(adjustment))}`}
+                    tone={isCharge ? "amber" : "rose"}
+                  />
                 )}
+                <div className="flex items-center justify-between text-base mt-2 pt-2 border-t border-slate-200/40 dark:border-slate-700/40">
+                  <span className="font-bold">Total final</span>
+                  <span
+                    className={`font-black tabular-nums ${
+                      isCharge
+                        ? "text-amber-700 dark:text-amber-300"
+                        : "text-emerald-700 dark:text-emerald-300"
+                    }`}
+                  >
+                    {formatMoney(projectedTotal)}
+                  </span>
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || loadingItems}
                 className="w-full h-12 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
               >
@@ -301,15 +420,129 @@ export default function EditSaleAdjustModal({
                 )}
                 Aplicar y notificar al cliente
               </button>
-              <p className="text-[10px] text-center text-slate-400">
-                Se enviará una notificación instantánea al cliente con el
-                motivo del ajuste.
-              </p>
             </div>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>,
     document.body
+  )
+}
+
+/* ════════════════════════ Sub-componentes ════════════════════════ */
+
+function LineRow({
+  item,
+  onChangeTier,
+  onChangeQty,
+}: {
+  item: PricedItem
+  onChangeTier: (t: Tier) => void
+  onChangeQty: (qty: number) => void
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-black truncate">
+            {item.product_name}
+          </p>
+          {item.variant_name && (
+            <p className="text-[10px] font-bold text-slate-500 truncate">
+              {item.variant_name}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center bg-slate-50 dark:bg-slate-800 rounded-lg p-0.5">
+          <button
+            type="button"
+            onClick={() => onChangeQty(Number(item.qty) - 1)}
+            className="w-6 h-6 flex items-center justify-center text-slate-500"
+            aria-label="Restar"
+          >
+            <Minus size={10} />
+          </button>
+          <span className="w-7 text-center text-[11px] font-black tabular-nums">
+            {item.qty}
+          </span>
+          <button
+            type="button"
+            onClick={() => onChangeQty(Number(item.qty) + 1)}
+            className="w-6 h-6 flex items-center justify-center text-slate-500"
+            aria-label="Sumar"
+          >
+            <Plus size={10} />
+          </button>
+        </div>
+      </div>
+
+      {/* Tier picker — muestra solo los tiers que existen */}
+      <div className="grid grid-cols-3 gap-1 mb-2">
+        {TIER_LIST.map((t) => {
+          const price =
+            t === "menudeo"
+              ? item.price_menudeo
+              : t === "medio"
+              ? item.price_medio
+              : item.price_mayoreo
+          const has = !!price && price > 0
+          const active = item.tier === t
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => onChangeTier(t)}
+              disabled={!has}
+              className={`h-12 rounded-xl flex flex-col items-center justify-center transition-all ${
+                active
+                  ? "bg-primary text-white shadow-bloom"
+                  : has
+                  ? "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100"
+                  : "bg-slate-50/50 dark:bg-slate-800/50 text-slate-300 cursor-not-allowed"
+              }`}
+            >
+              <p className="text-[7px] font-black uppercase tracking-widest leading-none">
+                {TIER_LABEL[t]}
+              </p>
+              <p className="text-[10px] font-black tabular-nums leading-tight">
+                {has ? formatMoney(price!) : "—"}
+              </p>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex items-center justify-between text-[10px] font-bold pt-1.5 border-t border-slate-100 dark:border-slate-800">
+        <span className="text-slate-400">
+          {item.qty} × {formatMoney(Number(item.unit_price))}
+        </span>
+        <span className="font-black text-slate-900 dark:text-slate-100 tabular-nums">
+          {formatMoney(Number(item.qty) * Number(item.unit_price))}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function SummaryRow({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string
+  value: string
+  tone?: "default" | "rose" | "amber"
+}) {
+  const cls =
+    tone === "rose"
+      ? "text-rose-500"
+      : tone === "amber"
+      ? "text-amber-700 dark:text-amber-300"
+      : "text-slate-700 dark:text-slate-200"
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-slate-600 dark:text-slate-300">{label}</span>
+      <span className={`font-black tabular-nums ${cls}`}>{value}</span>
+    </div>
   )
 }

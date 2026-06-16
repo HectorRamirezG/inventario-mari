@@ -45,6 +45,20 @@ export function useSalesPage() {
   const [paid, setPaid] = useState<number | string>(0);
   const [capturingLocation, setCapturingLocation] = useState(false);
 
+  // --- Método de entrega ---
+  // mostrador  = entrega en local (default, sin envío)
+  // personal   = entrega en persona (zona + estación + horario)
+  // foraneo    = envío por paquetería (dirección completa + guía)
+  const [deliveryMethod, setDeliveryMethod] = useState<"mostrador" | "personal" | "foraneo">("mostrador");
+  const [deliveryZone, setDeliveryZone] = useState<"" | "cdmx_metro" | "edomex">("");
+  const [deliveryStation, setDeliveryStation] = useState("");
+  const [deliverySchedule, setDeliverySchedule] = useState("");
+  const [shippingStreet, setShippingStreet] = useState("");
+  const [shippingZip, setShippingZip] = useState("");
+  const [shippingColonia, setShippingColonia] = useState("");
+  const [shippingRefs, setShippingRefs] = useState("");
+  const [shippingAmount, setShippingAmount] = useState<number | "">("");
+
   // --- Sugerencias de cliente (histórico) ---
   const [customerSuggestions, setCustomerSuggestions] = useState<
     CustomerSnapshot[]
@@ -92,8 +106,10 @@ export function useSalesPage() {
   );
 
   const total = useMemo(
-    () => repricedCart.reduce((a, i) => a + i.price * i.qty, 0),
-    [repricedCart]
+    () =>
+      repricedCart.reduce((a, i) => a + i.price * i.qty, 0) +
+      (Number(shippingAmount) || 0),
+    [repricedCart, shippingAmount]
   );
 
   const balance = useMemo(() => {
@@ -168,6 +184,15 @@ export function useSalesPage() {
     setIsLayaway(false);
     setPaid(0);
     setCustomerSuggestions([]);
+    setDeliveryMethod("mostrador");
+    setDeliveryZone("");
+    setDeliveryStation("");
+    setDeliverySchedule("");
+    setShippingStreet("");
+    setShippingZip("");
+    setShippingColonia("");
+    setShippingRefs("");
+    setShippingAmount("");
   }, []);
 
   /* ---------- Búsqueda de clientes (debounced) ---------- */
@@ -244,23 +269,80 @@ export function useSalesPage() {
       return;
     }
 
+    // Validaciones de entrega
+    if (deliveryMethod === "personal") {
+      if (!deliveryZone) {
+        toast.error("Elige la zona de entrega");
+        return;
+      }
+      if (!deliveryStation.trim()) {
+        toast.error("Indica la estación o punto de entrega");
+        return;
+      }
+      if (!deliverySchedule.trim()) {
+        toast.error("Indica el horario de entrega");
+        return;
+      }
+    }
+    if (deliveryMethod === "foraneo") {
+      if (!shippingStreet.trim() || !shippingZip.trim() || !shippingColonia.trim()) {
+        toast.error("Completa la dirección de envío (calle, CP, colonia)");
+        return;
+      }
+    }
+
     setLoading(true);
     const toastId = toast.loading(
       isLayaway ? "Guardando apartado..." : "Procesando venta..."
     );
 
     try {
+      // Componer las notas con info estructurada de entrega
+      const deliveryNote = (() => {
+        if (deliveryMethod === "mostrador") return "";
+        if (deliveryMethod === "personal") {
+          const zoneLabel =
+            deliveryZone === "cdmx_metro" ? "CDMX · Metro" : "Edo. de México";
+          return [
+            `Entrega personal — ${zoneLabel}`,
+            `Punto: ${deliveryStation.trim()}`,
+            `Horario: ${deliverySchedule.trim()}`,
+          ].join("\n");
+        }
+        // foraneo
+        return [
+          "Envío foráneo (guía paquetería)",
+          `Calle: ${shippingStreet.trim()}`,
+          `Col.: ${shippingColonia.trim()}  CP: ${shippingZip.trim()}`,
+          shippingRefs.trim() ? `Refs: ${shippingRefs.trim()}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+      })();
+
+      const finalAddress =
+        deliveryMethod === "foraneo"
+          ? [shippingStreet, shippingColonia, shippingZip]
+              .filter(Boolean)
+              .join(", ")
+          : address.trim();
+
+      const finalNotes = [notes.trim(), deliveryNote].filter(Boolean).join("\n\n");
+
       await createSale({
         customer: customer.trim(),
         phone: phone.trim() || null,
-        address: address.trim() || null,
+        address: finalAddress || null,
         location: locationUrl.trim() || null,
-        notes: notes.trim() || null,
+        payment_url: paymentUrl.trim() || null,
+        notes: finalNotes || null,
         isLayaway,
         total,
         paid,
         balance,
         items: repricedCart,
+        shipping_amount: Number(shippingAmount) || 0,
+        is_foreign_shipping: deliveryMethod === "foraneo",
       });
 
       const msg = isLayaway
@@ -287,6 +369,16 @@ export function useSalesPage() {
     paid,
     balance,
     clearCart,
+    deliveryMethod,
+    deliveryZone,
+    deliveryStation,
+    deliverySchedule,
+    shippingStreet,
+    shippingZip,
+    shippingColonia,
+    shippingRefs,
+    shippingAmount,
+    locationUrl,
   ]);
 
   return {
@@ -311,6 +403,16 @@ export function useSalesPage() {
       config,
       customerSuggestions,
       lastSale,
+      // delivery
+      deliveryMethod,
+      deliveryZone,
+      deliveryStation,
+      deliverySchedule,
+      shippingStreet,
+      shippingZip,
+      shippingColonia,
+      shippingRefs,
+      shippingAmount,
     },
     actions: {
       addToCart,
@@ -329,6 +431,15 @@ export function useSalesPage() {
       handleSave,
       pickCustomer,
       dismissLastSale,
+      setDeliveryMethod,
+      setDeliveryZone,
+      setDeliveryStation,
+      setDeliverySchedule,
+      setShippingStreet,
+      setShippingZip,
+      setShippingColonia,
+      setShippingRefs,
+      setShippingAmount,
     },
   };
 }
