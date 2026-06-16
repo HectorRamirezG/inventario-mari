@@ -10,6 +10,8 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -17,6 +19,9 @@ import { supabase } from "../../lib/supabase"
 import { sound } from "../../lib/sound"
 import { formatMoney } from "../../lib/format"
 import type { Sale, SaleItem } from "../../types/database"
+import { previewCascade, toCascadeLine, type CascadeLine } from "./saleCascade"
+import { getPricingConfig } from "../pricing/pricingConfigService"
+import type { PricingConfig } from "../pricing/pricingTypes"
 
 interface Props {
   open: boolean
@@ -37,6 +42,7 @@ interface PricedItem extends SaleItem {
   price_menudeo: number | null
   price_medio: number | null
   price_mayoreo: number | null
+  _removed?: boolean
 }
 
 export default function EditSaleAdjustModal({
@@ -46,11 +52,17 @@ export default function EditSaleAdjustModal({
   onSaved,
 }: Props) {
   const [items, setItems] = useState<PricedItem[]>([])
+  const [originalItems, setOriginalItems] = useState<PricedItem[]>([])
   const [adjustment, setAdjustment] = useState<number | "">("")
   const [adjustSign, setAdjustSign] = useState<"discount" | "charge">("discount")
   const [reason, setReason] = useState("")
   const [loadingItems, setLoadingItems] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [cfg, setCfg] = useState<PricingConfig | null>(null)
+
+  useEffect(() => {
+    getPricingConfig().then(setCfg).catch(() => setCfg(null))
+  }, [])
 
   useEffect(() => {
     if (!open || !sale) return
@@ -97,6 +109,7 @@ export default function EditSaleAdjustModal({
         }
       })
       setItems(enriched)
+      setOriginalItems(enriched.map((it) => ({ ...it })))
     } catch (e: any) {
       toast.error(e?.message ?? "No se pudieron cargar las líneas")
     } finally {
@@ -133,29 +146,62 @@ export default function EditSaleAdjustModal({
     )
   }
 
+  function toggleRemove(item: PricedItem) {
+    setItems((prev) =>
+      prev.map((it) =>
+        it.id === item.id ? { ...it, _removed: !it._removed } : it
+      )
+    )
+  }
+
   function resetLines() {
     if (sale) loadItems(sale)
   }
 
+  /* ---------- Vista previa en cascada ---------- */
+  const cascade = useMemo(() => {
+    if (!sale || !cfg || originalItems.length === 0) return null
+    const orig = originalItems.map((it) => toCascadeLine(it, it))
+    const mod = items.map((it) => ({
+      ...toCascadeLine(it, it),
+      _removed: it._removed,
+    }))
+    return previewCascade(
+      {
+        adjustment_amount: adjustSign === "discount" ? Number(adjustment) || 0 : -(Number(adjustment) || 0),
+        shipping_amount: sale.shipping_amount,
+        paid: sale.paid,
+      },
+      orig,
+      mod,
+      cfg
+    )
+  }, [sale, cfg, items, originalItems, adjustment, adjustSign])
+
+  const tierChanged = cascade && cascade.newTier !== cascade.oldTier
+
   /* ---------- Cálculo del nuevo subtotal y signed adjustment ---------- */
-  const newSubtotal = useMemo(
-    () => items.reduce((acc, it) => acc + Number(it.qty) * Number(it.unit_price), 0),
-    [items]
-  )
+  const newSubtotal = cascade?.newSubtotal ?? 0
   const signedAdj = useMemo(() => {
     const n = Number(adjustment) || 0
     return adjustSign === "discount" ? n : -n
   }, [adjustment, adjustSign])
-  const projectedTotal = Math.max(0, newSubtotal - signedAdj)
+  const projectedTotal = cascade?.newTotal ?? Math.max(0, newSubtotal - signedAdj)
 
   async function handleSave() {
     if (!sale) return
     setSaving(true)
     const tid = toast.loading("Aplicando cambios...")
     try {
-      // 1) Si hay líneas modificadas, actualizamos sale_items + total/balance
-      const original = (sale.sale_items ?? []) as SaleItem[]
-      const dirtyLines = items.filter((it) => {
+      // Si hay alguna modificación en items (qty, tier, unit_price, removed)
+      // disparamos el flujo en cascada manual: UPDATE/DELETE de sale_items
+      // + apply_movement('devolucion') por cada unidad devuelta
+      // + UPDATE de sales (total, balance, status).
+      const repriced = cascade?.lines ?? items.filter((i) => !i._removed)
+      const removed = items.filter((i) => i._removed)
+
+      const original = originalItems
+      const updates = repriced.filter((it) => {
         const o = original.find((x) => x.id === it.id)
         if (!o) return true
         return (
@@ -165,8 +211,12 @@ export default function EditSaleAdjustModal({
         )
       })
 
-      for (const it of dirtyLines) {
-        const profit = (Number(it.unit_price) - Number(it.cost_snapshot)) * Number(it.qty)
+      const dirtyAny = updates.length > 0 || removed.length > 0
+
+      // 1) UPDATE de líneas modificadas
+      for (const it of updates) {
+        const profit =
+          (Number(it.unit_price) - Number(it.cost_snapshot)) * Number(it.qty)
         const { error } = await supabase
           .from("sale_items")
           .update({
@@ -179,11 +229,38 @@ export default function EditSaleAdjustModal({
         if (error) throw error
       }
 
-      if (dirtyLines.length > 0) {
-        // Recalcular total y balance manualmente (la sale tiene total guardado).
+      // 2) DELETE de líneas removidas + restock
+      for (const it of removed) {
+        const { error: delErr } = await supabase
+          .from("sale_items")
+          .delete()
+          .eq("id", it.id)
+        if (delErr) throw delErr
+        if (it.variant_id) {
+          const { error: movErr } = await supabase.rpc("apply_movement", {
+            p_variant_id: it.variant_id,
+            p_type: "devolucion",
+            p_qty: Number(it.qty),
+          })
+          if (movErr) {
+            console.warn("[cascade] apply_movement falló, intentando UPDATE directo:", movErr.message)
+            // Fallback si apply_movement no acepta 'devolucion' en la BD
+            const { data: v } = await supabase
+              .from("variants")
+              .select("stock")
+              .eq("id", it.variant_id)
+              .maybeSingle()
+            const newStock = (Number(v?.stock) || 0) + Number(it.qty)
+            await supabase.from("variants").update({ stock: newStock }).eq("id", it.variant_id)
+          }
+        }
+      }
+
+      if (dirtyAny) {
         const paid = Number(sale.paid) || 0
-        const total = newSubtotal
-        const balance = Math.max(0, total - signedAdj - paid)
+        const ship = Number(sale.shipping_amount) || 0
+        const total = Math.max(0, newSubtotal - signedAdj + ship)
+        const balance = Math.max(0, total - paid)
         const { error: upErr } = await supabase
           .from("sales")
           .update({
@@ -207,7 +284,12 @@ export default function EditSaleAdjustModal({
       }
 
       sound.success()
-      toast.success("Ticket actualizado", { id: tid })
+      toast.success(
+        removed.length > 0
+          ? `Ticket actualizado · ${removed.length} línea${removed.length === 1 ? "" : "s"} devuelta${removed.length === 1 ? "" : "s"} al stock`
+          : "Ticket actualizado",
+        { id: tid }
+      )
       onSaved()
       onClose()
     } catch (e: any) {
@@ -300,12 +382,24 @@ export default function EditSaleAdjustModal({
                   </p>
                 ) : (
                   <div className="space-y-2">
+                    {tierChanged && (
+                      <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-500/15 dark:border-amber-500/40 p-2.5 flex items-start gap-2">
+                        <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-[10px] font-bold text-amber-800 dark:text-amber-200 leading-snug">
+                          Al quitar piezas el ticket baja de{" "}
+                          <span className="font-black uppercase">{TIER_LABEL[cascade!.oldTier]}</span>{" "}
+                          a <span className="font-black uppercase">{TIER_LABEL[cascade!.newTier]}</span>.
+                          Los precios unitarios se recalcularán automáticamente.
+                        </div>
+                      </div>
+                    )}
                     {items.map((it) => (
                       <LineRow
                         key={it.id}
                         item={it}
                         onChangeTier={(t) => setLineTier(it, t)}
                         onChangeQty={(q) => setLineQty(it, q)}
+                        onToggleRemove={() => toggleRemove(it)}
                       />
                     ))}
                   </div>
@@ -435,88 +529,132 @@ function LineRow({
   item,
   onChangeTier,
   onChangeQty,
+  onToggleRemove,
 }: {
   item: PricedItem
   onChangeTier: (t: Tier) => void
   onChangeQty: (qty: number) => void
+  onToggleRemove: () => void
 }) {
+  const removed = !!item._removed
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+    <div
+      className={`rounded-2xl border p-3 transition-all ${
+        removed
+          ? "border-rose-300 bg-rose-50/60 dark:bg-rose-500/10 dark:border-rose-500/40 opacity-70"
+          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+      }`}
+    >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-black truncate">
+          <p
+            className={`text-[12px] font-black truncate ${
+              removed ? "line-through text-rose-600 dark:text-rose-400" : ""
+            }`}
+          >
             {item.product_name}
           </p>
           {item.variant_name && (
-            <p className="text-[10px] font-bold text-slate-500 truncate">
+            <p
+              className={`text-[10px] font-bold truncate ${
+                removed ? "line-through text-rose-500/70" : "text-slate-500"
+              }`}
+            >
               {item.variant_name}
             </p>
           )}
         </div>
-        <div className="flex items-center bg-slate-50 dark:bg-slate-800 rounded-lg p-0.5">
+        <div className="flex items-center gap-1">
+          <div className="flex items-center bg-slate-50 dark:bg-slate-800 rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() => onChangeQty(Number(item.qty) - 1)}
+              disabled={removed}
+              className="w-6 h-6 flex items-center justify-center text-slate-500 disabled:opacity-30"
+              aria-label="Restar"
+            >
+              <Minus size={10} />
+            </button>
+            <span className="w-7 text-center text-[11px] font-black tabular-nums">
+              {item.qty}
+            </span>
+            <button
+              type="button"
+              onClick={() => onChangeQty(Number(item.qty) + 1)}
+              disabled={removed}
+              className="w-6 h-6 flex items-center justify-center text-slate-500 disabled:opacity-30"
+              aria-label="Sumar"
+            >
+              <Plus size={10} />
+            </button>
+          </div>
           <button
             type="button"
-            onClick={() => onChangeQty(Number(item.qty) - 1)}
-            className="w-6 h-6 flex items-center justify-center text-slate-500"
-            aria-label="Restar"
+            onClick={onToggleRemove}
+            aria-label={removed ? "Restaurar línea" : "Quitar línea (devuelve stock)"}
+            title={removed ? "Restaurar línea" : "Quitar línea (devuelve stock)"}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
+              removed
+                ? "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 hover:bg-emerald-100"
+                : "bg-rose-50 dark:bg-rose-500/15 text-rose-600 hover:bg-rose-100"
+            }`}
           >
-            <Minus size={10} />
-          </button>
-          <span className="w-7 text-center text-[11px] font-black tabular-nums">
-            {item.qty}
-          </span>
-          <button
-            type="button"
-            onClick={() => onChangeQty(Number(item.qty) + 1)}
-            className="w-6 h-6 flex items-center justify-center text-slate-500"
-            aria-label="Sumar"
-          >
-            <Plus size={10} />
+            {removed ? <RotateCcw size={12} /> : <Trash2 size={12} />}
           </button>
         </div>
       </div>
 
       {/* Tier picker — muestra solo los tiers que existen */}
-      <div className="grid grid-cols-3 gap-1 mb-2">
-        {TIER_LIST.map((t) => {
-          const price =
-            t === "menudeo"
-              ? item.price_menudeo
-              : t === "medio"
-              ? item.price_medio
-              : item.price_mayoreo
-          const has = !!price && price > 0
-          const active = item.tier === t
-          return (
-            <button
-              key={t}
-              type="button"
-              onClick={() => onChangeTier(t)}
-              disabled={!has}
-              className={`h-12 rounded-xl flex flex-col items-center justify-center transition-all ${
-                active
-                  ? "bg-primary text-white shadow-bloom"
-                  : has
-                  ? "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100"
-                  : "bg-slate-50/50 dark:bg-slate-800/50 text-slate-300 cursor-not-allowed"
-              }`}
-            >
-              <p className="text-[7px] font-black uppercase tracking-widest leading-none">
-                {TIER_LABEL[t]}
-              </p>
-              <p className="text-[10px] font-black tabular-nums leading-tight">
-                {has ? formatMoney(price!) : "—"}
-              </p>
-            </button>
-          )
-        })}
-      </div>
+      {!removed && (
+        <div className="grid grid-cols-3 gap-1 mb-2">
+          {TIER_LIST.map((t) => {
+            const price =
+              t === "menudeo"
+                ? item.price_menudeo
+                : t === "medio"
+                ? item.price_medio
+                : item.price_mayoreo
+            const has = !!price && price > 0
+            const active = item.tier === t
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => onChangeTier(t)}
+                disabled={!has}
+                className={`h-12 rounded-xl flex flex-col items-center justify-center transition-all ${
+                  active
+                    ? "bg-primary text-white shadow-bloom"
+                    : has
+                    ? "bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100"
+                    : "bg-slate-50/50 dark:bg-slate-800/50 text-slate-300 cursor-not-allowed"
+                }`}
+              >
+                <p className="text-[7px] font-black uppercase tracking-widest leading-none">
+                  {TIER_LABEL[t]}
+                </p>
+                <p className="text-[10px] font-black tabular-nums leading-tight">
+                  {has ? formatMoney(price!) : "—"}
+                </p>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="flex items-center justify-between text-[10px] font-bold pt-1.5 border-t border-slate-100 dark:border-slate-800">
-        <span className="text-slate-400">
-          {item.qty} × {formatMoney(Number(item.unit_price))}
+        <span className={removed ? "text-rose-500" : "text-slate-400"}>
+          {removed
+            ? `Se devolverán ${item.qty} pz al stock`
+            : `${item.qty} × ${formatMoney(Number(item.unit_price))}`}
         </span>
-        <span className="font-black text-slate-900 dark:text-slate-100 tabular-nums">
+        <span
+          className={`font-black tabular-nums ${
+            removed
+              ? "line-through text-rose-500/70"
+              : "text-slate-900 dark:text-slate-100"
+          }`}
+        >
           {formatMoney(Number(item.qty) * Number(item.unit_price))}
         </span>
       </div>

@@ -16,6 +16,7 @@ import {
 import type { PricingConfig } from "../pricing/pricingTypes";
 import type { Sale } from "../../types/database";
 import { sound } from "../../lib/sound";
+import { getBusinessRules } from "../settings/businessRulesService";
 
 const DEFAULT_CONFIG: PricingConfig = {
   id: 1,
@@ -289,6 +290,28 @@ export function useSalesPage() {
         toast.error("Completa la dirección de envío (calle, CP, colonia)");
         return;
       }
+    }
+
+    // Reglas de negocio
+    const rules = getBusinessRules();
+
+    // Regla: anticipo mínimo en apartados
+    if (isLayaway && rules.min_layaway_enabled) {
+      const minPaid = (total * rules.min_layaway_percent) / 100;
+      if (Number(paid) < minPaid) {
+        toast.error(
+          `El apartado requiere mínimo ${rules.min_layaway_percent}% de anticipo (${minPaid.toFixed(2)})`
+        );
+        return;
+      }
+    }
+
+    // Regla: confirmación extra para ventas de alto valor
+    if (rules.high_value_enabled && total >= rules.high_value_threshold) {
+      const ok = window.confirm(
+        `Esta venta supera ${rules.high_value_threshold.toLocaleString("es-MX", { style: "currency", currency: "MXN" })}.\n\n¿Confirmas que es correcta?`
+      );
+      if (!ok) return;
     }
 
     setLoading(true);

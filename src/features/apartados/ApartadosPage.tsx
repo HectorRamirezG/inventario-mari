@@ -25,6 +25,10 @@ import Badge from "../../components/ui/Badge";
 import PageHeader from "../../components/ui/PageHeader";
 import KpiCard from "../../components/ui/KpiCard";
 import TabBar from "../../components/ui/TabBar";
+import {
+  useBusinessRules,
+  canCancelSale,
+} from "../settings/businessRulesService";
 import type { Sale } from "../../types/database";
 import { sendReceiptByWhatsApp } from "../../lib/receipt";
 import {
@@ -72,6 +76,8 @@ export default function ApartadosPage() {
       alive = false;
     };
   }, [state.sales]);
+
+  const rules = useBusinessRules();
 
   return (
     <div className="px-3 pt-1 pb-28 max-w-5xl mx-auto">
@@ -182,6 +188,7 @@ export default function ApartadosPage() {
                     : undefined
                 }
                 hasPendingProof={state.pendingProofIds.has(sale.id)}
+                cancelGuard={canCancelSale(rules, sale)}
                 onPay={() => setSelected(sale)}
                 onTicket={() => setTicketSale(sale)}
                 onAdjust={() => setAdjustSale(sale)}
@@ -221,6 +228,7 @@ function SaleCard({
   sale,
   profile,
   hasPendingProof,
+  cancelGuard,
   onPay,
   onTicket,
   onAdjust,
@@ -229,6 +237,7 @@ function SaleCard({
   sale: Sale;
   profile?: UserProfileDetail;
   hasPendingProof?: boolean;
+  cancelGuard?: { allowed: boolean; reason?: string };
   onPay: () => void;
   onTicket: () => void;
   onAdjust: () => void;
@@ -653,8 +662,9 @@ function SaleCard({
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={onCancel}
-            className="h-10 px-3 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
-            title="Cancelar venta"
+            disabled={cancelGuard ? !cancelGuard.allowed : false}
+            className="h-10 px-3 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={cancelGuard?.reason ?? "Cancelar venta"}
           >
             <XCircle size={12} />
           </motion.button>

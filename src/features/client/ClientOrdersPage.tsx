@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Receipt, Clock, CheckCircle2, ArrowRight, LifeBuoy } from "lucide-react"
+import { Receipt, Clock, CheckCircle2, ArrowRight, LifeBuoy, Lock } from "lucide-react"
+import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDate, shortId } from "../../lib/format"
@@ -8,6 +9,11 @@ import { useAuth } from "../../lib/useAuth"
 import TicketDrawer from "../../components/ui/TicketDrawer"
 import Skeleton from "../../components/ui/Skeleton"
 import SupportModal from "../support/SupportModal"
+import {
+  useBusinessRules,
+  canClaim,
+  formatRemaining,
+} from "../settings/businessRulesService"
 
 interface MyOrder {
   id: string
@@ -27,6 +33,7 @@ export default function ClientOrdersPage() {
   const [ticketToken, setTicketToken] = useState<string | null>(null)
   const [openSupport, setOpenSupport] = useState(false)
   const [supportSaleId, setSupportSaleId] = useState<string | null>(null)
+  const rules = useBusinessRules()
 
   useEffect(() => {
     if (!email) return
@@ -163,18 +170,40 @@ export default function ClientOrdersPage() {
                 Ver ticket
                 <ArrowRight size={12} />
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSupportSaleId(o.id)
-                  setOpenSupport(true)
-                }}
-                title="Reportar problema con este pedido"
-                className="h-9 px-3 rounded-xl bg-primary/10 text-primary text-xs font-black flex items-center gap-1 active:scale-95 transition-transform"
-              >
-                <LifeBuoy size={12} />
-                Ayuda
-              </button>
+              {(() => {
+                const claim = canClaim(rules, o as any)
+                if (!claim.allowed) {
+                  return (
+                    <button
+                      type="button"
+                      disabled
+                      title={claim.reason}
+                      className="h-9 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 text-xs font-black flex items-center gap-1 cursor-not-allowed"
+                    >
+                      <Lock size={12} />
+                      Cerrado
+                    </button>
+                  )
+                }
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSupportSaleId(o.id)
+                      setOpenSupport(true)
+                    }}
+                    title={
+                      Number.isFinite(claim.remainingMs)
+                        ? `Te quedan ${formatRemaining(claim.remainingMs)} para reportar`
+                        : "Reportar problema con este pedido"
+                    }
+                    className="h-9 px-3 rounded-xl bg-primary/10 text-primary text-xs font-black flex items-center gap-1 active:scale-95 transition-transform"
+                  >
+                    <LifeBuoy size={12} />
+                    Ayuda
+                  </button>
+                )
+              })()}
             </div>
           </motion.div>
         )

@@ -39,6 +39,7 @@ import DashboardPage from "./features/dashboard/DashboardPage"
 import SalesPage from "./features/sales/SalesPage"
 import ApartadosPage from "./features/apartados/ApartadosPage"
 import SettingsPage from "./features/settings/SettingsPage"
+import BusinessRulesPage from "./features/settings/BusinessRulesPage"
 import LoginPage from "./features/auth/LoginPage"
 import PublicTicketPage from "./features/public/PublicTicketPage"
 import ClientShopPage from "./features/client/ClientShopPage"
@@ -60,6 +61,7 @@ import { useTheme } from "./lib/useTheme"
 import { useAuth, isStaffOrAdmin } from "./lib/useAuth"
 import { useRealtimeNotifications } from "./lib/useRealtime"
 import { useMyAvatar } from "./lib/useMyAvatar"
+import { preloadBusinessRules } from "./features/settings/businessRulesService"
 
 // ──────────────────────────────────────────────────────────────────
 // Menús del shell admin/staff. Etiquetas más cortas y orientadas a acción.
@@ -72,6 +74,7 @@ type AdminSection =
   | "ciclos"
   | "calculadora"
   | "soporte"
+  | "reglas"
   | "ajustes"
 
 const ADMIN_MENU: {
@@ -87,6 +90,7 @@ const ADMIN_MENU: {
   { id: "soporte", label: "Soporte", icon: LifeBuoy },
   { id: "ciclos", label: "Ciclos", icon: TrendingUp, adminOnly: true },
   { id: "calculadora", label: "Calculadora", icon: Tag, adminOnly: true },
+  { id: "reglas", label: "Reglas", icon: SettingsIcon, adminOnly: true },
 ]
 
 /* ============================================================== */
@@ -127,6 +131,11 @@ export default function App() {
 /** Pequeño wrapper para inicializar el tema (solo monta el hook). */
 function ThemeMount() {
   useTheme()
+  useEffect(() => {
+    // Pre-carga las políticas de negocio en caché para que los services
+    // síncronos (getBusinessRules) las tengan disponibles al instante.
+    preloadBusinessRules().catch(() => {})
+  }, [])
   return null
 }
 
@@ -532,6 +541,7 @@ function AdminShell() {
                 {section === "soporte" && <SupportPage />}
                 {section === "ciclos" && isAdmin && <CyclesPage />}
                 {section === "calculadora" && isAdmin && <PricingPage />}
+                {section === "reglas" && isAdmin && <BusinessRulesPage />}
                 {section === "ajustes" && <SettingsPage />}
               </motion.div>
             </AnimatePresence>
