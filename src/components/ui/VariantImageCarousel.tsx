@@ -1,6 +1,6 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
-import { Package } from "lucide-react"
+import { Package, ChevronLeft, ChevronRight } from "lucide-react"
 
 export interface CarouselVariant {
   id: string
@@ -10,7 +10,7 @@ export interface CarouselVariant {
 
 interface Props {
   variants: CarouselVariant[]
-  /** Variante activa (controlada por el padre — chips abajo de la card) */
+  /** Variante activa (controlada por el padre — chips externos) */
   selectedVariantId: string | null
   /** Aspect ratio CSS (default 1/1) */
   aspect?: string
@@ -20,12 +20,15 @@ interface Props {
 }
 
 /**
- * Muestra UNA imagen de la variante seleccionada, con animación de fade
- * al cambiar. Sin swipe táctil ni scroll horizontal — eso rompía el
- * scroll vertical nativo en móvil. El swipe ENTRE fotos se delega al
- * componente `ProductLightbox` que se abre al hacer tap.
+ * Carrusel de la imagen activa. La VARIANTE la controla el padre
+ * (chips externos); el ÍNDICE de la foto dentro de esa variante lo
+ * maneja este componente con flechas + dots.
  *
- * Si hay una sola foto, simplemente la muestra.
+ * Reglas:
+ *  - Si el selectedVariantId no matchea, usa la primera variante.
+ *  - Si la variante activa tiene 0 fotos, el padre debe pasarle fallback
+ *    en `images` para que no se vea vacía.
+ *  - Las flechas y dots solo aparecen si la variante activa tiene >1 fotos.
  */
 export default function VariantImageCarousel({
   variants,
@@ -34,33 +37,29 @@ export default function VariantImageCarousel({
   onTap,
   className = "",
 }: Props) {
-  // Foto principal de la variante seleccionada (la primera)
-  const activeUrl = useMemo(() => {
+  const active = useMemo(() => {
     if (variants.length === 0) return null
-    const v = variants.find((vv) => vv.id === selectedVariantId) ?? variants[0]
-    return v.images[0] ?? null
+    return variants.find((vv) => vv.id === selectedVariantId) ?? variants[0]
   }, [variants, selectedVariantId])
 
-  const activeId = useMemo(() => {
-    if (variants.length === 0) return null
-    const v = variants.find((vv) => vv.id === selectedVariantId) ?? variants[0]
-    return v.id
-  }, [variants, selectedVariantId])
+  const images = active?.images ?? []
+  const totalInActive = images.length
 
-  const activeName = useMemo(() => {
-    if (variants.length === 0) return null
-    const v = variants.find((vv) => vv.id === selectedVariantId) ?? variants[0]
-    return v.name
-  }, [variants, selectedVariantId])
+  // Índice de la foto dentro de la variante activa
+  const [idx, setIdx] = useState(0)
 
-  // Total de fotos disponibles para mostrar el contador
-  const totalImages = useMemo(
-    () => variants.reduce((acc, v) => acc + v.images.length, 0),
-    [variants]
-  )
+  // Reset al cambiar de variante
+  useEffect(() => {
+    setIdx(0)
+  }, [active?.id])
+
+  function go(delta: number) {
+    if (totalInActive < 2) return
+    setIdx((i) => (i + delta + totalInActive) % totalInActive)
+  }
 
   // Estado vacío
-  if (!activeUrl || variants.length === 0) {
+  if (!active || images.length === 0) {
     return (
       <div
         className={`relative w-full overflow-hidden bg-gradient-to-br from-pink-50 to-purple-50 dark:from-slate-800 dark:to-slate-800/60 flex items-center justify-center text-primary/40 ${className}`}
@@ -71,6 +70,10 @@ export default function VariantImageCarousel({
     )
   }
 
+  const safeIdx = Math.min(idx, totalInActive - 1)
+  const activeUrl = images[safeIdx]
+  const hasMany = totalInActive > 1
+
   return (
     <div
       className={`relative w-full overflow-hidden bg-slate-100 dark:bg-slate-800 select-none ${className}`}
@@ -78,9 +81,9 @@ export default function VariantImageCarousel({
     >
       <AnimatePresence mode="wait">
         <motion.img
-          key={activeId}
+          key={`${active.id}-${safeIdx}`}
           src={activeUrl}
-          alt={activeName ?? ""}
+          alt={active.name}
           loading="lazy"
           draggable={false}
           initial={{ opacity: 0, scale: 1.04 }}
@@ -96,7 +99,7 @@ export default function VariantImageCarousel({
       {variants.length > 1 && (
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeId}
+            key={active.id}
             initial={{ opacity: 0, y: 6, scale: 0.92 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6 }}
@@ -104,31 +107,65 @@ export default function VariantImageCarousel({
             className="absolute top-2 left-2 z-10 px-2.5 py-1 rounded-full text-white text-[9px] font-black uppercase tracking-widest shadow pointer-events-none"
             style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
           >
-            {activeName}
+            {active.name}
           </motion.div>
         </AnimatePresence>
       )}
 
-      {/* Contador de fotos (si hay varias) */}
-      {totalImages > 1 && (
+      {/* Contador X/N */}
+      {hasMany && (
         <span className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full bg-black/45 backdrop-blur text-white text-[9px] font-black tabular-nums pointer-events-none">
-          1/{totalImages}
+          {safeIdx + 1}/{totalInActive}
         </span>
       )}
 
-      {/* Pills indicadoras (una por variante) */}
-      {variants.length > 1 && (
-        <LayoutGroup id={`vic-${variants.map((v) => v.id).join("-")}`}>
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 z-10 pointer-events-none">
-            {variants.map((v) => {
-              const active = v.id === activeId
+      {/* Flechas laterales */}
+      {hasMany && (
+        <>
+          <button
+            type="button"
+            aria-label="Foto anterior"
+            onClick={(e) => {
+              e.stopPropagation()
+              go(-1)
+            }}
+            className="absolute left-1.5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/65 dark:bg-slate-900/65 backdrop-blur text-slate-700 dark:text-slate-100 flex items-center justify-center shadow active:scale-90 transition-transform"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            type="button"
+            aria-label="Foto siguiente"
+            onClick={(e) => {
+              e.stopPropagation()
+              go(1)
+            }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/65 dark:bg-slate-900/65 backdrop-blur text-slate-700 dark:text-slate-100 flex items-center justify-center shadow active:scale-90 transition-transform"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </>
+      )}
+
+      {/* Dots de fotos dentro de la variante activa */}
+      {hasMany && (
+        <LayoutGroup id={`vic-photos-${active.id}`}>
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 z-10">
+            {images.map((_, i) => {
+              const isActive = i === safeIdx
               return (
-                <motion.span
-                  key={v.id}
+                <motion.button
+                  key={i}
+                  type="button"
                   layout
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIdx(i)
+                  }}
+                  aria-label={`Foto ${i + 1}`}
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  className={`h-1.5 rounded-full ${
-                    active ? "w-5 bg-white shadow" : "w-1.5 bg-white/60"
+                  className={`h-1.5 rounded-full transition-colors ${
+                    isActive ? "w-5 bg-white shadow" : "w-1.5 bg-white/60"
                   }`}
                 />
               )

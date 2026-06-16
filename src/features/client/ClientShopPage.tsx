@@ -1210,26 +1210,42 @@ function ProductCardClient({
   })()
   const onOffer = discountPct >= 5
 
-  // "Slices" para VariantImageCarousel: cada variante aporta sus fotos
-  const carouselVariants = product.variants
-    .map((v) => {
-      const imgs =
-        v.image_urls && v.image_urls.length > 0
-          ? v.image_urls
-          : v.image_url
-          ? [v.image_url]
-          : []
-      return { id: v.id, name: v.variant_name, images: imgs }
+  // Slices para VariantImageCarousel. REGLA CRÍTICA:
+  // toda variante DEBE existir en este array, aunque no tenga fotos propias,
+  // para que el selectedVariantId siempre matchee. Si no tiene fotos, hereda
+  // las del producto o las de la primera variante con galería como fallback.
+  const fallbackImages = (() => {
+    const firstWithImgs = product.variants.find((v) => {
+      const arr = v.image_urls && v.image_urls.length > 0
+        ? v.image_urls
+        : v.image_url
+        ? [v.image_url]
+        : []
+      return arr.length > 0
     })
-    .filter((v) => v.images.length > 0)
+    if (firstWithImgs) {
+      return firstWithImgs.image_urls && firstWithImgs.image_urls.length > 0
+        ? firstWithImgs.image_urls
+        : firstWithImgs.image_url
+        ? [firstWithImgs.image_url]
+        : []
+    }
+    return product.image_url ? [product.image_url] : []
+  })()
 
-  // Fallback: si NINGÚN variant tiene fotos, caémos al image_url del producto
-  const carouselSafe =
-    carouselVariants.length > 0
-      ? carouselVariants
-      : product.image_url
-      ? [{ id: variant.id, name: variant.variant_name, images: [product.image_url] }]
-      : []
+  const carouselSafe = product.variants.map((v) => {
+    const own =
+      v.image_urls && v.image_urls.length > 0
+        ? v.image_urls
+        : v.image_url
+        ? [v.image_url]
+        : []
+    return {
+      id: v.id,
+      name: v.variant_name,
+      images: own.length > 0 ? own : fallbackImages,
+    }
+  })
 
   /* ───────── LIST MODE: fila horizontal compacta ───────── */
   if (mode === "list") {
