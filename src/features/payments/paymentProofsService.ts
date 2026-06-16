@@ -66,19 +66,60 @@ export async function uploadPaymentProof(input: {
     publicUrl = u
   }
 
-  const { data, error } = await supabase
+  // En efectivo NO hay imagen; el status va 'pending_verification' para
+  // que el admin sepa que debe validar fisicamente el dinero. La columna
+  // image_url debe ser NULLABLE en la BD (fix_payments_and_notifications.sql).
+  const isCash = !input.file
+  const payload: Record<string, any> = {
+    sale_id: input.saleId,
+    image_url: publicUrl,
+    amount: input.amount ?? null,
+    method: input.method ?? (isCash ? "efectivo" : "transferencia"),
+    customer_email: input.customerEmail ?? null,
+    note: input.note ?? null,
+    status: isCash ? "pending_verification" : "pending",
+  }
+
+  let { data, error } = await supabase
     .from("payment_proofs")
-    .insert({
-      sale_id: input.saleId,
-      image_url: publicUrl,
-      amount: input.amount ?? null,
-      method: input.method ?? "transferencia",
-      customer_email: input.customerEmail ?? null,
-      note: input.note ?? null,
-      status: "pending",
-    })
+    .insert(payload)
     .select()
     .single()
+
+  // Fallback: si la BD aún no permite 'pending_verification' (constraint
+  // viejo), reintentamos con 'pending' para no romper el flujo del cliente.
+  if (
+    error &&
+    /violates check constraint|invalid input value for enum|status_check/i.test(
+      error.message
+    )
+  ) {
+    payload.status = "pending"
+    const retry = await supabase
+      .from("payment_proofs")
+      .insert(payload)
+      .select()
+      .single()
+    data = retry.data
+    error = retry.error
+  }
+
+  // Fallback duro: si image_url sigue NOT NULL pegamos un placeholder para
+  // que el flujo no truene. El admin sabrá que es efectivo por el method.
+  if (
+    error &&
+    isCash &&
+    /null value in column "image_url"|not-null constraint/i.test(error.message)
+  ) {
+    payload.image_url = "cash://no-image"
+    const retry = await supabase
+      .from("payment_proofs")
+      .insert(payload)
+      .select()
+      .single()
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) throw error
   return data as PaymentProof

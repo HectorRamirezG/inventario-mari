@@ -33,6 +33,18 @@ export interface BusinessRules {
   /** Apartado mínimo (% del total) para aceptarlo. */
   min_layaway_enabled: boolean
   min_layaway_percent: number
+
+  /** Tope de apartados simultáneos por cliente (evita acaparar stock). */
+  max_layaways_enabled: boolean
+  max_layaways_per_client: number
+
+  /** Notifica al admin cuando una variante baja del umbral. */
+  stock_alert_enabled: boolean
+  stock_alert_threshold: number
+
+  /** Una vez que el ciclo de inventario está cerrado, prohíbe editar
+   *  pedidos viejos (no se pueden quitar artículos del histórico). */
+  lock_edit_when_cycle_closed: boolean
 }
 
 export const DEFAULT_RULES: BusinessRules = {
@@ -54,6 +66,14 @@ export const DEFAULT_RULES: BusinessRules = {
 
   min_layaway_enabled: false,
   min_layaway_percent: 20,
+
+  max_layaways_enabled: false,
+  max_layaways_per_client: 3,
+
+  stock_alert_enabled: true,
+  stock_alert_threshold: 3,
+
+  lock_edit_when_cycle_closed: false,
 }
 
 let cache: BusinessRules | null = null
@@ -75,6 +95,13 @@ function merge(raw: any): BusinessRules {
     no_refund: !!raw.no_refund,
     min_layaway_enabled: !!raw.min_layaway_enabled,
     min_layaway_percent: Number(raw.min_layaway_percent) || DEFAULT_RULES.min_layaway_percent,
+    max_layaways_enabled: !!raw.max_layaways_enabled,
+    max_layaways_per_client:
+      Number(raw.max_layaways_per_client) || DEFAULT_RULES.max_layaways_per_client,
+    stock_alert_enabled: !!raw.stock_alert_enabled,
+    stock_alert_threshold:
+      Number(raw.stock_alert_threshold) || DEFAULT_RULES.stock_alert_threshold,
+    lock_edit_when_cycle_closed: !!raw.lock_edit_when_cycle_closed,
   }
 }
 

@@ -11,6 +11,10 @@ import {
   Ban,
   Wallet,
   RotateCcw,
+  Bookmark,
+  Package,
+  Layers,
+  Lock,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -182,6 +186,50 @@ export default function BusinessRulesPage() {
             description="Las cancelaciones se reconvierten en nota de crédito interna, nunca dinero en efectivo."
             enabled={form.no_refund}
             onToggle={(v) => patch({ no_refund: v })}
+          />
+        </Block>
+
+        {/* INVENTARIO Y CONTROL DE APARTADOS */}
+        <Block title="Inventario y control de apartados" icon={Package}>
+          <RuleRow
+            icon={Bookmark}
+            title="Tope de apartados por cliente"
+            description="Si un cliente ya tiene N apartados pendientes, no podrá crear otro hasta liquidar."
+            enabled={form.max_layaways_enabled}
+            onToggle={(v) => patch({ max_layaways_enabled: v })}
+          >
+            <NumberField
+              label="Máximo"
+              value={form.max_layaways_per_client}
+              onChange={(v) => patch({ max_layaways_per_client: v })}
+              min={1}
+              max={20}
+            />
+          </RuleRow>
+
+          <RuleRow
+            icon={Layers}
+            title="Alerta automática de stock bajo"
+            description="Notifica al admin cuando una variante baja del umbral configurado."
+            enabled={form.stock_alert_enabled}
+            onToggle={(v) => patch({ stock_alert_enabled: v })}
+          >
+            <NumberField
+              label="Piezas"
+              value={form.stock_alert_threshold}
+              onChange={(v) => patch({ stock_alert_threshold: v })}
+              suffix="pz"
+              min={0}
+              max={100}
+            />
+          </RuleRow>
+
+          <RuleRow
+            icon={Lock}
+            title="Bloquear edición tras cerrar ciclo"
+            description="Después de cerrar el ciclo de inventario del mes, los pedidos viejos no se pueden modificar."
+            enabled={form.lock_edit_when_cycle_closed}
+            onToggle={(v) => patch({ lock_edit_when_cycle_closed: v })}
           />
         </Block>
       </div>

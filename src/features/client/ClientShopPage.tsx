@@ -42,6 +42,7 @@ import {
   useShippingConfig,
   calcShipping,
 } from "../pricing/shippingService"
+import { getBusinessRules } from "../settings/businessRulesService"
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -62,6 +63,7 @@ interface PublicProduct {
   name: string
   category: string | null
   image_url: string | null
+  created_at?: string | null
   variants: PublicVariant[]
 }
 
@@ -140,6 +142,8 @@ export default function ClientShopPage() {
   const [products, setProducts] = useState<PublicProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
+  const [sortBy, setSortBy] = useState<"newest" | "price_asc" | "price_desc" | "name">("newest")
+  const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [cart, setCart] = useState<CartLine[]>([])
   const [openCart, setOpenCart] = useState(false)
   const [openGuestForm, setOpenGuestForm] = useState(false)
@@ -176,7 +180,7 @@ export default function ClientShopPage() {
       // Leemos directo de products + variants (la policy `anon_all` lo permite).
       const { data: prods } = await supabase
         .from("products")
-        .select("id,name,category,image_url")
+        .select("id,name,category,image_url,created_at")
         .eq("is_active", true)
         .order("name")
       const { data: vars } = await supabase
@@ -207,17 +211,48 @@ export default function ClientShopPage() {
     }
   }, [])
 
+  const categories = useMemo(() => {
+    const set = new Set<string>()
+    products.forEach((p) => {
+      if (p.category) set.add(p.category)
+    })
+    return Array.from(set).sort()
+  }, [products])
+
   const filtered = useMemo(() => {
-    if (!q.trim()) return products
-    const needle = q.toLowerCase()
-    return products.filter(
-      (p) =>
-        p.name.toLowerCase().includes(needle) ||
-        p.variants.some((v) =>
-          v.variant_name.toLowerCase().includes(needle)
-        )
-    )
-  }, [products, q])
+    const needle = q.trim().toLowerCase()
+    let out = products
+    // categoría
+    if (categoryFilter !== "all") {
+      out = out.filter((p) => (p.category ?? "") === categoryFilter)
+    }
+    // búsqueda
+    if (needle) {
+      out = out.filter(
+        (p) =>
+          p.name.toLowerCase().includes(needle) ||
+          p.variants.some((v) => v.variant_name.toLowerCase().includes(needle))
+      )
+    }
+    // orden
+    const minPrice = (p: PublicProduct) => {
+      const ps = p.variants
+        .map((v) => Number(v.price_menudeo ?? v.price ?? 0))
+        .filter((x) => x > 0)
+      return ps.length ? Math.min(...ps) : Infinity
+    }
+    const arr = [...out]
+    if (sortBy === "price_asc") arr.sort((a, b) => minPrice(a) - minPrice(b))
+    else if (sortBy === "price_desc") arr.sort((a, b) => minPrice(b) - minPrice(a))
+    else if (sortBy === "name") arr.sort((a, b) => a.name.localeCompare(b.name))
+    else
+      arr.sort((a, b) => {
+        const ta = a.created_at ? Date.parse(a.created_at) : 0
+        const tb = b.created_at ? Date.parse(b.created_at) : 0
+        return tb - ta
+      })
+    return arr
+  }, [products, q, categoryFilter, sortBy])
 
   const totalQty = useMemo(
     () => cart.reduce((acc, c) => acc + c.qty, 0),
@@ -391,6 +426,24 @@ export default function ClientShopPage() {
       setOpenGuestForm(true)
       return
     }
+
+    // Regla de negocio: tope de apartados pendientes simultáneos por cliente
+    const rules = getBusinessRules()
+    if (rules.max_layaways_enabled) {
+      const { count } = await supabase
+        .from("sales")
+        .select("id", { count: "exact", head: true })
+        .eq("customer_email", guest.email.trim().toLowerCase())
+        .eq("is_layaway", true)
+        .eq("status", "pending")
+      if ((count ?? 0) >= rules.max_layaways_per_client) {
+        toast.error(
+          `Ya tienes ${count} apartados pendientes (máx. ${rules.max_layaways_per_client}). Liquida alguno para crear otro.`
+        )
+        return
+      }
+    }
+
     setSubmitting(true)
     const total = totalAmt
     const tid = toast.loading("Creando tu apartado...")
@@ -492,7 +545,7 @@ export default function ClientShopPage() {
       </div>
 
       {/* Buscador */}
-      <div className="flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl h-12 px-4 mb-4 shadow-sm">
+      <div className="flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl h-12 px-4 mb-3 shadow-sm">
         <Search size={16} className="text-slate-400" />
         <input
           value={q}
@@ -509,6 +562,53 @@ export default function ClientShopPage() {
             <X size={11} />
           </button>
         )}
+      </div>
+
+      {/* Filtros: categoría + sort */}
+      {categories.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 -mx-1 px-1 mb-1 scroll-container-ios">
+          <button
+            type="button"
+            onClick={() => setCategoryFilter("all")}
+            className={`shrink-0 px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+              categoryFilter === "all"
+                ? "bg-primary text-white shadow-bloom"
+                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500"
+            }`}
+          >
+            Todo
+          </button>
+          {categories.map((c) => {
+            const active = categoryFilter === c
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategoryFilter(c)}
+                className={`shrink-0 px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                  active
+                    ? "bg-primary text-white shadow-bloom"
+                    : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500"
+                }`}
+              >
+                {c}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 mb-3">
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          className="flex-1 h-9 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 outline-none"
+        >
+          <option value="newest">Más recientes</option>
+          <option value="price_asc">Precio: menor a mayor</option>
+          <option value="price_desc">Precio: mayor a menor</option>
+          <option value="name">Nombre A–Z</option>
+        </select>
       </div>
 
       {/* Layout switcher */}
@@ -1090,6 +1190,26 @@ function ProductCardClient({
 
   const out = variant.stock <= 0
 
+  // Badges automáticos: NUEVO (producto creado en últimos 7 días) y
+  // OFERTA (price_medio < price_menudeo). El % de descuento se calcula
+  // contra el precio_menudeo (el de referencia más alto).
+  const NEW_DAYS_WINDOW = 7
+  const isNew = (() => {
+    if (!product.created_at) return false
+    const created = Date.parse(product.created_at)
+    if (!created) return false
+    return Date.now() - created < NEW_DAYS_WINDOW * 24 * 3600 * 1000
+  })()
+  const discountPct = (() => {
+    const m = Number(variant?.price_menudeo) || 0
+    const med = Number(variant?.price_medio) || 0
+    if (m > 0 && med > 0 && med < m) {
+      return Math.round(((m - med) / m) * 100)
+    }
+    return 0
+  })()
+  const onOffer = discountPct >= 5
+
   // "Slices" para VariantImageCarousel: cada variante aporta sus fotos
   const carouselVariants = product.variants
     .map((v) => {
@@ -1126,7 +1246,7 @@ function ProductCardClient({
           type="button"
           onClick={() => variant && onOpenLightbox(variant.id)}
           layoutId={`img-${product.id}`}
-          className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-700/50"
+          className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-700/50 relative"
           aria-label={`Ver ${product.name}`}
         >
           {cover ? (
@@ -1139,6 +1259,20 @@ function ProductCardClient({
           ) : (
             <div className="w-full h-full flex items-center justify-center text-slate-300">
               <Package size={22} />
+            </div>
+          )}
+          {(isNew || onOffer) && (
+            <div className="absolute top-1 left-1 flex flex-col items-start gap-0.5">
+              {isNew && (
+                <span className="px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 text-[7px] font-black uppercase tracking-widest shadow-sm">
+                  Nuevo
+                </span>
+              )}
+              {onOffer && (
+                <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[7px] font-black uppercase tracking-widest shadow-sm">
+                  -{discountPct}%
+                </span>
+              )}
             </div>
           )}
         </motion.button>
@@ -1200,6 +1334,19 @@ function ProductCardClient({
           onTap={() => variant && onOpenLightbox(variant.id)}
           className="rounded-none"
         />
+        {/* Badges esquina superior izquierda: NUEVO / OFERTA */}
+        <div className="absolute top-2 left-2 z-10 flex flex-col items-start gap-1">
+          {isNew && (
+            <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200 text-[9px] font-black uppercase tracking-widest shadow-sm border border-sky-200/60">
+              Nuevo
+            </span>
+          )}
+          {onOffer && (
+            <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-200 text-[9px] font-black uppercase tracking-widest shadow-sm border border-rose-200/60">
+              -{discountPct}% mayoreo
+            </span>
+          )}
+        </div>
         {out && (
           <span className="absolute top-2 right-12 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
             Agotado
