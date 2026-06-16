@@ -1247,6 +1247,17 @@ function ProductCardClient({
     }
   })
 
+  // ¿Hay diferenciación real entre variantes a nivel de imagen?
+  // Si todas terminan con exactamente la misma primera URL (caso típico:
+  // ninguna variante subió foto, todas heredan la del producto), la pill
+  // "Canela / Negro / Cafe..." sobre la imagen solo confunde porque la
+  // foto no cambia. La ocultamos en ese caso.
+  const distinctCovers = new Set(
+    carouselSafe.map((v) => v.images[0] ?? "")
+  )
+  const showVariantBadge =
+    product.variants.length > 1 && distinctCovers.size > 1
+
   /* ───────── LIST MODE: fila horizontal compacta ───────── */
   if (mode === "list") {
     const cover = carouselSafe[0]?.images[0]
@@ -1350,6 +1361,7 @@ function ProductCardClient({
           aspect={isFocus ? "4/3" : "1/1"}
           onTap={() => variant && onOpenLightbox(variant.id)}
           className="rounded-none"
+          showVariantBadge={showVariantBadge}
         />
         {/* Badges esquina superior izquierda: NUEVO / OFERTA.
             Layout en fila (flex-wrap) para no apilarse verticalmente y

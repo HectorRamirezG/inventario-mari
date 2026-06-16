@@ -17,6 +17,13 @@ interface Props {
   /** Click en imagen → abre lightbox fullscreen */
   onTap?: () => void
   className?: string
+  /**
+   * Mostrar la pill flotante con el nombre de la variante activa.
+   * Default: true. El padre puede pasarlo en false cuando TODAS las
+   * variantes están usando la misma imagen fallback (porque ninguna
+   * subió foto propia) — en ese caso la pill solo confunde al cliente.
+   */
+  showVariantBadge?: boolean
 }
 
 /**
@@ -36,6 +43,7 @@ export default function VariantImageCarousel({
   aspect = "1/1",
   onTap,
   className = "",
+  showVariantBadge = true,
 }: Props) {
   const active = useMemo(() => {
     if (variants.length === 0) return null
@@ -99,8 +107,11 @@ export default function VariantImageCarousel({
           Se posiciona BOTTOM-LEFT para no chocar con los badges promocionales
           (Nuevo / Oferta) que ProductCardClient pinta en top-left.
           Si hay múltiples fotos (dots visibles abajo) la subimos un piso
-          para no chocar contra los dots. */}
-      {variants.length > 1 && (
+          para no chocar contra los dots.
+          La pill se OCULTA cuando showVariantBadge=false (caso típico:
+          todas las variantes comparten la misma imagen fallback — la pill
+          solo confundiría al cliente). */}
+      {variants.length > 1 && showVariantBadge && (
         <AnimatePresence mode="wait">
           <motion.div
             key={active.id}

@@ -529,11 +529,66 @@ function VariantsTab({
 }) {
   const [openId, setOpenId] = useState<string | null>(focusVariantId)
   const [showNew, setShowNew] = useState(false)
+  const [bulkInheriting, setBulkInheriting] = useState(false)
 
   // Si recibimos focusVariantId, abrimos esa fila al montar
   useEffect(() => {
     if (focusVariantId) setOpenId(focusVariantId)
   }, [focusVariantId])
+
+  // Variantes sin foto propia (ni image_url ni image_urls con elementos).
+  // Si el producto tiene foto principal, ofrecemos heredarla con 1 click.
+  const variantsWithoutPhoto = useMemo(
+    () =>
+      (product.variants ?? []).filter((v) => {
+        const hasUrls = Array.isArray(v.image_urls) && v.image_urls.length > 0
+        const hasUrl = !!v.image_url
+        return !hasUrls && !hasUrl
+      }),
+    [product.variants]
+  )
+  const canBulkInherit =
+    !!product.image_url && variantsWithoutPhoto.length > 0
+
+  async function inheritProductPhotoToAll() {
+    if (!canBulkInherit || !product.image_url) return
+    setBulkInheriting(true)
+    const tid = toast.loading(
+      `Asignando foto a ${variantsWithoutPhoto.length} ${
+        variantsWithoutPhoto.length === 1 ? "variante" : "variantes"
+      }...`
+    )
+    try {
+      // Actualiza en paralelo. updateVariant ya maneja el fallback de
+      // image_urls si la columna no existe (DB sin migración 0028).
+      const results = await Promise.allSettled(
+        variantsWithoutPhoto.map((v) =>
+          updateVariant(v.id, {
+            image_url: product.image_url,
+            image_urls: [product.image_url!],
+          } as any)
+        )
+      )
+      const ok = results.filter((r) => r.status === "fulfilled").length
+      const fail = results.length - ok
+      if (fail === 0) {
+        toast.success(
+          `✨ Foto asignada a ${ok} ${ok === 1 ? "variante" : "variantes"}`,
+          { id: tid }
+        )
+      } else {
+        toast.error(
+          `${ok} ok · ${fail} fallaron. Reintenta o sube fotos manuales.`,
+          { id: tid }
+        )
+      }
+      onSaved()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Error asignando fotos", { id: tid })
+    } finally {
+      setBulkInheriting(false)
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -550,6 +605,52 @@ function VariantsTab({
           Nueva variante
         </button>
       </div>
+
+      {/* Banner masivo: heredar foto del producto a variantes sin foto.
+          Solo aparece si HAY foto principal y AL MENOS 1 variante sin foto. */}
+      {canBulkInherit && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-gradient-to-br from-amber-50 to-pink-50 dark:from-amber-500/10 dark:to-pink-500/10 border border-amber-200/70 dark:border-amber-500/30 p-3 flex items-start gap-3"
+        >
+          <div
+            className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border-2 border-white shadow"
+            style={{
+              background: "linear-gradient(135deg,#fcd34d,#f9a8d4)",
+            }}
+          >
+            <img
+              src={product.image_url!}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
+              {variantsWithoutPhoto.length}{" "}
+              {variantsWithoutPhoto.length === 1 ? "variante sin foto" : "variantes sin foto"}
+            </p>
+            <p className="text-[11px] font-bold text-amber-900/70 dark:text-amber-100/80 leading-snug">
+              Heredan la foto principal del producto para que se vean en la
+              tienda mientras les tomas su propia foto.
+            </p>
+            <button
+              type="button"
+              onClick={inheritProductPhotoToAll}
+              disabled={bulkInheriting}
+              className="mt-2 h-8 px-3 rounded-lg bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow active:scale-95 disabled:opacity-50"
+            >
+              {bulkInheriting ? (
+                <Loader2 size={11} className="animate-spin" />
+              ) : (
+                <ImageIcon size={11} />
+              )}
+              Heredar foto a {variantsWithoutPhoto.length === 1 ? "esa variante" : "todas"}
+            </button>
+          </div>
+        </motion.div>
+      )}
 
       <AnimatePresence>
         {showNew && (
@@ -866,6 +967,7 @@ function VariantAccordion({
   }
 
   const cover = images[0]
+  const hasOwnPhoto = images.length > 0
 
   return (
     <motion.div
@@ -873,7 +975,9 @@ function VariantAccordion({
       className={`rounded-2xl border transition-colors ${
         dirty
           ? "border-primary/40 bg-primary/5"
-          : "border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800/60"
+          : hasOwnPhoto
+          ? "border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800/60"
+          : "border-amber-200/60 dark:border-amber-500/30 bg-amber-50/40 dark:bg-amber-500/5"
       }`}
     >
       <button
@@ -881,15 +985,28 @@ function VariantAccordion({
         onClick={onToggle}
         className="w-full flex items-center gap-3 p-2.5 text-left"
       >
-        <div className="w-11 h-11 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-700 flex items-center justify-center shrink-0">
+        <div
+          className={`relative w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center shrink-0 ${
+            cover
+              ? "bg-slate-100 dark:bg-slate-700"
+              : "bg-amber-100 dark:bg-amber-500/20 ring-2 ring-amber-200 dark:ring-amber-500/30"
+          }`}
+        >
           {cover ? (
             <img src={cover} alt="" className="w-full h-full object-cover" />
           ) : (
-            <ImageIcon size={16} className="text-slate-300" />
+            <Camera size={16} className="text-amber-500" />
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-black truncate">{vName}</p>
+          <p className="text-[12px] font-black truncate flex items-center gap-1.5">
+            {vName}
+            {!hasOwnPhoto && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[8px] font-black uppercase tracking-widest shrink-0">
+                Sin foto
+              </span>
+            )}
+          </p>
           <p className="text-[9px] font-bold text-slate-400 truncate">
             <span className="text-emerald-600">{stock} pz</span>
             {pm !== "" && (
