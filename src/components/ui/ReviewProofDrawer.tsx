@@ -11,6 +11,9 @@ import {
   Wallet,
   Banknote,
   AlertCircle,
+  MapPin,
+  Phone,
+  MessageCircle,
 } from "lucide-react"
 import toast from "react-hot-toast"
 import confetti from "canvas-confetti"
@@ -37,6 +40,8 @@ interface SaleLite {
   customer_name: string | null
   customer_email: string | null
   customer_phone: string | null
+  customer_address: string | null
+  customer_location: string | null
   total: number
   paid: number
   balance: number
@@ -91,7 +96,7 @@ export default function ReviewProofDrawer({
       const { data: s } = await supabase
         .from("sales")
         .select(
-          "id,customer_name,customer_email,customer_phone,total,paid,balance,status,is_layaway,public_token,created_at"
+          "id,customer_name,customer_email,customer_phone,customer_address,customer_location,total,paid,balance,status,is_layaway,public_token,created_at"
         )
         .eq("id", (p as PaymentProof).sale_id)
         .maybeSingle()
@@ -295,20 +300,20 @@ export default function ReviewProofDrawer({
                   {sale && (
                     <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-3 space-y-2">
                       <div className="flex items-start justify-between">
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black">
                             Cliente
                           </p>
-                          <p className="text-sm font-black">
+                          <p className="text-sm font-black truncate">
                             {sale.customer_name ?? "—"}
                           </p>
                           {sale.customer_email && (
-                            <p className="text-[10px] text-slate-500">
+                            <p className="text-[10px] text-slate-500 truncate">
                               {sale.customer_email}
                             </p>
                           )}
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0">
                           <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black">
                             Fecha
                           </p>
@@ -317,6 +322,51 @@ export default function ReviewProofDrawer({
                           </p>
                         </div>
                       </div>
+
+                      {/* Contacto + ubicación: chips clickeables para que
+                          Mari pueda llamar / WhatsAppear / abrir el pin en
+                          Maps sin salir del drawer de revisión. */}
+                      {(sale.customer_phone ||
+                        sale.customer_address ||
+                        sale.customer_location) && (
+                        <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-700">
+                          {sale.customer_phone && (
+                            <>
+                              <a
+                                href={`https://wa.me/${sale.customer_phone.replace(/\D/g, "")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100"
+                              >
+                                <MessageCircle size={10} /> WhatsApp
+                              </a>
+                              <a
+                                href={`tel:${sale.customer_phone.replace(/\D/g, "")}`}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[9px] font-black uppercase tracking-widest"
+                              >
+                                <Phone size={10} /> {sale.customer_phone}
+                              </a>
+                            </>
+                          )}
+                          {sale.customer_location && (
+                            <a
+                              href={sale.customer_location}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-[9px] font-black uppercase tracking-widest hover:bg-blue-100"
+                              title="Abrir ubicación en Google Maps"
+                            >
+                              <MapPin size={10} /> Abrir pin
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {sale.customer_address && (
+                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 italic flex items-start gap-1.5 leading-snug">
+                          <MapPin size={10} className="mt-0.5 shrink-0 text-slate-400" />
+                          {sale.customer_address}
+                        </p>
+                      )}
 
                       <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700">
                         <Kpi

@@ -262,10 +262,14 @@ export default function ReportPaymentButton({
   }
 
   // Vista normal: botón grande para efectivo + dos botones de foto + historial
-  // Estado del comprobante más reciente (si existe) para mostrar banner arriba
-  const lastPending = history.find(
-    (p) => p.status === "pending" || p.status === "pending_verification"
-  )
+  // Estado del comprobante más reciente (si existe) para mostrar banner arriba.
+  // Casteamos a string en el comparator porque el tipo del status puede ser
+  // serializado por la DB con un valor extendido ("pending_verification" para
+  // pagos en efectivo declarados) y queremos tratarlos igual que "pending".
+  const lastPending = history.find((p) => {
+    const s = String(p.status)
+    return s === "pending" || s === "pending_verification"
+  })
   const lastApproved = history.find((p) => p.status === "approved")
   const lastRejected = history.find((p) => p.status === "rejected")
 

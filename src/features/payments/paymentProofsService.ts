@@ -1,6 +1,6 @@
 import { supabase } from "../../lib/supabase"
 
-export type ProofStatus = "pending" | "approved" | "rejected"
+export type ProofStatus = "pending" | "pending_verification" | "approved" | "rejected"
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

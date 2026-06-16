@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, MessageCircle, Copy, Check, Image as ImageIcon } from "lucide-react"
+import { X, MessageCircle, Copy, Check, Image as ImageIcon, FileDown } from "lucide-react"
 import { useState } from "react"
 import { toast } from "react-hot-toast"
 
@@ -15,7 +15,7 @@ import {
 } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
 import { buildReceiptText, sendReceiptByWhatsApp } from "../../lib/receipt"
-import { shareTicketImage } from "../../lib/shareImage"
+import { shareTicketImage, shareTicketPdf } from "../../lib/shareImage"
 
 interface Props {
   open: boolean
@@ -300,7 +300,7 @@ export default function TicketView({ open, sale, onClose }: Props) {
             </div>
 
             {/* Acciones secundarias */}
-            <div className="grid grid-cols-3 gap-2 print:hidden">
+            <div className="grid grid-cols-4 gap-2 print:hidden">
               <ActionBtn
                 icon={<ImageIcon size={14} />}
                 label="Imagen"
@@ -316,6 +316,16 @@ export default function TicketView({ open, sale, onClose }: Props) {
                   })
                 }
                 tone="emerald"
+              />
+              <ActionBtn
+                icon={<FileDown size={14} />}
+                label="PDF"
+                onClick={() =>
+                  shareTicketPdf({
+                    node: ticketRef.current,
+                    filename: `ticket-${shortId(sale.id)}.pdf`,
+                  })
+                }
               />
               <ActionBtn
                 icon={<MessageCircle size={14} />}

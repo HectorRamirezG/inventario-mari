@@ -1,4 +1,5 @@
 import html2canvas from "html2canvas"
+import jsPDF from "jspdf"
 import toast from "react-hot-toast"
 
 /**
@@ -81,25 +82,52 @@ function resolveOklchColors(root: HTMLElement) {
 }
 
 /**
- * Captura un nodo del DOM como PNG. Devuelve un Blob.
- * Útil para tickets, comprobantes, comandas.
+ * Captura un nodo del DOM como canvas. Si alguna imagen externa falla
+ * por CORS, html2canvas se cuelga; por eso usamos `imageTimeout` y
+ * `allowTaint: true` como red de seguridad para no quedarnos esperando
+ * para siempre.
  */
-export async function nodeToBlob(node: HTMLElement, scale = 2): Promise<Blob | null> {
-  const canvas = await html2canvas(node, {
+async function nodeToCanvas(node: HTMLElement, scale = 2): Promise<HTMLCanvasElement> {
+  return html2canvas(node, {
     scale,
     backgroundColor: "#ffffff",
     useCORS: true,
+    allowTaint: true,    // ← si una img no resuelve CORS, no truena
+    imageTimeout: 8000,  // ← evita "se queda cargando para siempre"
     logging: false,
     onclone: (_doc, clonedRoot) => {
       try {
         resolveOklchColors(clonedRoot as HTMLElement)
       } catch (e) {
-        // Si la conversión falla por alguna razón, dejamos que html2canvas
-        // intente; en el peor caso saldrá el error original.
         console.warn("[shareImage] resolveOklchColors failed", e)
       }
     },
   })
+}
+
+/** Wrap del canvas con timeout duro para evitar UI bloqueada. */
+async function nodeToCanvasWithTimeout(
+  node: HTMLElement,
+  scale = 2,
+  timeoutMs = 20000
+): Promise<HTMLCanvasElement> {
+  return Promise.race<HTMLCanvasElement>([
+    nodeToCanvas(node, scale),
+    new Promise<HTMLCanvasElement>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Tomó demasiado tiempo (timeout). Reintenta.")),
+        timeoutMs
+      )
+    ),
+  ])
+}
+
+/**
+ * Captura un nodo del DOM como PNG. Devuelve un Blob.
+ * Útil para tickets, comprobantes, comandas.
+ */
+export async function nodeToBlob(node: HTMLElement, scale = 2): Promise<Blob | null> {
+  const canvas = await nodeToCanvasWithTimeout(node, scale)
   return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png"))
 }
 
@@ -152,7 +180,55 @@ export async function shareTicketImage(opts: {
     downloadBlob(blob, filename)
     toast.success("Imagen descargada", { id: tid })
   } catch (e: any) {
+    console.error("[shareTicketImage]", e)
     toast.error(e?.message ?? "Error generando imagen", { id: tid })
+  }
+}
+
+/**
+ * Exporta el nodo a PDF (formato carta) con la imagen capturada del
+ * ticket centrada y escalada para llenar la página sin distorsionar.
+ * Mismo look-and-feel que la imagen, pero como documento imprimible.
+ */
+export async function shareTicketPdf(opts: {
+  node: HTMLElement | null
+  filename?: string
+}) {
+  const { node, filename = "ticket.pdf" } = opts
+  if (!node) {
+    toast.error("No se pudo capturar el ticket")
+    return
+  }
+  const tid = toast.loading("Generando PDF...")
+  try {
+    const canvas = await nodeToCanvasWithTimeout(node, 2)
+    const imgData = canvas.toDataURL("image/png")
+
+    // Página tamaño "letter" (216 × 279 mm) en orientación retrato.
+    const pdf = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" })
+    const pageW = pdf.internal.pageSize.getWidth()
+    const pageH = pdf.internal.pageSize.getHeight()
+    const margin = 12
+
+    // Escalamos la imagen para que entre dentro del área útil sin deformar.
+    const availW = pageW - margin * 2
+    const availH = pageH - margin * 2
+    const aspect = canvas.width / canvas.height
+    let drawW = availW
+    let drawH = availW / aspect
+    if (drawH > availH) {
+      drawH = availH
+      drawW = availH * aspect
+    }
+    const offsetX = (pageW - drawW) / 2
+    const offsetY = (pageH - drawH) / 2
+
+    pdf.addImage(imgData, "PNG", offsetX, offsetY, drawW, drawH, undefined, "FAST")
+    pdf.save(filename)
+    toast.success("PDF descargado", { id: tid })
+  } catch (e: any) {
+    console.error("[shareTicketPdf]", e)
+    toast.error(e?.message ?? "Error generando PDF", { id: tid })
   }
 }
 
@@ -166,3 +242,4 @@ function downloadBlob(blob: Blob, filename: string) {
   document.body.removeChild(a)
   setTimeout(() => URL.revokeObjectURL(url), 5_000)
 }
+
