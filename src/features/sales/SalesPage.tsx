@@ -31,6 +31,7 @@ import Badge from "../../components/ui/Badge";
 import BarcodeScanner from "../../components/ui/BarcodeScanner";
 import TicketView from "../../components/ui/TicketView";
 import SmartLocationInput from "../../components/ui/SmartLocationInput";
+import PageHeader from "../../components/ui/PageHeader";
 import { formatMoney } from "../../lib/format";
 import { sound } from "../../lib/sound";const TIER_TONE: Record<string, { bg: string; text: string; ring: string }> = {
   menudeo: {
@@ -138,40 +139,43 @@ export default function SalesPage() {
   return (
     <div className="px-3 pt-1 pb-28">
       {/* HEADER */}
-      <div className="mb-3 flex items-center justify-between max-w-5xl mx-auto">
-        <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-slate-900">
-          <ShoppingCart size={14} className="text-primary" />
-          Venta Activa
-        </h2>
-        <div className="flex items-center gap-2">
-          {state.cart.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                if (
-                  window.confirm(
-                    "¿Vaciar carrito? Se perderán los productos agregados."
-                  )
-                ) {
-                  actions.clearCart()
-                  sound.tap()
-                }
-              }}
-              className="flex items-center gap-1 h-8 px-2.5 rounded-lg bg-rose-50 text-rose-600 text-[9px] font-black uppercase tracking-widest hover:bg-rose-100 active:scale-95 transition-all"
-              title="Vaciar carrito / cancelar venta"
-            >
-              <Trash2 size={11} /> Vaciar
-            </button>
-          )}
-          <p className="text-sm font-black text-primary tabular-nums">
-            {formatMoney(state.total)}
-          </p>
-        </div>
+      <div className="max-w-5xl mx-auto">
+        <PageHeader
+          icon={ShoppingCart}
+          title="Venta activa"
+          subtitle={`${state.cart.length} ${state.cart.length === 1 ? "item" : "items"} en el carrito`}
+          right={
+            <div className="flex items-center gap-2">
+              {state.cart.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        "¿Vaciar carrito? Se perderán los productos agregados."
+                      )
+                    ) {
+                      actions.clearCart()
+                      sound.tap()
+                    }
+                  }}
+                  className="flex items-center gap-1 h-9 px-3 rounded-full bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/40 text-rose-600 dark:text-rose-300 text-[9px] font-black uppercase tracking-widest hover:shadow-md active:scale-95 transition-all"
+                  title="Vaciar carrito"
+                >
+                  <Trash2 size={11} /> Vaciar
+                </button>
+              )}
+              <span className="px-3 h-9 inline-flex items-center rounded-full bg-primary/10 dark:bg-primary/20 text-primary text-xs font-black tabular-nums">
+                {formatMoney(state.total)}
+              </span>
+            </div>
+          }
+        />
       </div>
 
       <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
         {/* ────────── CATÁLOGO ────────── */}
-        <section className="bg-white rounded-[2rem] p-4 border border-slate-100 shadow-sm flex flex-col">
+        <section className="surface-card p-4 flex flex-col">
           <div className="flex items-center justify-between mb-3 gap-2">
             <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest shrink-0">
               Productos
@@ -273,7 +277,7 @@ export default function SalesPage() {
         </section>
 
         {/* ────────── DETALLE / CARRITO ────────── */}
-        <section className="bg-white rounded-[2rem] p-4 border border-slate-100 shadow-sm">
+        <section className="surface-card p-4">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-sm font-black uppercase text-slate-800">
               Detalle

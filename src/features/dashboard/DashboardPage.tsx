@@ -102,7 +102,7 @@ export default function DashboardPage() {
         <TabsContent value="resumen" className="space-y-6">
 
           {/* CAPITAL */}
-          <section className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
+          <section className="surface-card p-6">
 
             <div className="flex items-center justify-between mb-4">
               <span className="text-[10px] font-black uppercase text-primary/60 flex items-center gap-1">
@@ -166,7 +166,7 @@ export default function DashboardPage() {
                 transition={{ duration: 0.25 }}
                 className="overflow-hidden"
               >
-                <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-1 mt-1">
+                <div className="surface-card p-1 mt-1">
                   <LowStockView />
                 </div>
               </motion.div>
@@ -179,7 +179,7 @@ export default function DashboardPage() {
         <TabsContent value="analisis" className="space-y-6">
 
           {/* CHART */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
+          <div className="surface-card p-5">
 
             <div className="flex justify-between items-center mb-4">
               <h4 className="text-sm font-black">
@@ -208,7 +208,7 @@ export default function DashboardPage() {
           </div>
 
           {/* RANKING */}
-          <div className="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm space-y-3">
+          <div className="surface-card p-5 space-y-3">
 
             <h4 className="text-sm font-black">Top productos</h4>
 
@@ -236,7 +236,7 @@ export default function DashboardPage() {
 function StatCard({ icon, value, label, alert }: any) {
   return (
     <Card className={`p-4 rounded-2xl text-center border ${
-      alert ? "border-rose-200 bg-rose-50" : "border-slate-100 bg-white"
+      alert ? "border-rose-200 bg-rose-50 dark:bg-rose-500/10 dark:border-rose-500/40" : "surface-card"
     }`}>
       <div className="flex justify-center mb-2 text-primary">
         {icon}

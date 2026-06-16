@@ -64,7 +64,7 @@ export default function DayCloseView({ onClose }: { onClose: () => void }) {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-3xl border border-slate-100 p-6 mb-4 print:shadow-none"
+        className="surface-card p-6 mb-4 print:shadow-none"
       >
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
@@ -144,7 +144,7 @@ export default function DayCloseView({ onClose }: { onClose: () => void }) {
 
           {/* Métodos de pago */}
           {Object.keys(stats.payment_methods).length > 0 && (
-            <section className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <section className="surface-card p-4 mb-4">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
                 Pagos por método
               </h3>
@@ -173,7 +173,7 @@ export default function DayCloseView({ onClose }: { onClose: () => void }) {
 
           {/* Top productos */}
           {stats.top_products.length > 0 && (
-            <section className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <section className="surface-card p-4 mb-4">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1">
                 <Award size={12} /> Más vendidos
               </h3>
@@ -201,7 +201,7 @@ export default function DayCloseView({ onClose }: { onClose: () => void }) {
 
           {/* Top clientes */}
           {stats.top_customers.length > 0 && (
-            <section className="bg-white rounded-2xl border border-slate-100 p-4 mb-4">
+            <section className="surface-card p-4 mb-4">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">
                 Mejores clientes del día
               </h3>

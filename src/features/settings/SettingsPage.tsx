@@ -421,7 +421,7 @@ function Section({
     <motion.section
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-3xl border border-slate-100 p-5 mb-4 space-y-3 shadow-sm"
+      className="surface-card p-5 mb-4 space-y-3"
     >
       <div className="flex items-center gap-2 mb-2">
         <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">

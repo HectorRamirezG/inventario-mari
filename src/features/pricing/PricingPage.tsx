@@ -10,6 +10,7 @@ import { usePricingPage } from "./usePricingPage";
 import CalculatorTab from "./CalculatorTab";
 import PricingHistory from "./PricingHistory";
 import PricingSettings from "./PricingSettings";
+import TabBar from "../../components/ui/TabBar";
 
 export default function PricingPage() {
   const [activeTab, setActiveTab] = useState<"precios" | "historial" | "config">("precios");
@@ -25,45 +26,22 @@ export default function PricingPage() {
   } = usePricingPage();
 
   const tabs = [
-    { id: "precios", label: "PRECIOS", icon: Calculator },
-    { id: "historial", label: "HISTORIAL", icon: History },
-    { id: "config", label: "CONFIG", icon: Settings },
+    { id: "precios", label: "Precios", icon: Calculator },
+    { id: "historial", label: "Historial", icon: History },
+    { id: "config", label: "Config", icon: Settings },
   ] as const;
 
   return (
-    <div className="flex flex-col text-slate-900">
+    <div className="flex flex-col text-slate-900 dark:text-slate-100">
 
       {/* HEADER */}
-      <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-xl border-b border-pink-50 px-1 pt-1 pb-2 -mx-1">
-
-        <nav className="flex bg-white border border-pink-50 p-1 rounded-[1.8rem] shadow-sm">
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative flex-1 py-2 rounded-[1.4rem] flex items-center justify-center gap-1 transition-all ${
-                  isActive ? "text-white" : "text-slate-400"
-                }`}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute inset-0 bg-slate-900 rounded-[1.4rem]"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                  />
-                )}
-
-                <tab.icon size={12} className="relative z-10" />
-                <span className="relative z-10 text-[8px] font-black tracking-tight">
-                  {tab.label}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
+      <header className="sticky top-0 z-30 bg-slate-50/85 dark:bg-slate-950/85 backdrop-blur-xl px-1 pt-1 pb-2 -mx-1">
+        <TabBar
+          tabs={tabs}
+          active={activeTab}
+          onChange={(id) => setActiveTab(id as typeof activeTab)}
+          layoutId="pricingActiveTab"
+        />
       </header>
 
       {/* MAIN */}

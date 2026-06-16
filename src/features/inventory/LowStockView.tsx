@@ -124,7 +124,7 @@ export default function LowStockView() {
                   className={`flex items-center justify-between gap-3 p-3 rounded-2xl border ${
                     empty
                       ? "bg-rose-50/50 border-rose-100"
-                      : "bg-white border-slate-100"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
                   }`}
                 >
                   <div className="min-w-0 flex-1">

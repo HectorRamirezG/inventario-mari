@@ -22,6 +22,9 @@ import PaymentModal from "./PaymentModal";
 import EditSaleAdjustModal from "./EditSaleAdjustModal";
 import TicketView from "../../components/ui/TicketView";
 import Badge from "../../components/ui/Badge";
+import PageHeader from "../../components/ui/PageHeader";
+import KpiCard from "../../components/ui/KpiCard";
+import TabBar from "../../components/ui/TabBar";
 import type { Sale } from "../../types/database";
 import { sendReceiptByWhatsApp } from "../../lib/receipt";
 import {
@@ -73,33 +76,35 @@ export default function ApartadosPage() {
   return (
     <div className="px-3 pt-1 pb-28 max-w-5xl mx-auto">
       {/* HEADER */}
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-slate-900">
-            <Bookmark size={14} className="text-amber-500" fill="currentColor" />
-            Apartados & Cobros
-          </h2>
-          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">
+      <PageHeader
+        icon={Bookmark}
+        iconTone="amber"
+        title="Apartados & Cobros"
+        subtitle={
+          <>
             {state.totals.count}{" "}
             {state.totals.count === 1 ? "venta" : "ventas"} ·{" "}
             <span className="text-rose-500">
               {formatMoney(state.totals.balance)} por cobrar
             </span>
-          </p>
-        </div>
-        <button
-          onClick={actions.refresh}
-          className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-primary active:scale-90 transition-transform"
-        >
-          <RefreshCcw size={16} className={state.loading ? "animate-spin" : ""} />
-        </button>
-      </div>
+          </>
+        }
+        right={
+          <button
+            onClick={actions.refresh}
+            aria-label="Refrescar"
+            className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-center text-primary active:scale-90 transition-all hover:shadow-md"
+          >
+            <RefreshCcw size={16} className={state.loading ? "animate-spin" : ""} />
+          </button>
+        }
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <Kpi label="Por cobrar" value={formatMoney(state.totals.balance)} tone="rose" />
-        <Kpi label="Cobrado" value={formatMoney(state.totals.paid)} tone="emerald" />
-        <Kpi label="Total" value={formatMoney(state.totals.total)} tone="slate" />
+        <KpiCard label="Por cobrar" value={formatMoney(state.totals.balance)} tone="danger" />
+        <KpiCard label="Cobrado" value={formatMoney(state.totals.paid)} tone="success" />
+        <KpiCard label="Total" value={formatMoney(state.totals.total)} tone="default" />
       </div>
 
       {/* CONTROLES */}
@@ -108,49 +113,34 @@ export default function ApartadosPage() {
         <div className="relative">
           <Search
             size={14}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300"
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
           />
           <input
             type="text"
             placeholder="Buscar cliente o teléfono..."
             value={state.search}
             onChange={(e) => actions.setSearch(e.target.value)}
-            className="w-full h-11 pl-11 pr-4 rounded-2xl bg-white border border-slate-100 text-[11px] font-bold outline-none focus:ring-2 focus:ring-primary/20"
+            className="field-input h-11 pl-11"
           />
         </div>
 
         {/* Filtros */}
         <div className="flex items-center gap-2">
-          <div className="flex bg-slate-100 rounded-full p-1 flex-1">
-            {FILTERS.map((f) => {
-              const active = state.filter === f.id;
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => actions.setFilter(f.id)}
-                  className={`relative flex-1 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-colors ${
-                    active ? "text-slate-900" : "text-slate-400"
-                  }`}
-                >
-                  {active && (
-                    <motion.div
-                      layoutId="apartados-filter"
-                      className="absolute inset-0 bg-white shadow-sm rounded-full"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                    />
-                  )}
-                  <span className="relative z-10">{f.label}</span>
-                </button>
-              );
-            })}
+          <div className="flex-1">
+            <TabBar
+              tabs={FILTERS.map((f) => ({ id: f.id, label: f.label })) as any}
+              active={state.filter}
+              onChange={(id) => actions.setFilter(id as ApartadosFilter)}
+              layoutId="apartados-filter"
+            />
           </div>
 
           <button
             onClick={() => actions.setOnlyLayaway(!state.onlyLayaway)}
-            className={`shrink-0 h-9 px-3 rounded-full flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest border transition-all ${
+            className={`shrink-0 h-10 px-3 rounded-full flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest border shadow-sm transition-all ${
               state.onlyLayaway
-                ? "bg-amber-50 border-amber-200 text-amber-700"
-                : "bg-white border-slate-100 text-slate-400"
+                ? "bg-amber-50 dark:bg-amber-500/15 border-amber-200 dark:border-amber-500/40 text-amber-700 dark:text-amber-300"
+                : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500"
             }`}
           >
             <Bookmark
@@ -227,30 +217,6 @@ export default function ApartadosPage() {
 
 /* ---------- Sub-componentes ---------- */
 
-function Kpi({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "rose" | "emerald" | "slate";
-}) {
-  const toneClasses = {
-    rose: "bg-rose-50 text-rose-600 border-rose-100",
-    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
-    slate: "bg-white text-slate-700 border-slate-100",
-  };
-  return (
-    <div className={`rounded-2xl p-3 border ${toneClasses[tone]}`}>
-      <p className="text-[7px] font-black uppercase tracking-widest opacity-70">
-        {label}
-      </p>
-      <p className="text-sm font-black tabular-nums mt-1">{value}</p>
-    </div>
-  );
-}
-
 function SaleCard({
   sale,
   profile,
@@ -326,18 +292,18 @@ function SaleCard({
   const cardBg = isCancelled
     ? "bg-slate-50 dark:bg-slate-900 opacity-60"
     : isPaid
-    ? "bg-emerald-50/40 dark:bg-emerald-500/5"
+    ? "bg-emerald-50 dark:bg-emerald-500/10"
     : urgent
-    ? "bg-rose-50/40 dark:bg-rose-500/5"
-    : "bg-white dark:bg-slate-900/60";
+    ? "bg-rose-50 dark:bg-rose-500/10"
+    : "bg-white dark:bg-slate-900";
 
   const cardRing = isCancelled
-    ? "border-slate-100 dark:border-slate-800"
+    ? "border-slate-200 dark:border-slate-800"
     : isPaid
-    ? "border-emerald-200 dark:border-emerald-500/30"
+    ? "border-emerald-200 dark:border-emerald-500/40"
     : urgent
-    ? "border-rose-200 dark:border-rose-500/30"
-    : "border-slate-100 dark:border-slate-800";
+    ? "border-rose-200 dark:border-rose-500/40"
+    : "border-slate-200 dark:border-slate-800";
 
   return (
     <motion.div
@@ -345,7 +311,7 @@ function SaleCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      className={`relative rounded-2xl border p-4 shadow-sm overflow-hidden transition-colors ${cardBg} ${cardRing}`}
+      className={`relative rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden ${cardBg} ${cardRing}`}
     >
       {/* Stamp PAGADO (gigante de fondo) */}
       {isPaid && (
