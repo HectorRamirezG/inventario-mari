@@ -19,7 +19,6 @@ import {
 import { toast } from "react-hot-toast"
 
 import CategoryCombobox from "../../components/ui/CategoryCombobox"
-import ProductImageUploader from "../../components/ui/ProductImageUploader"
 import MultiImageUploader from "../../components/ui/MultiImageUploader"
 import Badge from "../../components/ui/Badge"
 import { supabase } from "../../lib/supabase"
@@ -47,14 +46,15 @@ import type { PricingConfig } from "../pricing/pricingTypes"
  *
  * Modos:
  *   "create"  → producto nuevo (solo pestaña Datos hasta guardar)
- *   "edit"    → producto existente con tabs Datos / Variantes / Galería
+ *   "edit"    → producto existente con tabs Datos / Variantes
  *   "stock"   → enfoca directamente la variante para ajustar stock rápido
  *
- * Nunca abre un modal encima de otro. Variantes se gestionan en línea
- * con acordeones colapsables dentro de la pestaña Variantes.
+ * Las FOTOS viven solo en cada variante (galería interna de hasta 6).
+ * El producto NO tiene foto propia: la "portada" mostrada al cliente es
+ * la primera foto de la primera variante.
  * ────────────────────────────────────────────────────────────────────── */
 
-type TabId = "general" | "variants" | "gallery"
+type TabId = "general" | "variants"
 
 interface Props {
   open: boolean
@@ -83,9 +83,19 @@ export default function ProductDrawer({
   const [category, setCategory] = useState("")
   const [cost, setCost] = useState<number | "">("")
   const [minStock, setMinStock] = useState<number | "">("")
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
-  const [gallery, setGallery] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+
+  // La portada mostrada en el header del drawer es la primera foto
+  // disponible de la primera variante con fotos. Si nadie tiene foto,
+  // el header dibuja el ícono de paquete.
+  const headerCover = useMemo(() => {
+    const variants = product?.variants ?? []
+    for (const v of variants) {
+      if (v.image_urls && v.image_urls.length > 0) return v.image_urls[0]
+      if (v.image_url) return v.image_url
+    }
+    return null
+  }, [product?.variants])
 
   // ──────────── Pricing config (para sugeridos) ────────────
   const [pricingCfg, setPricingCfg] = useState<PricingConfig | null>(null)
@@ -120,18 +130,12 @@ export default function ProductDrawer({
       setCategory(product?.category ?? "")
       setCost(product?.cost ?? "")
       setMinStock(product?.min_stock ?? "")
-      setImageUrl(product?.image_url ?? null)
-      // La galería del producto no se ha modelado explícitamente; usamos
-      // image_url como portada y el resto vive en cada variante.
-      setGallery(product?.image_url ? [product.image_url] : [])
     } else {
       // create
       setName("")
       setCategory("")
       setCost("")
       setMinStock("")
-      setImageUrl(null)
-      setGallery([])
     }
   }, [open, mode, product?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -180,7 +184,7 @@ export default function ProductDrawer({
           category: category.trim() || null,
           cost: Number(cost),
           min_stock: minStock === "" ? 0 : Number(minStock),
-          image_url: imageUrl,
+          // image_url se omite: las fotos viven solo por variante.
         })
         toast.success("Producto creado ✨")
         onSaved()
@@ -200,7 +204,6 @@ export default function ProductDrawer({
           category: category.trim() || null,
           cost: Number(cost),
           min_stock: minStock === "" ? 0 : Number(minStock),
-          image_url: imageUrl,
         })
         toast.success("Cambios guardados")
         onSaved()
@@ -221,7 +224,6 @@ export default function ProductDrawer({
       : [
           { id: "general", label: "Datos", icon: Package },
           { id: "variants", label: "Variantes", icon: Layers },
-          { id: "gallery", label: "Galería", icon: ImageIcon },
         ]
 
   return createPortal(
@@ -254,14 +256,14 @@ export default function ProductDrawer({
                 <div
                   className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-bloom shrink-0 overflow-hidden"
                   style={{
-                    background: imageUrl
+                    background: headerCover
                       ? "transparent"
                       : "linear-gradient(135deg,#e6007e,#a855f7)",
                   }}
                 >
-                  {imageUrl ? (
+                  {headerCover ? (
                     <img
-                      src={imageUrl}
+                      src={headerCover}
                       alt=""
                       className="w-full h-full object-cover"
                     />
@@ -330,9 +332,6 @@ export default function ProductDrawer({
                   setCost={setCost}
                   minStock={minStock}
                   setMinStock={setMinStock}
-                  imageUrl={imageUrl}
-                  setImageUrl={setImageUrl}
-                  productId={product?.id ?? "new"}
                   knownCategories={knownCategories}
                   sug={sug}
                 />
@@ -344,17 +343,6 @@ export default function ProductDrawer({
                   focusVariantId={focusVariantId ?? null}
                   onSaved={onSaved}
                   pricingCfg={pricingCfg}
-                />
-              )}
-
-              {tab === "gallery" && product && (
-                <GalleryTab
-                  productId={product.id}
-                  value={gallery}
-                  onChange={(g) => {
-                    setGallery(g)
-                    setImageUrl(g[0] ?? null)
-                  }}
                 />
               )}
             </div>
@@ -403,9 +391,6 @@ function GeneralTab({
   setCost,
   minStock,
   setMinStock,
-  imageUrl,
-  setImageUrl,
-  productId,
   knownCategories,
   sug,
 }: {
@@ -417,21 +402,20 @@ function GeneralTab({
   setCost: (v: number | "") => void
   minStock: number | ""
   setMinStock: (v: number | "") => void
-  imageUrl: string | null
-  setImageUrl: (v: string | null) => void
-  productId: string
   knownCategories?: string[]
   sug: { men: number; med: number; may: number } | null
 }) {
   return (
     <div className="space-y-4">
-      <div className="space-y-1.5">
-        <Label>Foto principal del producto</Label>
-        <ProductImageUploader
-          value={imageUrl}
-          onChange={setImageUrl}
-          folder={`products/${productId}`}
-        />
+      {/* Banner explicativo: las fotos viven por variante. */}
+      <div className="rounded-2xl bg-pink-50/60 dark:bg-pink-500/10 border border-pink-100 dark:border-pink-500/20 p-3 flex items-start gap-2 text-pink-700 dark:text-pink-300">
+        <Sparkles size={14} className="shrink-0 mt-0.5" />
+        <p className="text-[11px] font-bold leading-snug">
+          Las fotos viven en cada{" "}
+          <span className="font-black">variante</span> (hasta 6 c/u). En la
+          tienda el cliente verá por defecto la primera foto de la primera
+          variante.
+        </p>
       </div>
 
       <div className="space-y-1.5">
@@ -572,6 +556,15 @@ function VariantsTab({
       const ok = results.filter((r) => r.status === "fulfilled").length
       const fail = results.length - ok
       if (fail === 0) {
+        // Migración legacy completa: limpia image_url del producto para
+        // que el banner desaparezca y ya no haya "portada del producto"
+        // que confunda. La portada visible al cliente ahora sale de la
+        // primera variante.
+        try {
+          await updateProduct(product.id, { image_url: null })
+        } catch {
+          /* noop — no es crítico que falle */
+        }
         toast.success(
           `✨ Foto asignada a ${ok} ${ok === 1 ? "variante" : "variantes"}`,
           { id: tid }
@@ -606,8 +599,11 @@ function VariantsTab({
         </button>
       </div>
 
-      {/* Banner masivo: heredar foto del producto a variantes sin foto.
-          Solo aparece si HAY foto principal y AL MENOS 1 variante sin foto. */}
+      {/* Banner masivo: heredar foto legacy del producto a las variantes
+          sin foto. Solo aparece si el producto AÚN tiene image_url
+          (campo legacy: antes el producto tenía portada propia, ahora
+          las fotos viven en cada variante). Tras heredar, el image_url
+          del producto se limpia y este banner deja de aparecer. */}
       {canBulkInherit && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
@@ -628,12 +624,15 @@ function VariantsTab({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
-              {variantsWithoutPhoto.length}{" "}
-              {variantsWithoutPhoto.length === 1 ? "variante sin foto" : "variantes sin foto"}
+              Foto antigua del producto
             </p>
             <p className="text-[11px] font-bold text-amber-900/70 dark:text-amber-100/80 leading-snug">
-              Heredan la foto principal del producto para que se vean en la
-              tienda mientras les tomas su propia foto.
+              Tienes {variantsWithoutPhoto.length}{" "}
+              {variantsWithoutPhoto.length === 1
+                ? "variante sin foto"
+                : "variantes sin foto"}
+              . Hereda esta foto a todas para que se vean en la tienda
+              mientras les tomas su propia foto.
             </p>
             <button
               type="button"
@@ -646,7 +645,7 @@ function VariantsTab({
               ) : (
                 <ImageIcon size={11} />
               )}
-              Heredar foto a {variantsWithoutPhoto.length === 1 ? "esa variante" : "todas"}
+              Heredar a {variantsWithoutPhoto.length === 1 ? "esa variante" : "todas"}
             </button>
           </div>
         </motion.div>
@@ -1162,37 +1161,6 @@ function VariantAccordion({
         )}
       </AnimatePresence>
     </motion.div>
-  )
-}
-
-/* ════════════════════════ TAB 3: GALERÍA ════════════════════════ */
-function GalleryTab({
-  productId,
-  value,
-  onChange,
-}: {
-  productId: string
-  value: string[]
-  onChange: (v: string[]) => void
-}) {
-  return (
-    <div className="space-y-3">
-      <div className="rounded-2xl bg-pink-50/60 dark:bg-pink-500/10 border border-pink-200/60 dark:border-pink-500/20 p-3 flex items-start gap-2 text-pink-700 dark:text-pink-300">
-        <Sparkles size={14} className="shrink-0 mt-0.5" />
-        <p className="text-[11px] font-bold leading-snug">
-          La primera foto es la portada que ve el cliente en el catálogo. Cada
-          variante también puede tener sus propias fotos en la pestaña{" "}
-          <span className="font-black">Variantes</span>.
-        </p>
-      </div>
-      <MultiImageUploader
-        value={value}
-        onChange={onChange}
-        folder={`products/${productId}/gallery`}
-        label="Subir fotos del producto"
-        max={6}
-      />
-    </div>
   )
 }
 

@@ -6,6 +6,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react"
 
 export interface LightboxSlide {
@@ -27,10 +29,15 @@ interface Props {
 }
 
 /**
- * Lightbox fullscreen para fotos de producto. Swipe horizontal táctil
- * para cambiar de foto, swipe vertical para cerrar (drag-to-dismiss).
- * Solo se monta cuando el usuario hace clic en la imagen de la card,
- * así nunca interfiere con el scroll vertical del catálogo.
+ * Lightbox fullscreen para fotos de producto. Soporta:
+ *  - Swipe horizontal táctil → cambia foto (solo si scale === 1)
+ *  - Swipe vertical → cierra (drag-to-dismiss, solo si scale === 1)
+ *  - Pinch (2 dedos) → zoom continuo (1×–4×)
+ *  - Double-tap → toggle 1× ↔ 2.5×
+ *  - Doble click desktop / rueda → zoom step
+ *  - Drag con 1 dedo cuando scale > 1 → pan dentro de la foto
+ *  - Botones desktop +/-
+ * El zoom se resetea al cambiar de slide.
  */
 export default function ProductLightbox({
   open,
@@ -41,12 +48,33 @@ export default function ProductLightbox({
   onClose,
 }: Props) {
   const [index, setIndex] = useState(startIndex)
-  const startRef = useRef({ x: 0, y: 0 })
   const total = slides.length
 
-  // Reset index cuando se abre con un nuevo producto
+  // ─────── Estado de zoom/pan ───────
+  const [scale, setScale] = useState(1)
+  const [tx, setTx] = useState(0)
+  const [ty, setTy] = useState(0)
+  const zoomed = scale > 1.05
+  const MIN_SCALE = 1
+  const MAX_SCALE = 4
+
+  const pinchStartDist = useRef<number | null>(null)
+  const pinchStartScale = useRef(1)
+  const lastTapAt = useRef(0)
+  const panStart = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null)
+
+  function resetZoom() {
+    setScale(1)
+    setTx(0)
+    setTy(0)
+  }
+
+  // Reset index + zoom cuando se abre con un nuevo producto
   useEffect(() => {
-    if (open) setIndex(startIndex)
+    if (open) {
+      setIndex(startIndex)
+      resetZoom()
+    }
   }, [open, startIndex])
 
   // Bloquear scroll body
@@ -66,11 +94,14 @@ export default function ProductLightbox({
       if (e.key === "Escape") onClose()
       else if (e.key === "ArrowLeft") go(-1)
       else if (e.key === "ArrowRight") go(+1)
+      else if (e.key === "+" || e.key === "=") stepZoom(+0.5)
+      else if (e.key === "-" || e.key === "_") stepZoom(-0.5)
+      else if (e.key === "0") resetZoom()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, index, total])
+  }, [open, index, total, scale])
 
   const go = useCallback(
     (delta: number) => {
@@ -80,13 +111,30 @@ export default function ProductLightbox({
         if (slide && slide.variantId !== slides[i]?.variantId) {
           onVariantChange?.(slide.variantId)
         }
+        // Reset zoom al cambiar de slide
+        setScale(1)
+        setTx(0)
+        setTy(0)
         return next
       })
     },
     [total, slides, onVariantChange]
   )
 
+  function stepZoom(delta: number) {
+    setScale((s) => {
+      const next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, s + delta))
+      if (next === MIN_SCALE) {
+        setTx(0)
+        setTy(0)
+      }
+      return next
+    })
+  }
+
   function onDragEnd(_: unknown, info: PanInfo) {
+    // Si está zoomeado, el drag es pan — no cambiar slide ni cerrar.
+    if (zoomed) return
     // Swipe vertical largo → cerrar
     if (Math.abs(info.offset.y) > Math.abs(info.offset.x)) {
       if (Math.abs(info.offset.y) > 120 || Math.abs(info.velocity.y) > 600) {
@@ -97,6 +145,78 @@ export default function ProductLightbox({
     // Swipe horizontal → cambiar foto
     if (info.offset.x < -50 || info.velocity.x < -300) go(+1)
     else if (info.offset.x > 50 || info.velocity.x > 300) go(-1)
+  }
+
+  // ─────── Gestos táctiles (pinch + double-tap + pan) ───────
+  function distanceBetweenTouches(touches: React.TouchList) {
+    const [a, b] = [touches[0], touches[1]]
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+  }
+
+  function onTouchStartImg(e: React.TouchEvent) {
+    if (e.touches.length === 2) {
+      pinchStartDist.current = distanceBetweenTouches(e.touches)
+      pinchStartScale.current = scale
+      panStart.current = null
+      return
+    }
+    if (e.touches.length === 1 && zoomed) {
+      panStart.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        tx,
+        ty,
+      }
+    }
+    if (e.touches.length === 1) {
+      const now = Date.now()
+      if (now - lastTapAt.current < 280) {
+        // Double-tap → toggle zoom
+        if (zoomed) resetZoom()
+        else setScale(2.5)
+        lastTapAt.current = 0
+      } else {
+        lastTapAt.current = now
+      }
+    }
+  }
+
+  function onTouchMoveImg(e: React.TouchEvent) {
+    if (e.touches.length === 2 && pinchStartDist.current) {
+      const d = distanceBetweenTouches(e.touches)
+      const ratio = d / pinchStartDist.current
+      const next = Math.max(
+        MIN_SCALE,
+        Math.min(MAX_SCALE, pinchStartScale.current * ratio)
+      )
+      setScale(next)
+      if (next === MIN_SCALE) {
+        setTx(0)
+        setTy(0)
+      }
+      return
+    }
+    if (e.touches.length === 1 && zoomed && panStart.current) {
+      const dx = e.touches[0].clientX - panStart.current.x
+      const dy = e.touches[0].clientY - panStart.current.y
+      setTx(panStart.current.tx + dx)
+      setTy(panStart.current.ty + dy)
+    }
+  }
+
+  function onTouchEndImg(e: React.TouchEvent) {
+    if (e.touches.length < 2) pinchStartDist.current = null
+    if (e.touches.length === 0) panStart.current = null
+  }
+
+  function onWheelImg(e: React.WheelEvent) {
+    e.preventDefault()
+    stepZoom(e.deltaY < 0 ? +0.2 : -0.2)
+  }
+
+  function onDoubleClickImg() {
+    if (zoomed) resetZoom()
+    else setScale(2.5)
   }
 
   if (typeof document === "undefined") return null
@@ -113,64 +233,82 @@ export default function ProductLightbox({
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[260] flex items-center justify-center touch-none"
         >
-          {/* Backdrop oscuro */}
+          {/* Backdrop oscuro — click: si zoom→reset; si no→cierra */}
           <motion.div
             className="absolute inset-0 bg-black/95 backdrop-blur-2xl"
-            onClick={onClose}
+            onClick={() => {
+              if (zoomed) resetZoom()
+              else onClose()
+            }}
           />
 
           {/* Header */}
-          <div className="absolute top-0 inset-x-0 z-10 flex items-center justify-between p-4 pb-safe">
-            <span
-              className="px-3 py-1 rounded-full bg-white/15 backdrop-blur text-white text-[10px] font-black uppercase tracking-widest"
-              style={{ marginTop: "env(safe-area-inset-top)" }}
-            >
-              {current?.variantName}
-            </span>
-            <span
-              className="px-3 py-1 rounded-full bg-white/15 backdrop-blur text-white text-[11px] font-black tabular-nums"
-              style={{ marginTop: "env(safe-area-inset-top)" }}
-            >
-              {index + 1}/{total}
-            </span>
+          <div
+            className="absolute top-0 inset-x-0 z-10 flex items-center justify-between gap-2 p-4"
+            style={{ paddingTop: "calc(env(safe-area-inset-top) + 1rem)" }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="px-3 py-1 rounded-full bg-white/15 backdrop-blur text-white text-[10px] font-black uppercase tracking-widest truncate">
+                {current?.variantName}
+              </span>
+              {total > 1 && (
+                <span className="px-3 py-1 rounded-full bg-white/15 backdrop-blur text-white text-[11px] font-black tabular-nums shrink-0">
+                  {index + 1}/{total}
+                </span>
+              )}
+              {zoomed && (
+                <span className="px-2 py-1 rounded-full bg-primary/80 backdrop-blur text-white text-[10px] font-black tabular-nums shrink-0">
+                  {scale.toFixed(1)}×
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={onClose}
               aria-label="Cerrar"
-              className="w-10 h-10 rounded-full bg-white/15 backdrop-blur text-white flex items-center justify-center"
-              style={{ marginTop: "env(safe-area-inset-top)" }}
+              className="w-10 h-10 rounded-full bg-white/15 backdrop-blur text-white flex items-center justify-center shrink-0"
             >
               <X size={18} />
             </button>
           </div>
 
-          {/* Imagen con swipe táctil */}
+          {/* Imagen con swipe + pinch zoom */}
           <motion.div
             key={index}
-            drag="x"
+            drag={zoomed ? false : "x"}
             dragConstraints={{ left: 0, right: 0 }}
             dragElastic={0.25}
             onDragEnd={onDragEnd}
-            onTouchStart={(e) => {
-              startRef.current.x = e.touches[0].clientX
-              startRef.current.y = e.touches[0].clientY
-            }}
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ type: "spring", stiffness: 280, damping: 28 }}
-            className="relative w-full h-full max-w-3xl flex items-center justify-center px-4"
+            className="relative w-full h-full max-w-3xl flex items-center justify-center px-4 overflow-hidden"
           >
             <img
               src={current?.url}
               alt={current?.variantName}
               draggable={false}
-              className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl pointer-events-none select-none"
+              onTouchStart={onTouchStartImg}
+              onTouchMove={onTouchMoveImg}
+              onTouchEnd={onTouchEndImg}
+              onWheel={onWheelImg}
+              onDoubleClick={onDoubleClickImg}
+              style={{
+                transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
+                transition:
+                  pinchStartDist.current || panStart.current
+                    ? "none"
+                    : "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+                touchAction: "none",
+                cursor: zoomed ? "grab" : "zoom-in",
+              }}
+              className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl select-none"
             />
           </motion.div>
 
-          {/* Flechas desktop */}
-          {total > 1 && (
+          {/* Flechas desktop — ocultas al estar zoomeado */}
+          {total > 1 && !zoomed && (
             <>
               <button
                 type="button"
@@ -193,8 +331,33 @@ export default function ProductLightbox({
             </>
           )}
 
-          {/* Indicadores tipo pill */}
-          {total > 1 && (
+          {/* Controles de zoom (desktop/tablet) */}
+          <div
+            className="absolute right-6 z-20 hidden sm:flex flex-col gap-2"
+            style={{ bottom: "calc(env(safe-area-inset-bottom) + 6rem)" }}
+          >
+            <button
+              type="button"
+              onClick={() => stepZoom(+0.5)}
+              aria-label="Acercar"
+              disabled={scale >= MAX_SCALE}
+              className="w-10 h-10 rounded-full bg-white/15 backdrop-blur text-white flex items-center justify-center disabled:opacity-30"
+            >
+              <ZoomIn size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => (zoomed ? resetZoom() : stepZoom(-0.5))}
+              aria-label="Alejar"
+              disabled={!zoomed}
+              className="w-10 h-10 rounded-full bg-white/15 backdrop-blur text-white flex items-center justify-center disabled:opacity-30"
+            >
+              <ZoomOut size={16} />
+            </button>
+          </div>
+
+          {/* Indicadores tipo pill — ocultos al estar zoomeado */}
+          {total > 1 && !zoomed && (
             <div
               className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-1 z-10 pointer-events-none"
               style={{ marginBottom: "env(safe-area-inset-bottom)" }}
@@ -211,8 +374,18 @@ export default function ProductLightbox({
             </div>
           )}
 
+          {/* Hint inicial — desaparece al zoomear */}
+          {!zoomed && (
+            <p
+              className="absolute left-1/2 -translate-x-1/2 text-white/45 text-[10px] font-black uppercase tracking-widest pointer-events-none select-none"
+              style={{ bottom: "calc(env(safe-area-inset-bottom) + 2.5rem)" }}
+            >
+              Pellizca · doble tap para zoom
+            </p>
+          )}
+
           {/* CTA + Agregar al carrito (flotante en lightbox) */}
-          {onOpenBuy && (
+          {onOpenBuy && !zoomed && (
             <button
               type="button"
               onClick={(e) => {

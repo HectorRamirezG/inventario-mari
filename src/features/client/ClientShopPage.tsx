@@ -1213,7 +1213,9 @@ function ProductCardClient({
   // Slices para VariantImageCarousel. REGLA CRÍTICA:
   // toda variante DEBE existir en este array, aunque no tenga fotos propias,
   // para que el selectedVariantId siempre matchee. Si no tiene fotos, hereda
-  // las del producto o las de la primera variante con galería como fallback.
+  // las de la primera variante con galería. Como último recurso (legacy)
+  // usa product.image_url; el admin verá un banner en el drawer pidiendo
+  // migrar esa foto a las variantes.
   const fallbackImages = (() => {
     const firstWithImgs = product.variants.find((v) => {
       const arr = v.image_urls && v.image_urls.length > 0
@@ -1246,6 +1248,9 @@ function ProductCardClient({
       images: own.length > 0 ? own : fallbackImages,
     }
   })
+
+  // ¿Hay AL MENOS una foto real en alguna variante o legacy?
+  const hasAnyPhoto = carouselSafe.some((v) => v.images.length > 0)
 
   // ¿Hay diferenciación real entre variantes a nivel de imagen?
   // Si todas terminan con exactamente la misma primera URL (caso típico:

@@ -68,19 +68,11 @@ export default function ProductCard({
   // Galería para el VariantImageCarousel.
   // REGLA CRÍTICA: TODA variante debe estar presente para que el
   // selectedVariantId siempre matchee al cambiar de chip. Si una variante
-  // no tiene fotos propias, hereda en cascada: producto -> primera
-  // variante con fotos. Nunca se filtra.
+  // no tiene fotos propias, hereda en cascada de la PRIMERA variante con
+  // fotos. NO usamos product.image_url como fallback porque el producto
+  // ya no tiene foto propia (esa idea está deprecada).
   const carouselSafe = useMemo(() => {
-    if (variants.length === 0) {
-      if (!product.image_url) return []
-      return [
-        {
-          id: "_main",
-          name: product.name,
-          images: [product.image_url],
-        },
-      ]
-    }
+    if (variants.length === 0) return []
     const firstWithImgs = variants.find((v) => {
       const arr =
         v.image_urls && v.image_urls.length > 0
@@ -91,12 +83,14 @@ export default function ProductCard({
       return arr.length > 0
     })
     const fallback: string[] = (() => {
-      if (product.image_url) return [product.image_url]
       if (firstWithImgs) {
         if (firstWithImgs.image_urls && firstWithImgs.image_urls.length > 0)
           return firstWithImgs.image_urls
         if (firstWithImgs.image_url) return [firstWithImgs.image_url]
       }
+      // Último recurso (legacy): si NADIE tiene foto pero el producto sí
+      // (campo viejo), úsalo. El banner del drawer le va a pedir migrar.
+      if (product.image_url) return [product.image_url]
       return []
     })()
     return variants.map((v) => {
@@ -112,7 +106,7 @@ export default function ProductCard({
         images: own.length > 0 ? own : fallback,
       }
     })
-  }, [variants, product.image_url, product.name])
+  }, [variants, product.image_url])
 
   // Popover de acción rápida del botón "+"
   const [popoverOpen, setPopoverOpen] = useState(false)
@@ -187,6 +181,10 @@ export default function ProductCard({
 
   const lowStock = (product.min_stock ?? 0) > 0 && totalStock <= (product.min_stock ?? 0)
 
+  // ¿Hay AL MENOS una foto real en alguna variante?
+  // Si no, mostramos un placeholder atractivo + CTA en vez del carrusel.
+  const hasAnyPhoto = carouselSafe.some((v) => v.images.length > 0)
+
   return (
     <motion.div
       layout
@@ -195,29 +193,48 @@ export default function ProductCard({
       transition={{ type: "spring", stiffness: 280, damping: 26 }}
       className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
     >
-      {/* Imagen + Carrusel */}
+      {/* Imagen + Carrusel (o placeholder si no hay fotos) */}
       <div className="relative">
-        <VariantImageCarousel
-          variants={carouselSafe}
-          selectedVariantId={selected}
-          aspect="1/1"
-          onTap={openLightbox}
-          className="rounded-none"
-        />
+        {hasAnyPhoto ? (
+          <VariantImageCarousel
+            variants={carouselSafe}
+            selectedVariantId={selected}
+            aspect="1/1"
+            onTap={openLightbox}
+            className="rounded-none"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => onEdit(product)}
+            className="w-full aspect-square bg-gradient-to-br from-pink-50 via-purple-50 to-amber-50 dark:from-slate-800 dark:via-slate-800/80 dark:to-slate-700/60 flex flex-col items-center justify-center gap-2 text-primary/70 hover:text-primary transition-colors group"
+            aria-label="Agregar fotos al producto"
+          >
+            <div className="w-14 h-14 rounded-2xl bg-white/70 dark:bg-slate-900/40 backdrop-blur flex items-center justify-center shadow-bloom group-hover:scale-110 transition-transform">
+              <ImageIcon size={22} />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              Sin fotos
+            </span>
+            <span className="text-[9px] font-bold text-slate-400">
+              Toca para subir
+            </span>
+          </button>
+        )}
         {/* Contador de fotos reales (solo si hay >1) */}
-        {lightboxSlides.length > 1 && (
+        {hasAnyPhoto && lightboxSlides.length > 1 && (
           <span className="absolute top-2 right-2 z-10 px-2 py-0.5 rounded-full bg-black/55 backdrop-blur text-white text-[9px] font-black tabular-nums shadow">
             {lightboxSlides.length} fotos
           </span>
         )}
         {/* Badge stock bajo */}
-        {lowStock && (
+        {lowStock && hasAnyPhoto && (
           <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest z-10 shadow-bloom">
             Stock bajo
           </span>
         )}
         {/* Badge sin costo (admin) */}
-        {product.cost == null && (
+        {product.cost == null && hasAnyPhoto && (
           <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest z-10">
             Sin costo
           </span>
@@ -295,15 +312,33 @@ export default function ProductCard({
           </div>
         )}
 
-        {/* Precio + acciones rápidas */}
+        {/* Precio + stock + acciones rápidas. Stock con color semántico:
+            verde = bien, ámbar = bajo, rojo = agotado total. */}
         <div className="flex items-center justify-between gap-2 pt-1">
-          <div className="min-w-0">
-            <span className="text-sm font-black text-primary tabular-nums">
-              {minPrice ? formatMoney(minPrice) : "—"}
-            </span>
-            <span className="ml-2 text-[9px] font-black uppercase text-slate-400">
-              {totalStock} pz total
-            </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-base font-black text-primary tabular-nums leading-none">
+                {minPrice ? formatMoney(minPrice) : "—"}
+              </span>
+              {variants.length > 0 && (
+                <span
+                  className={`text-[9px] font-black uppercase tracking-widest tabular-nums ${
+                    totalStock === 0
+                      ? "text-rose-500"
+                      : lowStock
+                      ? "text-amber-600"
+                      : "text-emerald-600"
+                  }`}
+                >
+                  {totalStock} pz
+                </span>
+              )}
+            </div>
+            {variants.length === 0 && (
+              <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 mt-0.5">
+                Sin variantes
+              </p>
+            )}
           </div>
 
           {/* Botón "+" con popover de acción rápida */}
