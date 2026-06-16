@@ -19,10 +19,10 @@ export function usePricingPage() {
       key: crypto.randomUUID(),
       productId: "",
       variantId: "",
-      quantity: 1,
-      manualPrice: "",
       manualExtraCost: "",
-      tierApplied: "menudeo"
+      overrideMenudeo: "",
+      overrideMedio: "",
+      overrideMayoreo: "",
     }
   ]);
 
@@ -57,8 +57,7 @@ export function usePricingPage() {
         product?.variants?.find((v: any) => v.id === r.variantId) ||
         null;
 
-      // El costo real viene de cost_override en la variante (si lo tiene)
-      // o del cost del producto. NUNCA de variant.cost (no existe).
+      // Costo real = cost_override de la variante (si elegida) o cost del producto
       const costBase = Number(
         variant?.cost_override ?? product?.cost ?? 0
       );
@@ -73,43 +72,31 @@ export function usePricingPage() {
       const m_medio = Number(cfg.margen_medio) / 100;
       const m_mayoreo = Number(cfg.margen_mayoreo) / 100;
 
+      // Fórmula: precio = costo * (1 + margen%)
+      // (margen sobre costo, NO margen sobre precio de venta)
       const suggestedPrices = {
-        menudeo: Math.round(
-          totalOperatingCost / (1 - m_menudeo)
-        ),
-        medio: Math.round(
-          totalOperatingCost / (1 - m_medio)
-        ),
-        mayoreo: Math.round(
-          totalOperatingCost / (1 - m_mayoreo)
-        )
+        menudeo: Math.round(totalOperatingCost * (1 + m_menudeo) * 100) / 100,
+        medio: Math.round(totalOperatingCost * (1 + m_medio) * 100) / 100,
+        mayoreo: Math.round(totalOperatingCost * (1 + m_mayoreo) * 100) / 100,
       };
 
-      const qty = Number(r.quantity) || 0;
+      // Precios FINALES = override manual si existe, si no el sugerido
+      const finalMenudeo =
+        Number(r.overrideMenudeo) > 0
+          ? Number(r.overrideMenudeo)
+          : suggestedPrices.menudeo;
+      const finalMedio =
+        Number(r.overrideMedio) > 0
+          ? Number(r.overrideMedio)
+          : suggestedPrices.medio;
+      const finalMayoreo =
+        Number(r.overrideMayoreo) > 0
+          ? Number(r.overrideMayoreo)
+          : suggestedPrices.mayoreo;
 
-      // Tier sugerido por cantidad (solo para resaltar uno)
-      let tierByQty: "menudeo" | "medio" | "mayoreo" = "menudeo";
-      if (qty >= Number(cfg.umbral_mayoreo)) tierByQty = "mayoreo";
-      else if (qty >= Number(cfg.umbral_medio)) tierByQty = "medio";
-
-      // Tier activo = el que el usuario eligió, o el sugerido por qty.
-      const tierApplied: "menudeo" | "medio" | "mayoreo" =
-        r.tierApplied || tierByQty;
-
-      const tierPrice = suggestedPrices[tierApplied];
-
-      // Precio final: si capturó manualPrice usa ese, si no el del tier elegido.
-      const finalPrice =
-        Number(r.manualPrice) > 0
-          ? Number(r.manualPrice)
-          : tierPrice;
-
-      const profit = finalPrice - totalOperatingCost;
-
+      const profit = finalMenudeo - totalOperatingCost;
       const realMarginPercent =
-        finalPrice > 0
-          ? (profit / finalPrice) * 100
-          : 0;
+        finalMenudeo > 0 ? (profit / finalMenudeo) * 100 : 0;
 
       return {
         ...r,
@@ -117,9 +104,10 @@ export function usePricingPage() {
         variant,
         totalOperatingCost,
         suggestedPrices,
-        finalPrice,
+        finalMenudeo,
+        finalMedio,
+        finalMayoreo,
         realMarginPercent,
-        tierApplied
       };
     });
   }, [rows, products, cfg]);
@@ -131,10 +119,10 @@ export function usePricingPage() {
         key: crypto.randomUUID(),
         productId: "",
         variantId: "",
-        quantity: 1,
-        manualPrice: "",
         manualExtraCost: "",
-        tierApplied: "menudeo"
+        overrideMenudeo: "",
+        overrideMedio: "",
+        overrideMayoreo: "",
       }
     ]);
 
@@ -165,14 +153,21 @@ export function usePricingPage() {
       let variantsUpdated = 0;
 
       for (const r of validRows) {
-        const sp = r.suggestedPrices;
-        const priceBase = Number(r.finalPrice) || Number(sp[r.tierApplied]) || 0;
+        const priceMen = Number(r.finalMenudeo) || 0;
+        const priceMed = Number(r.finalMedio) || 0;
+        const priceMay = Number(r.finalMayoreo) || 0;
+
+        if (priceMen <= 0 && priceMed <= 0 && priceMay <= 0) {
+          throw new Error(
+            `${r.product?.name}: necesitas costo > 0 o precios manuales`
+          );
+        }
 
         const priceUpdate = {
-          price: priceBase,
-          price_menudeo: Number(sp.menudeo) || 0,
-          price_medio: Number(sp.medio) || 0,
-          price_mayoreo: Number(sp.mayoreo) || 0,
+          price: priceMen,
+          price_menudeo: priceMen,
+          price_medio: priceMed,
+          price_mayoreo: priceMay,
         };
 
         // Determinar qué variantes actualizar
@@ -210,16 +205,16 @@ export function usePricingPage() {
               variant_name_snapshot:
                 r.variant?.variant_name ||
                 (r.variantId ? "Variante" : "Todas las variantes"),
-              quantity: Number(r.quantity) || 0,
+              quantity: targetVariantIds.length,
               extra_cost: Number(r.manualExtraCost) || 0,
               cost_unit: Number(r.totalOperatingCost) || 0,
               cost_final: Number(r.totalOperatingCost) || 0,
-              price_menudeo: Number(sp.menudeo) || 0,
-              price_medio: Number(sp.medio) || 0,
-              price_mayoreo: Number(sp.mayoreo) || 0,
-              price_applied: priceBase,
-              tier: r.tierApplied || "menudeo",
-              total: priceBase * (Number(r.quantity) || 0),
+              price_menudeo: priceMen,
+              price_medio: priceMed,
+              price_mayoreo: priceMay,
+              price_applied: priceMen,
+              tier: "menudeo",
+              total: priceMen,
               margin_percent: Number(r.realMarginPercent) || 0,
             }
           ]);
@@ -244,10 +239,10 @@ export function usePricingPage() {
           key: crypto.randomUUID(),
           productId: "",
           variantId: "",
-          quantity: 1,
-          manualPrice: "",
           manualExtraCost: "",
-          tierApplied: "menudeo"
+          overrideMenudeo: "",
+          overrideMedio: "",
+          overrideMayoreo: "",
         }
       ]);
     } catch (error: any) {

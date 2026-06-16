@@ -64,35 +64,41 @@ export default function ProductCard({
     return arr.length ? Math.min(...arr) : null
   }, [variants])
 
-  // Galería para el VariantImageCarousel: cada variante aporta sus fotos
+  // Galería para el VariantImageCarousel: cada variante aporta sus fotos.
+  // Si una variante no tiene fotos propias, hereda la imagen general del
+  // producto como fallback — así NUNCA se ve gris vacío si el admin subió
+  // una foto principal.
   const carousel = useMemo(() => {
-    return variants
-      .map((v) => {
-        const imgs =
-          v.image_urls && v.image_urls.length > 0
-            ? v.image_urls
-            : v.image_url
-            ? [v.image_url]
-            : []
-        return { id: v.id, name: v.variant_name, images: imgs }
-      })
-      .filter((v) => v.images.length > 0)
-  }, [variants])
+    return variants.map((v) => {
+      const own =
+        v.image_urls && v.image_urls.length > 0
+          ? v.image_urls
+          : v.image_url
+          ? [v.image_url]
+          : []
+      const images = own.length > 0
+        ? own
+        : product.image_url
+        ? [product.image_url]
+        : []
+      return { id: v.id, name: v.variant_name, images }
+    }).filter((v) => v.images.length > 0)
+  }, [variants, product.image_url])
 
-  // Fallback al image_url del producto si no hay nada en variantes
+  // Fallback final: si NO hay variantes y SÍ hay imagen del producto
   const carouselSafe = useMemo(() => {
     if (carousel.length > 0) return carousel
-    if (product.image_url && variants[0]) {
+    if (product.image_url) {
       return [
         {
-          id: variants[0].id,
-          name: variants[0].variant_name,
+          id: variants[0]?.id ?? "_main",
+          name: variants[0]?.variant_name ?? product.name,
           images: [product.image_url],
         },
       ]
     }
     return []
-  }, [carousel, product.image_url, variants])
+  }, [carousel, product.image_url, product.name, variants])
 
   // Popover de acción rápida del botón "+"
   const [popoverOpen, setPopoverOpen] = useState(false)

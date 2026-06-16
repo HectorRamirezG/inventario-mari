@@ -343,6 +343,7 @@ export default function ProductDrawer({
                   product={product}
                   focusVariantId={focusVariantId ?? null}
                   onSaved={onSaved}
+                  pricingCfg={pricingCfg}
                 />
               )}
 
@@ -519,10 +520,12 @@ function VariantsTab({
   product,
   focusVariantId,
   onSaved,
+  pricingCfg,
 }: {
   product: Product
   focusVariantId: string | null
   onSaved: () => void
+  pricingCfg: PricingConfig | null
 }) {
   const [openId, setOpenId] = useState<string | null>(focusVariantId)
   const [showNew, setShowNew] = useState(false)
@@ -575,6 +578,8 @@ function VariantsTab({
               key={v.id}
               variant={v}
               productId={product.id}
+              productCost={product.cost ?? null}
+              pricingCfg={pricingCfg}
               isOpen={openId === v.id}
               onToggle={() => setOpenId((id) => (id === v.id ? null : v.id))}
               onSaved={onSaved}
@@ -615,10 +620,34 @@ function NewVariantForm({
     }
     setSaving(true)
     try {
+      // 🎯 Auto-calcular precios sugeridos basados en el costo del producto
+      // y la configuración de márgenes. Así la variante nace CON precios y
+      // no aparece $0 en menudeo/medio/mayoreo.
+      const [{ data: prod }, cfg] = await Promise.all([
+        supabase
+          .from("products")
+          .select("cost")
+          .eq("id", productId)
+          .maybeSingle(),
+        getPricingConfig().catch(() => null),
+      ])
+      const cost = Number(prod?.cost) || 0
+      let priceFields: Partial<Variant> = {}
+      if (cost > 0 && cfg) {
+        const sug = suggestedPrices(cost, cfg)
+        priceFields = {
+          price: Math.round(sug.men * 100) / 100,
+          price_menudeo: Math.round(sug.men * 100) / 100,
+          price_medio: Math.round(sug.med * 100) / 100,
+          price_mayoreo: Math.round(sug.may * 100) / 100,
+        }
+      }
+
       const v = await createVariant({
         product_id: productId,
         variant_name: vName.trim(),
         sku: sku.trim() || null,
+        ...priceFields,
       })
       const qty = Number(stock) || 0
       if (qty > 0) {
@@ -628,7 +657,12 @@ function NewVariantForm({
           quantity: qty,
         })
       }
-      toast.success(qty > 0 ? "Variante + stock inicial creados" : "Variante creada")
+      const msg = cost > 0 && cfg
+        ? `Variante creada con precios sugeridos${qty > 0 ? " + stock" : ""}`
+        : qty > 0
+        ? "Variante + stock inicial creados"
+        : "Variante creada"
+      toast.success(msg)
       onDone()
     } catch (e: any) {
       toast.error(e?.message ?? "Error creando variante")
@@ -696,12 +730,16 @@ function NewVariantForm({
 function VariantAccordion({
   variant,
   productId,
+  productCost,
+  pricingCfg,
   isOpen,
   onToggle,
   onSaved,
 }: {
   variant: Variant
   productId: string
+  productCost: number | null
+  pricingCfg: PricingConfig | null
   isOpen: boolean
   onToggle: () => void
   onSaved: () => void
@@ -720,6 +758,28 @@ function VariantAccordion({
       : []
   )
   const [saving, setSaving] = useState(false)
+
+  // Sugeridos calculados desde el costo del producto (referencia)
+  const sug = useMemo(() => {
+    if (!pricingCfg) return null
+    const c = Number(productCost) || 0
+    if (c <= 0) return null
+    return suggestedPrices(c, pricingCfg)
+  }, [pricingCfg, productCost])
+
+  // ¿Los 3 precios están vacíos? → mostrar banner de aplicar sugeridos
+  const noPrices =
+    (pm === "" || Number(pm) === 0) &&
+    (pmd === "" || Number(pmd) === 0) &&
+    (pma === "" || Number(pma) === 0)
+
+  function applySuggested() {
+    if (!sug) return
+    setPm(Math.round(sug.men * 100) / 100)
+    setPmd(Math.round(sug.med * 100) / 100)
+    setPma(Math.round(sug.may * 100) / 100)
+    toast.success("Precios sugeridos aplicados — guarda para confirmar")
+  }
 
   const dirty = useMemo(() => {
     return (
@@ -896,7 +956,34 @@ function VariantAccordion({
               </div>
 
               <div className="space-y-1">
-                <Label>Precios por nivel</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Precios por nivel</Label>
+                  {sug && (
+                    <button
+                      type="button"
+                      onClick={applySuggested}
+                      className="text-[9px] font-black uppercase tracking-widest text-primary hover:underline flex items-center gap-1"
+                    >
+                      <Sparkles size={10} />
+                      Usar sugeridos
+                    </button>
+                  )}
+                </div>
+                {noPrices && sug && (
+                  <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-2 mb-1 flex items-start gap-2">
+                    <Sparkles size={12} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[9px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-widest">
+                        Sin precios
+                      </p>
+                      <p className="text-[10px] font-bold text-amber-700/80 dark:text-amber-200/80 leading-tight">
+                        Toca "Usar sugeridos" para aplicar Menudeo{" "}
+                        {money(sug.men)} · Medio {money(sug.med)} · Mayoreo{" "}
+                        {money(sug.may)}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-3 gap-2">
                   <PriceInput label="Menudeo" value={pm} onChange={setPm} />
                   <PriceInput label="Medio" value={pmd} onChange={setPmd} />
