@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Clock, CheckCircle2, ArrowRight, LifeBuoy, Lock, ShoppingBag } from "lucide-react"
+import { Clock, CheckCircle2, ArrowRight, LifeBuoy, Lock, ShoppingBag, Wallet } from "lucide-react"
 import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDate, shortId } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
 import TicketDrawer from "../../components/ui/TicketDrawer"
+import PaymentCenterDrawer from "../../components/ui/PaymentCenterDrawer"
 import Skeleton from "../../components/ui/Skeleton"
 import SupportModal from "../support/SupportModal"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
@@ -25,6 +26,7 @@ interface MyOrder {
   is_layaway: boolean
   created_at: string
   public_token: string | null
+  payment_url: string | null
 }
 
 export default function ClientOrdersPage() {
@@ -32,6 +34,7 @@ export default function ClientOrdersPage() {
   const [orders, setOrders] = useState<MyOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [ticketToken, setTicketToken] = useState<string | null>(null)
+  const [paymentOrder, setPaymentOrder] = useState<MyOrder | null>(null)
   const [openSupport, setOpenSupport] = useState(false)
   const [supportSaleId, setSupportSaleId] = useState<string | null>(null)
   const rules = useBusinessRules()
@@ -42,7 +45,7 @@ export default function ClientOrdersPage() {
     ;(async () => {
       const { data } = await supabase
         .from("sales")
-        .select("id,total,paid,balance,status,is_layaway,created_at,public_token")
+        .select("id,total,paid,balance,status,is_layaway,created_at,public_token,payment_url")
         .eq("customer_email", email)
         .order("created_at", { ascending: false })
         .limit(50)
@@ -167,50 +170,70 @@ export default function ClientOrdersPage() {
                 </div>
               </>
             )}
-            {/* Botón: abre el ticket como cortina, NUNCA cambia de página */}
-            <div className="flex gap-2 mt-3">
-              <button
-                type="button"
-                onClick={() => setTicketToken(o.public_token ?? o.id)}
-                className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl bg-slate-50 dark:bg-slate-700 text-xs font-black active:scale-95 transition-transform"
-              >
-                Ver ticket
-                <ArrowRight size={12} />
-              </button>
-              {(() => {
-                const claim = canClaim(rules, o as any)
-                if (!claim.allowed) {
+            {/* Acciones */}
+            <div className="flex flex-col gap-2 mt-3">
+              {/* CTA principal: Pagar (solo si hay saldo) */}
+              {!paid && (
+                <motion.button
+                  type="button"
+                  onClick={() => setPaymentOrder(o)}
+                  whileTap={{ scale: 0.98 }}
+                  className="relative overflow-hidden w-full h-11 rounded-xl flex items-center justify-center gap-2 text-white text-[11px] font-black uppercase tracking-widest shadow-bloom press-hard"
+                  style={{
+                    background:
+                      "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
+                  }}
+                >
+                  <Wallet size={13} />
+                  Pagar saldo
+                  <ArrowRight size={12} />
+                </motion.button>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTicketToken(o.public_token ?? o.id)}
+                  className="flex-1 flex items-center justify-center gap-1 h-9 rounded-xl bg-slate-50 dark:bg-slate-700 text-xs font-black text-slate-700 dark:text-slate-200 press"
+                >
+                  Ver ticket
+                  <ArrowRight size={12} />
+                </button>
+                {(() => {
+                  const claim = canClaim(rules, o as any)
+                  if (!claim.allowed) {
+                    return (
+                      <button
+                        type="button"
+                        disabled
+                        title={claim.reason}
+                        className="h-9 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 text-xs font-black flex items-center gap-1 cursor-not-allowed"
+                      >
+                        <Lock size={12} />
+                        Cerrado
+                      </button>
+                    )
+                  }
                   return (
                     <button
                       type="button"
-                      disabled
-                      title={claim.reason}
-                      className="h-9 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 text-xs font-black flex items-center gap-1 cursor-not-allowed"
+                      onClick={() => {
+                        setSupportSaleId(o.id)
+                        setOpenSupport(true)
+                      }}
+                      title={
+                        Number.isFinite(claim.remainingMs)
+                          ? `Te quedan ${formatRemaining(claim.remainingMs)} para reportar`
+                          : "Reportar problema con este pedido"
+                      }
+                      className="h-9 px-3 rounded-xl bg-primary/10 text-primary text-xs font-black flex items-center gap-1 press"
                     >
-                      <Lock size={12} />
-                      Cerrado
+                      <LifeBuoy size={12} />
+                      Ayuda
                     </button>
                   )
-                }
-                return (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSupportSaleId(o.id)
-                      setOpenSupport(true)
-                    }}
-                    title={
-                      Number.isFinite(claim.remainingMs)
-                        ? `Te quedan ${formatRemaining(claim.remainingMs)} para reportar`
-                        : "Reportar problema con este pedido"
-                    }
-                    className="h-9 px-3 rounded-xl bg-primary/10 text-primary text-xs font-black flex items-center gap-1 active:scale-95 transition-transform"
-                  >
-                    <LifeBuoy size={12} />
-                    Ayuda
-                  </button>
-                )
-              })()}
+                })()}
+              </div>
             </div>
           </motion.div>
         )
@@ -221,6 +244,24 @@ export default function ClientOrdersPage() {
         open={!!ticketToken}
         token={ticketToken}
         onClose={() => setTicketToken(null)}
+      />
+
+      {/* Centro de pago - drawer dedicado solo para pago/comprobantes */}
+      <PaymentCenterDrawer
+        open={!!paymentOrder}
+        sale={
+          paymentOrder
+            ? {
+                id: paymentOrder.id,
+                total: paymentOrder.total,
+                paid: paymentOrder.paid,
+                balance: paymentOrder.balance,
+                payment_url: paymentOrder.payment_url,
+                payments: [],
+              }
+            : null
+        }
+        onClose={() => setPaymentOrder(null)}
       />
 
       {/* FAB de soporte (siempre visible, abajo a la izquierda) */}
