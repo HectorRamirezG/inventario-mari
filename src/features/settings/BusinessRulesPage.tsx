@@ -20,6 +20,7 @@ import toast from "react-hot-toast"
 
 import PageHeader from "../../components/ui/PageHeader"
 import Toggle from "../../components/ui/Toggle"
+import { confirmAction } from "../../lib/confirm"
 import {
   useBusinessRules,
   saveBusinessRules,
@@ -52,7 +53,12 @@ export default function BusinessRulesPage() {
   }
 
   function handleReset() {
-    if (!window.confirm("¿Restaurar valores por defecto?")) return
+    if (!(await confirmAction({
+      title: "¿Restaurar valores por defecto?",
+      description: "Se restaurarán todas las reglas de negocio a sus valores originales.",
+      confirmLabel: "Sí, restaurar",
+      tone: "primary",
+    }))) return
     setForm(DEFAULT_RULES)
   }
 

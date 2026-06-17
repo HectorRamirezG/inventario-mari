@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useDeferredValue } from "react";
 import { toast } from "react-hot-toast";
 import { getMovementHistory, registrarAbono } from "./movementHistoryService";
 
 export function useMovementHistoryPage() {
   const [type, setType] = useState<"all" | "entrada" | "venta">("all");
   const [q, setQ] = useState("");
+  // El filter se computa con valor diferido para no bloquear input
+  const deferredQ = useDeferredValue(q);
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -16,10 +18,6 @@ export function useMovementHistoryPage() {
     try {
       setLoading(true);
       const data = await getMovementHistory({ limit: 100 });
-      
-      // LOG PARA DEPURAR: Abre la consola y mira si 'total' viene ahí
-      console.log("Data desde SQL:", data); 
-
       setRows(data || []);
     } catch (e) {
       toast.error("Error al cargar datos");
@@ -49,7 +47,7 @@ export function useMovementHistoryPage() {
     if (type === "entrada") result = result.filter(r => r.sale_id === null);
 
     // 2. Filtro por búsqueda
-    const s = q.trim().toLowerCase();
+    const s = deferredQ.trim().toLowerCase();
     if (s) {
       result = result.filter((r) => {
         const customerMatch = (r.customer || "").toLowerCase().includes(s);
@@ -61,7 +59,7 @@ export function useMovementHistoryPage() {
     }
 
     return result;
-  }, [q, rows, type]);
+  }, [deferredQ, rows, type]);
 
   const ejecutarAbono = async () => {
     if (!montoAbono || Number(montoAbono) <= 0) return toast.error("Monto inválido");

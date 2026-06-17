@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useDeferredValue } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Fuse from "fuse.js"
@@ -154,6 +154,8 @@ export default function ClientShopPage() {
   const [products, setProducts] = useState<PublicProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState("")
+  // Debounce automatico del search para no recomputar fuse en cada tecla.
+  const deferredQ = useDeferredValue(q)
   const [sortBy, setSortBy] = useState<"newest" | "price_asc" | "price_desc" | "name">("newest")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [cart, setCart] = useState<CartLine[]>([])
@@ -252,7 +254,7 @@ export default function ClientShopPage() {
   )
 
   const filtered = useMemo(() => {
-    const needle = q.trim()
+    const needle = deferredQ.trim()
     let out = products
 
     if (categoryFilter !== "all") {
@@ -286,7 +288,7 @@ export default function ClientShopPage() {
         return tb - ta
       })
     return arr
-  }, [products, q, categoryFilter, sortBy, onlyWishlist, wishlist, fuse])
+  }, [products, deferredQ, categoryFilter, sortBy, onlyWishlist, wishlist, fuse])
 
   const handleScan = (code: string) => {
     const norm = code.trim().toLowerCase()

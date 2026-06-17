@@ -8,6 +8,7 @@ import {
 } from "./apartadosService";
 import { supabase } from "../../lib/supabase";
 import { sound } from "../../lib/sound";
+import { confirmAction } from "../../lib/confirm";
 import type { Sale } from "../../types/database";
 
 export type ApartadosFilter = "pending" | "paid" | "all";
@@ -191,12 +192,13 @@ export function useApartados() {
 
   const handleCancelSale = useCallback(
     async (saleId: string) => {
-      if (
-        !window.confirm(
-          "¿Cancelar esta venta? El stock se devolverá al inventario."
-        )
-      )
-        return false;
+      const ok = await confirmAction({
+        title: "¿Cancelar esta venta?",
+        description: "El stock se devolverá al inventario automáticamente. No se puede deshacer.",
+        confirmLabel: "Sí, cancelar venta",
+        tone: "danger",
+      });
+      if (!ok) return false;
       const toastId = toast.loading("Cancelando venta...");
       try {
         await cancelSale(saleId);

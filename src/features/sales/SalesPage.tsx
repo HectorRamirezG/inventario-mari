@@ -33,7 +33,10 @@ import TicketView from "../../components/ui/TicketView";
 import SmartLocationInput from "../../components/ui/SmartLocationInput";
 import PageHeader from "../../components/ui/PageHeader";
 import { formatMoney } from "../../lib/format";
-import { sound } from "../../lib/sound";const TIER_TONE: Record<string, { bg: string; text: string; ring: string }> = {
+import { sound } from "../../lib/sound";
+import { confirmAction } from "../../lib/confirm";
+
+const TIER_TONE: Record<string, { bg: string; text: string; ring: string }> = {
   menudeo: {
     bg: "bg-slate-100",
     text: "text-slate-600",
@@ -204,12 +207,14 @@ export default function SalesPage() {
               {state.cart.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "¿Vaciar carrito? Se perderán los productos agregados."
-                      )
-                    ) {
+                  onClick={async () => {
+                    const ok = await confirmAction({
+                      title: "¿Vaciar carrito?",
+                      description: "Se perderán los productos agregados al carrito actual.",
+                      confirmLabel: "Sí, vaciar",
+                      tone: "danger",
+                    });
+                    if (ok) {
                       actions.clearCart()
                       sound.tap()
                     }

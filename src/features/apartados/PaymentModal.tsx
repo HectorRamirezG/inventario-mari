@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button";
 import AnimatedCheckmark from "../../components/ui/AnimatedCheckmark";
 import type { Sale } from "../../types/database";
 import { useFeedback } from "../../lib/useFeedback";
+import { confirmAction } from "../../lib/confirm";
 
 import { formatMoney as fmtMoney } from "../../lib/format";
 
@@ -49,14 +50,13 @@ export default function PaymentModal({ open, sale, onClose, onPay }: Props) {
   async function handleSubmit() {
     if (amountNum <= 0) return;
     if (amountNum > balance + 0.01) {
-      if (
-        !window.confirm(
-          `El abono (${money(amountNum)}) supera el saldo pendiente (${money(
-            balance
-          )}). ¿Continuar?`
-        )
-      )
-        return;
+      const ok = await confirmAction({
+        title: "El abono supera el saldo",
+        description: `El abono (${money(amountNum)}) supera el saldo pendiente (${money(balance)}). ¿Continuar?`,
+        confirmLabel: "Sí, continuar",
+        tone: "primary",
+      });
+      if (!ok) return;
     }
     setSaving(true);
     const ok = await onPay(sale!.id, amountNum, method);

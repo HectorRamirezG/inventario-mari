@@ -36,6 +36,7 @@ import {
   DEFAULT_BANK,
 } from "./bankAccountService"
 import { resetAppData, type ResetReport } from "./resetAppService"
+import { confirmAction } from "../../lib/confirm"
 
 export default function SettingsPage() {
   const { info, update, reset } = useStoreInfo()
@@ -71,7 +72,12 @@ export default function SettingsPage() {
   }
 
   const handleStoreReset = () => {
-    if (!window.confirm("¿Restaurar valores por defecto?")) return
+    if (!(await confirmAction({
+      title: "¿Restaurar valores por defecto?",
+      description: "Se restaurarán los umbrales de tier (menudeo / medio / mayoreo) a sus valores originales.",
+      confirmLabel: "Sí, restaurar",
+      tone: "primary",
+    }))) return
     reset()
     toast.success("Restaurado")
   }
@@ -480,13 +486,13 @@ function DangerZoneSection() {
 
   async function handleReset() {
     if (!canRun) return
-    if (
-      !window.confirm(
-        "⚠️ Última confirmación.\n\nEsto borra TODOS los productos, variantes, ventas, ciclos, fotos y movimientos. Los USUARIOS y la CONFIGURACIÓN se preservan.\n\n¿Continuar?"
-      )
-    ) {
-      return
-    }
+    const confirmed = await confirmAction({
+      title: "Última confirmación",
+      description: "Esto borra TODOS los productos, variantes, ventas, ciclos, fotos y movimientos. Los USUARIOS y la CONFIGURACIÓN se preservan. ¿Continuar?",
+      confirmLabel: "Sí, borrar todo",
+      tone: "danger",
+    })
+    if (!confirmed) return
     setBusy(true)
     const tid = toast.loading("Reseteando datos operativos...")
     try {
