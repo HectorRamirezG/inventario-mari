@@ -54,6 +54,10 @@ export default function BarcodeScanner({ open, onClose, onScan }: Props) {
           (decoded) => {
             if (cancelled) return
             setLastScan(decoded)
+            // Haptic + tono al escanear OK
+            try {
+              if ("vibrate" in navigator) navigator.vibrate(35)
+            } catch {}
             const shouldClose = onScan(decoded)
             if (shouldClose) {
               // Pequeño delay para que el usuario vea el "leído" antes del cierre

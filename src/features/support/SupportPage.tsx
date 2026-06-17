@@ -34,6 +34,7 @@ import { formatDateTime, shortId } from "../../lib/format"
 import KpiCard from "../../components/ui/KpiCard"
 import Avatar from "../../components/ui/Avatar"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
+import { useLocalStorageState } from "../../lib/useLocalStorageState"
 
 const STATUS_TABS: { id: SupportStatus | "all"; label: string }[] = [
   { id: "open", label: "Abiertas" },
@@ -66,7 +67,7 @@ function statusLabel(s: SupportStatus): string {
 }
 
 export default function SupportPage() {
-  const [tab, setTab] = useState<SupportStatus | "all">("open")
+  const [tab, setTab] = useLocalStorageState<SupportStatus | "all">("support:tab", "open")
   const [tickets, setTickets] = useState<SupportTicket[]>([])
   const [allTickets, setAllTickets] = useState<SupportTicket[]>([])
   const [loading, setLoading] = useState(true)

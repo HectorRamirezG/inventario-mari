@@ -395,6 +395,19 @@ export function useSalesPage() {
         : "Venta cobrada";
       toast.success(msg, { id: toastId });
       clearCart();
+
+      // Milestone: primera venta del día → confetti
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const lastDay = localStorage.getItem("mari:last-sale-day");
+        if (lastDay !== today) {
+          localStorage.setItem("mari:last-sale-day", today);
+          // Lazy import: el confetti solo se carga si vamos a usarlo
+          import("../../lib/confetti").then(({ fireConfetti }) => {
+            fireConfetti({ count: 70, duration: 1800 });
+          });
+        }
+      } catch {}
     } catch (e: any) {
       toast.error(e?.message ?? "Error al guardar la venta", { id: toastId });
     } finally {

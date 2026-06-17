@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState, useDeferredValue } from "react";
 import { toast } from "react-hot-toast";
 import { getMovementHistory, registrarAbono } from "./movementHistoryService";
+import { useLocalStorageState } from "../../lib/useLocalStorageState";
 
 export function useMovementHistoryPage() {
-  const [type, setType] = useState<"all" | "entrada" | "venta">("all");
+  const [type, setType] = useLocalStorageState<"all" | "entrada" | "venta">(
+    "movements:type",
+    "all",
+  );
   const [q, setQ] = useState("");
   // El filter se computa con valor diferido para no bloquear input
   const deferredQ = useDeferredValue(q);
