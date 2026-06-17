@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, MessageCircle, Copy, Check, Image as ImageIcon, FileDown } from "lucide-react"
+import { X, MessageCircle, Copy, Check, Image as ImageIcon, FileDown, Truck } from "lucide-react"
 import { useState } from "react"
 import { toast } from "react-hot-toast"
 
@@ -307,7 +307,7 @@ export default function TicketView({ open, sale, onClose }: Props) {
             </div>
 
             {/* Acciones secundarias */}
-            <div className="grid grid-cols-4 gap-2 print:hidden">
+            <div className="grid grid-cols-5 gap-2 print:hidden">
               <ActionBtn
                 icon={<ImageIcon size={14} />}
                 label="Imagen"
@@ -345,6 +345,19 @@ export default function TicketView({ open, sale, onClose }: Props) {
                 label={copied ? "Copiado" : "Copiar"}
                 onClick={handleCopy}
                 tone={copied ? "emerald" : "default"}
+              />
+              <ActionBtn
+                icon={<Truck size={14} />}
+                label="Comanda"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent("sales:open-delivery", {
+                      detail: { saleId: sale.id },
+                    })
+                  )
+                  onClose()
+                }}
+                tone="sky"
               />
             </div>
           </motion.div>
@@ -445,12 +458,14 @@ function ActionBtn({
   icon: React.ReactNode
   label: string
   onClick: () => void
-  tone?: "default" | "emerald"
+  tone?: "default" | "emerald" | "sky"
   disabled?: boolean
 }) {
   const toneClass =
     tone === "emerald"
       ? "bg-emerald-500 text-white hover:bg-emerald-600"
+      : tone === "sky"
+      ? "bg-sky-500 text-white hover:bg-sky-600"
       : "bg-white text-slate-800 hover:bg-slate-100"
   return (
     <button

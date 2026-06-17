@@ -40,6 +40,7 @@ import {
 import InventoryPage from "./features/inventory/InventoryPage"
 import LoginPage from "./features/auth/LoginPage"
 import PublicTicketPage from "./features/public/PublicTicketPage"
+import PublicDeliveryNotePage from "./features/delivery/PublicDeliveryNotePage"
 import ClientShopPage from "./features/client/ClientShopPage"
 
 const PricingPage = lazy(() => import("./features/pricing/PricingPage"))
@@ -156,6 +157,7 @@ export default function App() {
       <Routes>
         {/* Públicas (sin login) */}
         <Route path="/ticket/:token" element={<PublicTicketPage />} />
+        <Route path="/comanda/:token" element={<PublicDeliveryNotePage />} />
         <Route path="/login" element={<LoginRoute />} />
 
         {/* Admin / staff */}

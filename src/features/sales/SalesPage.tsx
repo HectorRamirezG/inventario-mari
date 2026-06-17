@@ -31,6 +31,7 @@ import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
 import BarcodeScanner from "../../components/ui/BarcodeScanner";
 import TicketView from "../../components/ui/TicketView";
+import CreateDeliveryNoteModal from "../delivery/CreateDeliveryNoteModal";
 import SmartLocationInput from "../../components/ui/SmartLocationInput";
 import PageHeader from "../../components/ui/PageHeader";
 import { formatMoney } from "../../lib/format";
@@ -831,9 +832,37 @@ export default function SalesPage() {
         sale={state.lastSale}
         onClose={actions.dismissLastSale}
       />
+
+      {/* COMANDA de entrega para la última venta */}
+      <DeliveryHook lastSale={state.lastSale} />
     </div>
   );
 }
+
+/* ════════════════════════ DeliveryHook ════════════════════════
+ * Escucha el evento "sales:open-delivery" emitido desde TicketView
+ * (botón Comanda) y abre el modal de creación con la venta recién
+ * cerrada. Vive como sub-componente para mantener su propio state.
+ */
+function DeliveryHook({ lastSale }: { lastSale: any }) {
+  const [openSale, setOpenSale] = useState<any>(null);
+  useEffect(() => {
+    const handler = () => {
+      if (lastSale) setOpenSale(lastSale);
+    };
+    window.addEventListener("sales:open-delivery", handler);
+    return () =>
+      window.removeEventListener("sales:open-delivery", handler);
+  }, [lastSale]);
+  return (
+    <CreateDeliveryNoteModal
+      open={!!openSale}
+      sale={openSale}
+      onClose={() => setOpenSale(null)}
+    />
+  );
+}
+
 /* ════════════════════════ DeliveryBlock ════════════════════════ */
 function DeliveryBlock({ state, actions }: { state: any; actions: any }) {
   const method = state.deliveryMethod as "mostrador" | "personal" | "foraneo";

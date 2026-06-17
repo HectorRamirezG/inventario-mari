@@ -14,12 +14,14 @@ import {
   Receipt,
   Printer,
   SlidersHorizontal,
+  Truck,
 } from "lucide-react";
 
 import { useApartados, type ApartadosFilter } from "./useApartados";
 import PaymentModal from "./PaymentModal";
 import EditSaleAdjustModal from "./EditSaleAdjustModal";
 import TicketView from "../../components/ui/TicketView";
+import CreateDeliveryNoteModal from "../delivery/CreateDeliveryNoteModal";
 import Badge from "../../components/ui/Badge";
 import PageHeader from "../../components/ui/PageHeader";
 import KpiCard from "../../components/ui/KpiCard";
@@ -64,6 +66,7 @@ export default function ApartadosPage() {
   const [selected, setSelected] = useState<Sale | null>(null);
   const [ticketSale, setTicketSale] = useState<Sale | null>(null);
   const [adjustSale, setAdjustSale] = useState<Sale | null>(null);
+  const [deliverySale, setDeliverySale] = useState<Sale | null>(null);
   const [profiles, setProfiles] = useState<Record<string, UserProfileDetail>>({});
   const [customerStats, setCustomerStats] = useState<Record<string, CustomerStat>>({});
 
@@ -218,6 +221,7 @@ export default function ApartadosPage() {
                   onPay={() => setSelected(sale)}
                   onTicket={() => setTicketSale(sale)}
                   onAdjust={() => setAdjustSale(sale)}
+                  onDelivery={() => setDeliverySale(sale)}
                   onCancel={() => actions.handleCancelSale(sale.id)}
                 />
               )
@@ -245,6 +249,12 @@ export default function ApartadosPage() {
         onClose={() => setAdjustSale(null)}
         onSaved={actions.refresh}
       />
+
+      <CreateDeliveryNoteModal
+        open={!!deliverySale}
+        sale={deliverySale}
+        onClose={() => setDeliverySale(null)}
+      />
     </div>
   );
 }
@@ -260,6 +270,7 @@ function SaleCard({
   onPay,
   onTicket,
   onAdjust,
+  onDelivery,
   onCancel,
 }: {
   sale: Sale;
@@ -270,6 +281,7 @@ function SaleCard({
   onPay: () => void;
   onTicket: () => void;
   onAdjust: () => void;
+  onDelivery: () => void;
   onCancel: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -733,6 +745,14 @@ function SaleCard({
             title="Ver ticket / imprimir / enviar"
           >
             <Printer size={12} /> Ticket
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={onDelivery}
+            className="h-10 px-3 rounded-xl bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
+            title="Crear comanda de entrega para el repartidor"
+          >
+            <Truck size={12} /> Comanda
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.96 }}
