@@ -5,7 +5,6 @@ import {
   X,
   Camera,
   Send,
-  CheckCircle2,
   Loader2,
   Image as ImageIcon,
   Trash2,
@@ -19,6 +18,8 @@ import {
   uploadSupportImage,
   type SupportCategory,
 } from "./supportService"
+import AnimatedCheckmark from "../../components/ui/AnimatedCheckmark"
+import { useFeedback } from "../../lib/useFeedback"
 
 interface Props {
   open: boolean
@@ -40,6 +41,7 @@ export default function SupportModal({
   const [preview, setPreview] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
+  const { success: hapticSuccess, error: hapticError } = useFeedback()
 
   function reset() {
     setCategory("damaged")
@@ -70,6 +72,7 @@ export default function SupportModal({
   async function handleSubmit() {
     if (description.trim().length < 3) {
       toast.error("Cuéntanos un poco más")
+      hapticError()
       return
     }
     setSubmitting(true)
@@ -84,14 +87,22 @@ export default function SupportModal({
         description: description.trim(),
         imageUrl,
       })
+      hapticSuccess()
       setDone(true)
       toast.success("Reporte enviado 💖")
+      // Confetti suave de celebración (lazy import)
+      import("../../lib/confetti")
+        .then(({ fireConfetti }) =>
+          fireConfetti({ count: 50, duration: 1400 }),
+        )
+        .catch(() => {})
       // Cierre automático suave
       setTimeout(() => {
         onClose()
         reset()
-      }, 1600)
+      }, 1800)
     } catch (e: any) {
+      hapticError()
       toast.error(e?.message ?? "No se pudo enviar")
     } finally {
       setSubmitting(false)
@@ -161,18 +172,11 @@ export default function SupportModal({
                 animate={{ opacity: 1, scale: 1 }}
                 className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center"
               >
-                <motion.div
-                  initial={{ scale: 0, rotate: -20 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", stiffness: 320, damping: 18 }}
-                  className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3 shadow-bloom"
-                >
-                  <CheckCircle2 size={32} />
-                </motion.div>
-                <p className="text-base font-black mb-1">
+                <AnimatedCheckmark size={84} tone="success" />
+                <p className="text-base font-black mt-4 mb-1 text-slate-900 dark:text-slate-100">
                   ¡Recibido! 💖
                 </p>
-                <p className="text-[12px] text-slate-500 max-w-xs">
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 max-w-xs">
                   Mari te contactará por WhatsApp lo antes posible para
                   ayudarte con tu caso.
                 </p>
@@ -235,9 +239,9 @@ export default function SupportModal({
                     placeholder="Ej: La sombra llegó rota en la esquina superior derecha"
                     rows={3}
                     maxLength={500}
-                    className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 focus:border-primary outline-none text-sm font-semibold resize-none"
+                    className="w-full px-3 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/15 outline-none text-sm font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 resize-none transition-all"
                   />
-                  <p className="text-[9px] text-slate-400 text-right">
+                  <p className="text-[9px] text-slate-400 dark:text-slate-500 text-right">
                     {description.length}/500
                   </p>
                 </div>

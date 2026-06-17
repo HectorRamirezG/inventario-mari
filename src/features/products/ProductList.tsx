@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, FilterX, Sparkles, Boxes, Plus, X } from "lucide-react"
+import { Search, Sparkles, Boxes, Plus, X } from "lucide-react"
 import toast from "react-hot-toast"
 
 import ProductCard from "./ProductCard"
 import ProductDrawer from "./ProductDrawer"
 import { getProducts } from "./productService"
 import type { Product } from "../../types/database"
+import Skeleton from "../../components/ui/Skeleton"
+import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
+import { debug } from "../../lib/debug"
 
 const container = {
   hidden: { opacity: 0 },
@@ -42,7 +45,7 @@ export default function ProductList() {
       const data = await getProducts()
       setProducts(data)
     } catch (e) {
-      console.error("Error cargando productos:", e)
+      debug.error("Error cargando productos:", e)
       toast.error("No se pudieron cargar los productos")
     } finally {
       setLoading(false)
@@ -153,17 +156,17 @@ export default function ProductList() {
       {/* HEADER + ACTION */}
       <div className="flex items-center justify-between px-2">
         <div>
-          <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2">
+          <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-slate-900 dark:text-slate-100">
             <Boxes size={14} className="text-primary" /> Catálogo
           </h2>
-          <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none mt-0.5">
+          <p className="text-[7px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mt-0.5">
             {filtered.length} productos
           </p>
         </div>
 
         <button
           onClick={openCreate}
-          className="h-10 px-4 rounded-full bg-primary text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-bloom active:scale-90 transition-all"
+          className="h-10 px-4 rounded-full bg-primary text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-bloom press-hard"
         >
           <Plus size={14} strokeWidth={3} /> Nuevo
         </button>
@@ -186,7 +189,7 @@ export default function ProductList() {
               type="button"
               onClick={() => setPickForVariant(false)}
               aria-label="Cancelar"
-              className="w-6 h-6 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-violet-500"
+              className="w-6 h-6 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-violet-500 press"
             >
               <X size={12} />
             </button>
@@ -196,7 +199,7 @@ export default function ProductList() {
 
       {/* SEARCH */}
       <div className="relative px-1">
-        <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-slate-300">
+        <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500">
           <Search size={16} />
         </div>
         <input
@@ -208,7 +211,7 @@ export default function ProductList() {
               ? "Busca el producto para agregarle variante..."
               : "Buscar producto, variante o SKU..."
           }
-          className="w-full h-12 pl-12 pr-5 rounded-[2rem] bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 text-[11px] font-black text-slate-700 dark:text-slate-200 placeholder:text-slate-300 outline-none shadow-sm focus:border-primary/30"
+          className="w-full h-12 pl-12 pr-5 rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-black text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none shadow-sm focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all"
         />
         <AnimatePresence>
           {q && (
@@ -228,12 +231,9 @@ export default function ProductList() {
 
       {/* LISTADO */}
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 px-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 px-1">
           {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="aspect-square rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse"
-            />
+            <Skeleton key={i} className="aspect-square w-full" rounded="xl" />
           ))}
         </div>
       ) : filtered.length ? (
@@ -254,25 +254,36 @@ export default function ProductList() {
             />
           ))}
         </motion.div>
-      ) : (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 0.6, y: 0 }}
-          className="py-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-[2.5rem] mx-2"
-        >
-          <FilterX className="mx-auto mb-2 text-slate-300" size={28} />
-          <p className="text-[10px] font-black uppercase tracking-widest">
-            Sin resultados
-          </p>
-          {q && (
+      ) : q ? (
+        <EmptyStateIllustration
+          variant="no-results"
+          title="Sin resultados"
+          subtitle={`No encontramos productos para "${q}". Revisa el nombre, variante o SKU.`}
+          cta={
             <button
+              type="button"
               onClick={() => setQ("")}
-              className="mt-4 text-[9px] font-black text-primary uppercase tracking-widest"
+              className="h-10 px-4 rounded-xl bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest press"
             >
               Limpiar búsqueda
             </button>
-          )}
-        </motion.div>
+          }
+        />
+      ) : (
+        <EmptyStateIllustration
+          variant="no-products"
+          title="Sin productos aún"
+          subtitle="Agrega tu primer producto al catálogo para empezar a vender."
+          cta={
+            <button
+              type="button"
+              onClick={openCreate}
+              className="h-11 px-5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-bloom press-hard"
+            >
+              <Plus size={12} strokeWidth={3} /> Crear primer producto
+            </button>
+          }
+        />
       )}
 
       {/* DRAWER ÚNICO */}
