@@ -6,7 +6,6 @@ import {
   Clock,
   AlertCircle,
   Plus,
-  Inbox,
   Image as ImageIcon,
 } from "lucide-react"
 
@@ -21,6 +20,7 @@ import { formatDateTime, shortId } from "../../lib/format"
 import SupportModal from "../support/SupportModal"
 import PageHeader from "../../components/ui/PageHeader"
 import Skeleton from "../../components/ui/Skeleton"
+import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 
 const STATUS_META: Record<
   SupportStatus,
@@ -128,24 +128,20 @@ export default function MyReportsPage() {
 
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div className="surface-card p-8 text-center">
-      <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3">
-        <Inbox size={22} />
-      </div>
-      <p className="font-black text-slate-700 dark:text-slate-200">
-        Aún no tienes reportes
-      </p>
-      <p className="text-[11px] text-slate-500 mt-1">
-        Cuando algo no salga como esperabas, házselo saber a Mari aquí.
-      </p>
-      <button
-        type="button"
-        onClick={onCreate}
-        className="mt-4 h-11 px-5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5 shadow-bloom active:scale-95"
-      >
-        <Plus size={12} strokeWidth={3} /> Crear reporte
-      </button>
-    </div>
+    <EmptyStateIllustration
+      variant="no-orders"
+      title="Aún no tienes reportes"
+      subtitle="Si algo no salió como esperabas, házselo saber a Mari aquí para resolverlo rápido."
+      cta={
+        <button
+          type="button"
+          onClick={onCreate}
+          className="h-11 px-5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5 shadow-bloom press-hard"
+        >
+          <Plus size={12} strokeWidth={3} /> Crear reporte
+        </button>
+      }
+    />
   )
 }
 

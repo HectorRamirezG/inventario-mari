@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Receipt, Clock, CheckCircle2, ArrowRight, LifeBuoy, Lock } from "lucide-react"
+import { Clock, CheckCircle2, ArrowRight, LifeBuoy, Lock, ShoppingBag } from "lucide-react"
 import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
@@ -9,6 +9,7 @@ import { useAuth } from "../../lib/useAuth"
 import TicketDrawer from "../../components/ui/TicketDrawer"
 import Skeleton from "../../components/ui/Skeleton"
 import SupportModal from "../support/SupportModal"
+import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import {
   useBusinessRules,
   canClaim,
@@ -88,13 +89,19 @@ export default function ClientOrdersPage() {
 
   if (orders.length === 0) {
     return (
-      <div className="text-center py-16">
-        <Receipt size={40} className="mx-auto text-slate-300 mb-3" />
-        <p className="font-bold text-slate-600">Aún no tienes pedidos</p>
-        <p className="text-xs text-slate-400 mt-1">
-          Arma tu carrito desde el catálogo.
-        </p>
-      </div>
+      <EmptyStateIllustration
+        variant="no-orders"
+        title="Aún no tienes pedidos"
+        subtitle="Arma tu carrito desde el catálogo y aparecerán aquí para que sigas su estado."
+        cta={
+          <a
+            href="/"
+            className="inline-flex items-center gap-1.5 h-11 px-5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest shadow-bloom press-hard"
+          >
+            <ShoppingBag size={12} /> Ir al catálogo
+          </a>
+        }
+      />
     )
   }
 

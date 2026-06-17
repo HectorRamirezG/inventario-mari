@@ -266,13 +266,18 @@ export default function NotificationBell({
 
               {/* Lista */}
               {items.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-12 px-6 text-center">
-                  <BellOff size={28} className="text-slate-300 mb-2" />
-                  <p className="text-sm font-black text-slate-500">
+                <div className="flex-1 flex flex-col items-center justify-center py-10 px-6 text-center">
+                  <div className="relative mb-3">
+                    <div className="absolute inset-0 rounded-full bg-emerald-100/60 dark:bg-emerald-500/15 blur-xl" />
+                    <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-100 to-emerald-50 dark:from-emerald-500/20 dark:to-emerald-500/5 flex items-center justify-center border border-emerald-200/60 dark:border-emerald-500/30">
+                      <BellOff size={24} className="text-emerald-600 dark:text-emerald-300" />
+                    </div>
+                  </div>
+                  <p className="text-sm font-black text-slate-700 dark:text-slate-200">
                     Todo tranquilo
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Aquí verás avisos cuando haya movimiento en tus apartados.
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 max-w-[220px] leading-snug">
+                    Aquí verás avisos cuando haya movimiento en tus apartados o ventas.
                   </p>
                 </div>
               ) : (

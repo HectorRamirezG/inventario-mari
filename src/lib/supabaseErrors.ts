@@ -13,6 +13,9 @@
  * El segundo argumento es el "contexto" que se usa cuando no encontramos
  * un match específico — sirve para que el toast diga "No se pudo guardar
  * el producto" en vez del genérico "Ocurrió un error".
+ *
+ * Para el patrón loading→success/error completo, usa `toastAsync` desde
+ * `./toast`.
  */
 
 /** Detecta un objeto tipo PostgrestError o cualquier shape con .message/.code */
@@ -140,29 +143,4 @@ export function translateError(err: unknown, fallback?: string): string {
   }
 
   return fallback ?? "Ocurrió un error inesperado."
-}
-
-/**
- * Helper que envuelve un toast.loading/success/error de una sola vez.
- * Mantiene el patrón estándar de la app y aplica `translateError`.
- *
- *   await toastAsync(
- *     () => saveProduct(p),
- *     { loading: "Guardando...", success: "Producto guardado", error: "No se pudo guardar" }
- *   )
- */
-export async function toastAsync<T>(
-  fn: () => Promise<T>,
-  msgs: { loading: string; success: string; error?: string },
-  toast: { loading: (m: string) => string; success: (m: string, opts?: any) => void; error: (m: string, opts?: any) => void },
-): Promise<T | null> {
-  const tid = toast.loading(msgs.loading)
-  try {
-    const result = await fn()
-    toast.success(msgs.success, { id: tid })
-    return result
-  } catch (e) {
-    toast.error(translateError(e, msgs.error), { id: tid })
-    return null
-  }
 }
