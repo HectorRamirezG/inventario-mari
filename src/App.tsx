@@ -80,20 +80,16 @@ import { preloadBusinessRules, useBusinessRules } from "./features/settings/busi
 
 // ──────────────────────────────────────────────────────────────────
 // Menús del shell admin/staff. Etiquetas más cortas y orientadas a acción.
+// Las definiciones viven en `lib/adminNav.ts` (catálogo único compartido
+// entre sidebar, dock, ActionHub y CommandPalette).
 // ──────────────────────────────────────────────────────────────────
-type AdminSection =
-  | "hoy"
-  | "catalogo"
-  | "caja"
-  | "pendientes"
-  | "ciclos"
-  | "calculadora"
-  | "soporte"
-  | "sugerencias"
-  | "stories"
-  | "resenias"
-  | "reglas"
-  | "ajustes"
+import {
+  ADMIN_SECTIONS,
+  sidebarSections,
+  dockSections,
+  visibleSections,
+  type AdminSection,
+} from "./lib/adminNav"
 
 /** Saludo segun la hora del dia. */
 function greeting(): string {
@@ -103,21 +99,7 @@ function greeting(): string {
   return "Buenas noches"
 }
 
-const ADMIN_MENU: {
-  id: AdminSection
-  label: string
-  icon: typeof Calendar
-  adminOnly?: boolean
-}[] = [
-  { id: "hoy", label: "Hoy", icon: Calendar },
-  { id: "catalogo", label: "Catálogo", icon: Package },
-  { id: "caja", label: "Caja", icon: ShoppingCart },
-  { id: "pendientes", label: "Pendientes", icon: Bookmark },
-  { id: "soporte", label: "Soporte", icon: LifeBuoy },
-  { id: "ciclos", label: "Ciclos", icon: TrendingUp, adminOnly: true },
-  { id: "calculadora", label: "Calculadora", icon: Tag, adminOnly: true },
-  { id: "reglas", label: "Reglas", icon: SettingsIcon, adminOnly: true },
-]
+const ADMIN_MENU = ADMIN_SECTIONS // alias para retrocompat de search/dispatcher
 
 /* ============================================================== */
 /* ROOT                                                            */
@@ -308,8 +290,13 @@ function AdminShell() {
   useRealtimeNotifications()
 
   const visibleMenu = useMemo(
-    () => ADMIN_MENU.filter((m) => !m.adminOnly || isAdmin),
-    [isAdmin]
+    () => sidebarSections(rules, isAdmin),
+    [rules, isAdmin]
+  )
+
+  const dockMenu = useMemo(
+    () => dockSections(rules, isAdmin),
+    [rules, isAdmin]
   )
 
   useEffect(() => {
@@ -340,13 +327,7 @@ function AdminShell() {
         settings: "ajustes",
       }
       const next = (legacy[t] ?? t) as AdminSection
-      if (
-        ADMIN_MENU.some((m) => m.id === next) ||
-        next === "ajustes" ||
-        next === "sugerencias" ||
-        next === "stories" ||
-        next === "resenias"
-      ) {
+      if (ADMIN_SECTIONS.some((m) => m.id === next)) {
         setSection(next)
         if (next === "pendientes") setApartadoBadge(0)
       }
@@ -368,141 +349,84 @@ function AdminShell() {
     }
   }, [])
 
-  const hubActions: HubAction[] = [
-    {
-      id: "new-sale",
-      label: "Venta rápida",
-      caption: "Cobrar ahora",
-      icon: Zap,
-      accent: "linear-gradient(135deg,#e6007e,#a855f7)",
-      onClick: () => setSection("caja"),
-    },
-    {
-      id: "scan",
-      label: "Escanear",
-      caption: "Código de barras",
-      icon: ScanLine,
-      accent: "linear-gradient(135deg,#3b82f6,#06b6d4)",
-      onClick: () => {
-        setSection("caja")
-        setTimeout(
-          () => window.dispatchEvent(new CustomEvent("sales:open-scanner")),
-          200
-        )
+  // ─── ActionHub (+) ───
+  // Combina ACCIONES RÁPIDAS (escanear, nuevo producto, nueva variante)
+  // con TODAS las secciones del catálogo (filtradas por reglas + rol).
+  // Una sola fuente de verdad = consistente con sidebar/dock/palette.
+  const hubActions: HubAction[] = useMemo(() => {
+    const quickActions: HubAction[] = [
+      {
+        id: "scan",
+        label: "Escanear",
+        caption: "Código de barras al carrito",
+        icon: ScanLine,
+        accent: "linear-gradient(135deg,#3b82f6,#06b6d4)",
+        onClick: () => {
+          setSection("caja")
+          setTimeout(
+            () => window.dispatchEvent(new CustomEvent("sales:open-scanner")),
+            200
+          )
+        },
       },
-    },
-    {
-      id: "new-product",
-      label: "Nuevo producto",
-      caption: "Agregar al catálogo",
-      icon: Plus,
-      accent: "linear-gradient(135deg,#10b981,#34d399)",
-      onClick: () => {
-        setSection("catalogo")
-        setTimeout(
-          () => window.dispatchEvent(new CustomEvent("products:new")),
-          200
-        )
+      {
+        id: "new-product",
+        label: "Nuevo producto",
+        caption: "Agregar al catálogo",
+        icon: Plus,
+        accent: "linear-gradient(135deg,#10b981,#34d399)",
+        onClick: () => {
+          setSection("catalogo")
+          setTimeout(
+            () => window.dispatchEvent(new CustomEvent("products:new")),
+            200
+          )
+        },
       },
-    },
-    {
-      id: "new-variant",
-      label: "📦 Nueva variante",
-      caption: "Elige un producto del catálogo",
-      icon: Package,
-      accent: "linear-gradient(135deg,#8b5cf6,#ec4899)",
-      onClick: () => {
-        setSection("catalogo")
-        // El listado del catálogo escucha este evento y guía al admin a
-        // elegir un producto para agregarle variantes sin abrir ventanas
-        // encimadas.
-        setTimeout(
-          () => window.dispatchEvent(new CustomEvent("products:pick-for-variant")),
-          200
-        )
+      {
+        id: "new-variant",
+        label: "Nueva variante",
+        caption: "Elige un producto del catálogo",
+        icon: Package,
+        accent: "linear-gradient(135deg,#8b5cf6,#ec4899)",
+        onClick: () => {
+          setSection("catalogo")
+          setTimeout(
+            () =>
+              window.dispatchEvent(
+                new CustomEvent("products:pick-for-variant")
+              ),
+            200
+          )
+        },
       },
-    },
-    ...(isAdmin
-      ? [
-          {
-            id: "pricing-calc",
-            label: "🧮 Calculadora rápida",
-            caption: "Precios menudeo / medio / mayoreo",
-            icon: Tag,
-            accent: "linear-gradient(135deg,#f97316,#eab308)",
-            onClick: () => setSection("calculadora"),
-          } as HubAction,
-        ]
-      : []),
-    {
-      id: "apartado",
-      label: "Cobrar abono",
-      caption: "Registrar pago",
-      icon: BookmarkPlus,
-      accent: "linear-gradient(135deg,#f59e0b,#fb923c)",
-      onClick: () => setSection("pendientes"),
-    },
-    {
-      id: "soporte",
-      label: "Soporte",
-      caption: "Buzón de reportes de clientes",
-      icon: LifeBuoy,
-      accent: "linear-gradient(135deg,#0ea5e9,#6366f1)",
-      onClick: () => setSection("soporte"),
-    },
-    {
-      id: "sugerencias",
-      label: "Sugerencias",
-      caption: "Lo que tus clientes te piden",
-      icon: Heart,
-      accent: "linear-gradient(135deg,#ec4899,#a855f7)",
-      onClick: () => setSection("sugerencias"),
-    },
-    ...(rules.stories_enabled
-      ? [
-          {
-            id: "stories",
-            label: "Stories del día",
-            caption: "Fotos efimeras estilo Instagram",
-            icon: Camera,
-            accent: "linear-gradient(135deg,#f97316,#e6007e)",
-            onClick: () => setSection("stories"),
-          } as HubAction,
-        ]
-      : []),
-    ...(rules.reviews_enabled
-      ? [
-          {
-            id: "resenias",
-            label: "Reseñas",
-            caption: "Modera lo que dicen del producto",
-            icon: Star,
-            accent: "linear-gradient(135deg,#f59e0b,#ec4899)",
-            onClick: () => setSection("resenias"),
-          } as HubAction,
-        ]
-      : []),
-    ...(isAdmin
-      ? [
-          {
-            id: "reglas",
-            label: "Reglas del negocio",
-            caption: "Políticas de venta, devoluciones y apartado",
-            icon: ScrollText,
-            accent: "linear-gradient(135deg,#64748b,#475569)",
-            onClick: () => setSection("reglas"),
-          } as HubAction,
-        ]
-      : []),
-    {
-      id: "ajustes",
-      label: "Ajustes",
-      caption: "Tienda, banco, envíos, preferencias",
-      icon: SettingsIcon,
-      accent: "linear-gradient(135deg,#94a3b8,#64748b)",
-      onClick: () => setSection("ajustes"),
-    },
-  ]
+      {
+        id: "apartado",
+        label: "Cobrar abono",
+        caption: "Registrar pago de un apartado",
+        icon: BookmarkPlus,
+        accent: "linear-gradient(135deg,#f59e0b,#fb923c)",
+        onClick: () => setSection("pendientes"),
+      },
+    ]
+
+    // Todas las secciones disponibles como tarjetas en el hub.
+    const sectionActions: HubAction[] = visibleSections(rules, isAdmin).map(
+      (s) => ({
+        id: s.id,
+        label: s.label,
+        caption: s.caption,
+        icon: s.icon,
+        accent: s.accent,
+        onClick: () => {
+          setSection(s.id)
+          if (s.id === "pendientes") setApartadoBadge(0)
+        },
+      })
+    )
+
+    return [...quickActions, ...sectionActions]
+  }, [rules, isAdmin])
 
   return (
     <div className="fixed inset-0 flex flex-col md:flex-row bg-white dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors duration-300">
@@ -744,7 +668,7 @@ function AdminShell() {
         {/* ─── DOCK MÓVIL (delgado, pegado al borde) ─── */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 shadow-[0_-8px_30px_-15px_rgba(230,0,126,0.25)]">
           <div className="relative h-12 flex items-center justify-around pb-safe">
-            {visibleMenu.slice(0, 2).map((m) => (
+            {dockMenu.slice(0, 2).map((m) => (
               <DockButton
                 key={m.id}
                 active={section === m.id}
@@ -776,7 +700,7 @@ function AdminShell() {
               />
             </motion.button>
 
-            {visibleMenu.slice(2, 4).map((m) => (
+            {dockMenu.slice(2, 4).map((m) => (
               <DockButton
                 key={m.id}
                 active={section === m.id}

@@ -3,23 +3,13 @@ import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Search,
-  LayoutDashboard,
-  Package,
-  ShoppingCart,
-  Bookmark,
-  Tag,
   ScanLine,
   Moon,
   Sun,
   RefreshCcw,
   Sparkles,
-  Settings,
-  TrendingUp,
-  LifeBuoy,
-  ScrollText,
   Plus,
   User as UserIcon,
-  Calculator,
   Wifi,
   Receipt,
   X,
@@ -28,6 +18,13 @@ import {
 import toast from "react-hot-toast"
 import { useTheme } from "../../lib/useTheme"
 import { supabase } from "../../lib/supabase"
+import {
+  ADMIN_SECTIONS,
+  visibleSections,
+  type AdminSectionEntry,
+} from "../../lib/adminNav"
+import { useBusinessRules } from "../../features/settings/businessRulesService"
+import { useAuth } from "../../lib/useAuth"
 
 interface Command {
   id: string
@@ -63,6 +60,9 @@ export default function CommandPalette({ open, onClose }: Props) {
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const { effective, toggle, setTheme } = useTheme()
+  const rules = useBusinessRules()
+  const { role } = useAuth()
+  const isAdmin = role === "admin"
 
   // Reset al abrir
   useEffect(() => {
@@ -73,89 +73,35 @@ export default function CommandPalette({ open, onClose }: Props) {
     }
   }, [open])
 
+  /** Mapa AdminSection -> 'tab' que entiende el dispatcher de App.tsx */
+  const sectionToTab: Record<string, string> = {
+    hoy: "dashboard",
+    catalogo: "inventario",
+    caja: "ventas",
+    pendientes: "apartados",
+    calculadora: "precios",
+    ajustes: "settings",
+  }
+
+  const navCommands: Command[] = useMemo(
+    () =>
+      visibleSections(rules, isAdmin).map(
+        (s: AdminSectionEntry): Command => ({
+          id: `go-${s.id}`,
+          label: s.label,
+          hint: s.hint ?? s.caption,
+          icon: s.icon,
+          shortcut: s.shortcut,
+          group: "Navegación",
+          run: () => navigate(sectionToTab[s.id] ?? s.id),
+        })
+      ),
+    [rules, isAdmin]
+  )
+
   const allCommands: Command[] = useMemo(
     () => [
-      /* ─────────── Navegación (atajos 1..7) ─────────── */
-      {
-        id: "go-caja",
-        label: "Caja viva",
-        hint: "Procesar nueva venta",
-        icon: ShoppingCart,
-        shortcut: "1",
-        group: "Navegación",
-        run: () => navigate("ventas"),
-      },
-      {
-        id: "go-apartados",
-        label: "Pendientes / Apartados",
-        hint: "Control de saldos y abonos",
-        icon: Bookmark,
-        shortcut: "2",
-        group: "Navegación",
-        run: () => navigate("apartados"),
-      },
-      {
-        id: "go-catalogo",
-        label: "Catálogo admin",
-        hint: "Productos, variantes y stock",
-        icon: Package,
-        shortcut: "3",
-        group: "Navegación",
-        run: () => navigate("inventario"),
-      },
-      {
-        id: "go-ciclos",
-        label: "Ciclos de inventario",
-        hint: "Gastos operativos y break-even",
-        icon: TrendingUp,
-        shortcut: "4",
-        group: "Navegación",
-        run: () => navigate("ciclos"),
-      },
-      {
-        id: "go-soporte",
-        label: "Buzón de incidencias",
-        hint: "Tickets de clientes",
-        icon: LifeBuoy,
-        shortcut: "5",
-        group: "Navegación",
-        run: () => navigate("soporte"),
-      },
-      {
-        id: "go-reglas",
-        label: "Políticas del negocio",
-        hint: "Reglas globales (ventana de reclamo, cancelaciones, etc.)",
-        icon: ScrollText,
-        shortcut: "6",
-        group: "Navegación",
-        run: () => navigate("reglas"),
-      },
-      {
-        id: "go-calculadora",
-        label: "Calculadora de precios",
-        hint: "Aplica menudeo/medio/mayoreo a variantes",
-        icon: Calculator,
-        shortcut: "7",
-        group: "Navegación",
-        run: () => navigate("precios"),
-      },
-      {
-        id: "go-dashboard",
-        label: "Dashboard / Hoy",
-        hint: "Resumen del día",
-        icon: LayoutDashboard,
-        shortcut: "g d",
-        group: "Navegación",
-        run: () => navigate("dashboard"),
-      },
-      {
-        id: "go-settings",
-        label: "Configuración general",
-        hint: "Tienda, banco, envío, márgenes",
-        icon: Settings,
-        group: "Navegación",
-        run: () => navigate("settings"),
-      },
+      ...navCommands,
 
       /* ─────────── Acciones transaccionales ─────────── */
       {
@@ -300,7 +246,7 @@ export default function CommandPalette({ open, onClose }: Props) {
         run: () => setTheme("system"),
       },
     ],
-    [effective, toggle, setTheme]
+    [navCommands, effective, toggle, setTheme]
   )
 
   const filtered = useMemo(() => {
