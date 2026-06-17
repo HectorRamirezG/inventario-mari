@@ -9,7 +9,6 @@ import {
   RefreshCcw,
   Search,
   Clock,
-  CheckCircle2,
   AlertTriangle,
   MessageCircle,
   Receipt,
@@ -25,6 +24,8 @@ import Badge from "../../components/ui/Badge";
 import PageHeader from "../../components/ui/PageHeader";
 import KpiCard from "../../components/ui/KpiCard";
 import TabBar from "../../components/ui/TabBar";
+import Skeleton from "../../components/ui/Skeleton";
+import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration";
 import {
   useBusinessRules,
   canCancelSale,
@@ -168,19 +169,27 @@ export default function ApartadosPage() {
       {state.loading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-28 rounded-2xl bg-slate-100/60 animate-pulse"
-            />
+            <Skeleton key={i} className="h-32 w-full" rounded="xl" />
           ))}
         </div>
       ) : state.sales.length === 0 ? (
-        <div className="py-16 text-center border-2 border-dashed border-slate-200 rounded-3xl">
-          <CheckCircle2 className="mx-auto mb-2 text-slate-300" size={32} />
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-            Sin resultados
-          </p>
-        </div>
+        <EmptyStateIllustration
+          variant="no-orders"
+          title={
+            state.filter === "paid"
+              ? "Sin ventas pagadas"
+              : state.filter === "pending"
+              ? "Sin saldos pendientes"
+              : "Sin apartados ni ventas"
+          }
+          subtitle={
+            state.search
+              ? "No encontramos coincidencias con tu búsqueda"
+              : state.filter === "pending"
+              ? "¡Excelente! Todas las ventas están cobradas."
+              : "Cuando registres una venta o un apartado aparecerá aquí."
+          }
+        />
       ) : (
         <div className="space-y-2">
           <AnimatePresence mode="popLayout">

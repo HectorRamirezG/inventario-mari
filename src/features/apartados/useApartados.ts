@@ -74,6 +74,7 @@ export function useApartados() {
   useEffect(() => {
     const handler = () => refresh();
     window.addEventListener("mari:apartado-refresh", handler);
+    window.addEventListener("mari:pull-refresh", handler);
     // Atajo desde la paleta de comandos: filtrar solo apartados pendientes
     const overdueHandler = () => {
       setFilter("pending");
@@ -82,6 +83,7 @@ export function useApartados() {
     window.addEventListener("apartados:filter-overdue", overdueHandler);
     return () => {
       window.removeEventListener("mari:apartado-refresh", handler);
+      window.removeEventListener("mari:pull-refresh", handler);
       window.removeEventListener("apartados:filter-overdue", overdueHandler);
     };
   }, [refresh]);

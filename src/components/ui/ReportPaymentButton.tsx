@@ -30,6 +30,12 @@ interface Props {
   balance: number
   customerEmail?: string | null
   onUploaded?: (proof: PaymentProof) => void
+  /**
+   * Modo compacto: oculta el historial interno y los banners de estado.
+   * Útil cuando el componente vive dentro de una pestaña dedicada y el
+   * contenedor ya muestra esa información por separado.
+   */
+  compact?: boolean
 }
 
 /**
@@ -46,6 +52,7 @@ export default function ReportPaymentButton({
   balance,
   customerEmail,
   onUploaded,
+  compact = false,
 }: Props) {
   const [busy, setBusy] = useState(false)
   const [askAmount, setAskAmount] = useState(false)
@@ -276,7 +283,7 @@ export default function ReportPaymentButton({
   return (
     <div className="space-y-3">
       {/* BANNER DE ESTADO — el cliente NUNCA debe pensar 'no se envió' */}
-      {lastPending && (
+      {!compact && lastPending && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -301,7 +308,7 @@ export default function ReportPaymentButton({
         </motion.div>
       )}
 
-      {!lastPending && lastApproved && (
+      {!compact && !lastPending && lastApproved && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -322,7 +329,7 @@ export default function ReportPaymentButton({
         </motion.div>
       )}
 
-      {!lastPending && !lastApproved && lastRejected && (
+      {!compact && !lastPending && !lastApproved && lastRejected && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -348,7 +355,7 @@ export default function ReportPaymentButton({
       )}
 
       {/* HISTORIAL — ahora arriba para que se vea sin scroll */}
-      <ProofsHistory items={history} loading={loadingHistory} />
+      {!compact && <ProofsHistory items={history} loading={loadingHistory} />}
 
       {/* OPCIÓN 1: Pago en EFECTIVO (un toque) */}
       <button
@@ -433,7 +440,7 @@ export default function ReportPaymentButton({
 }
 
 /* ──────────── Historial de comprobantes (parte inferior) ──────────── */
-function ProofsHistory({
+export function ProofsHistory({
   items,
   loading,
 }: {
