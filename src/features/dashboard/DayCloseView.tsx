@@ -15,6 +15,7 @@ import {
   getDayCloseStats,
   type DayCloseStats,
 } from "./dayCloseService"
+import { fireConfetti } from "../../lib/confetti"
 
 import { formatMoney as fmtMoney } from "../../lib/format";
 
@@ -39,6 +40,17 @@ export default function DayCloseView({ onClose }: { onClose: () => void }) {
       .then(setStats)
       .finally(() => setLoading(false))
   }, [date])
+
+  // Confetti al cargar el cierre del día (sólo si vendió algo y es hoy)
+  useEffect(() => {
+    if (!stats) return
+    const isToday = date === new Date().toISOString().slice(0, 10)
+    if (isToday && stats.sales_count > 0) {
+      // pequeño delay para que el usuario vea la página primero
+      const t = window.setTimeout(() => fireConfetti({ count: 90, duration: 2200 }), 350)
+      return () => window.clearTimeout(t)
+    }
+  }, [stats, date])
 
   const handlePrint = () => window.print()
 

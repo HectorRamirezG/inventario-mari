@@ -176,13 +176,22 @@ function AdminGate() {
 
 function FullScreenSpinner() {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+    <>
+      {/* Barra de progreso superior estilo Linear/YouTube */}
       <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
-        className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full"
+        initial={{ width: "0%", opacity: 0.9 }}
+        animate={{ width: ["0%", "70%", "92%"] }}
+        transition={{ duration: 2.4, ease: "easeOut", times: [0, 0.4, 1] }}
+        className="fixed top-0 left-0 h-[3px] bg-gradient-to-r from-primary via-fuchsia-500 to-violet-500 z-[9999] rounded-r-full shadow-[0_0_12px_rgba(230,0,126,0.45)]"
       />
-    </div>
+      <div className="fixed inset-0 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+          className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full"
+        />
+      </div>
+    </>
   )
 }
 
