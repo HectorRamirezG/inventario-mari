@@ -9,6 +9,9 @@ import { debug } from "../../lib/debug"
  * una nueva versión de la app instalada en el Service Worker. Permite
  * actualizarla inmediatamente (recarga la página tras el nuevo SW).
  *
+ * Polling: cada 60 segundos pregunta al SW si hay actualizacion para
+ * que el usuario no tenga que cerrar/reabrir manualmente.
+ *
  * Se monta una sola vez en App.tsx — no requiere props.
  */
 export default function PwaUpdatePrompt() {
@@ -17,8 +20,17 @@ export default function PwaUpdatePrompt() {
     updateServiceWorker,
   } = useRegisterSW({
     onRegisterError(err) {
-      // eslint-disable-next-line no-console
       debug.error("SW registration error", err)
+    },
+    onRegisteredSW(_swUrl, registration) {
+      // Polling: revisa cada 60s si hay update sin esperar a que el
+      // usuario navegue/cierre la app. Vital para PWAs instaladas que
+      // se mantienen abiertas dias enteros.
+      if (!registration) return
+      const interval = 60 * 1000
+      setInterval(() => {
+        registration.update().catch((e) => debug.warn("[sw] update poll", e))
+      }, interval)
     },
   })
 
