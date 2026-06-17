@@ -1,4 +1,6 @@
 import type { ReactNode } from "react"
+import { TrendingUp, TrendingDown, Minus } from "lucide-react"
+import Sparkline from "./Sparkline"
 
 type KpiTone = "default" | "primary" | "success" | "danger" | "warn"
 
@@ -7,6 +9,12 @@ interface KpiCardProps {
   value: ReactNode
   hint?: ReactNode
   tone?: KpiTone
+  /** Datos opcionales para sparkline (mini gráfica al fondo). */
+  sparkline?: number[]
+  /** Delta % vs período anterior. Pinta flecha + color. */
+  delta?: number
+  /** Icono opcional para mostrar al lado del label. */
+  icon?: ReactNode
 }
 
 const TONE_CLASS: Record<KpiTone, string> = {
@@ -17,24 +25,80 @@ const TONE_CLASS: Record<KpiTone, string> = {
   warn: "kpi-card-tone-warn",
 }
 
+const SPARK_COLOR: Record<KpiTone, string> = {
+  default: "#94a3b8",
+  primary: "#e6007e",
+  success: "#10b981",
+  danger: "#ef4444",
+  warn: "#f59e0b",
+}
+
 /**
  * Tarjeta de métrica (KPI). Tono semántico opcional.
  * Todas las KPI de la app deben usar este componente.
+ *
+ * Extensiones:
+ *  - `sparkline`: array de números para mini-gráfica de tendencia
+ *  - `delta`: % de cambio vs período anterior (auto color + flecha)
+ *  - `icon`: nodo para ícono junto al label
  */
-export default function KpiCard({ label, value, hint, tone = "default" }: KpiCardProps) {
+export default function KpiCard({
+  label,
+  value,
+  hint,
+  tone = "default",
+  sparkline,
+  delta,
+  icon,
+}: KpiCardProps) {
+  const sparkColor = SPARK_COLOR[tone]
+  const showDelta = typeof delta === "number" && Number.isFinite(delta)
+  const deltaTrend = showDelta ? (delta! > 0.5 ? "up" : delta! < -0.5 ? "down" : "flat") : null
+  const deltaCls =
+    deltaTrend === "up"   ? "text-emerald-600 dark:text-emerald-400" :
+    deltaTrend === "down" ? "text-rose-600 dark:text-rose-400" :
+    "text-slate-400 dark:text-slate-500"
+  const DeltaIcon = deltaTrend === "up" ? TrendingUp : deltaTrend === "down" ? TrendingDown : Minus
+
   return (
-    <div className={`kpi-card ${TONE_CLASS[tone]}`}>
-      <p className="text-[7px] font-black uppercase tracking-widest opacity-70">
-        {label}
-      </p>
-      <p className="text-sm font-black tabular-nums mt-1 leading-tight">
-        {value}
-      </p>
-      {hint && (
-        <p className="text-[8px] font-bold opacity-60 mt-0.5 leading-tight">
-          {hint}
+    <div className={`kpi-card ${TONE_CLASS[tone]} relative overflow-hidden group`}>
+      <div className="relative z-10">
+        <p className="text-[7px] font-black uppercase tracking-widest opacity-70 flex items-center gap-1">
+          {icon && <span className="opacity-80">{icon}</span>}
+          {label}
         </p>
+        <p className="text-sm font-black tabular-nums mt-1 leading-tight">
+          {value}
+        </p>
+        {(hint || showDelta) && (
+          <div className="flex items-center gap-1.5 mt-0.5 leading-tight">
+            {showDelta && (
+              <span className={`inline-flex items-center gap-0.5 text-[8px] font-black ${deltaCls}`}>
+                <DeltaIcon className="w-2.5 h-2.5" strokeWidth={2.5} />
+                {Math.abs(delta!).toFixed(0)}%
+              </span>
+            )}
+            {hint && (
+              <span className="text-[8px] font-bold opacity-60">
+                {hint}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      {sparkline && sparkline.length > 1 && (
+        <div className="absolute bottom-1 right-1 opacity-70 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <Sparkline
+            data={sparkline}
+            width={48}
+            height={20}
+            stroke={sparkColor}
+            strokeWidth={1.25}
+            showDot={false}
+          />
+        </div>
       )}
     </div>
   )
 }
+
