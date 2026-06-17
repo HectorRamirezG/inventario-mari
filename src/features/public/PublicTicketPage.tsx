@@ -10,6 +10,7 @@ import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
 import { useAuth, isStaffOrAdmin } from "../../lib/useAuth"
 import ReportPaymentButton from "../../components/ui/ReportPaymentButton"
+import RequestExtensionButton from "../client/RequestExtensionButton"
 import SupportModal from "../support/SupportModal"
 interface TicketItem {
   id: string
@@ -424,6 +425,13 @@ export default function PublicTicketPage() {
               balance={Number(ticket.balance) || 0}
               customerEmail={session ? null : null}
             />
+            {ticket.is_layaway && (
+              <RequestExtensionButton
+                saleId={ticket.id}
+                customerName={ticket.customer_name}
+                customerEmail={ticket.customer_email}
+              />
+            )}
           </motion.div>
         )}
 

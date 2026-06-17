@@ -1,0 +1,20 @@
+export const APP_CONSTANTS = {
+  STORAGE_BUCKET: "product-images",
+  AVATAR_FOLDER: "avatars",
+  DEFAULT_LAYAWAY_DAYS: 30,
+  LAYAWAY_URGENT_DAYS: 5,
+  TICKET_PDF_FORMAT: "letter",
+  TICKET_PDF_MARGIN_MM: 12,
+  DASHBOARD_DEFAULT_PERIOD_DAYS: 30,
+  CART_PERSIST_KEY: "mari_cart_v1",
+  GUEST_PROFILE_KEY: "mari_guest_v1",
+  WISHLIST_KEY: "mari_wishlist_v1",
+  ONBOARDING_KEY: "mari_onboarding_done_v1",
+  SHOP_VIEW_KEY: "mari_shop_view",
+  STORAGE_DELETE_CHUNK: 1000,
+  HTML2CANVAS_IMAGE_TIMEOUT_MS: 8000,
+  HTML2CANVAS_HARD_TIMEOUT_MS: 20000,
+} as const
+
+export const NEW_PRODUCT_WINDOW_DAYS = 7
+export const OFFER_MIN_DISCOUNT_PCT = 5

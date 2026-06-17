@@ -61,7 +61,7 @@ export function TabsTrigger({ value, children, className }: { value: string; chi
 }
 
 /* ---------------- CONTENT ---------------- */
-export function TabsContent({ value, children }: { value: string; children: React.ReactNode }) {
+export function TabsContent({ value, children, className = "" }: { value: string; children: React.ReactNode; className?: string }) {
   const ctx = useContext(TabsContext)
   if (!ctx) throw new Error("TabsContent must be inside Tabs")
 
@@ -74,7 +74,7 @@ export function TabsContent({ value, children }: { value: string; children: Reac
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -8, scale: 0.98 }}
           transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-          className="outline-none"
+          className={`outline-none ${className}`}
         >
           {children}
         </motion.div>

@@ -24,6 +24,8 @@ import {
   ArrowUpRight,
   Sparkles,
   PiggyBank,
+  FileDown,
+  Activity,
 } from "lucide-react"
 import {
   ResponsiveContainer,
@@ -44,6 +46,8 @@ import DayCloseView from "./DayCloseView"
 import CycleBanner from "../cycles/CycleBanner"
 import LowStockView from "../inventory/LowStockView"
 import { formatMoney as formatCurrency } from "../../lib/format"
+import { useCountUp } from "../../lib/useCountUp"
+import { shareTicketPdf } from "../../lib/shareImage"
 
 type PeriodDays = 7 | 30 | 90
 
@@ -110,6 +114,10 @@ export default function DashboardPage() {
 
         <div className="flex items-center gap-2">
           <PeriodSwitcher value={period} onChange={setPeriod} />
+          <GenerateReportButton
+            targetId="dashboard-report-area"
+            periodLabel={periodLabelFor(period)}
+          />
           <button
             onClick={() => setDayCloseOpen(true)}
             className="h-10 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom active:scale-95 transition-transform"
@@ -145,7 +153,7 @@ export default function DashboardPage() {
 
         {/* ════════════════ RESUMEN ════════════════ */}
         <TabsContent value="resumen" className="space-y-5">
-          {/* HERO FINANCIERO */}
+          <div id="dashboard-report-area" className="space-y-5 bg-white dark:bg-slate-950 p-1">
           <FinanceHero
             revenue={revenue}
             cogs={cogs}
@@ -232,6 +240,9 @@ export default function DashboardPage() {
             products={stats?.products ?? 0}
             variants={stats?.variants ?? 0}
           />
+
+          <StockoutRiskCard items={stats?.stockoutRisk ?? []} />
+          </div>
         </TabsContent>
 
         {/* ════════════════ ANÁLISIS ════════════════ */}
@@ -376,14 +387,13 @@ function FinanceHero({
       />
 
       <div className="p-5 md:p-6">
-        {/* Cabecera */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black leading-none">
               Ganancia neta · {periodLabel}
             </p>
             <h3 className="text-3xl md:text-4xl font-black tracking-tight tabular-nums mt-1">
-              {formatCurrency(profit)}
+              <AnimatedMoney value={profit} />
             </h3>
             <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
               <Sparkles size={11} className="text-primary" />
@@ -392,7 +402,6 @@ function FinanceHero({
           </div>
           <Wallet size={22} className="text-primary/30 shrink-0" />
         </div>
-
         {/* Comparativa con período anterior */}
         <div className="flex flex-wrap gap-3 mb-5">
           <GrowthChip label="Ingresos" pct={revGrowth} />
@@ -642,10 +651,10 @@ function TrendChart({
                   fontSize: 11,
                   fontWeight: 700,
                 }}
-                formatter={(v: any, key: string) => [
+                formatter={((v: any, key: any) => [
                   typeof v === "number" ? formatCurrency(v) : v,
                   key === "revenue" ? "Ingresos" : "Ganancia",
-                ]}
+                ]) as any}
               />
               <Area
                 yAxisId="left"
@@ -1036,5 +1045,88 @@ function DailyOpsCards({
         )
       })}
     </div>
+  )
+}
+
+function AnimatedMoney({ value }: { value: number }) {
+  const animated = useCountUp(value, 650)
+  return <span>{formatCurrency(animated)}</span>
+}
+
+export function StockoutRiskCard({
+  items,
+}: {
+  items: { variantId: string; productName: string; variantName: string; stock: number; daysUntilStockout: number; soldPerDay: number }[]
+}) {
+  if (!items || items.length === 0) return null
+  return (
+    <section className="rounded-3xl border border-amber-200 dark:border-amber-500/30 bg-gradient-to-br from-amber-50 to-orange-50/40 dark:from-amber-500/10 dark:to-orange-500/5 p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-bloom">
+          <Activity size={14} />
+        </div>
+        <div>
+          <h4 className="text-sm font-black">Pronto sin stock</h4>
+          <p className="text-[10px] font-bold text-slate-500">
+            Al ritmo actual de venta
+          </p>
+        </div>
+      </div>
+      <ol className="space-y-2">
+        {items.map((it) => {
+          const urgent = it.daysUntilStockout <= 3
+          return (
+            <li
+              key={it.variantId}
+              className={`flex items-center gap-3 px-3 py-2 rounded-xl border ${
+                urgent
+                  ? "bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30"
+                  : "bg-white dark:bg-slate-900/40 border-slate-100 dark:border-slate-800"
+              }`}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-black truncate">{it.productName}</p>
+                <p className="text-[10px] text-slate-500 truncate">{it.variantName}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p
+                  className={`text-sm font-black tabular-nums ${
+                    urgent ? "text-rose-600 dark:text-rose-400" : "text-amber-700 dark:text-amber-300"
+                  }`}
+                >
+                  {it.daysUntilStockout < 1 ? "<1" : Math.round(it.daysUntilStockout)} d
+                </p>
+                <p className="text-[9px] font-bold text-slate-400 tabular-nums">
+                  {it.stock} pz · {it.soldPerDay}/día
+                </p>
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+}
+
+export function GenerateReportButton({
+  targetId,
+  periodLabel,
+}: {
+  targetId: string
+  periodLabel: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const node = document.getElementById(targetId) as HTMLElement | null
+        const safeLabel = periodLabel.toLowerCase().replace(/\s+/g, "-")
+        shareTicketPdf({ node, filename: `reporte-${safeLabel}.pdf` })
+      }}
+      className="h-10 px-3 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 active:scale-95 shadow-sm"
+      title="Generar PDF del resumen"
+    >
+      <FileDown size={12} /> PDF
+    </button>
   )
 }

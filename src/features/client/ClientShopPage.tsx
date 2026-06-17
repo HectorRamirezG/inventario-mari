@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
+import Fuse from "fuse.js"
 import {
   Search,
   ShoppingBag,
@@ -19,6 +20,8 @@ import {
   LayoutGrid,
   List,
   LifeBuoy,
+  ScanLine,
+  Heart,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -26,10 +29,19 @@ import { supabase } from "../../lib/supabase"
 import { formatMoney } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
 import { sound } from "../../lib/sound"
+import { useWishlist } from "../../lib/useWishlist"
 import SmartLocationInput from "../../components/ui/SmartLocationInput"
 import VariantImageCarousel from "../../components/ui/VariantImageCarousel"
 import ProductLightbox, { type LightboxSlide } from "../../components/ui/ProductLightbox"
 import Skeleton from "../../components/ui/Skeleton"
+import BarcodeScanner from "../../components/ui/BarcodeScanner"
+import WishlistHeart from "../../components/ui/WishlistHeart"
+import ClientHero from "../../components/ui/ClientHero"
+import OnboardingTour from "../../components/ui/OnboardingTour"
+import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
+import CategoryIcon, { getCategoryVisual } from "../../components/ui/CategoryIcon"
+import AbandonedCartBanner from "../../components/ui/AbandonedCartBanner"
+import { useCartPersist, clearPersistedCart, type PersistedCartLine } from "../../lib/useCartPersist"
 import BuySheet, { type BuySheetProduct } from "./BuySheet"
 import SupportModal from "../support/SupportModal"
 import {
@@ -145,6 +157,7 @@ export default function ClientShopPage() {
   const [sortBy, setSortBy] = useState<"newest" | "price_asc" | "price_desc" | "name">("newest")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [cart, setCart] = useState<CartLine[]>([])
+  useCartPersist(cart as PersistedCartLine[])
   const [openCart, setOpenCart] = useState(false)
   const [openGuestForm, setOpenGuestForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -161,6 +174,10 @@ export default function ClientShopPage() {
 
   // Centro de soporte (cliente logueado o invitado)
   const [openSupport, setOpenSupport] = useState(false)
+
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [onlyWishlist, setOnlyWishlist] = useState(false)
+  const wishlist = useWishlist()
 
   // Si el usuario está logueado, prellena con sus datos
   useEffect(() => {
@@ -219,22 +236,39 @@ export default function ClientShopPage() {
     return Array.from(set).sort()
   }, [products])
 
+  const fuse = useMemo(
+    () =>
+      new Fuse(products, {
+        keys: [
+          { name: "name", weight: 0.6 },
+          { name: "category", weight: 0.2 },
+          { name: "variants.variant_name", weight: 0.2 },
+        ],
+        threshold: 0.38,
+        ignoreLocation: true,
+        minMatchCharLength: 2,
+      }),
+    [products]
+  )
+
   const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase()
+    const needle = q.trim()
     let out = products
-    // categoría
+
     if (categoryFilter !== "all") {
       out = out.filter((p) => (p.category ?? "") === categoryFilter)
     }
-    // búsqueda
-    if (needle) {
-      out = out.filter(
-        (p) =>
-          p.name.toLowerCase().includes(needle) ||
-          p.variants.some((v) => v.variant_name.toLowerCase().includes(needle))
-      )
+
+    if (onlyWishlist) {
+      out = out.filter((p) => wishlist.has(p.id))
     }
-    // orden
+
+    if (needle.length >= 2) {
+      const results = fuse.search(needle).map((r) => r.item)
+      const idSet = new Set(out.map((p) => p.id))
+      out = results.filter((p) => idSet.has(p.id))
+    }
+
     const minPrice = (p: PublicProduct) => {
       const ps = p.variants
         .map((v) => Number(v.price_menudeo ?? v.price ?? 0))
@@ -245,14 +279,34 @@ export default function ClientShopPage() {
     if (sortBy === "price_asc") arr.sort((a, b) => minPrice(a) - minPrice(b))
     else if (sortBy === "price_desc") arr.sort((a, b) => minPrice(b) - minPrice(a))
     else if (sortBy === "name") arr.sort((a, b) => a.name.localeCompare(b.name))
-    else
+    else if (needle.length < 2)
       arr.sort((a, b) => {
         const ta = a.created_at ? Date.parse(a.created_at) : 0
         const tb = b.created_at ? Date.parse(b.created_at) : 0
         return tb - ta
       })
     return arr
-  }, [products, q, categoryFilter, sortBy])
+  }, [products, q, categoryFilter, sortBy, onlyWishlist, wishlist, fuse])
+
+  const handleScan = (code: string) => {
+    const norm = code.trim().toLowerCase()
+    const match = products.find(
+      (p) =>
+        p.name.toLowerCase() === norm ||
+        p.variants.some((v) => v.variant_name.toLowerCase() === norm)
+    )
+    if (match) {
+      setBuySheetPreselectedVariant(match.variants[0]?.id ?? null)
+      setBuySheetProduct(match)
+      setScannerOpen(false)
+      sound.success()
+      toast.success(match.name, { duration: 1500 })
+      return true
+    }
+    sound.error()
+    toast.error(`No encontré "${code}"`)
+    return false
+  }
 
   const totalQty = useMemo(
     () => cart.reduce((acc, c) => acc + c.qty, 0),
@@ -491,6 +545,7 @@ export default function ClientShopPage() {
       sound.success()
       toast.success("✨ ¡Apartado creado!", { id: tid })
       setCart([])
+      clearPersistedCart()
       setOpenGuestForm(false)
       setOpenCart(false)
       // Navegación SPA hacia el ticket público (no reload)
@@ -530,23 +585,22 @@ export default function ClientShopPage() {
 
   return (
     <div className="pb-24">
-      {/* Saludo */}
-      <div className="mb-4">
-        <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">
-          {isLogged ? "Hola de nuevo" : "Bienvenida"}
-        </p>
-        <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
-          {(guest.name || authName)?.split(" ")[0] ?? "Cosmética bonita"}{" "}
-          <Sparkles size={18} className="text-primary" />
-        </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Aparta tus productos favoritos sin pagar todo hoy.
-        </p>
-      </div>
+      <ClientHero
+        customerName={guest.name || authName}
+        isLogged={isLogged}
+      />
 
-      {/* Buscador */}
-      <div className="flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl h-12 px-4 mb-3 shadow-sm">
-        <Search size={16} className="text-slate-400" />
+      {cart.length === 0 && (
+        <AbandonedCartBanner
+          onResume={(lines) => {
+            setCart(lines as CartLine[])
+            setOpenCart(true)
+          }}
+        />
+      )}
+
+      <div className="flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl h-12 px-3 mb-3 shadow-sm">
+        <Search size={16} className="text-slate-400 shrink-0" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -556,10 +610,36 @@ export default function ClientShopPage() {
         {q && (
           <button
             onClick={() => setQ("")}
-            className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400"
+            className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-400 shrink-0"
             aria-label="Limpiar"
           >
             <X size={11} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setScannerOpen(true)}
+          aria-label="Escanear código"
+          title="Escanear código del producto"
+          className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center shadow-sm active:scale-95 shrink-0"
+        >
+          <ScanLine size={14} />
+        </button>
+        {wishlist.count > 0 && (
+          <button
+            type="button"
+            onClick={() => setOnlyWishlist((v) => !v)}
+            aria-label="Filtrar favoritos"
+            className={`relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+              onlyWishlist
+                ? "bg-rose-500 text-white shadow-sm"
+                : "bg-rose-50 dark:bg-rose-500/15 text-rose-500"
+            }`}
+          >
+            <Heart size={14} fill="currentColor" />
+            <span className="absolute -top-1 -right-1 text-[8px] font-black tabular-nums bg-white text-rose-600 rounded-full px-1 min-w-[14px] h-[14px] flex items-center justify-center border border-rose-300">
+              {wishlist.count}
+            </span>
           </button>
         )}
       </div>
@@ -580,17 +660,19 @@ export default function ClientShopPage() {
           </button>
           {categories.map((c) => {
             const active = categoryFilter === c
+            const { Icon } = getCategoryVisual(c)
             return (
               <button
                 key={c}
                 type="button"
                 onClick={() => setCategoryFilter(c)}
-                className={`shrink-0 px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                className={`shrink-0 inline-flex items-center gap-1.5 px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
                   active
                     ? "bg-primary text-white shadow-bloom"
                     : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500"
                 }`}
               >
+                <Icon size={11} />
                 {c}
               </button>
             )
@@ -653,10 +735,32 @@ export default function ClientShopPage() {
 
       {/* Catálogo */}
       {filtered.length === 0 ? (
-        <div className="py-20 text-center">
-          <Package size={36} className="mx-auto text-slate-300 mb-2" />
-          <p className="text-sm font-bold text-slate-500">Sin resultados</p>
-        </div>
+        <EmptyStateIllustration
+          variant={onlyWishlist ? "cart-empty" : "no-results"}
+          title={
+            onlyWishlist
+              ? "Aún no guardas favoritos"
+              : q
+              ? "No encontré nada con esa búsqueda"
+              : "Sin productos en esta categoría"
+          }
+          subtitle={
+            onlyWishlist
+              ? "Toca el corazón en cualquier producto para guardarlo aquí."
+              : "Prueba otra palabra o quita los filtros."
+          }
+          cta={
+            onlyWishlist ? (
+              <button
+                type="button"
+                onClick={() => setOnlyWishlist(false)}
+                className="h-10 px-4 rounded-2xl bg-primary text-white text-[10px] font-black uppercase tracking-widest"
+              >
+                Ver catálogo
+              </button>
+            ) : undefined
+          }
+        />
       ) : (
         <LayoutGroup id="shop-catalog">
           <motion.div
@@ -674,6 +778,8 @@ export default function ClientShopPage() {
                 key={p.id}
                 product={p}
                 mode={viewMode}
+                isFavorite={wishlist.has(p.id)}
+                onToggleFavorite={() => wishlist.toggle(p.id)}
                 onOpenLightbox={(variantId) => {
                   setLightboxStartVariant(variantId)
                   setLightboxProduct(p)
@@ -1133,6 +1239,14 @@ export default function ClientShopPage() {
         customerName={guest.name || authName || null}
         onClose={() => setOpenSupport(false)}
       />
+
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onScan={handleScan}
+      />
+
+      <OnboardingTour />
     </div>
   )
 }
@@ -1167,14 +1281,16 @@ function FieldInput({
 function ProductCardClient({
   product,
   mode = "grid",
+  isFavorite = false,
+  onToggleFavorite,
   onOpenLightbox,
   onOpenBuy,
 }: {
   product: PublicProduct
   mode?: "focus" | "grid" | "list"
-  /** Click en la imagen → abre lightbox fullscreen */
+  isFavorite?: boolean
+  onToggleFavorite?: () => void
   onOpenLightbox: (variantId: string) => void
-  /** Click en el botón "+" → abre BuySheet preseleccionando la variante activa */
   onOpenBuy: (variantId: string) => void
 }) {
   // Variante visible (sincronizada con los chips: cambia al clic en chip)
@@ -1384,6 +1500,11 @@ function ProductCardClient({
                 -{discountPct}%
               </span>
             )}
+          </div>
+        )}
+        {onToggleFavorite && (
+          <div className="absolute top-2 right-2 z-10">
+            <WishlistHeart active={isFavorite} onClick={onToggleFavorite} />
           </div>
         )}
       </motion.div>

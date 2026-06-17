@@ -64,7 +64,7 @@ export async function getDashboardStats(periodDays = 30): Promise<DashboardStats
     supabase
       .from("variants")
       .select(
-        "stock,is_active,cost_override,products:products(min_stock,is_active,cost,category)"
+        "id,stock,is_active,cost_override,products:products(min_stock,is_active,cost,category)"
       ),
     // 3) ventas del período actual (no canceladas)
     supabase
@@ -77,7 +77,7 @@ export async function getDashboardStats(periodDays = 30): Promise<DashboardStats
     supabase
       .from("sale_items")
       .select(
-        "product_name,qty,unit_price,profit,sale_id,sales!inner(created_at,status),products:products(category)"
+        "product_name,variant_id,variant_name,qty,unit_price,profit,sale_id,sales!inner(created_at,status),products:products(category)"
       )
       .gte("sales.created_at", current.start)
       .lte("sales.created_at", current.end)
@@ -249,6 +249,43 @@ export async function getDashboardStats(periodDays = 30): Promise<DashboardStats
     operations: dayOps.get(d.date) ?? 0,
   }))
 
+  const soldByVariant = new Map<string, { qty: number; productName: string; variantName: string }>()
+  ;(itemsData.data ?? []).forEach((i: any) => {
+    const vid = i.variant_id as string | null
+    if (!vid) return
+    const cur = soldByVariant.get(vid) ?? {
+      qty: 0,
+      productName: String(i.product_name ?? ""),
+      variantName: String(i.variant_name ?? ""),
+    }
+    cur.qty += Number(i.qty) || 0
+    soldByVariant.set(vid, cur)
+  })
+  const stockByVariant = new Map<string, number>()
+  for (const v of (inv.data as any[]) ?? []) {
+    if (!v.is_active || !v.products?.is_active) continue
+    if (typeof v.id === "string") stockByVariant.set(v.id, Number(v.stock) || 0)
+  }
+  const stockoutRisk: DashboardStats["stockoutRisk"] = []
+  for (const [vid, info] of soldByVariant.entries()) {
+    const stock = stockByVariant.get(vid)
+    if (stock === undefined || stock <= 0) continue
+    const perDay = info.qty / periodDays
+    if (perDay <= 0) continue
+    const days = stock / perDay
+    if (days <= 14) {
+      stockoutRisk.push({
+        variantId: vid,
+        productName: info.productName,
+        variantName: info.variantName,
+        stock,
+        daysUntilStockout: Math.round(days * 10) / 10,
+        soldPerDay: Math.round(perDay * 10) / 10,
+      })
+    }
+  }
+  stockoutRisk.sort((a, b) => a.daysUntilStockout - b.daysUntilStockout)
+
   return {
     products: pCount.count ?? 0,
     variants: vCount.count ?? 0,
@@ -269,6 +306,7 @@ export async function getDashboardStats(periodDays = 30): Promise<DashboardStats
     topCustomers,
     topCategories,
     inventoryValue,
+    stockoutRisk: stockoutRisk.slice(0, 8),
   }
 }
 

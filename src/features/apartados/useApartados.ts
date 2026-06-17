@@ -91,23 +91,28 @@ export function useApartados() {
   useEffect(() => {
     if (sales.length === 0) return;
     const ids = sales.map((s) => s.id);
+    const idsFilter = `sale_id=in.(${ids.join(",")})`;
     const channel = supabase
       .channel("apartados-activity")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "payment_proofs" },
-        (payload) => {
-          const sid = (payload.new as any)?.sale_id;
-          if (sid && ids.includes(sid)) refreshProofs(ids);
-        }
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "payment_proofs",
+          filter: idsFilter,
+        },
+        () => refreshProofs(ids)
       )
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "payments" },
-        (payload) => {
-          const sid = (payload.new as any)?.sale_id;
-          if (sid && ids.includes(sid)) refresh();
-        }
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "payments",
+          filter: idsFilter,
+        },
+        () => refresh()
       )
       .subscribe();
     return () => {

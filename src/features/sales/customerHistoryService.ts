@@ -14,7 +14,6 @@ export interface CustomerSnapshot {
   /** Última fecha de venta */
   last_visit: string | null
 }
-
 /**
  * Busca clientes anteriores por nombre o teléfono y los agrupa.
  * Útil para auto-completar al teclear el nombre en una nueva venta.

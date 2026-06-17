@@ -41,4 +41,14 @@ export interface DashboardStats {
   topCategories: { category: string; qty: number; revenue: number }[];
   /** Valor del inventario actual al costo (stock × cost) */
   inventoryValue: number;
+
+  /** Variantes con riesgo de quedarse sin stock en los próximos N días */
+  stockoutRisk: {
+    variantId: string;
+    productName: string;
+    variantName: string;
+    stock: number;
+    daysUntilStockout: number;
+    soldPerDay: number;
+  }[];
 }

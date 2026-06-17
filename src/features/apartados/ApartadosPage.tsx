@@ -42,6 +42,8 @@ import {
   fetchProfilesByEmails,
   type UserProfileDetail,
 } from "../profile/profileService";
+import { fetchCustomerStatsByEmails, type CustomerStat } from "./customerStatsService";
+import RfmBadge from "../../components/ui/RfmBadge";
 
 const waLink = (raw?: string | null) => {
   const p = intlPhone(raw);
@@ -60,8 +62,8 @@ export default function ApartadosPage() {
   const [ticketSale, setTicketSale] = useState<Sale | null>(null);
   const [adjustSale, setAdjustSale] = useState<Sale | null>(null);
   const [profiles, setProfiles] = useState<Record<string, UserProfileDetail>>({});
+  const [customerStats, setCustomerStats] = useState<Record<string, CustomerStat>>({});
 
-  // Carga lazy de avatars de clientes cuando cambian las ventas mostradas
   useEffect(() => {
     const emails = state.sales
       .map((s) => s.customer_email)
@@ -71,6 +73,9 @@ export default function ApartadosPage() {
     let alive = true;
     fetchProfilesByEmails(emails).then((map) => {
       if (alive) setProfiles((prev) => ({ ...prev, ...map }));
+    });
+    fetchCustomerStatsByEmails(emails).then((map) => {
+      if (alive) setCustomerStats((prev) => ({ ...prev, ...map }));
     });
     return () => {
       alive = false;
@@ -187,6 +192,11 @@ export default function ApartadosPage() {
                     ? profiles[sale.customer_email.toLowerCase()]
                     : undefined
                 }
+                stats={
+                  sale.customer_email
+                    ? customerStats[sale.customer_email.toLowerCase()]
+                    : undefined
+                }
                 hasPendingProof={state.pendingProofIds.has(sale.id)}
                 cancelGuard={canCancelSale(rules, sale)}
                 onPay={() => setSelected(sale)}
@@ -227,6 +237,7 @@ export default function ApartadosPage() {
 function SaleCard({
   sale,
   profile,
+  stats,
   hasPendingProof,
   cancelGuard,
   onPay,
@@ -236,6 +247,7 @@ function SaleCard({
 }: {
   sale: Sale;
   profile?: UserProfileDetail;
+  stats?: CustomerStat;
   hasPendingProof?: boolean;
   cancelGuard?: { allowed: boolean; reason?: string };
   onPay: () => void;
@@ -376,6 +388,7 @@ function SaleCard({
             <p className="text-[13px] font-black text-slate-900 dark:text-slate-100 truncate">
               {sale.customer_name ?? "Sin cliente"}
             </p>
+            {stats && <RfmBadge tier={stats.tier} />}
             {isLayaway && !isPaid && !isCancelled && (
               <Badge tone="warn" className="text-[8px] px-1.5 py-0 rounded-full font-black">
                 APARTADO

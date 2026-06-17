@@ -56,6 +56,7 @@ import ConnectionBanner from "./components/ui/ConnectionBanner"
 import UserProfileDrawer from "./components/ui/UserProfileDrawer"
 import ReviewProofDrawer from "./components/ui/ReviewProofDrawer"
 import WhatsAppSupportFab from "./components/ui/WhatsAppSupportFab"
+import InstallPrompt from "./components/ui/InstallPrompt"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
@@ -114,6 +115,7 @@ export default function App() {
       />
       <ThemeMount />
       <ConnectionBanner />
+      <InstallPrompt />
       <Routes>
         {/* Públicas (sin login) */}
         <Route path="/ticket/:token" element={<PublicTicketPage />} />
