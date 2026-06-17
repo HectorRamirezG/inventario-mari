@@ -15,6 +15,10 @@ import {
   Building2,
   AlertTriangle,
   Trash2,
+  Volume2,
+  Smartphone,
+  PartyPopper,
+  Sparkles,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
@@ -37,6 +41,8 @@ import {
 } from "./bankAccountService"
 import { resetAppData, type ResetReport } from "./resetAppService"
 import { confirmAction } from "../../lib/confirm"
+import { useUserPrefs } from "../../lib/userPrefs"
+import Toggle from "../../components/ui/Toggle"
 
 export default function SettingsPage() {
   const { info, update, reset } = useStoreInfo()
@@ -369,6 +375,9 @@ export default function SettingsPage() {
         </Section>
       )}
 
+      {/* PREFERENCIAS DEL USUARIO */}
+      <UserPrefsSection />
+
       {/* ZONA PELIGROSA — solo admin */}
       {isAdmin && <DangerZoneSection />}
 
@@ -467,6 +476,104 @@ function Field({
       </span>
       {children}
     </label>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   PREFERENCIAS DEL USUARIO — sonidos / haptics / confetti
+   Persistidas en localStorage. No requieren backend.
+   ════════════════════════════════════════════════════════════════════ */
+function UserPrefsSection() {
+  const { prefs, toggle } = useUserPrefs()
+
+  const rows: Array<{
+    key: keyof typeof prefs
+    icon: React.ReactNode
+    title: string
+    description: string
+    iconBg: string
+  }> = [
+    {
+      key: "sounds",
+      icon: <Volume2 size={14} />,
+      title: "Sonidos",
+      description:
+        "Tonos suaves al cobrar, escanear códigos y confirmar acciones.",
+      iconBg: "bg-sky-500",
+    },
+    {
+      key: "haptics",
+      icon: <Smartphone size={14} />,
+      title: "Vibración (haptics)",
+      description:
+        "Pequeñas vibraciones del celular al tocar botones y al cobrar.",
+      iconBg: "bg-violet-500",
+    },
+    {
+      key: "confetti",
+      icon: <PartyPopper size={14} />,
+      title: "Confetti en logros",
+      description:
+        "Celebración al cerrar el día, primera venta y reportes resueltos.",
+      iconBg: "bg-amber-500",
+    },
+  ]
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="surface-card p-5 mb-4 space-y-3"
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-bloom"
+          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+        >
+          <Sparkles size={14} />
+        </div>
+        <div>
+          <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
+            Experiencia
+          </h3>
+          <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400">
+            Sonidos, vibración y celebraciones
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        {rows.map((r) => (
+          <label
+            key={r.key}
+            className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 hover:border-primary/30 dark:hover:border-primary/40 cursor-pointer transition-colors"
+          >
+            <div
+              className={`w-9 h-9 rounded-xl ${r.iconBg} text-white flex items-center justify-center shrink-0 shadow-sm`}
+            >
+              {r.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+                {r.title}
+              </p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                {r.description}
+              </p>
+            </div>
+            <Toggle
+              checked={prefs[r.key]}
+              onChange={() => toggle(r.key)}
+              label={r.title}
+            />
+          </label>
+        ))}
+      </div>
+
+      <p className="text-[9px] text-slate-400 dark:text-slate-500 text-center italic pt-1">
+        Estas preferencias se guardan en este dispositivo
+      </p>
+    </motion.section>
   )
 }
 

@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import type { PricingTier } from "./pricingTypes";
+import { debug } from "../../lib/debug";
 
 export async function getPricingHistory(params: {
   fromISO: string;
@@ -26,7 +27,7 @@ export async function getPricingHistory(params: {
 
   const { data, error } = await query;
   if (error) {
-    console.error("Error SQL:", error);
+    debug.error("Error SQL:", error);
     return [];
   }
 

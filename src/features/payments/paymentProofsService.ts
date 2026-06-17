@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { debug } from "../../lib/debug"
 
 export type ProofStatus = "pending" | "pending_verification" | "approved" | "rejected"
 
@@ -132,7 +133,7 @@ export async function getProofById(id: string): Promise<PaymentProof | null> {
     .eq("id", id)
     .maybeSingle()
   if (error) {
-    console.warn("[proofs] get error:", error.message)
+    debug.warn("[proofs] get error:", error.message)
     return null
   }
   return (data as PaymentProof) ?? null
@@ -146,7 +147,7 @@ export async function listProofsForSale(saleId: string): Promise<PaymentProof[]>
     .eq("sale_id", saleId)
     .order("created_at", { ascending: false })
   if (error) {
-    console.warn("[proofs] list error:", error.message)
+    debug.warn("[proofs] list error:", error.message)
     return []
   }
   return (data as PaymentProof[]) ?? []

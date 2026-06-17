@@ -22,6 +22,7 @@ import CategoryCombobox from "../../components/ui/CategoryCombobox"
 import MultiImageUploader from "../../components/ui/MultiImageUploader"
 import Badge from "../../components/ui/Badge"
 import { supabase } from "../../lib/supabase"
+import { debug } from "../../lib/debug"
 import { formatMoney } from "../../lib/format"
 import { suggestedPrices, money } from "../pricing/suggest"
 import { getPricingConfig } from "../pricing/pricingConfigService"
@@ -988,7 +989,7 @@ function VariantAccordion({
       )
       onSaved()
     } catch (e: any) {
-      console.error("[VariantAccordion.handleSave]", e)
+      debug.error("[VariantAccordion.handleSave]", e)
       toast.error(e?.message ?? "Error guardando")
     } finally {
       setSaving(false)

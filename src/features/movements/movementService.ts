@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase";
+import { debug } from "../../lib/debug";
 
 export type MovementType = "entrada" | "venta";
 
@@ -17,7 +18,7 @@ export async function applyMovement(params: {
   });
 
   if (error) {
-    console.error("Error en RPC apply_movement:", error.message);
+    debug.error("Error en RPC apply_movement:", error.message);
     throw error;
   }
   return data as number;

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "react-hot-toast";
 import { createProduct, createVariant } from "../products/productService";
 import { applyMovement } from "./movementService";
+import { debug } from "../../lib/debug";
 
 /**
  * Hook para Creación de Productos
@@ -130,7 +131,7 @@ export function useMovementModal(variantId: string | null, type: "entrada" | "ve
       onClose();
       onSuccess();
     } catch (e: any) {
-      console.error(e);
+      debug.error(e);
       toast.error(e?.message ?? "Error en el movimiento");
     } finally {
       setSaving(false);

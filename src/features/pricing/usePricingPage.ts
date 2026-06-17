@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { supabase } from "../../lib/supabase";
 import { toast } from "react-hot-toast";
+import { debug } from "../../lib/debug";
 
 export function usePricingPage() {
   const [products, setProducts] = useState<any[]>([]);
@@ -41,7 +42,7 @@ export function usePricingPage() {
       if (p) setProducts(p);
       if (c) setCfg(c);
     } catch (error) {
-      console.error("Error al cargar datos:", error);
+      debug.error("Error al cargar datos:", error);
     }
   };
 
@@ -220,7 +221,7 @@ export function usePricingPage() {
           ]);
 
         if (histError) {
-          console.error(histError);
+          debug.error(histError);
           throw new Error(`Error guardando historial: ${histError.message}`);
         }
       }
@@ -246,7 +247,7 @@ export function usePricingPage() {
         }
       ]);
     } catch (error: any) {
-      console.error(error);
+      debug.error(error);
       toast.error(error.message || "Error desconocido", { id: toastId });
     } finally {
       setIsSaving(false);

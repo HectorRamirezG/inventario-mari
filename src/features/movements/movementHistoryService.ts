@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase";
+import { debug } from "../../lib/debug";
 
 export async function getMovementHistory() {
   // Consultamos la tabla de SALES para obtener las ventas agrupadas
@@ -22,7 +23,7 @@ export async function getMovementHistory() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("Error en Supabase:", error.message);
+    debug.error("Error en Supabase:", error.message);
     return [];
   }
 

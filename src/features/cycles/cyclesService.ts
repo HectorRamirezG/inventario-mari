@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { debug } from "../../lib/debug"
 
 export type CycleStatus = "open" | "closed"
 
@@ -209,7 +210,7 @@ export async function estimateCurrentInventoryCost(): Promise<number | null> {
       .from("variants")
       .select("stock,is_active,cost_override,products:products(is_active,cost)")
     if (error) {
-      console.warn("[estimateCurrentInventoryCost]", error.message)
+      debug.warn("[estimateCurrentInventoryCost]", error.message)
       return null
     }
     let total = 0
@@ -221,7 +222,7 @@ export async function estimateCurrentInventoryCost(): Promise<number | null> {
     }
     return Math.round(total * 100) / 100
   } catch (e) {
-    console.warn("[estimateCurrentInventoryCost] catch", e)
+    debug.warn("[estimateCurrentInventoryCost] catch", e)
     return null
   }
 }

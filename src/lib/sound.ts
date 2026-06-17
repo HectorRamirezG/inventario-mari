@@ -2,7 +2,13 @@
  * Mini librería de feedback sonoro/háptico para acciones críticas
  * (venta cerrada, error, scan exitoso). Usa Web Audio + Vibration API,
  * sin assets externos. Respeta el "silent mode" del sistema.
+ *
+ * Respeta las preferencias del usuario (userPrefs):
+ *  - prefs.sounds = false → no reproduce nada
+ *  - prefs.haptics = false → no vibra
  */
+
+import { getPrefs } from "./userPrefs"
 
 let audioCtx: AudioContext | null = null
 
@@ -20,6 +26,7 @@ function ctx(): AudioContext | null {
 }
 
 function beep(frequency: number, durationMs = 80, volume = 0.04, type: OscillatorType = "sine") {
+  if (!getPrefs().sounds) return
   const c = ctx()
   if (!c) return
   try {
@@ -41,6 +48,7 @@ function beep(frequency: number, durationMs = 80, volume = 0.04, type: Oscillato
 
 /** Campana premium con armónico — ideal para venta cerrada / abono cobrado. */
 function bell(baseHz: number, durationMs = 600, volume = 0.06) {
+  if (!getPrefs().sounds) return
   const c = ctx()
   if (!c) return
   try {
@@ -67,6 +75,7 @@ function bell(baseHz: number, durationMs = 600, volume = 0.06) {
 }
 
 function vibrate(pattern: number | number[]) {
+  if (!getPrefs().haptics) return
   if (typeof navigator === "undefined") return
   if ("vibrate" in navigator) {
     try {

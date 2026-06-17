@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase"
 import type { Product, Variant } from "../../types/database"
+import { debug } from "../../lib/debug"
 
 export async function getProducts(): Promise<Product[]> {
   const { data, error } = await supabase
@@ -31,7 +32,7 @@ export async function getProducts(): Promise<Product[]> {
     .order("created_at", { ascending: false })
 
   if (error) {
-    console.error(error)
+    debug.error(error)
     return []
   }
 
@@ -63,7 +64,7 @@ export async function updateProduct(productId: string, patch: Partial<Product>) 
 
   if (error) throw error
   if (!Array.isArray(data) || data.length === 0) {
-    console.error("[updateProduct] 0 filas actualizadas", { productId, safe })
+    debug.error("[updateProduct] 0 filas actualizadas", { productId, safe })
     throw new Error(
       "No se pudo guardar el producto. ¿RLS bloqueando? " +
       "(0 filas actualizadas)"
@@ -107,7 +108,7 @@ export async function updateVariant(
     if (!Array.isArray(data) || data.length === 0) {
       // 0 filas afectadas → RLS deniega o el id no existe. En ambos
       // casos es un fallo real que el usuario debe saber.
-      console.error("[updateVariant] 0 filas actualizadas", { variantId, safePatch })
+      debug.error("[updateVariant] 0 filas actualizadas", { variantId, safePatch })
       throw new Error(
         "No se pudo guardar. ¿Tu sesión sigue activa con permisos de admin? " +
         "(0 filas actualizadas — posible RLS bloqueando)"
@@ -122,7 +123,7 @@ export async function updateVariant(
   // silenciosamente la galería completa cuando había RLS u otros errores.
   const msg = error.message ?? ""
   const code = (error as any).code ?? ""
-  console.warn("[updateVariant] error:", { msg, code, safePatch })
+  debug.warn("[updateVariant] error:", { msg, code, safePatch })
 
   const isMissingCol =
     code === "42703" || // Postgres: column does not exist

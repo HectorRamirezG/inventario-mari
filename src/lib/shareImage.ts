@@ -1,4 +1,5 @@
 import toast from "react-hot-toast"
+import { debug } from "./debug"
 
 // IMPORTANTE: html2canvas (~200 KB gz) y jspdf (~150 KB gz) son pesados.
 // Los cargamos en runtime SOLO cuando el usuario pide imagen o PDF, así el
@@ -111,7 +112,7 @@ async function nodeToCanvas(node: HTMLElement, scale = 2): Promise<HTMLCanvasEle
       try {
         resolveOklchColors(clonedRoot as HTMLElement)
       } catch (e) {
-        console.warn("[shareImage] resolveOklchColors failed", e)
+        debug.warn("[shareImage] resolveOklchColors failed", e)
       }
     },
   })
@@ -192,7 +193,7 @@ export async function shareTicketImage(opts: {
     downloadBlob(blob, filename)
     toast.success("Imagen descargada", { id: tid })
   } catch (e: any) {
-    console.error("[shareTicketImage]", e)
+    debug.error("[shareTicketImage]", e)
     toast.error(e?.message ?? "Error generando imagen", { id: tid })
   }
 }
@@ -244,7 +245,7 @@ export async function shareTicketPdf(opts: {
     pdf.save(filename)
     toast.success("PDF descargado", { id: tid })
   } catch (e: any) {
-    console.error("[shareTicketPdf]", e)
+    debug.error("[shareTicketPdf]", e)
     toast.error(e?.message ?? "Error generando PDF", { id: tid })
   }
 }

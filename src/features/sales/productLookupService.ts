@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase";
+import { debug } from "../../lib/debug";
 
 // IMPORTANTE: la tabla `variants` no tiene columna `cost`. El costo base
 // vive en `products.cost`; cada variante puede sobreescribirlo con
@@ -52,7 +53,7 @@ export const searchVariants = async (term: string): Promise<ProductVariantLookup
     .limit(10);
 
   if (error) {
-    console.error("Error en búsqueda:", error.message);
+    debug.error("Error en búsqueda:", error.message);
     return [];
   }
 
@@ -65,7 +66,7 @@ export const searchVariants = async (term: string): Promise<ProductVariantLookup
       .limit(10);
 
     if (secondError) {
-      console.error("Error en búsqueda secundaria:", secondError.message);
+      debug.error("Error en búsqueda secundaria:", secondError.message);
       return [];
     }
 
@@ -83,7 +84,7 @@ export const getAllVariants = async (): Promise<ProductVariantLookup[]> => {
     .order("variant_name", { ascending: true });
 
   if (error) {
-    console.error("Error cargando catálogo:", error.message);
+    debug.error("Error cargando catálogo:", error.message);
     return [];
   }
 

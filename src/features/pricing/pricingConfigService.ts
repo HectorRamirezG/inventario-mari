@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import type { PricingConfig } from "./pricingTypes";
+import { debug } from "../../lib/debug";
 
 /**
  * Obtiene la configuración global. 
@@ -38,7 +39,7 @@ export async function getPricingConfig(): Promise<PricingConfig> {
     };
 
   } catch (e) {
-    console.error("Error crítico al cargar configuración:", e);
+    debug.error("Error crítico al cargar configuración:", e);
     // Fallback de emergencia
     return {
       id: 1,
@@ -72,7 +73,7 @@ export async function savePricingConfig(cfg: PricingConfig) {
     .upsert(payload, { onConflict: "id" });
 
   if (error) {
-    console.error("Error al guardar en Supabase:", error.message);
+    debug.error("Error al guardar en Supabase:", error.message);
     throw error;
   }
 }

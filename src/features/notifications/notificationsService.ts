@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { sound } from "../../lib/sound"
 import { useAuth, isStaffOrAdmin, type AppRole } from "../../lib/useAuth"
+import { debug } from "../../lib/debug"
 
 export type NotifType =
   | "payment_added"
@@ -58,9 +59,9 @@ export async function markAllRead() {
   try {
     const { error } = await supabase.rpc("mark_all_notifications_read")
     if (!error) return
-    console.warn("[notif] RPC falló, usando fallback:", error.message)
+    debug.warn("[notif] RPC falló, usando fallback:", error.message)
   } catch (e) {
-    console.warn("[notif] RPC excepción, usando fallback:", e)
+    debug.warn("[notif] RPC excepción, usando fallback:", e)
   }
   // Fallback: marca todas como leídas con UPDATE directo
   await supabase

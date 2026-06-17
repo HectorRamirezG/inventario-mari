@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { debug } from "../../lib/debug"
 
 export interface UserProfileDetail {
   id: string
@@ -18,7 +19,7 @@ export async function fetchMyProfile(userId: string): Promise<UserProfileDetail 
     .eq("id", userId)
     .maybeSingle()
   if (error) {
-    console.warn("[profile] fetch error:", error.message)
+    debug.warn("[profile] fetch error:", error.message)
     return null
   }
   return (data as UserProfileDetail) ?? null
@@ -91,7 +92,7 @@ export async function fetchProfilesByEmails(
     .select("id,email,full_name,avatar_url,phone,address,location_url,role")
     .in("email", unique)
   if (error) {
-    console.warn("[profile] batch fetch error:", error.message)
+    debug.warn("[profile] batch fetch error:", error.message)
     return {}
   }
   const map: Record<string, UserProfileDetail> = {}

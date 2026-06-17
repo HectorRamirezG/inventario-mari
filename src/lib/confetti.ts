@@ -3,10 +3,16 @@
  * Dibuja N piezas de papel cayendo con física simple, las colorea
  * con la paleta de la marca y se autodestruye.
  *
+ * Respeta:
+ *  - prefers-reduced-motion (sistema operativo)
+ *  - prefs.confetti = false (preferencia del usuario)
+ *
  * Uso:
  *   import { fireConfetti } from "@/lib/confetti"
  *   fireConfetti({ duration: 1800, count: 80 })
  */
+
+import { getPrefs } from "./userPrefs"
 
 interface ConfettiOptions {
   /** Duración total del efecto en ms. */
@@ -34,8 +40,11 @@ let cleanupTimer: number | null = null
 export function fireConfetti(options: ConfettiOptions = {}) {
   if (typeof window === "undefined") return
 
-  // Respetar prefers-reduced-motion
+  // Respetar prefers-reduced-motion del sistema
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return
+
+  // Respetar preferencia explícita del usuario
+  if (!getPrefs().confetti) return
 
   const {
     duration = 1800,

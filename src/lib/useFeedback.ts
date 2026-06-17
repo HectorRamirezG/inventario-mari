@@ -6,7 +6,13 @@
  *  - error     : tono descendente + vibración larga (fallos)
  *  - strong    : vibración fuerte (escaneo OK, swipe destructivo)
  *  - feedback  : alias retrocompatible de tap()
+ *
+ * Respeta las preferencias del usuario en `userPrefs`:
+ *  - prefs.sounds = false → no reproduce tonos
+ *  - prefs.haptics = false → no vibra
  */
+
+import { getPrefs } from "./userPrefs"
 
 let sharedCtx: AudioContext | null = null
 function getCtx(): AudioContext | null {
@@ -24,6 +30,8 @@ function getCtx(): AudioContext | null {
 }
 
 function beep(freq: number, durMs: number, vol = 0.04, type: OscillatorType = "sine", delayMs = 0) {
+  // Respeta preferencia del usuario
+  if (!getPrefs().sounds) return
   const ctx = getCtx()
   if (!ctx) return
   try {
@@ -44,6 +52,8 @@ function beep(freq: number, durMs: number, vol = 0.04, type: OscillatorType = "s
 }
 
 function buzz(pattern: number | number[]) {
+  // Respeta preferencia del usuario
+  if (!getPrefs().haptics) return
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     try { navigator.vibrate(pattern) } catch {}
   }

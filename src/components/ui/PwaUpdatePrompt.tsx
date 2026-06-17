@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useRegisterSW } from "virtual:pwa-register/react"
 import { motion, AnimatePresence } from "framer-motion"
 import { RefreshCw, X } from "lucide-react"
+import { debug } from "../../lib/debug"
 
 /**
  * Banner discreto que aparece cuando vite-plugin-pwa detecta que hay
@@ -17,7 +18,7 @@ export default function PwaUpdatePrompt() {
   } = useRegisterSW({
     onRegisterError(err) {
       // eslint-disable-next-line no-console
-      console.error("SW registration error", err)
+      debug.error("SW registration error", err)
     },
   })
 

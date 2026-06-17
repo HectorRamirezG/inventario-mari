@@ -11,6 +11,7 @@ import {
 import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
+import { debug } from "../../lib/debug"
 
 interface Props {
   /** Array de URLs. La primera es la principal (portada). */
@@ -56,7 +57,7 @@ export default function MultiImageUploader({
       .from("product-images")
       .upload(path, file, { cacheControl: "31536000", upsert: false })
     if (error) {
-      console.error("[MultiImageUploader.upload]", { path, error })
+      debug.error("[MultiImageUploader.upload]", { path, error })
       toast.error(`No se pudo subir "${file.name}": ${error.message}`)
       return null
     }

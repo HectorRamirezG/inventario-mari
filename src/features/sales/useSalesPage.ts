@@ -18,6 +18,7 @@ import type { Sale } from "../../types/database";
 import { sound } from "../../lib/sound";
 import { getBusinessRules } from "../settings/businessRulesService";
 import { confirmAction } from "../../lib/confirm";
+import { debug } from "../../lib/debug";
 
 const DEFAULT_CONFIG: PricingConfig = {
   id: 1,
@@ -85,7 +86,7 @@ export function useSalesPage() {
         setVariants(vars);
       })
       .catch((e) => {
-        console.error("Error cargando catálogo o configuración:", e);
+        debug.error("Error cargando catálogo o configuración:", e);
         toast.error("No se pudo cargar el catálogo");
       });
     return () => {

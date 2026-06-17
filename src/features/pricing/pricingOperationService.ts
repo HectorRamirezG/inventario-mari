@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import type { PricingTier } from "./pricingTypes";
+import { debug } from "../../lib/debug";
 
 export interface PricingOperationPayload {
   product_id: string;
@@ -51,7 +52,7 @@ export async function savePricingOperation(r: any) {
     .select();
 
   if (error) {
-    console.error("Error al guardar operación:", error.message);
+    debug.error("Error al guardar operación:", error.message);
     throw error;
   }
 
@@ -70,7 +71,7 @@ export async function saveMultipleOperations(rows: any[]) {
   );
 
   if (validRows.length === 0) {
-    console.error("No hay filas válidas para guardar");
+    debug.error("No hay filas válidas para guardar");
     return;
   }
 
@@ -105,7 +106,7 @@ export async function saveMultipleOperations(rows: any[]) {
     .select();
 
   if (error) {
-    console.error("Error de Supabase:", error.message);
+    debug.error("Error de Supabase:", error.message);
     throw error;
   }
 

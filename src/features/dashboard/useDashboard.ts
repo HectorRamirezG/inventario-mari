@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react"
 import { getDashboardStats } from "./dashboardService"
 import type { DashboardStats } from "./dashboardTypes"
+import { debug } from "../../lib/debug"
 
 export function useDashboard(periodDays = 30) {
   const [stats, setStats] = useState<DashboardStats | null>(null)
@@ -13,7 +14,7 @@ export function useDashboard(periodDays = 30) {
       const data = await getDashboardStats(periodDays)
       setStats(data)
     } catch (error) {
-      console.error("Error en dashboard:", error)
+      debug.error("Error en dashboard:", error)
     } finally {
       setLoading(false)
     }

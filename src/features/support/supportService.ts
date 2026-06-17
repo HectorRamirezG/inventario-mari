@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { debug } from "../../lib/debug"
 
 export type SupportCategory = "damaged" | "shipping" | "comment"
 export type SupportStatus = "open" | "in_progress" | "resolved"
@@ -130,10 +131,10 @@ export async function createSupportTicket(input: {
 
     if (rows.length > 0) {
       const { error: insErr } = await supabase.from("notifications").insert(rows)
-      if (insErr) console.warn("[support] notif admin fallo:", insErr.message)
+      if (insErr) debug.warn("[support] notif admin fallo:", insErr.message)
     }
   } catch (e: any) {
-    console.warn("[support] notif admin excepción:", e?.message)
+    debug.warn("[support] notif admin excepción:", e?.message)
   }
 
   return ticketId
@@ -235,7 +236,7 @@ export async function resolveTicket(
         },
       })
     } catch (e: any) {
-      console.warn("[support] notif insert fallo:", e?.message)
+      debug.warn("[support] notif insert fallo:", e?.message)
     }
   }
 }

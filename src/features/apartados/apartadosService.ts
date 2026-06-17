@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase";
 import type { Sale } from "../../types/database";
+import { debug } from "../../lib/debug";
 
 /**
  * Lista las ventas/apartados con sus items y pagos asociados.
@@ -72,7 +73,7 @@ export async function listApartados(opts: {
 
   const { data, error } = await q;
   if (error) {
-    console.error("listApartados:", error.message);
+    debug.error("listApartados:", error.message);
     throw new Error(error.message);
   }
   return (data ?? []) as unknown as Sale[];
@@ -98,7 +99,7 @@ export async function getLatestProofActivity(
     .in("sale_id", saleIds)
     .order("created_at", { ascending: false });
   if (error) {
-    console.warn("getLatestProofActivity:", error.message);
+    debug.warn("getLatestProofActivity:", error.message);
     return {};
   }
   const map: Record<string, string> = {};

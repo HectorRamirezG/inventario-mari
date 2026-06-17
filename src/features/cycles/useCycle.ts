@@ -10,6 +10,7 @@ import {
   type InventoryCycle,
   type OperatingExpense,
 } from "./cyclesService"
+import { debug } from "../../lib/debug"
 
 interface CycleState {
   loading: boolean
@@ -62,7 +63,7 @@ export function useCycle() {
         expenses,
       })
     } catch (e) {
-      console.error(e)
+      debug.error(e)
       setState((s) => ({ ...s, loading: false }))
     }
   }, [])

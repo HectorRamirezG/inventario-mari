@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 // Asumo que este servicio ya trae los campos price_medio y price_mayoreo
 import { getPricingHistory } from "./pricingHistoryService";
+import { debug } from "../../lib/debug";
 
 export function usePricingHistory() {
   const [range, setRange] = useState<"7" | "30" | "90">("30");
@@ -21,7 +22,7 @@ export function usePricingHistory() {
       const data = await getPricingHistory({ fromISO, type: tier });
       setRows(data);
     } catch (e) {
-      console.error("Error al traer historial:", e);
+      debug.error("Error al traer historial:", e);
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { debug } from "../../lib/debug"
 
 export interface CustomerSnapshot {
   name: string
@@ -40,7 +41,7 @@ export async function searchCustomers(
     .limit(300) // tomamos un buffer y agrupamos en cliente
 
   if (error) {
-    console.error("searchCustomers:", error.message)
+    debug.error("searchCustomers:", error.message)
     return []
   }
 
