@@ -1,24 +1,61 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronRight, Sparkles, ShoppingBag, Receipt, X } from "lucide-react"
+import {
+  ChevronRight,
+  Sparkles,
+  ShoppingBag,
+  Receipt,
+  X,
+  Heart,
+  Camera,
+  Star,
+  type LucideIcon,
+} from "lucide-react"
 import { APP_CONSTANTS } from "../../lib/constants"
+import { useBusinessRules } from "../../features/settings/businessRulesService"
 
-const STEPS = [
+interface Step {
+  icon: LucideIcon
+  title: string
+  body: string
+  /** Si se especifica, solo se muestra cuando la regla está activa. */
+  flag?: "wishes_enabled" | "stories_enabled" | "reviews_enabled"
+}
+
+const ALL_STEPS: Step[] = [
   {
     icon: Sparkles,
     title: "Bienvenida a Beauty's Me",
-    body: "Explora el catálogo, guarda tus favoritos y aparta sin pagar todo de una.",
+    body: "Tu tienda completa de cosmética en línea. Explora el catálogo, guarda favoritos y aparta sin pagar todo de una.",
   },
   {
     icon: ShoppingBag,
     title: "Aparta tu pedido",
-    body: "Elige tus tonos, pulsa el botón rosa y captura tus datos (solo la primera vez).",
+    body: "Elige tus tonos, toca el botón rosa y captura tus datos solo la primera vez. Después es un solo clic.",
   },
   {
     icon: Receipt,
     title: "Sube tu pago",
-    body: "Al abonar te damos un ticket en línea y notificamos al equipo para que lo apruebe.",
+    body: "Al abonar te damos un ticket en línea y notificamos al equipo para que apruebe tu comprobante rápido.",
+  },
+  {
+    icon: Heart,
+    title: "Pídenos lo que no tenemos",
+    body: "¿Quieres un tono, marca o modelo en específico? Mándanos foto, talla y color. Te avisamos cuando lo tengamos.",
+    flag: "wishes_enabled",
+  },
+  {
+    icon: Camera,
+    title: "Stories del día",
+    body: "Arriba de la tienda verás nuestras novedades del día estilo Instagram. Toca cualquiera para verla en grande.",
+    flag: "stories_enabled",
+  },
+  {
+    icon: Star,
+    title: "Reseñas con foto",
+    body: "Después de probarlo, deja tu reseña con foto. Ayudas a otras clientas y a nosotras a mejorar.",
+    flag: "reviews_enabled",
   },
 ]
 
@@ -41,6 +78,14 @@ function markSeen() {
 export default function OnboardingTour() {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
+  const rules = useBusinessRules()
+
+  // Filtra los pasos según las reglas activas en este momento (Mari decide
+  // qué módulos ve el cliente y el tour solo presenta lo que sí va a ver).
+  const steps = useMemo(
+    () => ALL_STEPS.filter((s) => !s.flag || rules[s.flag]),
+    [rules]
+  )
 
   useEffect(() => {
     if (!wasSeen()) {
@@ -55,14 +100,14 @@ export default function OnboardingTour() {
   }
 
   function next() {
-    if (step === STEPS.length - 1) close()
+    if (step === steps.length - 1) close()
     else setStep((s) => s + 1)
   }
 
   if (typeof document === "undefined") return null
-  if (!open) return null
+  if (!open || steps.length === 0) return null
 
-  const s = STEPS[step]
+  const s = steps[Math.min(step, steps.length - 1)]
   const Icon = s.icon
 
   return createPortal(
@@ -99,17 +144,21 @@ export default function OnboardingTour() {
               <Icon size={22} />
             </div>
 
-            <h3 className="text-lg font-black tracking-tight">{s.title}</h3>
-            <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+            <h3 className="text-lg font-black tracking-tight leading-tight">
+              {s.title}
+            </h3>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
               {s.body}
             </p>
 
-            <div className="flex items-center gap-2 mt-5">
-              {STEPS.map((_, i) => (
+            <div className="flex items-center gap-1.5 mt-5 flex-wrap">
+              {steps.map((_, i) => (
                 <span
                   key={i}
                   className={`h-1.5 rounded-full transition-all ${
-                    i === step ? "w-6 bg-primary" : "w-1.5 bg-slate-200 dark:bg-slate-700"
+                    i === step
+                      ? "w-6 bg-primary"
+                      : "w-1.5 bg-slate-200 dark:bg-slate-700"
                   }`}
                 />
               ))}
@@ -129,7 +178,7 @@ export default function OnboardingTour() {
                 className="h-11 px-5 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-bloom"
                 style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
               >
-                {step === STEPS.length - 1 ? "Empezar" : "Siguiente"}
+                {step === steps.length - 1 ? "Empezar" : "Siguiente"}
                 <ChevronRight size={14} />
               </button>
             </div>
@@ -140,3 +189,4 @@ export default function OnboardingTour() {
     document.body
   )
 }
+

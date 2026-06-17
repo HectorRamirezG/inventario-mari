@@ -75,6 +75,23 @@ export default function ProductList() {
       window.removeEventListener("products:pick-for-variant", handler)
   }, [])
 
+  // Saltar directo a un producto (o filtrar) desde el CommandPalette
+  // universal search. Si pasa productId y existe en el catálogo cargado,
+  // abre su drawer; si solo pasa query, prefiltra el listado.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail ?? {}
+      if (detail.query) setQ(String(detail.query))
+      if (detail.productId) {
+        const found = products.find((p) => p.id === detail.productId)
+        if (found) openEdit(found)
+      }
+      setTimeout(() => searchRef.current?.focus(), 50)
+    }
+    window.addEventListener("products:focus", handler)
+    return () => window.removeEventListener("products:focus", handler)
+  }, [products])
+
   // Re-mapea el drawerProduct cuando se refresca el catálogo (para que
   // las variantes editadas/agregadas se vean reflejadas inmediatamente
   // dentro del Drawer abierto).

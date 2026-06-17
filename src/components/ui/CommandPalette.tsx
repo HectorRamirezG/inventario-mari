@@ -14,6 +14,10 @@ import {
   Receipt,
   X,
   CircleDollarSign,
+  Package,
+  ShoppingBag,
+  Loader2,
+  type LucideIcon,
 } from "lucide-react"
 import toast from "react-hot-toast"
 import { useTheme } from "../../lib/useTheme"
@@ -25,6 +29,11 @@ import {
 } from "../../lib/adminNav"
 import { useBusinessRules } from "../../features/settings/businessRulesService"
 import { useAuth } from "../../lib/useAuth"
+import { useDebouncedValue } from "../../lib/useDebouncedValue"
+import {
+  universalSearch,
+  type UniversalResult,
+} from "../../lib/universalSearch"
 
 interface Command {
   id: string
@@ -57,6 +66,7 @@ interface Props {
  */
 export default function CommandPalette({ open, onClose }: Props) {
   const [query, setQuery] = useState("")
+  const debouncedQuery = useDebouncedValue(query, 250)
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const { effective, toggle, setTheme } = useTheme()
@@ -64,14 +74,46 @@ export default function CommandPalette({ open, onClose }: Props) {
   const { role } = useAuth()
   const isAdmin = role === "admin"
 
+  // Resultados dinámicos (productos / ventas / clientes) que se obtienen
+  // de la BD cada vez que el usuario escribe 2+ caracteres.
+  const [dynamicResults, setDynamicResults] = useState<UniversalResult[]>([])
+  const [searching, setSearching] = useState(false)
+
   // Reset al abrir
   useEffect(() => {
     if (open) {
       setQuery("")
       setActive(0)
+      setDynamicResults([])
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [open])
+
+  // Lanza la búsqueda universal cuando cambia el query debounced.
+  useEffect(() => {
+    if (!open) return
+    const q = debouncedQuery.trim()
+    if (q.length < 2) {
+      setDynamicResults([])
+      setSearching(false)
+      return
+    }
+    let alive = true
+    setSearching(true)
+    universalSearch(q)
+      .then((res) => {
+        if (alive) setDynamicResults(res)
+      })
+      .catch(() => {
+        if (alive) setDynamicResults([])
+      })
+      .finally(() => {
+        if (alive) setSearching(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [debouncedQuery, open])
 
   /** Mapa AdminSection -> 'tab' que entiende el dispatcher de App.tsx */
   const sectionToTab: Record<string, string> = {
@@ -249,16 +291,69 @@ export default function CommandPalette({ open, onClose }: Props) {
     [navCommands, effective, toggle, setTheme]
   )
 
+  // Mezcla comandos estáticos con resultados dinámicos. Si hay query, los
+  // dinámicos van ARRIBA en su propio grupo "Resultados" para que el admin
+  // vea rápidamente el producto / venta / cliente que busca.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return allCommands
-    return allCommands.filter(
+    const dyn: Command[] = dynamicResults.map((r) => {
+      const icon: LucideIcon =
+        r.kind === "product"
+          ? Package
+          : r.kind === "sale"
+          ? ShoppingBag
+          : UserIcon
+      return {
+        id: `dyn-${r.kind}-${r.refId}`,
+        label: r.label,
+        hint: r.hint,
+        icon,
+        group: "Resultados",
+        run: () => {
+          if (r.kind === "product") {
+            navigate("inventario")
+            setTimeout(
+              () =>
+                dispatch("products:focus", {
+                  productId: r.refId,
+                  query: r.label,
+                }),
+              200
+            )
+          } else if (r.kind === "sale") {
+            navigate("apartados")
+            setTimeout(
+              () =>
+                dispatch("apartados:focus", {
+                  saleId: r.refId,
+                  query: r.label.split(" · ")[0],
+                }),
+              200
+            )
+          } else {
+            navigate("apartados")
+            setTimeout(
+              () =>
+                dispatch("apartados:focus", {
+                  query: r.refId, // email/nombre normalizado
+                }),
+              200
+            )
+          }
+        },
+      }
+    })
+
+    if (!q) return [...dyn, ...allCommands]
+
+    const staticFiltered = allCommands.filter(
       (c) =>
         c.label.toLowerCase().includes(q) ||
         (c.hint ?? "").toLowerCase().includes(q) ||
         c.group.toLowerCase().includes(q)
     )
-  }, [query, allCommands])
+    return [...dyn, ...staticFiltered]
+  }, [query, allCommands, dynamicResults])
 
   // Keyboard nav
   useEffect(() => {
@@ -322,7 +417,14 @@ export default function CommandPalette({ open, onClose }: Props) {
           >
             {/* Input */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-              <Search size={16} className="text-slate-400 shrink-0" />
+              {searching ? (
+                <Loader2
+                  size={16}
+                  className="text-primary shrink-0 animate-spin"
+                />
+              ) : (
+                <Search size={16} className="text-slate-400 shrink-0" />
+              )}
               <input
                 ref={inputRef}
                 value={query}
@@ -330,7 +432,7 @@ export default function CommandPalette({ open, onClose }: Props) {
                   setQuery(e.target.value)
                   setActive(0)
                 }}
-                placeholder="Buscar comandos, acciones, módulos…"
+                placeholder="Busca productos, clientes, folios, acciones…"
                 className="flex-1 bg-transparent border-none outline-none text-sm font-bold text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
               />
               <kbd className="hidden md:inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">

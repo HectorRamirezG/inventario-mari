@@ -1,32 +1,70 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, ChevronRight, Star, ShoppingBag } from "lucide-react"
+import {
+  Sparkles,
+  ChevronRight,
+  Star,
+  ShoppingBag,
+  Heart,
+  Camera,
+  PartyPopper,
+} from "lucide-react"
+import { useBusinessRules } from "../../features/settings/businessRulesService"
 
 interface Slide {
   title: string
   subtitle: string
   accent: string
   icon: React.ReactNode
+  /** Si se especifica, solo aparece cuando la regla está activa. */
+  flag?: "wishes_enabled" | "stories_enabled" | "reviews_enabled"
 }
 
-const SLIDES: Slide[] = [
+const ALL_SLIDES: Slide[] = [
   {
     title: "Aparta sin pagar todo hoy",
-    subtitle: "Bloquea tu pieza con un anticipo, paga el resto cuando puedas.",
+    subtitle: "Anticipo desde 20% · liquidas cuando puedas",
     accent: "from-fuchsia-500 to-pink-500",
     icon: <Sparkles size={16} className="text-white" />,
   },
   {
     title: "Mientras más, más barato",
-    subtitle: "Activa precios de mayoreo combinando productos del carrito.",
+    subtitle: "Combina productos y activa precios de mayoreo",
     accent: "from-amber-500 to-orange-500",
     icon: <Star size={16} className="text-white" />,
   },
   {
-    title: "Tu ticket vive en linea",
-    subtitle: "Comparte el link con quien quieras y revisa tu saldo cuando quieras.",
+    title: "Tu ticket vive en línea",
+    subtitle: "Comparte el link, revisa tu saldo cuando quieras",
     accent: "from-emerald-500 to-teal-500",
     icon: <ShoppingBag size={16} className="text-white" />,
+  },
+  {
+    title: "Pídenos lo que no tenemos",
+    subtitle: "Mándanos foto, talla y color · te avisamos al llegar",
+    accent: "from-pink-500 to-purple-500",
+    icon: <Heart size={16} className="text-white" />,
+    flag: "wishes_enabled",
+  },
+  {
+    title: "Mira las stories del día",
+    subtitle: "Novedades y promos arriba · estilo Instagram",
+    accent: "from-orange-500 to-rose-500",
+    icon: <Camera size={16} className="text-white" />,
+    flag: "stories_enabled",
+  },
+  {
+    title: "Reseñas reales de clientas",
+    subtitle: "Mira fotos y comentarios antes de elegir",
+    accent: "from-amber-500 to-pink-500",
+    icon: <Star size={16} className="text-white" />,
+    flag: "reviews_enabled",
+  },
+  {
+    title: "Bienvenida a Beauty's Me",
+    subtitle: "Cosmética premium con catálogo siempre fresco",
+    accent: "from-violet-500 to-fuchsia-500",
+    icon: <PartyPopper size={16} className="text-white" />,
   },
 ]
 
@@ -36,14 +74,34 @@ interface Props {
 }
 
 export default function ClientHero({ customerName, isLogged }: Props) {
+  const rules = useBusinessRules()
   const [idx, setIdx] = useState(0)
 
-  useEffect(() => {
-    const t = setInterval(() => setIdx((i) => (i + 1) % SLIDES.length), 4500)
-    return () => clearInterval(t)
-  }, [])
+  // Filtra slides según reglas activas. Cuando Mari apaga un módulo
+  // (wishes, stories, reviews) el slide correspondiente desaparece sin
+  // tocar código de este componente.
+  const slides = useMemo(
+    () => ALL_SLIDES.filter((s) => !s.flag || rules[s.flag]),
+    [rules]
+  )
 
-  const slide = SLIDES[idx]
+  // Si las reglas cambian y el índice queda fuera, reset.
+  useEffect(() => {
+    if (idx >= slides.length) setIdx(0)
+  }, [idx, slides.length])
+
+  useEffect(() => {
+    if (slides.length <= 1) return
+    const t = setInterval(
+      () => setIdx((i) => (i + 1) % slides.length),
+      4800
+    )
+    return () => clearInterval(t)
+  }, [slides.length])
+
+  if (slides.length === 0) return null
+
+  const slide = slides[Math.min(idx, slides.length - 1)]
   const greeting = isLogged ? "Hola de nuevo" : "Bienvenida"
   const firstName = (customerName ?? "").split(" ")[0] || "Linda"
 
@@ -59,9 +117,9 @@ export default function ClientHero({ customerName, isLogged }: Props) {
 
       <AnimatePresence mode="wait">
         <motion.button
-          key={idx}
+          key={`${slide.title}-${idx}`}
           type="button"
-          onClick={() => setIdx((i) => (i + 1) % SLIDES.length)}
+          onClick={() => setIdx((i) => (i + 1) % slides.length)}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
@@ -72,8 +130,10 @@ export default function ClientHero({ customerName, isLogged }: Props) {
             {slide.icon}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-black truncate">{slide.title}</p>
-            <p className="text-[11px] opacity-90 leading-snug truncate">
+            <p className="text-sm font-black leading-tight line-clamp-2">
+              {slide.title}
+            </p>
+            <p className="text-[11px] opacity-90 leading-snug line-clamp-2 mt-0.5">
               {slide.subtitle}
             </p>
           </div>
@@ -81,19 +141,24 @@ export default function ClientHero({ customerName, isLogged }: Props) {
         </motion.button>
       </AnimatePresence>
 
-      <div className="mt-2 flex justify-center gap-1.5">
-        {SLIDES.map((_, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => setIdx(i)}
-            aria-label={`Slide ${i + 1}`}
-            className={`h-1.5 rounded-full transition-all ${
-              i === idx ? "w-6 bg-primary" : "w-1.5 bg-slate-300 dark:bg-slate-700"
-            }`}
-          />
-        ))}
-      </div>
+      {slides.length > 1 && (
+        <div className="mt-2 flex justify-center gap-1.5 flex-wrap">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setIdx(i)}
+              aria-label={`Slide ${i + 1}`}
+              className={`h-1.5 rounded-full transition-all ${
+                i === idx
+                  ? "w-6 bg-primary"
+                  : "w-1.5 bg-slate-300 dark:bg-slate-700"
+              }`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
+

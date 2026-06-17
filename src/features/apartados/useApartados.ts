@@ -81,10 +81,18 @@ export function useApartados() {
       setOnlyLayaway(true);
     };
     window.addEventListener("apartados:filter-overdue", overdueHandler);
+    // Atajo desde el CommandPalette universal: filtra por folio/cliente
+    const focusHandler = (e: Event) => {
+      const detail = (e as CustomEvent).detail ?? {};
+      if (detail.query) setSearch(String(detail.query));
+      if (detail.saleId) setSearch(String(detail.saleId).slice(0, 8));
+    };
+    window.addEventListener("apartados:focus", focusHandler);
     return () => {
       window.removeEventListener("mari:apartado-refresh", handler);
       window.removeEventListener("mari:pull-refresh", handler);
       window.removeEventListener("apartados:filter-overdue", overdueHandler);
+      window.removeEventListener("apartados:focus", focusHandler);
     };
   }, [refresh]);
 
