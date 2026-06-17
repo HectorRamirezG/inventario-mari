@@ -9,11 +9,13 @@ import {
   Heart,
   Image as ImageIcon,
   Trash2,
+  CheckCircle2,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
 import { createWish, uploadWishImage } from "./wishesService"
 import { useAuth } from "../../lib/useAuth"
+import { fetchMyProfile, updateMyProfile } from "../profile/profileService"
 
 interface Props {
   open: boolean
@@ -45,12 +47,15 @@ export default function WishesDrawer({
   defaultEmail,
   onCreated,
 }: Props) {
-  const { session, email: authEmail, fullName } = useAuth()
+  const { session, user, email: authEmail, fullName } = useAuth()
   const isLogged = !!session
 
   const [email, setEmail] = useState(defaultEmail ?? authEmail ?? "")
   const [name, setName] = useState(fullName ?? "")
   const [phone, setPhone] = useState("")
+  /** Phone que YA estaba en el perfil al abrir (para saber si hay que actualizarlo). */
+  const [profilePhone, setProfilePhone] = useState<string | null>(null)
+  const [loadingProfile, setLoadingProfile] = useState(false)
   const [title, setTitle] = useState(productRef?.title ?? "")
   const [description, setDescription] = useState("")
   const [size, setSize] = useState("")
@@ -61,20 +66,48 @@ export default function WishesDrawer({
   )
   const [submitting, setSubmitting] = useState(false)
 
-  // Reset al abrir
+  // Cargar phone del perfil cuando el cliente está logueado.
+  // Evita pedirle datos que ya nos dio en su registro.
+  useEffect(() => {
+    if (!open || !isLogged || !user) {
+      setProfilePhone(null)
+      return
+    }
+    let alive = true
+    setLoadingProfile(true)
+    fetchMyProfile(user.id)
+      .then((p) => {
+        if (!alive) return
+        setProfilePhone(p?.phone ?? null)
+        setPhone(p?.phone ?? "")
+        if (p?.full_name) setName(p.full_name)
+        if (p?.email) setEmail(p.email)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setLoadingProfile(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [open, isLogged, user])
+
+  // Reset al abrir (campos del wish, NO los datos personales)
   useEffect(() => {
     if (open) {
-      setEmail(defaultEmail ?? authEmail ?? "")
-      setName(fullName ?? "")
-      setPhone("")
       setTitle(productRef?.title ?? "")
       setDescription("")
       setSize("")
       setColor("")
       setFile(null)
       setPreview(productRef?.image_url ?? null)
+      if (!isLogged) {
+        setEmail(defaultEmail ?? authEmail ?? "")
+        setName(fullName ?? "")
+        setPhone("")
+      }
     }
-  }, [open, defaultEmail, authEmail, fullName, productRef])
+  }, [open, productRef, isLogged, defaultEmail, authEmail, fullName])
 
   // Bloquear scroll body
   useEffect(() => {
@@ -108,7 +141,7 @@ export default function WishesDrawer({
     }
 
     setSubmitting(true)
-    const tid = toast.loading("Enviando tu deseo a Mari...")
+    const tid = toast.loading("Enviando tu deseo...")
 
     try {
       let imageUrl = productRef?.image_url ?? null
@@ -129,7 +162,13 @@ export default function WishesDrawer({
         color: color || null,
       })
 
-      toast.success("¡Listo! Mari recibió tu petición ✨", { id: tid })
+      // Si el cliente está logueado y capturó un phone que NO tenía en su
+      // perfil, lo guardamos ahí silenciosamente para no volver a pedirlo.
+      if (isLogged && user && phone.trim() && phone.trim() !== profilePhone) {
+        updateMyProfile(user.id, { phone: phone.trim() }).catch(() => {})
+      }
+
+      toast.success("¡Listo! BEAUTY'S ME recibió tu petición ✨", { id: tid })
       onCreated?.()
       onClose()
     } catch (e: any) {
@@ -188,11 +227,11 @@ export default function WishesDrawer({
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-slate-100">
-                      Pídelo a Mari
+                      Pídelo a BEAUTY'S ME
                     </h2>
                     <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
-                      Dinos qué buscas (talla, color, modelo). Mari revisa cada
-                      petición y te avisa.
+                      Dinos qué buscas (talla, color, modelo). Revisamos cada
+                      petición y te avisamos.
                     </p>
                   </div>
                 </div>
@@ -308,12 +347,12 @@ export default function WishesDrawer({
                 />
               </Field>
 
-              {/* Datos del cliente */}
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
-                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                  ¿Cómo te contactamos?
-                </p>
-                {!isLogged && (
+              {/* Datos del cliente — solo si NO está logueado o si falta phone */}
+              {!isLogged && (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    ¿Cómo te contactamos?
+                  </p>
                   <Field label="Nombre">
                     <input
                       type="text"
@@ -324,29 +363,63 @@ export default function WishesDrawer({
                       maxLength={80}
                     />
                   </Field>
-                )}
-                <Field label="Email" required>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={isLogged}
-                    placeholder="tu@email.com"
-                    className="settings-input disabled:opacity-60"
-                  />
-                </Field>
-                <Field label="WhatsApp">
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="55 1234 5678"
-                    className="settings-input"
-                    maxLength={20}
-                  />
-                </Field>
-              </div>
+                  <Field label="Email" required>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      placeholder="tu@email.com"
+                      className="settings-input"
+                    />
+                  </Field>
+                  <Field label="WhatsApp">
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="55 1234 5678"
+                      className="settings-input"
+                      maxLength={20}
+                    />
+                  </Field>
+                </div>
+              )}
+
+              {/* Logueado: ya sabemos quién eres. Si falta phone se lo pedimos
+                  una sola vez y lo guardamos en su perfil al enviar. */}
+              {isLogged && (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                  {loadingProfile ? (
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                      <Loader2 size={11} className="animate-spin" />
+                      Cargando tus datos…
+                    </div>
+                  ) : profilePhone ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                      <CheckCircle2
+                        size={13}
+                        className="text-emerald-600 dark:text-emerald-400 shrink-0"
+                      />
+                      <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 leading-tight">
+                        Te contactaremos al WhatsApp{" "}
+                        <b>{profilePhone}</b> que ya tienes guardado.
+                      </p>
+                    </div>
+                  ) : (
+                    <Field label="Tu WhatsApp (lo guardamos en tu perfil)">
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="55 1234 5678"
+                        className="settings-input"
+                        maxLength={20}
+                      />
+                    </Field>
+                  )}
+                </div>
+              )}
 
               {/* CTA */}
               <button
@@ -359,11 +432,11 @@ export default function WishesDrawer({
                 ) : (
                   <Heart size={14} />
                 )}
-                Enviar a Mari
+                Enviar petición
               </button>
 
               <p className="text-[9px] text-slate-400 dark:text-slate-500 text-center italic pt-1">
-                Mari revisa cada deseo en persona y te responde por WhatsApp o
+                Revisamos cada deseo en persona y te respondemos por WhatsApp o
                 en la sección "Mis deseos" 💛
               </p>
             </div>

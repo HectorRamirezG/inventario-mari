@@ -12,9 +12,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.svg'],
       manifest: {
-        name: 'Mari Inventario',
-        short_name: 'Mari Inv',
-        description: 'Sistema de inventario, ventas y precios para cosméticos',
+        name: "Beauty's Me",
+        short_name: "Beauty's Me",
+        description: 'Catálogo, apartados y ventas · Beauty\'s Me',
         theme_color: '#e6007e',
         background_color: '#ffffff',
         display: 'standalone',

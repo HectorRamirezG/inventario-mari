@@ -10,6 +10,8 @@ import { supabase } from "../../lib/supabase"
  *   • support_tickets, notifications
  *   • pricing_operations (historial de la calculadora)
  *   • wishes (sugerencias / wishlist server-side)
+ *   • stories (fotos del día)
+ *   • reviews (reseñas con foto)
  *   • inventory_cycles, capital_injections, operating_expenses
  *   • Todos los archivos del bucket `product-images` EXCEPTO la carpeta
  *     `avatars/` (fotos de perfil)
@@ -40,9 +42,11 @@ const TABLES_IN_ORDER = [
   "support_tickets",
   "sale_items",
   "sales",
-  // Operacionales
+  // Engagement / cliente
   "pricing_operations", // historial de la calculadora
   "wishes",             // sugerencias / wishlist server-side
+  "stories",            // fotos del día (efimeras)
+  "reviews",            // reseñas con foto
   // Catálogo
   "variants",
   "products",

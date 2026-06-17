@@ -361,7 +361,7 @@ export default function PublicTicketPage() {
                         ¡Se aplicó un descuento manual!
                       </p>
                       <p className="text-[10px] font-bold leading-tight opacity-80">
-                        Mari te apoyó con {formatMoney(adj)} en este pedido ✨
+                        Beauty's Me te apoyó con {formatMoney(adj)} en este pedido ✨
                       </p>
                     </div>
                   </motion.div>

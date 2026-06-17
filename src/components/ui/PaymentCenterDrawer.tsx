@@ -268,7 +268,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                     ¡Pago completo!
                   </p>
                   <p className="text-[12px] text-emerald-600/80 dark:text-emerald-300/80 mt-1">
-                    Gracias por confiar en Mari ✨
+                    Gracias por confiar en Beauty's Me ✨
                   </p>
                 </motion.div>
 
@@ -354,7 +354,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                         />
 
                         <p className="text-center text-[10px] font-bold text-slate-400 dark:text-slate-500 flex items-center justify-center gap-1">
-                          <ShieldCheck size={11} /> Mari validará tu pago y se
+                          <ShieldCheck size={11} /> Validaremos tu pago y se
                           abonará al saldo
                         </p>
                       </motion.div>
@@ -478,7 +478,7 @@ function ProofStatusBanner({
       title:
         proof.method === "efectivo"
           ? "Pago en efectivo · esperando confirmación"
-          : "Comprobante enviado · Mari lo está validando",
+          : "Comprobante enviado · lo estamos validando",
       sub:
         proof.amount && proof.amount > 0
           ? `Monto: ${formatMoney(Number(proof.amount))}`
@@ -488,7 +488,7 @@ function ProofStatusBanner({
       cls: "border-emerald-200 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
       iconCls: "bg-emerald-500 text-white",
       icon: <CheckCircle2 size={14} />,
-      title: "Pago aprobado por Mari",
+      title: "Pago aprobado",
       sub: `${formatMoney(Number(proof.amount) || 0)} · ${proof.method ?? "—"}`,
     },
     rejected: {

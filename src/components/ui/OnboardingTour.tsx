@@ -7,7 +7,7 @@ import { APP_CONSTANTS } from "../../lib/constants"
 const STEPS = [
   {
     icon: Sparkles,
-    title: "Bienvenida a Mari",
+    title: "Bienvenida a Beauty's Me",
     body: "Explora el catálogo, guarda tus favoritos y aparta sin pagar todo de una.",
   },
   {
@@ -18,7 +18,7 @@ const STEPS = [
   {
     icon: Receipt,
     title: "Sube tu pago",
-    body: "Al abonar te damos un ticket en línea y avisamos a Mari para que lo apruebe.",
+    body: "Al abonar te damos un ticket en línea y notificamos al equipo para que lo apruebe.",
   },
 ]
 

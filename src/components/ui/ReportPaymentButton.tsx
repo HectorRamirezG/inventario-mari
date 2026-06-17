@@ -134,8 +134,8 @@ export default function ReportPaymentButton({
       sound.success()
       toast.success(
         method === "efectivo"
-          ? "✓ Pago en efectivo registrado · Mari lo confirmará"
-          : "✓ Comprobante enviado a Mari",
+          ? "✓ Pago en efectivo registrado · lo confirmaremos"
+          : "✓ Comprobante enviado",
         { id: tid }
       )
       setAskAmount(false)
@@ -148,7 +148,7 @@ export default function ReportPaymentButton({
       // Mostramos error legible (típico: violación RLS o tamaño)
       const friendly =
         /row-level security/i.test(e?.message ?? "")
-          ? "Permiso denegado por el servidor. Avísale a Mari por WhatsApp."
+          ? "Permiso denegado por el servidor. Avísanos por WhatsApp."
           : e?.message ?? "No se pudo subir"
       toast.error(friendly, { id: tid })
     } finally {
@@ -244,8 +244,8 @@ export default function ReportPaymentButton({
 
         <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-snug">
           {isCash
-            ? "⚠️ Indica el monto exacto que entregarás/entregaste en efectivo. Mari lo confirmará al recibirlo."
-            : "⚠️ Escribe la cantidad exacta que aparece en tu captura, tal cual la enviaste. Mari lo revisará y abonará tu saldo."}
+            ? "⚠️ Indica el monto exacto que entregarás/entregaste en efectivo. Lo confirmaremos al recibirlo."
+            : "⚠️ Escribe la cantidad exacta que aparece en tu captura, tal cual la enviaste. La revisaremos y abonaremos tu saldo."}
         </p>
 
         <button
@@ -262,7 +262,7 @@ export default function ReportPaymentButton({
           ) : (
             <CheckCircle2 size={14} />
           )}
-          {isCash ? "Registrar pago en efectivo" : "Enviar a Mari para validar"}
+          {isCash ? "Registrar pago en efectivo" : "Enviar comprobante"}
         </button>
       </div>
     )
@@ -295,8 +295,8 @@ export default function ReportPaymentButton({
           <div className="min-w-0 flex-1">
             <p className="text-xs font-black text-amber-800 dark:text-amber-200 leading-tight">
               {lastPending.method === "efectivo"
-                ? "Pago en efectivo declarado · Mari lo confirmará al recibirlo"
-                : "Comprobante enviado · Mari lo está validando"}
+                ? "Pago en efectivo declarado · lo confirmaremos al recibirlo"
+                : "Comprobante enviado · lo estamos validando"}
             </p>
             <p className="text-[10px] font-bold text-amber-700/80 dark:text-amber-200/70 leading-snug mt-0.5">
               {lastPending.amount && lastPending.amount > 0
@@ -393,7 +393,7 @@ export default function ReportPaymentButton({
             </p>
             <p className="text-[10px] text-amber-800/80 dark:text-amber-200/70 leading-snug mt-0.5">
               Sube la captura de tu transferencia para que
-              <b> Mari valide tu pago</b>.
+              <b> validemos tu pago</b>.
             </p>
           </div>
         </div>

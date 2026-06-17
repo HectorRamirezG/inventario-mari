@@ -139,7 +139,7 @@ export const DEFAULT_RULES: BusinessRules = {
   auto_discount_min_items: 10,
   auto_discount_percent: 5,
   custom_ticket_message_enabled: false,
-  custom_ticket_message: "¡Gracias por tu compra! Síguenos en Instagram @mari",
+  custom_ticket_message: "¡Gracias por tu compra! Síguenos en Instagram @beautysme",
   auto_cancel_idle_enabled: false,
   auto_cancel_idle_days: 7,
   business_hours_enabled: false,

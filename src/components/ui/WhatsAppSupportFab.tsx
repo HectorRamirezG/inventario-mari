@@ -12,12 +12,12 @@ function buildPrefilledMessage(pathname: string): string {
   const ticketMatch = pathname.match(/^\/ticket\/([^/?#]+)/i)
   if (ticketMatch) {
     const token = ticketMatch[1].slice(0, 8).toUpperCase()
-    return `Hola Mari Cosméticos 💖, tengo una duda con mi apartado del Folio ${token}...`
+    return `Hola Beauty's Me 💖, tengo una duda con mi apartado del Folio ${token}...`
   }
   if (pathname.startsWith("/mis-pedidos")) {
-    return "Hola Mari Cosméticos 💖, tengo una duda sobre uno de mis pedidos..."
+    return "Hola Beauty's Me 💖, tengo una duda sobre uno de mis pedidos..."
   }
-  return "Hola Mari Cosméticos 💖, me gustaría preguntarte algo..."
+  return "Hola Beauty's Me 💖, me gustaría preguntarte algo..."
 }
 
 /**

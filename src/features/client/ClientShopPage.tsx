@@ -22,6 +22,7 @@ import {
   LifeBuoy,
   ScanLine,
   Heart,
+  Star,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -56,6 +57,8 @@ import {
 } from "../pricing/shippingService"
 import { getBusinessRules, useBusinessRules, isWithinBusinessHours } from "../settings/businessRulesService"
 import WishesDrawer from "../wishes/WishesDrawer"
+import StoriesBar from "../stories/StoriesBar"
+import ReviewsDrawer from "../reviews/ReviewsDrawer"
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -182,6 +185,12 @@ export default function ClientShopPage() {
   // Centro de soporte (cliente logueado o invitado)
   const [openSupport, setOpenSupport] = useState(false)
   const [openWishes, setOpenWishes] = useState(false)
+  /** Producto activo para abrir el drawer de reseñas. */
+  const [reviewsFor, setReviewsFor] = useState<{
+    id: string
+    name: string
+    image: string | null
+  } | null>(null)
 
   const [scannerOpen, setScannerOpen] = useState(false)
   const [onlyWishlist, setOnlyWishlist] = useState(false)
@@ -607,6 +616,8 @@ export default function ClientShopPage() {
         isLogged={isLogged}
       />
 
+      <StoriesBar enabled={bRules.stories_enabled} />
+
       {!shopOpen && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
@@ -825,6 +836,19 @@ export default function ClientShopPage() {
                   setBuySheetPreselectedVariant(variantId)
                   setBuySheetProduct(p)
                 }}
+                onOpenReviews={
+                  bRules.reviews_enabled
+                    ? () =>
+                        setReviewsFor({
+                          id: p.id,
+                          name: p.name,
+                          image:
+                            p.variants[0]?.image_urls?.[0] ??
+                            p.image_url ??
+                            null,
+                        })
+                    : undefined
+                }
               />
             ))}
           </motion.div>
@@ -865,7 +889,7 @@ export default function ClientShopPage() {
         <LifeBuoy size={18} />
       </motion.button>
 
-      {/* FAB "Pídelo a Mari" — solo si la regla wishes_enabled está activa */}
+      {/* FAB "Pídelo a Beauty's Me" — solo si la regla wishes_enabled está activa */}
       {bRules.wishes_enabled && (
         <motion.button
           type="button"
@@ -874,8 +898,8 @@ export default function ClientShopPage() {
           animate={{ scale: 1 }}
           transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.5 }}
           whileTap={{ scale: 0.9 }}
-          aria-label="Pídelo a Mari"
-          title="Pídele a Mari algo que no encuentras"
+          aria-label="Pídelo a Beauty's Me"
+          title="Pídenos algo que no encuentras"
           className="fixed bottom-[7.5rem] left-4 z-40 w-12 h-12 rounded-2xl text-white shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)] flex items-center justify-center hover:scale-105 transition-transform"
           style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
         >
@@ -1056,7 +1080,7 @@ export default function ClientShopPage() {
                   <ArrowRight size={14} />
                 </button>
                 <p className="text-[10px] text-center text-slate-400 dark:text-slate-500">
-                  Mari recibirá tu apartado y te contactará por WhatsApp.
+                  Recibiremos tu apartado y te contactaremos por WhatsApp.
                 </p>
               </div>
             </motion.div>
@@ -1097,7 +1121,7 @@ export default function ClientShopPage() {
                     Datos para tu apartado
                   </h3>
                   <p className="text-[10px] text-slate-500">
-                    Mari te contactará por WhatsApp.
+                    Te contactaremos por WhatsApp.
                   </p>
                 </div>
               </div>
@@ -1307,6 +1331,17 @@ export default function ClientShopPage() {
         defaultEmail={guest.email}
       />
 
+      {reviewsFor && bRules.reviews_enabled && (
+        <ReviewsDrawer
+          open={!!reviewsFor}
+          onClose={() => setReviewsFor(null)}
+          productId={reviewsFor.id}
+          productName={reviewsFor.name}
+          productImage={reviewsFor.image}
+          defaultEmail={guest.email}
+        />
+      )}
+
       <OnboardingTour />
     </div>
   )
@@ -1346,6 +1381,7 @@ function ProductCardClient({
   onToggleFavorite,
   onOpenLightbox,
   onOpenBuy,
+  onOpenReviews,
 }: {
   product: PublicProduct
   mode?: "focus" | "grid" | "list"
@@ -1353,6 +1389,7 @@ function ProductCardClient({
   onToggleFavorite?: () => void
   onOpenLightbox: (variantId: string) => void
   onOpenBuy: (variantId: string) => void
+  onOpenReviews?: () => void
 }) {
   // Variante visible (sincronizada con los chips: cambia al clic en chip)
   const [selected, setSelected] = useState<string | null>(
@@ -1607,6 +1644,23 @@ function ProductCardClient({
         )}
         {/* Pista de tier (mayoreo) */}
         <TierHint variant={variant} />
+
+        {/* Botón discreto "Reseñas" (solo si la regla está activa) */}
+        {onOpenReviews && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenReviews()
+            }}
+            className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:text-primary transition-colors mt-1 press"
+            aria-label="Ver reseñas"
+          >
+            <Star size={10} className="fill-amber-400 text-amber-400" />
+            <span>Reseñas</span>
+          </button>
+        )}
+
         <div className="flex items-center justify-between gap-2 mt-1">
           <div className="min-w-0 flex-1">
             <span

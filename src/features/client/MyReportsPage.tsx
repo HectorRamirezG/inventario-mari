@@ -131,7 +131,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
     <EmptyStateIllustration
       variant="no-orders"
       title="Aún no tienes reportes"
-      subtitle="Si algo no salió como esperabas, házselo saber a Mari aquí para resolverlo rápido."
+      subtitle="Si algo no salió como esperabas, házselo saber a Beauty's Me aquí para resolverlo rápido."
       cta={
         <button
           type="button"
@@ -212,7 +212,7 @@ function TicketCard({ ticket }: { ticket: SupportTicket }) {
 
       {ticket.status === "resolved" && !resolution && (
         <p className="mt-2 text-[10px] text-emerald-700 dark:text-emerald-300 font-bold">
-          Mari marcó tu reporte como resuelto.
+          Beauty's Me marcó tu reporte como resuelto.
         </p>
       )}
     </motion.article>

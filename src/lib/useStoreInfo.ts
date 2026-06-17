@@ -15,7 +15,7 @@ export interface StoreInfo {
 }
 
 const DEFAULT: StoreInfo = {
-  name: "Mari Cosméticos",
+  name: "Beauty's Me",
   tagline: "Tu tienda de confianza",
   phone: "",
   address: "",

@@ -177,7 +177,7 @@ export default function SupportModal({
                   ¡Recibido! 💖
                 </p>
                 <p className="text-[12px] text-slate-500 dark:text-slate-400 max-w-xs">
-                  Mari te contactará por WhatsApp lo antes posible para
+                  Te contactaremos por WhatsApp lo antes posible para
                   ayudarte con tu caso.
                 </p>
               </motion.div>

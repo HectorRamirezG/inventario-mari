@@ -149,7 +149,7 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
     const text = `Mi ticket en ${store.name} · Total ${formatMoney(ticket.total)}`
     if (navigator.share) {
       try {
-        await navigator.share({ title: "Ticket Mari", text, url })
+        await navigator.share({ title: "Ticket Beauty's Me", text, url })
       } catch {
         /* user cancelled */
       }
@@ -468,7 +468,7 @@ function SummarySection({
         )}
         {adj > 0 && (
           <Row
-            label={ticket.adjustment_reason || "Descuento Mari"}
+            label={ticket.adjustment_reason || "Descuento especial"}
             value={`- ${formatMoney(adj)}`}
             discount
           />
@@ -502,7 +502,7 @@ function SummarySection({
               ¡Se aplicó un descuento manual!
             </p>
             <p className="text-[10px] font-bold leading-tight opacity-80">
-              Mari te apoyó con {formatMoney(adj)} ✨
+              Te apoyamos con {formatMoney(adj)} ✨
             </p>
           </div>
         </motion.div>

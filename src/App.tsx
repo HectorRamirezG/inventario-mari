@@ -33,6 +33,8 @@ import {
   LifeBuoy,
   ScrollText,
   Heart,
+  Camera,
+  Star,
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
@@ -50,6 +52,8 @@ const ClientOrdersPage = lazy(() => import("./features/client/ClientOrdersPage")
 const MyReportsPage = lazy(() => import("./features/client/MyReportsPage"))
 const MyWishesPage = lazy(() => import("./features/wishes/MyWishesPage"))
 const WishAdminPage = lazy(() => import("./features/wishes/WishAdminPage"))
+const StoriesAdminPage = lazy(() => import("./features/stories/StoriesAdminPage"))
+const ReviewsAdminPage = lazy(() => import("./features/reviews/ReviewsAdminPage"))
 const CyclesPage = lazy(() => import("./features/cycles/CyclesPage"))
 const SupportPage = lazy(() => import("./features/support/SupportPage"))
 
@@ -86,6 +90,8 @@ type AdminSection =
   | "calculadora"
   | "soporte"
   | "sugerencias"
+  | "stories"
+  | "resenias"
   | "reglas"
   | "ajustes"
 
@@ -263,6 +269,7 @@ function AdminShell() {
   const [apartadoBadge, setApartadoBadge] = useState(0)
   const { role, signOut, fullName, email } = useAuth()
   const avatarUrl = useMyAvatar()
+  const rules = useBusinessRules()
   const isAdmin = role === "admin"
 
   // Calculamos la direccion del slide ANTES de actualizar el ref.
@@ -324,6 +331,11 @@ function AdminShell() {
         sugerencias: "sugerencias",
         deseos: "sugerencias",
         wishes: "sugerencias",
+        stories: "stories",
+        historias: "stories",
+        resenias: "resenias",
+        reseñas: "resenias",
+        reviews: "resenias",
         reglas: "reglas",
         settings: "ajustes",
       }
@@ -331,7 +343,9 @@ function AdminShell() {
       if (
         ADMIN_MENU.some((m) => m.id === next) ||
         next === "ajustes" ||
-        next === "sugerencias"
+        next === "sugerencias" ||
+        next === "stories" ||
+        next === "resenias"
       ) {
         setSection(next)
         if (next === "pendientes") setApartadoBadge(0)
@@ -444,6 +458,30 @@ function AdminShell() {
       accent: "linear-gradient(135deg,#ec4899,#a855f7)",
       onClick: () => setSection("sugerencias"),
     },
+    ...(rules.stories_enabled
+      ? [
+          {
+            id: "stories",
+            label: "Stories del día",
+            caption: "Fotos efimeras estilo Instagram",
+            icon: Camera,
+            accent: "linear-gradient(135deg,#f97316,#e6007e)",
+            onClick: () => setSection("stories"),
+          } as HubAction,
+        ]
+      : []),
+    ...(rules.reviews_enabled
+      ? [
+          {
+            id: "resenias",
+            label: "Reseñas",
+            caption: "Modera lo que dicen del producto",
+            icon: Star,
+            accent: "linear-gradient(135deg,#f59e0b,#ec4899)",
+            onClick: () => setSection("resenias"),
+          } as HubAction,
+        ]
+      : []),
     ...(isAdmin
       ? [
           {
@@ -478,7 +516,7 @@ function AdminShell() {
             style={{
               background: "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
             }}
-            aria-label="Mari"
+            aria-label="Beauty's Me"
           >
             <Sparkles className="text-white" size={20} />
           </Link>
@@ -690,6 +728,8 @@ function AdminShell() {
                     {section === "pendientes" && <ApartadosPage />}
                     {section === "soporte" && <SupportPage />}
                     {section === "sugerencias" && <WishAdminPage />}
+                    {section === "stories" && <StoriesAdminPage />}
+                    {section === "resenias" && <ReviewsAdminPage />}
                     {section === "ciclos" && isAdmin && <CyclesPage />}
                     {section === "calculadora" && isAdmin && <PricingPage />}
                     {section === "reglas" && isAdmin && <BusinessRulesPage />}
@@ -869,7 +909,7 @@ function ShopShell() {
             </div>
             <div className="min-w-0">
               <h1 className="text-sm font-black tracking-tighter leading-none">
-                Mari <span className="text-primary">Beauty</span>
+                Mari <span className="text-primary">Beauty's Me</span>
               </h1>
               <p className="text-[8px] uppercase tracking-widest text-slate-400 leading-tight mt-0.5">
                 {isLogged

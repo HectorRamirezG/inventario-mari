@@ -226,7 +226,7 @@ export async function resolveTicket(
         recipient_role: "client",
         type: "support_resolved",
         title: "Tu reporte fue resuelto",
-        body: message.trim() || "Mari resolvió tu incidencia. Si necesitas más ayuda, escríbele.",
+        body: message.trim() || "Resolvimos tu incidencia. Si necesitas más ayuda, escríbenos.",
         link: ticket.sale_id ? `/mis-pedidos` : null,
         metadata: {
           ticket_id: ticket.id,
@@ -279,7 +279,7 @@ export function buildSupportResolutionWhatsApp(
   const nameLine = ticket.customer_name ? `, ${ticket.customer_name.split(" ")[0]}` : ""
   const folio = ticket.sale_id ? ` (folio ${ticket.sale_id.slice(0, 8).toUpperCase()})` : ""
   const lines = [
-    `Hola${nameLine}, soy Mari.`,
+    `Hola${nameLine}, soy del equipo Beauty's Me.`,
     `Tu reporte${folio} ya fue resuelto:`,
     "",
     message.trim() || "Listo, todo arreglado. Cualquier cosa avísame.",
@@ -304,7 +304,7 @@ export function buildSupportWhatsApp(ticket: SupportTicket): string {
 
   const lines = [
     `Hola${nameLine} 👋`,
-    `Soy Mari, recibí tu mensaje sobre:`,
+    `Equipo Beauty's Me, recibimos tu mensaje sobre:`,
     `*${cat}*`,
     ticket.description ? `\n"${ticket.description}"` : "",
     `\n¿Cómo te puedo ayudar a resolverlo? ✨`,

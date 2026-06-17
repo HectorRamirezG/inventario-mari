@@ -25,7 +25,7 @@ export default function RequestExtensionButton({
 
   async function submit() {
     setBusy(true)
-    const tid = toast.loading("Enviando solicitud a Mari...")
+    const tid = toast.loading("Enviando solicitud...")
     try {
       await requestLayawayExtension({
         saleId,
@@ -49,7 +49,7 @@ export default function RequestExtensionButton({
       <div className="mt-3 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border-2 border-emerald-200 dark:border-emerald-500/30 p-3 flex items-center gap-2">
         <Clock4 size={14} className="text-emerald-600 dark:text-emerald-400" />
         <p className="text-[11px] font-black text-emerald-700 dark:text-emerald-300">
-          Mari recibió tu solicitud · te contactará pronto
+          Recibimos tu solicitud · te contactaremos pronto
         </p>
       </div>
     )

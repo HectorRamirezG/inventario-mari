@@ -103,7 +103,7 @@ export default function MyWishesPage() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-black text-emerald-900 dark:text-emerald-100 leading-tight">
-              ¡Mari ya tiene {readyCount} de tus deseos!
+              ¡Beauty's Me ya tiene {readyCount} de tus deseos!
             </p>
             <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 leading-tight mt-0.5">
               Pasa a buscarlos o pídelos por WhatsApp.
@@ -122,7 +122,7 @@ export default function MyWishesPage() {
           <EmptyStateIllustration
             variant="cart-empty"
             title="Aún no has pedido nada"
-            subtitle="Cuéntale a Mari qué buscas — talla, color, modelo — y te avisa cuando lo tenga."
+            subtitle="Cuéntale a Beauty's Me qué buscas — talla, color, modelo — y te avisa cuando lo tenga."
             cta={
               <button
                 onClick={() => setDrawerOpen(true)}
@@ -213,7 +213,7 @@ export default function MyWishesPage() {
                     </div>
                   </div>
 
-                  {/* Nota de Mari (admin) */}
+                  {/* Nota de Beauty's Me (admin) */}
                   {w.admin_note && (
                     <div className="mx-3 mb-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 flex items-start gap-2">
                       <MessageCircle
@@ -222,7 +222,7 @@ export default function MyWishesPage() {
                       />
                       <p className="text-[10px] font-bold text-primary leading-snug">
                         <span className="font-black uppercase tracking-widest text-[8px] block mb-0.5">
-                          Mensaje de Mari
+                          Mensaje de Beauty's Me
                         </span>
                         {w.admin_note}
                       </p>

@@ -477,7 +477,7 @@ export default function CommandPalette({ open, onClose }: Props) {
                 </span>
               </div>
               <span className="text-[9px] font-black uppercase tracking-widest text-primary">
-                <Tag size={9} className="inline mr-0.5" /> Mari OS
+                <Tag size={9} className="inline mr-0.5" /> Beauty's Me OS
               </span>
             </div>
           </motion.div>

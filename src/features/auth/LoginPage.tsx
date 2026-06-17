@@ -306,7 +306,7 @@ export default function LoginPage() {
         )}
 
         <p className="text-center text-[10px] uppercase tracking-widest text-slate-400 mt-6">
-          Mari · v2 · Premium
+          BEAUTY'S ME · v2 · Premium
         </p>
       </motion.div>
     </div>
