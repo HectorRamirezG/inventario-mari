@@ -19,6 +19,8 @@ import {
   Smartphone,
   PartyPopper,
   Sparkles,
+  Calculator,
+  Percent,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
@@ -39,6 +41,11 @@ import {
   saveBankAccount,
   DEFAULT_BANK,
 } from "./bankAccountService"
+import {
+  getPricingConfig,
+  savePricingConfig,
+} from "../pricing/pricingConfigService"
+import type { PricingConfig } from "../pricing/pricingTypes"
 import { resetAppData, type ResetReport } from "./resetAppService"
 import { confirmAction } from "../../lib/confirm"
 import { useUserPrefs } from "../../lib/userPrefs"
@@ -375,6 +382,9 @@ export default function SettingsPage() {
         </Section>
       )}
 
+      {/* CALCULADORA DE PRECIOS — solo admin */}
+      {isAdmin && <PricingPrefsSection />}
+
       {/* PREFERENCIAS DEL USUARIO */}
       <UserPrefsSection />
 
@@ -476,6 +486,166 @@ function Field({
       </span>
       {children}
     </label>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   PREFERENCIAS DE LA CALCULADORA — márgenes y costos fijos.
+   Persistido en `pricing_config` (fila id=1). Se usa al sugerir
+   precios en la calculadora y como costo extra al analizar producto.
+   ════════════════════════════════════════════════════════════════════ */
+function PricingPrefsSection() {
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [cfg, setCfg] = useState<PricingConfig>({
+    id: 1,
+    margen_menudeo: 30,
+    margen_medio: 25,
+    margen_mayoreo: 20,
+    umbral_medio: 6,
+    umbral_mayoreo: 12,
+    costo_extra: 0,
+  })
+
+  useEffect(() => {
+    let alive = true
+    getPricingConfig()
+      .then((d) => alive && setCfg(d))
+      .catch(() => {})
+      .finally(() => alive && setLoading(false))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await savePricingConfig(cfg)
+      toast.success("Calculadora actualizada ✓")
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo guardar")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <section className="surface-card p-5 mb-4 flex items-center justify-center h-32">
+        <Loader2 size={18} className="animate-spin text-primary" />
+      </section>
+    )
+  }
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="surface-card p-5 mb-4 space-y-3"
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+          <Calculator size={14} />
+        </div>
+        <div>
+          <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
+            Calculadora de precios
+          </h3>
+          <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500">
+            Márgenes sugeridos y costo extra por análisis
+          </p>
+        </div>
+      </div>
+
+      {/* Márgenes */}
+      <div className="space-y-2">
+        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <Percent size={11} /> Márgenes de utilidad sugeridos
+        </p>
+        {[
+          {
+            key: "margen_menudeo" as const,
+            label: "Menudeo",
+            hint: "1 a 5 pz",
+          },
+          {
+            key: "margen_medio" as const,
+            label: "Medio mayoreo",
+            hint: `desde ${cfg.umbral_medio} pz`,
+          },
+          {
+            key: "margen_mayoreo" as const,
+            label: "Mayoreo total",
+            hint: `desde ${cfg.umbral_mayoreo} pz`,
+          },
+        ].map((item) => (
+          <div
+            key={item.key}
+            className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60"
+          >
+            <div className="min-w-0">
+              <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 leading-tight">
+                {item.label}
+              </p>
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-tight">
+                {item.hint}
+              </p>
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={200}
+                value={cfg[item.key]}
+                onChange={(e) =>
+                  setCfg({ ...cfg, [item.key]: Number(e.target.value) || 0 })
+                }
+                className="h-9 w-24 pr-7 pl-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[12px] font-black tabular-nums text-center outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 text-slate-900 dark:text-slate-100"
+              />
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 dark:text-slate-500">
+                %
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Costo extra fijo */}
+      <Field label="Gasto fijo por análisis ($)">
+        <input
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="0.01"
+          value={cfg.costo_extra}
+          onChange={(e) =>
+            setCfg({ ...cfg, costo_extra: Number(e.target.value) || 0 })
+          }
+          className="settings-input"
+          placeholder="0.00"
+        />
+      </Field>
+      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+        El <b>gasto fijo</b> se suma al costo del producto en cada análisis de la
+        calculadora (ej: comisión de pasarela, empaque). Los <b>umbrales de piezas</b> para
+        cambiar de tier se configuran arriba en <b>Precios por volumen</b>.
+      </p>
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full h-11 mt-1 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom active:scale-95 disabled:opacity-50"
+      >
+        {saving ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <Save size={14} />
+        )}
+        Guardar calculadora
+      </button>
+    </motion.section>
   )
 }
 

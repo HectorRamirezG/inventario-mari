@@ -22,6 +22,10 @@ import {
   CalendarClock,
   Sun,
   MessageSquare,
+  Heart,
+  Camera,
+  Star,
+  ToggleRight,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -390,6 +394,37 @@ export default function BusinessRulesPage() {
           description="Después de cerrar el ciclo de inventario del mes, los pedidos viejos no se pueden modificar."
           enabled={form.lock_edit_when_cycle_closed}
           onToggle={(v) => patch({ lock_edit_when_cycle_closed: v })}
+        />
+      </Section>
+
+      {/* MÓDULOS DEL CLIENTE */}
+      <Section
+        icon={<ToggleRight size={14} />}
+        title="Módulos del cliente"
+        subtitle="Activa o desactiva secciones completas de la tienda"
+      >
+        <RuleRow
+          icon={Heart}
+          title="Mis deseos / Sugerencias"
+          description="El cliente puede pedir productos (con foto, talla, modelo) que quiere que tengas. Aparece como FAB en la tienda y pestaña en el dock."
+          enabled={form.wishes_enabled}
+          onToggle={(v) => patch({ wishes_enabled: v })}
+        />
+
+        <RuleRow
+          icon={Camera}
+          title="Stories del día"
+          description="Mari sube 3-5 fotos diarias estilo Instagram dentro de la tienda. El cliente las ve al abrir. (Pendiente de implementar)"
+          enabled={form.stories_enabled}
+          onToggle={(v) => patch({ stories_enabled: v })}
+        />
+
+        <RuleRow
+          icon={Star}
+          title="Reseñas con foto"
+          description="Los clientes suben reseñas con foto del producto. Mari aprueba antes de publicar. Vista compacta dentro de cada producto. (Pendiente de implementar)"
+          enabled={form.reviews_enabled}
+          onToggle={(v) => patch({ reviews_enabled: v })}
         />
       </Section>
 

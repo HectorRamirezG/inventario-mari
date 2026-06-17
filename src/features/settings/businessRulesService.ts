@@ -84,6 +84,23 @@ export interface BusinessRules {
    *  Se evalúa en el Dashboard al cargar; aparece en el banner superior. */
   daily_pending_alert_enabled: boolean
   daily_pending_alert_threshold: number
+
+  /* ════════════════ MÓDULOS DEL CLIENTE (switcheables) ════════════════
+   * Cada uno activa/desactiva una sección completa de la PWA del cliente.
+   * Filosofía: Mari decide qué ver el cliente. Si apaga uno, desaparece.
+   * ═══════════════════════════════════════════════════════════════════════ */
+
+  /** Módulo "Mis deseos" del cliente: petición de productos
+   *  (catalogo o externos). Si está apagado, el FAB y la pestaña se ocultan. */
+  wishes_enabled: boolean
+
+  /** Stories del día (estilo Instagram dentro de la tienda).
+   *  Pendiente de implementar. Toggle ya disponible para reservar el flag. */
+  stories_enabled: boolean
+
+  /** Reseñas con foto del cliente (dentro de cada producto, vista compacta).
+   *  Pendiente de implementar. Toggle reservado. */
+  reviews_enabled: boolean
 }
 
 export const DEFAULT_RULES: BusinessRules = {
@@ -130,6 +147,11 @@ export const DEFAULT_RULES: BusinessRules = {
   business_hours_close: "21:00",
   daily_pending_alert_enabled: false,
   daily_pending_alert_threshold: 3000,
+
+  // Módulos del cliente
+  wishes_enabled: true,
+  stories_enabled: false,
+  reviews_enabled: false,
 }
 
 let cache: BusinessRules | null = null
@@ -185,6 +207,11 @@ function merge(raw: any): BusinessRules {
     daily_pending_alert_enabled: !!raw.daily_pending_alert_enabled,
     daily_pending_alert_threshold:
       Number(raw.daily_pending_alert_threshold) || DEFAULT_RULES.daily_pending_alert_threshold,
+
+    // Módulos del cliente (default según DEFAULT_RULES)
+    wishes_enabled: raw.wishes_enabled ?? DEFAULT_RULES.wishes_enabled,
+    stories_enabled: raw.stories_enabled ?? DEFAULT_RULES.stories_enabled,
+    reviews_enabled: raw.reviews_enabled ?? DEFAULT_RULES.reviews_enabled,
   }
 }
 

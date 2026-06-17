@@ -32,6 +32,7 @@ import {
   User as UserIcon,
   LifeBuoy,
   ScrollText,
+  Heart,
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
@@ -47,6 +48,8 @@ const SettingsPage = lazy(() => import("./features/settings/SettingsPage"))
 const BusinessRulesPage = lazy(() => import("./features/settings/BusinessRulesPage"))
 const ClientOrdersPage = lazy(() => import("./features/client/ClientOrdersPage"))
 const MyReportsPage = lazy(() => import("./features/client/MyReportsPage"))
+const MyWishesPage = lazy(() => import("./features/wishes/MyWishesPage"))
+const WishAdminPage = lazy(() => import("./features/wishes/WishAdminPage"))
 const CyclesPage = lazy(() => import("./features/cycles/CyclesPage"))
 const SupportPage = lazy(() => import("./features/support/SupportPage"))
 
@@ -69,7 +72,7 @@ import { useTheme } from "./lib/useTheme"
 import { useAuth, isStaffOrAdmin } from "./lib/useAuth"
 import { useRealtimeNotifications } from "./lib/useRealtime"
 import { useMyAvatar } from "./lib/useMyAvatar"
-import { preloadBusinessRules } from "./features/settings/businessRulesService"
+import { preloadBusinessRules, useBusinessRules } from "./features/settings/businessRulesService"
 
 // ──────────────────────────────────────────────────────────────────
 // Menús del shell admin/staff. Etiquetas más cortas y orientadas a acción.
@@ -82,6 +85,7 @@ type AdminSection =
   | "ciclos"
   | "calculadora"
   | "soporte"
+  | "sugerencias"
   | "reglas"
   | "ajustes"
 
@@ -317,11 +321,18 @@ function AdminShell() {
         ciclos: "ciclos",
         soporte: "soporte",
         incidencias: "soporte",
+        sugerencias: "sugerencias",
+        deseos: "sugerencias",
+        wishes: "sugerencias",
         reglas: "reglas",
         settings: "ajustes",
       }
       const next = (legacy[t] ?? t) as AdminSection
-      if (ADMIN_MENU.some((m) => m.id === next) || next === "ajustes") {
+      if (
+        ADMIN_MENU.some((m) => m.id === next) ||
+        next === "ajustes" ||
+        next === "sugerencias"
+      ) {
         setSection(next)
         if (next === "pendientes") setApartadoBadge(0)
       }
@@ -424,6 +435,14 @@ function AdminShell() {
       icon: LifeBuoy,
       accent: "linear-gradient(135deg,#0ea5e9,#6366f1)",
       onClick: () => setSection("soporte"),
+    },
+    {
+      id: "sugerencias",
+      label: "Sugerencias",
+      caption: "Lo que tus clientes te piden",
+      icon: Heart,
+      accent: "linear-gradient(135deg,#ec4899,#a855f7)",
+      onClick: () => setSection("sugerencias"),
     },
     ...(isAdmin
       ? [
@@ -670,6 +689,7 @@ function AdminShell() {
                     {section === "caja" && <SalesPage />}
                     {section === "pendientes" && <ApartadosPage />}
                     {section === "soporte" && <SupportPage />}
+                    {section === "sugerencias" && <WishAdminPage />}
                     {section === "ciclos" && isAdmin && <CyclesPage />}
                     {section === "calculadora" && isAdmin && <PricingPage />}
                     {section === "reglas" && isAdmin && <BusinessRulesPage />}
@@ -819,7 +839,8 @@ function DockButton({
 
 const SHOP_TABS = [
   { to: "/", label: "Tienda", icon: Store, requiresAuth: false },
-  { to: "/mis-pedidos", label: "Mis pedidos", icon: ReceiptIcon, requiresAuth: true },
+  { to: "/mis-pedidos", label: "Pedidos", icon: ReceiptIcon, requiresAuth: true },
+  { to: "/mis-deseos", label: "Deseos", icon: Heart, requiresAuth: true },
   { to: "/mis-reportes", label: "Reportes", icon: LifeBuoy, requiresAuth: true },
 ] as const
 
@@ -830,6 +851,7 @@ function ShopShell() {
   const loc = useLocation()
   const navigate = useNavigate()
   const [profileOpen, setProfileOpen] = useState(false)
+  const rules = useBusinessRules()
 
   const showAdminLink = isLogged && isStaffOrAdmin(role)
 
@@ -935,6 +957,20 @@ function ShopShell() {
                     )
                   }
                 />
+                <Route
+                  path="/mis-deseos"
+                  element={
+                    isLogged ? (
+                      <MyWishesPage />
+                    ) : (
+                      <Navigate
+                        to="/login"
+                        replace
+                        state={{ from: "/mis-deseos" }}
+                      />
+                    )
+                  }
+                />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
@@ -946,6 +982,9 @@ function ShopShell() {
       <nav className="fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-pink-50 dark:border-slate-800 shadow-[0_-8px_30px_-15px_rgba(230,0,126,0.18)]">
         <div className="relative h-12 flex items-center justify-around max-w-md mx-auto pb-safe">
             {SHOP_TABS.map((t) => {
+              const visible =
+                t.to !== "/mis-deseos" || rules.wishes_enabled
+              if (!visible) return null
               const active = loc.pathname === t.to
               const Icon = t.icon
               const blocked = t.requiresAuth && !isLogged

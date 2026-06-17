@@ -55,6 +55,7 @@ import {
   calcShipping,
 } from "../pricing/shippingService"
 import { getBusinessRules, useBusinessRules, isWithinBusinessHours } from "../settings/businessRulesService"
+import WishesDrawer from "../wishes/WishesDrawer"
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -180,6 +181,7 @@ export default function ClientShopPage() {
 
   // Centro de soporte (cliente logueado o invitado)
   const [openSupport, setOpenSupport] = useState(false)
+  const [openWishes, setOpenWishes] = useState(false)
 
   const [scannerOpen, setScannerOpen] = useState(false)
   const [onlyWishlist, setOnlyWishlist] = useState(false)
@@ -863,6 +865,24 @@ export default function ClientShopPage() {
         <LifeBuoy size={18} />
       </motion.button>
 
+      {/* FAB "Pídelo a Mari" — solo si la regla wishes_enabled está activa */}
+      {bRules.wishes_enabled && (
+        <motion.button
+          type="button"
+          onClick={() => setOpenWishes(true)}
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.5 }}
+          whileTap={{ scale: 0.9 }}
+          aria-label="Pídelo a Mari"
+          title="Pídele a Mari algo que no encuentras"
+          className="fixed bottom-[7.5rem] left-4 z-40 w-12 h-12 rounded-2xl text-white shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)] flex items-center justify-center hover:scale-105 transition-transform"
+          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+        >
+          <Heart size={18} fill="white" />
+        </motion.button>
+      )}
+
       {/* Drawer carrito */}
       <AnimatePresence>
         {openCart && (
@@ -1279,6 +1299,12 @@ export default function ClientShopPage() {
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onScan={handleScan}
+      />
+
+      <WishesDrawer
+        open={openWishes}
+        onClose={() => setOpenWishes(false)}
+        defaultEmail={guest.email}
       />
 
       <OnboardingTour />
