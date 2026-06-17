@@ -54,7 +54,7 @@ import {
   useShippingConfig,
   calcShipping,
 } from "../pricing/shippingService"
-import { getBusinessRules } from "../settings/businessRulesService"
+import { getBusinessRules, useBusinessRules, isWithinBusinessHours } from "../settings/businessRulesService"
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -164,6 +164,10 @@ export default function ClientShopPage() {
   const [openGuestForm, setOpenGuestForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [guest, setGuest] = useState<GuestInfo>(() => loadGuest())
+
+  // Reglas de negocio (reactivas a cambios del admin en tiempo real)
+  const bRules = useBusinessRules()
+  const shopOpen = isWithinBusinessHours(bRules)
 
   // Bottom Sheet de compra (estilo Shein): se abre con el botón "+" de la card
   const [buySheetProduct, setBuySheetProduct] = useState<PublicProduct | null>(null)
@@ -483,6 +487,15 @@ export default function ClientShopPage() {
       return
     }
 
+    // Regla de negocio: bloquear checkout fuera de horario comercial
+    if (!isWithinBusinessHours(bRules)) {
+      toast.error(
+        `Tienda cerrada. Volvemos a las ${bRules.business_hours_open}. Tu carrito se guarda 💛`,
+        { duration: 4200 }
+      )
+      return
+    }
+
     // Regla de negocio: tope de apartados pendientes simultáneos por cliente
     const rules = getBusinessRules()
     if (rules.max_layaways_enabled) {
@@ -591,6 +604,26 @@ export default function ClientShopPage() {
         customerName={guest.name || authName}
         isLogged={isLogged}
       />
+
+      {!shopOpen && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-3 rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 px-4 py-3 flex items-center gap-3"
+        >
+          <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-base">
+            🌙
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-black text-amber-900 dark:text-amber-100 leading-tight">
+              Estamos cerrados
+            </p>
+            <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-tight mt-0.5">
+              Horario: {bRules.business_hours_open} a {bRules.business_hours_close}. Puedes seguir explorando, los pedidos se procesan mañana ✨
+            </p>
+          </div>
+        </motion.div>
+      )}
 
       {cart.length === 0 && (
         <AbandonedCartBanner

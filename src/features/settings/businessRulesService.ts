@@ -45,6 +45,45 @@ export interface BusinessRules {
   /** Una vez que el ciclo de inventario está cerrado, prohíbe editar
    *  pedidos viejos (no se pueden quitar artículos del histórico). */
   lock_edit_when_cycle_closed: boolean
+
+  /* ════════════════════ NUEVAS REGLAS (2026-06-17) ════════════════════ */
+
+  /** Bloquea agregar al carrito (cliente) / vender (admin) cuando stock = 0.
+   *  Si está apagada, permite pre-orden (vender en negativo). */
+  block_oversell: boolean
+
+  /** Días extra de gracia para clientes VIP (RFM tier "vip"). Se SUMA
+   *  a `cancellation_grace_days` al evaluar `canCancelSale`. */
+  vip_extra_grace_enabled: boolean
+  vip_extra_grace_days: number
+
+  /** Descuento automático cuando el carrito supera N piezas o N pesos.
+   *  Se aplica como sugerencia en SalesPage (el admin decide aplicarlo). */
+  auto_discount_enabled: boolean
+  auto_discount_min_items: number
+  auto_discount_percent: number
+
+  /** Mensaje personalizado que aparece en el ticket del cliente
+   *  (debajo de los items, antes del total). Útil para promos
+   *  temporales, advertencias, agradecimientos especiales. */
+  custom_ticket_message_enabled: boolean
+  custom_ticket_message: string
+
+  /** Auto-cancelar apartados sin abono pasados N días.
+   *  Solo afecta apartados con `paid = 0` (nunca tocados). */
+  auto_cancel_idle_enabled: boolean
+  auto_cancel_idle_days: number
+
+  /** Cierra la ventana de venta fuera de horario (admin sigue siempre).
+   *  Solo afecta al carrito del cliente público en /tienda. */
+  business_hours_enabled: boolean
+  business_hours_open: string // "09:00"
+  business_hours_close: string // "21:00"
+
+  /** Alerta diaria al admin cuando "por cobrar" del día supera el umbral.
+   *  Se evalúa en el Dashboard al cargar; aparece en el banner superior. */
+  daily_pending_alert_enabled: boolean
+  daily_pending_alert_threshold: number
 }
 
 export const DEFAULT_RULES: BusinessRules = {
@@ -74,6 +113,23 @@ export const DEFAULT_RULES: BusinessRules = {
   stock_alert_threshold: 3,
 
   lock_edit_when_cycle_closed: false,
+
+  // Nuevas
+  block_oversell: true,
+  vip_extra_grace_enabled: false,
+  vip_extra_grace_days: 2,
+  auto_discount_enabled: false,
+  auto_discount_min_items: 10,
+  auto_discount_percent: 5,
+  custom_ticket_message_enabled: false,
+  custom_ticket_message: "¡Gracias por tu compra! Síguenos en Instagram @mari",
+  auto_cancel_idle_enabled: false,
+  auto_cancel_idle_days: 7,
+  business_hours_enabled: false,
+  business_hours_open: "09:00",
+  business_hours_close: "21:00",
+  daily_pending_alert_enabled: false,
+  daily_pending_alert_threshold: 3000,
 }
 
 let cache: BusinessRules | null = null
@@ -102,6 +158,33 @@ function merge(raw: any): BusinessRules {
     stock_alert_threshold:
       Number(raw.stock_alert_threshold) || DEFAULT_RULES.stock_alert_threshold,
     lock_edit_when_cycle_closed: !!raw.lock_edit_when_cycle_closed,
+
+    // Nuevas (con defaults si no existen aún en BD)
+    block_oversell: raw.block_oversell ?? DEFAULT_RULES.block_oversell,
+    vip_extra_grace_enabled: !!raw.vip_extra_grace_enabled,
+    vip_extra_grace_days: Number(raw.vip_extra_grace_days) || DEFAULT_RULES.vip_extra_grace_days,
+    auto_discount_enabled: !!raw.auto_discount_enabled,
+    auto_discount_min_items: Number(raw.auto_discount_min_items) || DEFAULT_RULES.auto_discount_min_items,
+    auto_discount_percent: Number(raw.auto_discount_percent) || DEFAULT_RULES.auto_discount_percent,
+    custom_ticket_message_enabled: !!raw.custom_ticket_message_enabled,
+    custom_ticket_message:
+      typeof raw.custom_ticket_message === "string" && raw.custom_ticket_message.trim()
+        ? raw.custom_ticket_message
+        : DEFAULT_RULES.custom_ticket_message,
+    auto_cancel_idle_enabled: !!raw.auto_cancel_idle_enabled,
+    auto_cancel_idle_days: Number(raw.auto_cancel_idle_days) || DEFAULT_RULES.auto_cancel_idle_days,
+    business_hours_enabled: !!raw.business_hours_enabled,
+    business_hours_open:
+      typeof raw.business_hours_open === "string" && /^\d{2}:\d{2}$/.test(raw.business_hours_open)
+        ? raw.business_hours_open
+        : DEFAULT_RULES.business_hours_open,
+    business_hours_close:
+      typeof raw.business_hours_close === "string" && /^\d{2}:\d{2}$/.test(raw.business_hours_close)
+        ? raw.business_hours_close
+        : DEFAULT_RULES.business_hours_close,
+    daily_pending_alert_enabled: !!raw.daily_pending_alert_enabled,
+    daily_pending_alert_threshold:
+      Number(raw.daily_pending_alert_threshold) || DEFAULT_RULES.daily_pending_alert_threshold,
   }
 }
 
@@ -198,18 +281,23 @@ export function canClaim(
 /** ¿Puede el cliente o admin cancelar este apartado/venta? */
 export function canCancelSale(
   rules: BusinessRules,
-  sale: { created_at: string; paid?: number | null; status: string }
+  sale: { created_at: string; paid?: number | null; status: string },
+  opts: { isVip?: boolean } = {}
 ): { allowed: boolean; reason?: string } {
   if (sale.status === "cancelled") return { allowed: false, reason: "Ya cancelada" }
   if (sale.status === "paid") return { allowed: false, reason: "Pagada por completo" }
 
   if (rules.cancellation_grace_enabled) {
     const created = new Date(sale.created_at).getTime()
-    const limit = created + rules.cancellation_grace_days * 24 * 3600 * 1000
+    let extraDays = 0
+    if (rules.vip_extra_grace_enabled && opts.isVip) {
+      extraDays = rules.vip_extra_grace_days
+    }
+    const limit = created + (rules.cancellation_grace_days + extraDays) * 24 * 3600 * 1000
     if (Date.now() > limit) {
       return {
         allowed: false,
-        reason: `Pasaron más de ${rules.cancellation_grace_days} días desde el apartado`,
+        reason: `Pasaron más de ${rules.cancellation_grace_days + extraDays} días desde el apartado`,
       }
     }
   }
@@ -236,4 +324,73 @@ export function formatRemaining(ms: number): string {
   if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`
   if (h >= 1) return `${h}h ${m}m`
   return `${m}m`
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * NUEVOS HELPERS (2026-06-17)
+ * ════════════════════════════════════════════════════════════════════ */
+
+/**
+ * ¿Está la tienda dentro del horario comercial?
+ * Si la regla está apagada, siempre devuelve true.
+ * Tolerante a "cierre" después de medianoche (ej: 22:00 a 02:00 NO soportado
+ * — para eso usar abierto siempre).
+ */
+export function isWithinBusinessHours(rules: BusinessRules, now = new Date()): boolean {
+  if (!rules.business_hours_enabled) return true
+  const [openH, openM] = rules.business_hours_open.split(":").map(Number)
+  const [closeH, closeM] = rules.business_hours_close.split(":").map(Number)
+  const minutesNow = now.getHours() * 60 + now.getMinutes()
+  const openMin = openH * 60 + openM
+  const closeMin = closeH * 60 + closeM
+  if (closeMin <= openMin) return true // configuración inválida → no bloquear
+  return minutesNow >= openMin && minutesNow < closeMin
+}
+
+/**
+ * Calcula el descuento automático sugerido para un carrito según las reglas.
+ * Devuelve 0 si no aplica.
+ */
+export function calculateAutoDiscount(
+  rules: BusinessRules,
+  cart: { totalItems: number; subtotal: number }
+): { applies: boolean; amount: number; percent: number; reason: string } {
+  if (!rules.auto_discount_enabled) {
+    return { applies: false, amount: 0, percent: 0, reason: "" }
+  }
+  if (cart.totalItems < rules.auto_discount_min_items) {
+    return {
+      applies: false,
+      amount: 0,
+      percent: rules.auto_discount_percent,
+      reason: `Faltan ${rules.auto_discount_min_items - cart.totalItems} piezas para ${rules.auto_discount_percent}% de descuento`,
+    }
+  }
+  const amount = Math.round(cart.subtotal * (rules.auto_discount_percent / 100) * 100) / 100
+  return {
+    applies: true,
+    amount,
+    percent: rules.auto_discount_percent,
+    reason: `${rules.auto_discount_percent}% por comprar ${cart.totalItems} piezas`,
+  }
+}
+
+/**
+ * Valida si una venta nueva supera el oversell permitido.
+ * Devuelve un mensaje si NO se puede agregar; null si todo OK.
+ */
+export function validateStock(
+  rules: BusinessRules,
+  variant: { stock: number | null | undefined },
+  requestedQty: number,
+): string | null {
+  if (!rules.block_oversell) return null
+  const current = Number(variant.stock ?? 0)
+  if (current <= 0) {
+    return "Sin stock — la pre-venta está deshabilitada"
+  }
+  if (requestedQty > current) {
+    return `Solo hay ${current} disponibles`
+  }
+  return null
 }

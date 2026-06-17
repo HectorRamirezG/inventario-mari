@@ -133,8 +133,23 @@ export function useSalesPage() {
 
   /* ---------- Mutaciones del carrito ---------- */
   const addToCart = useCallback((v: any) => {
+    const rules = getBusinessRules();
+    const stockNum = Number(v.stock) || 0;
     setCart((prev) => {
       const exist = prev.find((i) => i.variant_id === v.id);
+      const currentQty = exist?.qty ?? 0;
+      const nextQty = currentQty + 1;
+
+      // Regla: bloquear venta sin stock (incluye sumar al carrito por encima)
+      if (rules.block_oversell && nextQty > stockNum) {
+        if (stockNum <= 0) {
+          toast.error("Sin stock disponible — pre-venta deshabilitada");
+        } else {
+          toast.error(`Solo hay ${stockNum} pz disponibles`);
+        }
+        return prev;
+      }
+
       if (exist) {
         return prev.map((i) =>
           i.variant_id === v.id ? { ...i, qty: i.qty + 1 } : i
@@ -151,7 +166,7 @@ export function useSalesPage() {
         name: v.products?.name ?? "Producto",
         variant_name: v.variant_name,
         qty: 1,
-        stock: Number(v.stock) || 0,
+        stock: stockNum,
         // La columna `cost` no existe en variants; el costo efectivo
         // es cost_override (si lo hay) o el costo del producto padre.
         cost: Number(v.cost_override ?? v.products?.cost ?? 0),
@@ -171,8 +186,16 @@ export function useSalesPage() {
 
   const updateQty = useCallback((id: string, qty: number) => {
     if (qty < 1) return;
+    const rules = getBusinessRules();
     setCart((prev) =>
-      prev.map((i) => (i.variant_id === id ? { ...i, qty } : i))
+      prev.map((i) => {
+        if (i.variant_id !== id) return i;
+        if (rules.block_oversell && qty > i.stock) {
+          toast.error(`Solo hay ${i.stock} pz disponibles`);
+          return i;
+        }
+        return { ...i, qty };
+      })
     );
   }, []);
 

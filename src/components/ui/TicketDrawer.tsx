@@ -19,6 +19,7 @@ import toast from "react-hot-toast"
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
+import { useBusinessRules } from "../../features/settings/businessRulesService"
 import Skeleton, { SkeletonText } from "./Skeleton"
 import PaymentCenterDrawer from "./PaymentCenterDrawer"
 
@@ -406,6 +407,7 @@ function SummarySection({
   ticket: PublicTicket
   store: ReturnType<typeof getStoreInfo>
 }) {
+  const rules = useBusinessRules()
   const subtotal = ticket.items.reduce(
     (a, it) => a + Number(it.qty) * Number(it.unit_price),
     0,
@@ -503,6 +505,18 @@ function SummarySection({
               Mari te apoyó con {formatMoney(adj)} ✨
             </p>
           </div>
+        </motion.div>
+      )}
+
+      {rules.custom_ticket_message_enabled && rules.custom_ticket_message && (
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-primary/25 bg-primary/5 dark:bg-primary/10 px-4 py-3"
+        >
+          <p className="text-[11px] font-bold text-primary italic text-center leading-snug">
+            {rules.custom_ticket_message}
+          </p>
         </motion.div>
       )}
 

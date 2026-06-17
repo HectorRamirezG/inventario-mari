@@ -49,6 +49,7 @@ import { formatMoney as formatCurrency } from "../../lib/format"
 import { useCountUp } from "../../lib/useCountUp"
 import Sparkline from "../../components/ui/Sparkline"
 import { shareTicketPdf } from "../../lib/shareImage"
+import { useBusinessRules } from "../settings/businessRulesService"
 
 type PeriodDays = 7 | 30 | 90
 
@@ -388,6 +389,11 @@ function FinanceHero({
 }) {
   const revenueSeries = trend?.map((t) => t.revenue) ?? []
   const profitSeries = trend?.map((t) => t.profit) ?? []
+  const businessRules = useBusinessRules()
+  const pendingAlertActive =
+    businessRules.daily_pending_alert_enabled &&
+    pending >= businessRules.daily_pending_alert_threshold &&
+    businessRules.daily_pending_alert_threshold > 0
   return (
     <section className="rounded-3xl overflow-hidden border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-premium">
       {/* Banda de color */}
@@ -466,6 +472,28 @@ function FinanceHero({
               abonos pendientes son flujo de caja a futuro.
             </p>
           </div>
+        )}
+
+        {/* Alerta de saldo pendiente (regla daily_pending_alert) */}
+        {pendingAlertActive && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 flex items-start gap-3 rounded-2xl bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-500/10 dark:to-pink-500/10 border border-rose-200 dark:border-rose-500/30 p-3"
+          >
+            <AlertTriangle
+              size={16}
+              className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-widest text-rose-700 dark:text-rose-300 leading-tight">
+                Saldo pendiente alto
+              </p>
+              <p className="text-[11px] font-bold text-rose-700/80 dark:text-rose-300/80 leading-snug mt-0.5">
+                {formatCurrency(pending)} por cobrar supera tu umbral de {formatCurrency(businessRules.daily_pending_alert_threshold)}. Sería buen momento de recordar abonos.
+              </p>
+            </div>
+          </motion.div>
         )}
       </div>
     </section>

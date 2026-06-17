@@ -198,28 +198,30 @@ export default function ApartadosPage() {
       ) : (
         <div className="space-y-2 stagger-list">
           <AnimatePresence mode="popLayout">
-            {state.sales.map((sale) => (
-              <SaleCard
-                key={sale.id}
-                sale={sale}
-                profile={
-                  sale.customer_email
-                    ? profiles[sale.customer_email.toLowerCase()]
-                    : undefined
-                }
-                stats={
-                  sale.customer_email
-                    ? customerStats[sale.customer_email.toLowerCase()]
-                    : undefined
-                }
-                hasPendingProof={state.pendingProofIds.has(sale.id)}
-                cancelGuard={canCancelSale(rules, sale)}
-                onPay={() => setSelected(sale)}
-                onTicket={() => setTicketSale(sale)}
-                onAdjust={() => setAdjustSale(sale)}
-                onCancel={() => actions.handleCancelSale(sale.id)}
-              />
-            ))}
+            {state.sales.map((sale) => {
+              const stat = sale.customer_email
+                ? customerStats[sale.customer_email.toLowerCase()]
+                : undefined
+              const isVip = stat?.tier === "vip"
+              return (
+                <SaleCard
+                  key={sale.id}
+                  sale={sale}
+                  profile={
+                    sale.customer_email
+                      ? profiles[sale.customer_email.toLowerCase()]
+                      : undefined
+                  }
+                  stats={stat}
+                  hasPendingProof={state.pendingProofIds.has(sale.id)}
+                  cancelGuard={canCancelSale(rules, sale, { isVip })}
+                  onPay={() => setSelected(sale)}
+                  onTicket={() => setTicketSale(sale)}
+                  onAdjust={() => setAdjustSale(sale)}
+                  onCancel={() => actions.handleCancelSale(sale.id)}
+                />
+              )
+            })}
           </AnimatePresence>
         </div>
       )}

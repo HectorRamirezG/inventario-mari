@@ -16,6 +16,7 @@ import {
 import { getStoreInfo } from "../../lib/useStoreInfo"
 import { buildReceiptText, sendReceiptByWhatsApp } from "../../lib/receipt"
 import { shareTicketImage, shareTicketPdf } from "../../lib/shareImage"
+import { useBusinessRules } from "../../features/settings/businessRulesService"
 
 interface Props {
   open: boolean
@@ -32,6 +33,7 @@ export default function TicketView({ open, sale, onClose }: Props) {
   const ticketRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const store = getStoreInfo()
+  const rules = useBusinessRules()
 
   // Bloquea scroll del body cuando está abierto
   useEffect(() => {
@@ -293,6 +295,11 @@ export default function TicketView({ open, sale, onClose }: Props) {
               <div className="text-center text-[10px] leading-tight">
                 <p className="font-black">{store.thanks_message}</p>
                 <p className="text-slate-500 mt-1">{store.footer_note}</p>
+                {rules.custom_ticket_message_enabled && rules.custom_ticket_message && (
+                  <p className="mt-2 text-[10px] font-bold text-primary italic">
+                    {rules.custom_ticket_message}
+                  </p>
+                )}
                 <p className="mt-2 text-[9px] text-slate-400">
                   Generado {formatDateTime(new Date())}
                 </p>

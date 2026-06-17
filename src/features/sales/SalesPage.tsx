@@ -19,6 +19,7 @@ import {
   Store,
   MapPin,
   Truck,
+  PartyPopper,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
@@ -35,6 +36,10 @@ import PageHeader from "../../components/ui/PageHeader";
 import { formatMoney } from "../../lib/format";
 import { sound } from "../../lib/sound";
 import { confirmAction } from "../../lib/confirm";
+import {
+  useBusinessRules,
+  calculateAutoDiscount,
+} from "../settings/businessRulesService";
 
 const TIER_TONE: Record<string, { bg: string; text: string; ring: string }> = {
   menudeo: {
@@ -193,6 +198,17 @@ export default function SalesPage() {
   }, [state.cart, state.total, state.cartTier]);
 
   const tone = TIER_TONE[state.cartTier];
+
+  // Regla de negocio: descuento automático por volumen (sugerencia visual al admin)
+  const rules = useBusinessRules();
+  const autoDiscount = useMemo(
+    () =>
+      calculateAutoDiscount(rules, {
+        totalItems: state.totalQty,
+        subtotal: state.total,
+      }),
+    [rules, state.totalQty, state.total],
+  );
 
   return (
     <div className="relative px-3 pt-1 pb-28">
@@ -407,6 +423,58 @@ export default function SalesPage() {
                   Mejor precio aplicado
                 </p>
               )}
+            </motion.div>
+          )}
+
+          {/* AUTO-DESCUENTO POR VOLUMEN (sugerencia) */}
+          {state.cart.length > 0 && rules.auto_discount_enabled && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`mb-3 rounded-2xl px-3 py-2 ring-1 ${
+                autoDiscount.applies
+                  ? "bg-emerald-50 dark:bg-emerald-500/10 ring-emerald-200 dark:ring-emerald-500/30"
+                  : "bg-amber-50 dark:bg-amber-500/10 ring-amber-200 dark:ring-amber-500/30"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <PartyPopper
+                    size={12}
+                    className={
+                      autoDiscount.applies
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-amber-600 dark:text-amber-400"
+                    }
+                  />
+                  <span
+                    className={`text-[9px] font-black uppercase tracking-widest leading-tight ${
+                      autoDiscount.applies
+                        ? "text-emerald-700 dark:text-emerald-300"
+                        : "text-amber-700 dark:text-amber-300"
+                    }`}
+                  >
+                    {autoDiscount.applies
+                      ? `${autoDiscount.percent}% sugerido`
+                      : `Promo ${rules.auto_discount_percent}%`}
+                  </span>
+                </div>
+                {autoDiscount.applies && (
+                  <span className="text-[9px] font-black tabular-nums text-emerald-700 dark:text-emerald-300">
+                    -{formatMoney(autoDiscount.amount)}
+                  </span>
+                )}
+              </div>
+              <p
+                className={`mt-1 text-[8px] font-bold leading-tight ${
+                  autoDiscount.applies
+                    ? "text-emerald-700/80 dark:text-emerald-300/70"
+                    : "text-amber-700/80 dark:text-amber-300/70"
+                }`}
+              >
+                {autoDiscount.reason}
+                {autoDiscount.applies && " (aplica como ajuste manual al cerrar)"}
+              </p>
             </motion.div>
           )}
 
