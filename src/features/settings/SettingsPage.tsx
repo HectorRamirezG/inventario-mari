@@ -71,7 +71,7 @@ export default function SettingsPage() {
     }, 200)
   }
 
-  const handleStoreReset = () => {
+  const handleStoreReset = async () => {
     if (!(await confirmAction({
       title: "¿Restaurar valores por defecto?",
       description: "Se restaurarán los umbrales de tier (menudeo / medio / mayoreo) a sus valores originales.",

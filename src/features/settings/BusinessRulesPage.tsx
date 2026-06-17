@@ -52,7 +52,7 @@ export default function BusinessRulesPage() {
     }
   }
 
-  function handleReset() {
+  async function handleReset() {
     if (!(await confirmAction({
       title: "¿Restaurar valores por defecto?",
       description: "Se restaurarán todas las reglas de negocio a sus valores originales.",
