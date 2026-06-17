@@ -365,6 +365,14 @@ function AdminShell() {
       accent: "linear-gradient(135deg,#f59e0b,#fb923c)",
       onClick: () => setSection("pendientes"),
     },
+    {
+      id: "soporte",
+      label: "Soporte",
+      caption: "Buzón de reportes de clientes",
+      icon: LifeBuoy,
+      accent: "linear-gradient(135deg,#0ea5e9,#6366f1)",
+      onClick: () => setSection("soporte"),
+    },
   ]
 
   return (

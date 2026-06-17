@@ -77,6 +77,9 @@ export async function uploadSupportImage(input: {
 /**
  * Crea un ticket de soporte desde el ticket público del cliente. Llama a
  * la RPC `create_support_ticket` que hace el INSERT con SECURITY DEFINER.
+ * Después intenta notificar a TODOS los admins activos vía insert directo
+ * en `notifications` (best-effort: si RLS lo bloquea, no rompe el flujo;
+ * de cualquier modo la sección Soporte del admin se refresca al entrar).
  */
 export async function createSupportTicket(input: {
   saleId: string | null
@@ -91,7 +94,49 @@ export async function createSupportTicket(input: {
     p_image_url: input.imageUrl ?? null,
   })
   if (error) throw error
-  return data as string
+  const ticketId = data as string
+
+  // Notifica a admins (best-effort).
+  // Buscamos correos de admin/staff activos y creamos una fila por cada uno
+  // en `notifications`. Es opcional: si la migración/RLS no lo permite,
+  // sólo dejamos warning en consola y devolvemos el ticketId igual.
+  try {
+    const meta = SUPPORT_CATEGORIES.find((c) => c.id === input.category)
+    const catLabel = meta?.label ?? input.category
+    const catEmoji = meta?.emoji ?? "💬"
+
+    const { data: admins, error: aErr } = await supabase
+      .from("user_profiles")
+      .select("email")
+      .in("role", ["admin", "staff"])
+      .not("email", "is", null)
+    if (aErr) throw aErr
+
+    const rows = (admins ?? [])
+      .filter((a) => !!a.email)
+      .map((a) => ({
+        recipient_email: a.email as string,
+        recipient_role: "admin" as const,
+        type: "support_ticket",
+        title: `${catEmoji} Nuevo reporte de cliente`,
+        body: input.description?.slice(0, 140) || catLabel,
+        link: "/admin",
+        metadata: {
+          ticket_id: ticketId,
+          sale_id: input.saleId,
+          category: input.category,
+        },
+      }))
+
+    if (rows.length > 0) {
+      const { error: insErr } = await supabase.from("notifications").insert(rows)
+      if (insErr) console.warn("[support] notif admin fallo:", insErr.message)
+    }
+  } catch (e: any) {
+    console.warn("[support] notif admin excepción:", e?.message)
+  }
+
+  return ticketId
 }
 
 /** Lista para la bandeja admin (orden cronológico). Devuelve [] si la
