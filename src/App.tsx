@@ -58,6 +58,7 @@ import UserProfileDrawer from "./components/ui/UserProfileDrawer"
 import ReviewProofDrawer from "./components/ui/ReviewProofDrawer"
 import WhatsAppSupportFab from "./components/ui/WhatsAppSupportFab"
 import InstallPrompt from "./components/ui/InstallPrompt"
+import ErrorBoundary from "./components/ui/ErrorBoundary"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
@@ -536,8 +537,14 @@ function AdminShell() {
           </div>
         </header>
 
-        {/* ─── CONTENIDO ─── */}
-        <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios bg-slate-50/30 dark:bg-slate-950/50">
+        {/* ─── CONTENIDO ───
+            En móvil el dock fijo (h-12) + safe-area + FAB sobresale ~28px
+            ocupa ~110-120px del viewport. El padding-bottom calculado
+            garantiza que el último elemento siempre quede visible al
+            scrollear, sin que lo tape el dock. */}
+        <main
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios bg-slate-50/30 dark:bg-slate-950/50 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0"
+        >
           <div className="w-full max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-6">
             <AnimatePresence mode="wait">
               <motion.div
@@ -546,19 +553,20 @@ function AdminShell() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.15 }}
-                className="pb-24 md:pb-12"
               >
-                <Suspense fallback={<FullScreenSpinner />}>
-                  {section === "hoy" && <DashboardPage />}
-                  {section === "catalogo" && <InventoryPage />}
-                  {section === "caja" && <SalesPage />}
-                  {section === "pendientes" && <ApartadosPage />}
-                  {section === "soporte" && <SupportPage />}
-                  {section === "ciclos" && isAdmin && <CyclesPage />}
-                  {section === "calculadora" && isAdmin && <PricingPage />}
-                  {section === "reglas" && isAdmin && <BusinessRulesPage />}
-                  {section === "ajustes" && <SettingsPage />}
-                </Suspense>
+                <ErrorBoundary scope={`admin:${section}`}>
+                  <Suspense fallback={<FullScreenSpinner />}>
+                    {section === "hoy" && <DashboardPage />}
+                    {section === "catalogo" && <InventoryPage />}
+                    {section === "caja" && <SalesPage />}
+                    {section === "pendientes" && <ApartadosPage />}
+                    {section === "soporte" && <SupportPage />}
+                    {section === "ciclos" && isAdmin && <CyclesPage />}
+                    {section === "calculadora" && isAdmin && <PricingPage />}
+                    {section === "reglas" && isAdmin && <BusinessRulesPage />}
+                    {section === "ajustes" && <SettingsPage />}
+                  </Suspense>
+                </ErrorBoundary>
               </motion.div>
             </AnimatePresence>
           </div>
@@ -771,42 +779,44 @@ function ShopShell() {
       </header>
 
       {/* CONTENIDO */}
-      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios">
-        <div className="max-w-3xl mx-auto px-4 py-4 pb-20">
-          <Suspense fallback={<FullScreenSpinner />}>
-            <Routes>
-              <Route path="/" element={<ClientShopPage />} />
-              <Route
-                path="/mis-pedidos"
-                element={
-                  isLogged ? (
-                    <ClientOrdersPage />
-                  ) : (
-                    <Navigate
-                      to="/login"
-                      replace
-                      state={{ from: "/mis-pedidos" }}
-                    />
-                  )
-                }
-              />
-              <Route
-                path="/mis-reportes"
-                element={
-                  isLogged ? (
-                    <MyReportsPage />
-                  ) : (
-                    <Navigate
-                      to="/login"
-                      replace
-                      state={{ from: "/mis-reportes" }}
-                    />
-                  )
-                }
-              />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">
+        <div className="max-w-3xl mx-auto px-4 py-4">
+          <ErrorBoundary scope="shop">
+            <Suspense fallback={<FullScreenSpinner />}>
+              <Routes>
+                <Route path="/" element={<ClientShopPage />} />
+                <Route
+                  path="/mis-pedidos"
+                  element={
+                    isLogged ? (
+                      <ClientOrdersPage />
+                    ) : (
+                      <Navigate
+                        to="/login"
+                        replace
+                        state={{ from: "/mis-pedidos" }}
+                      />
+                    )
+                  }
+                />
+                <Route
+                  path="/mis-reportes"
+                  element={
+                    isLogged ? (
+                      <MyReportsPage />
+                    ) : (
+                      <Navigate
+                        to="/login"
+                        replace
+                        state={{ from: "/mis-reportes" }}
+                      />
+                    )
+                  }
+                />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </main>
 
