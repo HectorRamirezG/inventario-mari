@@ -5,6 +5,10 @@ export interface TabItem<TId extends string = string> {
   id: TId
   label: string
   icon?: LucideIcon
+  /** Badge numérico opcional. 0 o undefined = no se muestra. */
+  badge?: number
+  /** Tono del badge cuando no está activo el tab. Default: slate. */
+  badgeTone?: "slate" | "primary" | "danger" | "success" | "warn"
 }
 
 interface TabBarProps<TId extends string = string> {
@@ -13,6 +17,14 @@ interface TabBarProps<TId extends string = string> {
   onChange: (id: TId) => void
   /** layoutId único para la animación entre tabs */
   layoutId: string
+}
+
+const BADGE_TONES: Record<NonNullable<TabItem["badgeTone"]>, string> = {
+  slate: "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200",
+  primary: "bg-primary/15 text-primary",
+  danger: "bg-rose-500 text-white",
+  success: "bg-emerald-500 text-white",
+  warn: "bg-amber-500 text-white",
 }
 
 /**
@@ -31,6 +43,8 @@ export default function TabBar<TId extends string = string>({
       {tabs.map((tab) => {
         const Icon = tab.icon
         const isActive = active === tab.id
+        const showBadge = typeof tab.badge === "number" && tab.badge > 0
+        const tone = tab.badgeTone ?? "slate"
         return (
           <button
             key={tab.id}
@@ -47,6 +61,15 @@ export default function TabBar<TId extends string = string>({
             )}
             {Icon && <Icon size={12} className="relative z-10" />}
             <span className="relative z-10">{tab.label}</span>
+            {showBadge && (
+              <span
+                className={`relative z-10 min-w-4 h-4 px-1 rounded-full text-[8px] font-black tabular-nums flex items-center justify-center ${
+                  isActive ? "bg-white/25 text-white" : BADGE_TONES[tone]
+                }`}
+              >
+                {tab.badge! > 99 ? "99+" : tab.badge}
+              </span>
+            )}
           </button>
         )
       })}

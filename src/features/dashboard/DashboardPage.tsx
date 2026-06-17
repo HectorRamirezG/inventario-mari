@@ -47,6 +47,7 @@ import CycleBanner from "../cycles/CycleBanner"
 import LowStockView from "../inventory/LowStockView"
 import { formatMoney as formatCurrency } from "../../lib/format"
 import { useCountUp } from "../../lib/useCountUp"
+import Sparkline from "../../components/ui/Sparkline"
 import { shareTicketPdf } from "../../lib/shareImage"
 
 type PeriodDays = 7 | 30 | 90
@@ -163,6 +164,7 @@ export default function DashboardPage() {
             revGrowth={revGrowth}
             profitGrowth={profitGrowth}
             periodLabel={periodLabelFor(period)}
+            trend={stats?.trend}
           />
 
           {/* KPIs operativos */}
@@ -368,6 +370,7 @@ function FinanceHero({
   revGrowth,
   profitGrowth,
   periodLabel,
+  trend,
 }: {
   revenue: number
   cogs: number
@@ -377,7 +380,10 @@ function FinanceHero({
   revGrowth: number | null
   profitGrowth: number | null
   periodLabel: string
+  trend?: { date: string; revenue: number; profit: number; operations: number }[]
 }) {
+  const revenueSeries = trend?.map((t) => t.revenue) ?? []
+  const profitSeries = trend?.map((t) => t.profit) ?? []
   return (
     <section className="rounded-3xl overflow-hidden border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/60 shadow-premium">
       {/* Banda de color */}
@@ -416,6 +422,7 @@ function FinanceHero({
             value={formatCurrency(revenue)}
             icon={ArrowUpRight}
             hint="Total vendido"
+            sparkline={revenueSeries}
           />
           <FinTile
             tone="slate"
@@ -430,6 +437,7 @@ function FinanceHero({
             value={formatCurrency(profit)}
             icon={TrendingUp}
             hint={`${margin.toFixed(0)}% de margen`}
+            sparkline={profitSeries}
           />
           <FinTile
             tone="amber"
@@ -466,12 +474,14 @@ function FinTile({
   value,
   icon: Icon,
   hint,
+  sparkline,
 }: {
   tone: "primary" | "slate" | "emerald" | "amber"
   label: string
   value: string
   icon: typeof TrendingUp
   hint?: string
+  sparkline?: number[]
 }) {
   const cls = {
     primary:
@@ -483,21 +493,39 @@ function FinTile({
     amber:
       "bg-amber-50 text-amber-700 border-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
   }[tone]
+  const sparkColor = {
+    primary: "#e6007e",
+    slate: "#64748b",
+    emerald: "#10b981",
+    amber: "#f59e0b",
+  }[tone]
   return (
-    <div className={`rounded-2xl px-3 py-3 border ${cls}`}>
-      <div className="flex items-center justify-between mb-1">
+    <div className={`relative rounded-2xl px-3 py-3 border overflow-hidden ${cls}`}>
+      <div className="flex items-center justify-between mb-1 relative z-10">
         <Icon size={12} className="opacity-70" />
         <span className="text-[8px] font-black uppercase tracking-widest opacity-70">
           {label}
         </span>
       </div>
-      <p className="text-sm md:text-base font-black tabular-nums leading-tight">
+      <p className="text-sm md:text-base font-black tabular-nums leading-tight relative z-10">
         {value}
       </p>
       {hint && (
-        <p className="text-[9px] font-bold opacity-60 mt-0.5 leading-tight">
+        <p className="text-[9px] font-bold opacity-60 mt-0.5 leading-tight relative z-10">
           {hint}
         </p>
+      )}
+      {sparkline && sparkline.length > 1 && (
+        <div className="absolute bottom-1 right-1 opacity-60 pointer-events-none">
+          <Sparkline
+            data={sparkline}
+            width={56}
+            height={22}
+            stroke={sparkColor}
+            strokeWidth={1.25}
+            showDot={false}
+          />
+        </div>
       )}
     </div>
   )
