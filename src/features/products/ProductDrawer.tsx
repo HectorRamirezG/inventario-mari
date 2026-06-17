@@ -56,6 +56,16 @@ import type { PricingConfig } from "../pricing/pricingTypes"
 
 type TabId = "general" | "variants"
 
+/** localStorage key del borrador de "nuevo producto". */
+const DRAFT_KEY = "mari:product-draft-new"
+interface DraftShape {
+  name: string
+  category: string
+  cost: number | ""
+  minStock: number | ""
+  savedAt?: number
+}
+
 interface Props {
   open: boolean
   mode: "create" | "edit" | "stock"
@@ -131,13 +141,45 @@ export default function ProductDrawer({
       setCost(product?.cost ?? "")
       setMinStock(product?.min_stock ?? "")
     } else {
-      // create
+      // create — intenta recuperar un draft del localStorage
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY)
+        if (raw) {
+          const draft = JSON.parse(raw) as DraftShape
+          // Sólo si hay algo útil que mostrar
+          if (draft.name || draft.category || draft.cost || draft.minStock) {
+            setName(draft.name ?? "")
+            setCategory(draft.category ?? "")
+            setCost(draft.cost ?? "")
+            setMinStock(draft.minStock ?? "")
+            toast("Restauramos tu borrador anterior", { icon: "📝" })
+            return
+          }
+        }
+      } catch {}
       setName("")
       setCategory("")
       setCost("")
       setMinStock("")
     }
   }, [open, mode, product?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ──────────── Auto-save de borrador (modo create) ────────────
+  useEffect(() => {
+    if (!open || mode !== "create") return
+    // Si no hay nada, no guardamos nada
+    if (!name && !category && cost === "" && minStock === "") {
+      try { localStorage.removeItem(DRAFT_KEY) } catch {}
+      return
+    }
+    const t = setTimeout(() => {
+      try {
+        const draft: DraftShape = { name, category, cost, minStock, savedAt: Date.now() }
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+      } catch {}
+    }, 350)
+    return () => clearTimeout(t)
+  }, [open, mode, name, category, cost, minStock])
 
   // ──────────── Bloquear scroll body + ESC ────────────
   useEffect(() => {
@@ -187,6 +229,8 @@ export default function ProductDrawer({
           // image_url se omite: las fotos viven solo por variante.
         })
         toast.success("Producto creado ✨")
+        // Borrador ya no aplica: el producto se creó
+        try { localStorage.removeItem(DRAFT_KEY) } catch {}
         onSaved()
         // Tras crear, mantenemos abierto el drawer pero cambiamos a modo edit
         // para que el admin agregue variantes sin reabrir nada.

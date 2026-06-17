@@ -61,6 +61,7 @@ import InstallPrompt from "./components/ui/InstallPrompt"
 import ErrorBoundary from "./components/ui/ErrorBoundary"
 import PwaUpdatePrompt from "./components/ui/PwaUpdatePrompt"
 import ShortcutsCheatsheet, { useShortcutsCheatsheet } from "./components/ui/ShortcutsCheatsheet"
+import PullToRefresh from "./components/ui/PullToRefresh"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
@@ -552,7 +553,16 @@ function AdminShell() {
             ocupa ~110-120px del viewport. El padding-bottom calculado
             garantiza que el último elemento siempre quede visible al
             scrollear, sin que lo tape el dock. */}
-        <main
+        <PullToRefresh
+          onRefresh={() => {
+            // Cada página decide qué hacer escuchando este evento.
+            window.dispatchEvent(
+              new CustomEvent("mari:pull-refresh", { detail: { section } }),
+            )
+            // También el evento legacy de apartados que ya usan varias vistas.
+            window.dispatchEvent(new CustomEvent("mari:apartado-refresh"))
+            return new Promise((r) => setTimeout(r, 600))
+          }}
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios bg-slate-50/30 dark:bg-slate-950/50 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0"
         >
           <div className="w-full max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-6">
@@ -580,7 +590,7 @@ function AdminShell() {
               </motion.div>
             </AnimatePresence>
           </div>
-        </main>
+        </PullToRefresh>
 
         {/* ─── DOCK MÓVIL (delgado, pegado al borde) ─── */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-100 dark:border-slate-800 shadow-[0_-8px_30px_-15px_rgba(230,0,126,0.25)]">
@@ -789,7 +799,13 @@ function ShopShell() {
       </header>
 
       {/* CONTENIDO */}
-      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0">
+      <PullToRefresh
+        onRefresh={() => {
+          window.dispatchEvent(new CustomEvent("mari:pull-refresh", { detail: { section: "shop" } }))
+          return new Promise((r) => setTimeout(r, 600))
+        }}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0"
+      >
         <div className="max-w-3xl mx-auto px-4 py-4">
           <ErrorBoundary scope="shop">
             <Suspense fallback={<FullScreenSpinner />}>
@@ -828,7 +844,7 @@ function ShopShell() {
             </Suspense>
           </ErrorBoundary>
         </div>
-      </main>
+      </PullToRefresh>
 
       {/* DOCK CLIENTE (delgado, pegado al borde) */}
       <nav className="fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-pink-50 dark:border-slate-800 shadow-[0_-8px_30px_-15px_rgba(230,0,126,0.18)]">

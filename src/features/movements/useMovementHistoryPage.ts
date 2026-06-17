@@ -30,6 +30,17 @@ export function useMovementHistoryPage() {
 
   useEffect(() => { refresh(); }, []);
 
+  // Pull-to-refresh global + eventos de apartados
+  useEffect(() => {
+    const handler = () => { void refresh(); };
+    window.addEventListener("mari:pull-refresh", handler);
+    window.addEventListener("mari:apartado-refresh", handler);
+    return () => {
+      window.removeEventListener("mari:pull-refresh", handler);
+      window.removeEventListener("mari:apartado-refresh", handler);
+    };
+  }, []);
+
   const filtered = useMemo(() => {
     let result = rows;
 
