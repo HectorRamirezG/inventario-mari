@@ -27,7 +27,10 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="flex flex-col text-slate-900 dark:text-slate-100">
+    <div className="relative flex flex-col text-slate-900 dark:text-slate-100">
+      {/* Orbs decorativos */}
+      <span className="deco-orb deco-orb-violet top-10 -left-16 w-64 h-64" />
+      <span className="deco-orb deco-orb-pink top-32 -right-16 w-72 h-72" />
 
       {/* HEADER */}
       <header className="sticky top-0 z-30 bg-slate-50/85 dark:bg-slate-950/85 backdrop-blur-xl px-1 pt-1 pb-2 -mx-1">

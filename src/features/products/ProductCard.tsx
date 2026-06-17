@@ -200,7 +200,7 @@ export default function ProductCard({
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 280, damping: 26 }}
-      className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
+      className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md hover:border-primary/30 dark:hover:border-primary/40 tilt-hover"
     >
       {/* Imagen + Carrusel (o placeholder si no hay fotos) */}
       <div className="relative">

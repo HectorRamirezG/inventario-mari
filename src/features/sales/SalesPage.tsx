@@ -195,7 +195,11 @@ export default function SalesPage() {
   const tone = TIER_TONE[state.cartTier];
 
   return (
-    <div className="px-3 pt-1 pb-28">
+    <div className="relative px-3 pt-1 pb-28">
+      {/* Orbs decorativos */}
+      <span className="deco-orb deco-orb-pink top-0 -left-12 w-64 h-64" />
+      <span className="deco-orb deco-orb-violet top-32 -right-16 w-72 h-72" />
+
       {/* HEADER */}
       <div className="max-w-5xl mx-auto">
         <PageHeader

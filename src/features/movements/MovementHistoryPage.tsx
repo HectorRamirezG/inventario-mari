@@ -93,8 +93,8 @@ export default function MovementHistoryPage() {
 
   return (
     <div className="flex flex-col gap-4 pb-44 px-2 max-w-2xl mx-auto">
-      {/* HEADER */}
-      <div className="space-y-3 pt-4">
+      {/* HEADER sticky con backdrop-blur */}
+      <div className="sticky top-0 z-20 -mx-2 px-2 pt-4 pb-2 bg-slate-50/85 dark:bg-slate-950/85 backdrop-blur-xl space-y-3">
         <div className="flex items-center justify-between px-2">
           <div>
             <h2 className="text-sm font-black uppercase tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">

@@ -31,6 +31,7 @@ import {
   Receipt as ReceiptIcon,
   User as UserIcon,
   LifeBuoy,
+  ScrollText,
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
@@ -116,13 +117,42 @@ export default function App() {
     <BrowserRouter>
       <Toaster
         position="top-center"
+        gutter={10}
         toastOptions={{
+          duration: 3200,
           style: {
-            borderRadius: "1rem",
+            borderRadius: "1.25rem",
             fontWeight: 700,
-            fontSize: "12px",
-            background: "rgba(255,255,255,0.95)",
-            backdropFilter: "blur(12px)",
+            fontSize: "12.5px",
+            color: "#0f172a",
+            background: "rgba(255,255,255,0.92)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            padding: "10px 16px",
+            boxShadow:
+              "0 20px 50px -15px rgba(15,23,42,0.18), 0 0 0 1px rgba(15,23,42,0.05)",
+            maxWidth: "380px",
+          },
+          success: {
+            iconTheme: { primary: "#10b981", secondary: "#ecfdf5" },
+            style: {
+              borderLeft: "4px solid #10b981",
+              paddingLeft: "12px",
+            },
+          },
+          error: {
+            iconTheme: { primary: "#ef4444", secondary: "#fef2f2" },
+            style: {
+              borderLeft: "4px solid #ef4444",
+              paddingLeft: "12px",
+            },
+          },
+          loading: {
+            iconTheme: { primary: "#e6007e", secondary: "#fff0f7" },
+            style: {
+              borderLeft: "4px solid #e6007e",
+              paddingLeft: "12px",
+            },
           },
         }}
       />
@@ -394,6 +424,26 @@ function AdminShell() {
       icon: LifeBuoy,
       accent: "linear-gradient(135deg,#0ea5e9,#6366f1)",
       onClick: () => setSection("soporte"),
+    },
+    ...(isAdmin
+      ? [
+          {
+            id: "reglas",
+            label: "Reglas del negocio",
+            caption: "Políticas de venta, devoluciones y apartado",
+            icon: ScrollText,
+            accent: "linear-gradient(135deg,#64748b,#475569)",
+            onClick: () => setSection("reglas"),
+          } as HubAction,
+        ]
+      : []),
+    {
+      id: "ajustes",
+      label: "Ajustes",
+      caption: "Tienda, banco, envíos, preferencias",
+      icon: SettingsIcon,
+      accent: "linear-gradient(135deg,#94a3b8,#64748b)",
+      onClick: () => setSection("ajustes"),
     },
   ]
 

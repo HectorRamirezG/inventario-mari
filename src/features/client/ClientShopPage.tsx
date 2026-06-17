@@ -769,10 +769,10 @@ export default function ClientShopPage() {
             layout
             className={
               viewMode === "focus"
-                ? "flex flex-col gap-3"
+                ? "flex flex-col gap-3 stagger-list"
                 : viewMode === "grid"
-                ? "grid grid-cols-2 gap-3"
-                : "flex flex-col gap-2"
+                ? "grid grid-cols-2 gap-3 stagger-list"
+                : "flex flex-col gap-2 stagger-list"
             }
           >
             {filtered.map((p) => (

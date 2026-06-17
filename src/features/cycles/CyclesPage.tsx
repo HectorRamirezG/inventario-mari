@@ -69,7 +69,11 @@ export default function CyclesPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-5xl mx-auto">
+    <div className="relative space-y-5 max-w-5xl mx-auto">
+      {/* Orbs decorativos */}
+      <span className="deco-orb deco-orb-violet top-0 -left-20 w-72 h-72" />
+      <span className="deco-orb deco-orb-pink top-32 -right-20 w-80 h-80" />
+
       {/* HEADER */}
       <div className="flex items-end justify-between flex-wrap gap-2">
         <div>

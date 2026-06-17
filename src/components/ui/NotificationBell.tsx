@@ -158,17 +158,21 @@ export default function NotificationBell({
         ref={btnRef}
         onClick={() => setOpen((o) => !o)}
         aria-label="Notificaciones"
-        className="relative w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-primary transition-colors"
+        className="relative w-10 h-10 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-primary hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors group"
       >
-        <Bell size={15} />
+        <span className={unread > 0 ? "wiggle-on-hover inline-flex animate-[wiggle_0.5s_ease-in-out_infinite_4s]" : "wiggle-on-hover inline-flex"}>
+          <Bell size={15} />
+        </span>
         {unread > 0 && (
           <motion.span
             key={unread}
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 460, damping: 18 }}
             className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center ring-2 ring-white dark:ring-slate-900"
           >
             {unread > 9 ? "9+" : unread}
+            <span className="absolute inset-0 rounded-full bg-rose-500 -z-10 animate-ping opacity-60" />
           </motion.span>
         )}
       </button>
@@ -267,7 +271,7 @@ export default function NotificationBell({
                   </p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/60">
+                <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/60 stagger-list">
                   {items
                     .filter((n) => {
                       if (filter === "unread") return !n.read_at

@@ -87,7 +87,11 @@ export default function ApartadosPage() {
   const rules = useBusinessRules();
 
   return (
-    <div className="px-3 pt-1 pb-28 max-w-5xl mx-auto">
+    <div className="relative px-3 pt-1 pb-28 max-w-5xl mx-auto">
+      {/* Orbs decorativos detras del contenido */}
+      <span className="deco-orb deco-orb-amber top-0 -left-16 w-64 h-64" />
+      <span className="deco-orb deco-orb-pink top-32 -right-16 w-72 h-72" />
+
       {/* HEADER */}
       <PageHeader
         icon={Bookmark}
