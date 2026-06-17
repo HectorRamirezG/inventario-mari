@@ -22,6 +22,7 @@ import { supabase } from "../../lib/supabase"
 import { sound } from "../../lib/sound"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { promptDialog } from "../../lib/prompt"
+import { extractLatLng, staticMapUrl } from "../../lib/geocoding"
 import {
   approveProof,
   rejectProof,
@@ -374,6 +375,33 @@ export default function ReviewProofDrawer({
                           {sale.customer_address}
                         </p>
                       )}
+
+                      {/* Mini preview del mapa si tenemos coordenadas en el link */}
+                      {(() => {
+                        const ll = extractLatLng(sale.customer_location ?? "")
+                        if (!ll) return null
+                        return (
+                          <a
+                            href={sale.customer_location!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 group"
+                          >
+                            <img
+                              src={staticMapUrl(ll.lat, ll.lng, { width: 600, height: 140, zoom: 16 })}
+                              alt="Ubicación del cliente"
+                              loading="lazy"
+                              className="w-full h-20 object-cover"
+                              onError={(e) => {
+                                ;(e.currentTarget as HTMLImageElement).style.display = "none"
+                              }}
+                            />
+                            <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-white/85 dark:bg-slate-900/85 backdrop-blur text-[8px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                              <MapPin size={8} className="text-primary" /> Ver en Maps
+                            </span>
+                          </a>
+                        )
+                      })()}
 
                       <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700">
                         <Kpi
