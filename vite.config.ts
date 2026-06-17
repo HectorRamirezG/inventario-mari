@@ -39,6 +39,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,svg,ico,woff,woff2}'],
+        // Sube el límite del precache: el bundle principal pasa los 2 MiB
+        // por defecto desde que agregamos jsPDF + html2canvas. Lo dejamos
+        // en 5 MiB para tener holgura sin reventar el build.
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         // No cachear el index.html: siempre que se navegue,
         // pedirlo a la red para que entren las versiones nuevas.
         navigateFallback: null,

@@ -1,6 +1,17 @@
-import html2canvas from "html2canvas"
-import jsPDF from "jspdf"
 import toast from "react-hot-toast"
+
+// IMPORTANTE: html2canvas (~200 KB gz) y jspdf (~150 KB gz) son pesados.
+// Los cargamos en runtime SOLO cuando el usuario pide imagen o PDF, así el
+// bundle inicial es mucho más liviano (Mari abre la app rapidísimo y solo
+// paga el peso cuando va a generar un comprobante).
+async function loadHtml2Canvas() {
+  const mod = await import("html2canvas")
+  return mod.default
+}
+async function loadJsPdf() {
+  const mod = await import("jspdf")
+  return mod.default ?? (mod as any).jsPDF
+}
 
 /**
  * html2canvas v1 no soporta funciones `oklch()` (color space que Tailwind v4
@@ -88,6 +99,7 @@ function resolveOklchColors(root: HTMLElement) {
  * para siempre.
  */
 async function nodeToCanvas(node: HTMLElement, scale = 2): Promise<HTMLCanvasElement> {
+  const html2canvas = await loadHtml2Canvas()
   return html2canvas(node, {
     scale,
     backgroundColor: "#ffffff",
@@ -205,7 +217,12 @@ export async function shareTicketPdf(opts: {
     const imgData = canvas.toDataURL("image/png")
 
     // Página tamaño "letter" (216 × 279 mm) en orientación retrato.
-    const pdf = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" })
+    const JsPdfCtor = await loadJsPdf()
+    const pdf = new JsPdfCtor({
+      unit: "mm",
+      format: "letter",
+      orientation: "portrait",
+    })
     const pageW = pdf.internal.pageSize.getWidth()
     const pageH = pdf.internal.pageSize.getHeight()
     const margin = 12
