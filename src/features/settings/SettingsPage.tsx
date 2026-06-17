@@ -637,6 +637,75 @@ function DangerZoneSection() {
           )}
         </motion.div>
       )}
+
+      {/* Limpiar caché local + service worker */}
+      <ClearCacheButton />
     </motion.section>
+  )
+}
+
+/**
+ * Botón para limpiar caché local + service worker + recargar.
+ * Útil cuando la app muestra datos viejos o un cambio nuevo no apareció.
+ */
+function ClearCacheButton() {
+  const [busy, setBusy] = useState(false)
+
+  async function clearAndReload() {
+    setBusy(true)
+    try {
+      // 1. Borrar Cache Storage del navegador
+      if ("caches" in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map((k) => caches.delete(k)))
+      }
+      // 2. Desregistrar todos los service workers
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map((r) => r.unregister()))
+      }
+      // 3. Borrar localStorage no crítico (preservamos sesión auth)
+      try {
+        const keep = Object.keys(localStorage).filter((k) =>
+          k.startsWith("sb-") || k.startsWith("supabase.")
+        )
+        const stash: Record<string, string> = {}
+        keep.forEach((k) => {
+          const v = localStorage.getItem(k)
+          if (v !== null) stash[k] = v
+        })
+        localStorage.clear()
+        Object.entries(stash).forEach(([k, v]) => localStorage.setItem(k, v))
+      } catch {}
+      // 4. Hard reload
+      window.location.reload()
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo limpiar la caché")
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="rounded-2xl bg-white dark:bg-slate-900/60 border border-rose-200/60 dark:border-rose-500/20 p-3 space-y-2">
+      <p className="text-[11px] font-black text-slate-700 dark:text-slate-200">
+        ¿La app muestra datos viejos?
+      </p>
+      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">
+        Limpia la caché del navegador y vuelve a cargar. No borra ventas ni tu sesión.
+      </p>
+      <button
+        type="button"
+        onClick={clearAndReload}
+        disabled={busy}
+        className="w-full h-10 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 press disabled:opacity-50"
+      >
+        {busy ? (
+          <Loader2 size={12} className="animate-spin" />
+        ) : (
+          <RotateCcw size={12} />
+        )}
+        Limpiar caché y recargar
+      </button>
+    </div>
   )
 }

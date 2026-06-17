@@ -59,6 +59,8 @@ import ReviewProofDrawer from "./components/ui/ReviewProofDrawer"
 import WhatsAppSupportFab from "./components/ui/WhatsAppSupportFab"
 import InstallPrompt from "./components/ui/InstallPrompt"
 import ErrorBoundary from "./components/ui/ErrorBoundary"
+import PwaUpdatePrompt from "./components/ui/PwaUpdatePrompt"
+import ShortcutsCheatsheet, { useShortcutsCheatsheet } from "./components/ui/ShortcutsCheatsheet"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
@@ -118,6 +120,8 @@ export default function App() {
       <ThemeMount />
       <ConnectionBanner />
       <InstallPrompt />
+      <PwaUpdatePrompt />
+      <ShortcutsCheatsheetMount />
       <Routes>
         {/* Públicas (sin login) */}
         <Route path="/ticket/:token" element={<PublicTicketPage />} />
@@ -142,6 +146,12 @@ function ThemeMount() {
     preloadBusinessRules().catch(() => {})
   }, [])
   return null
+}
+
+/** Cheatsheet global con tecla `?`. Funciona en cualquier ruta. */
+function ShortcutsCheatsheetMount() {
+  const { open, setOpen } = useShortcutsCheatsheet()
+  return <ShortcutsCheatsheet open={open} onClose={() => setOpen(false)} />
 }
 
 /* ============================================================== */
