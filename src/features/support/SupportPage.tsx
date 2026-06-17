@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   LifeBuoy,
   RefreshCw,
-  Inbox,
   Loader2,
   ImageOff,
   Image as ImageIcon,
@@ -14,6 +13,9 @@ import {
   MessageCircle,
   X,
   ExternalLink,
+  AlertCircle,
+  Activity,
+  ThumbsUp,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
@@ -29,6 +31,9 @@ import {
   type SupportStatus,
 } from "./supportService"
 import { formatDateTime, shortId } from "../../lib/format"
+import KpiCard from "../../components/ui/KpiCard"
+import Avatar from "../../components/ui/Avatar"
+import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 
 const STATUS_TABS: { id: SupportStatus | "all"; label: string }[] = [
   { id: "open", label: "Abiertas" },
@@ -49,17 +54,35 @@ function categoryMeta(cat: string) {
 }
 
 function statusTone(s: SupportStatus): string {
-  if (s === "resolved") return "bg-emerald-50 text-emerald-700 border-emerald-200"
-  if (s === "in_progress") return "bg-sky-50 text-sky-700 border-sky-200"
-  return "bg-rose-50 text-rose-700 border-rose-200"
+  if (s === "resolved") return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30"
+  if (s === "in_progress") return "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-500/30"
+  return "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30"
+}
+
+function statusLabel(s: SupportStatus): string {
+  if (s === "resolved") return "Resuelta"
+  if (s === "in_progress") return "En curso"
+  return "Nueva"
 }
 
 export default function SupportPage() {
   const [tab, setTab] = useState<SupportStatus | "all">("open")
   const [tickets, setTickets] = useState<SupportTicket[]>([])
+  const [allTickets, setAllTickets] = useState<SupportTicket[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SupportTicket | null>(null)
   const [tableReady, setTableReady] = useState<boolean | null>(null)
+
+  // Counts globales (para KPIs + badges en tabs)
+  const counts = useMemo(() => {
+    const c = { open: 0, in_progress: 0, resolved: 0, total: allTickets.length }
+    allTickets.forEach((t) => {
+      if (t.status === "open") c.open++
+      else if (t.status === "in_progress") c.in_progress++
+      else if (t.status === "resolved") c.resolved++
+    })
+    return c
+  }, [allTickets])
 
   // Detectar si la tabla existe en la DB (única vez al montar)
   useEffect(() => {
@@ -73,8 +96,14 @@ export default function SupportPage() {
   async function refresh() {
     setLoading(true)
     try {
-      const data = await listSupportTickets({ status: tab })
+      // Pedimos lista filtrada + global en paralelo para alimentar tabs y KPIs
+      const [data, all] = await Promise.all([
+        listSupportTickets({ status: tab }),
+        tab === "all" ? Promise.resolve(null) : listSupportTickets({ status: "all", limit: 200 }),
+      ])
       setTickets(data)
+      if (all) setAllTickets(all)
+      else setAllTickets(data) // si pediste "all", ya viene completo
     } catch (e: any) {
       toast.error(e?.message ?? "No se pudieron cargar las incidencias")
     } finally {
@@ -139,46 +168,81 @@ export default function SupportPage() {
   return (
     <div className="max-w-3xl mx-auto px-1 pb-12">
       {/* HEADER */}
-      <div className="flex items-end justify-between px-2 mb-4">
+      <div className="flex items-end justify-between px-2 mb-3">
         <div>
-          <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2">
+          <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-slate-900 dark:text-slate-100">
             <LifeBuoy size={14} className="text-primary" /> Incidencias
           </h2>
-          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mt-0.5">
+          <p className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mt-0.5">
             Buzón de soporte a clientes
           </p>
         </div>
         <button
           onClick={refresh}
           aria-label="Refrescar"
-          className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-primary flex items-center justify-center active:scale-90 transition-transform"
+          className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-primary flex items-center justify-center press"
         >
           <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
         </button>
       </div>
 
+      {/* KPI STRIP */}
+      <div className="grid grid-cols-3 gap-2 mb-3 px-1">
+        <KpiCard
+          label="Abiertas"
+          value={counts.open}
+          tone={counts.open > 0 ? "danger" : "default"}
+          icon={<AlertCircle size={9} />}
+        />
+        <KpiCard
+          label="En curso"
+          value={counts.in_progress}
+          tone={counts.in_progress > 0 ? "primary" : "default"}
+          icon={<Activity size={9} />}
+        />
+        <KpiCard
+          label="Resueltas"
+          value={counts.resolved}
+          tone="success"
+          icon={<ThumbsUp size={9} />}
+        />
+      </div>
+
       {/* TABS */}
-      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-2xl mb-4">
+      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-2xl mb-4 border border-slate-200/60 dark:border-slate-700/60">
         {STATUS_TABS.map((t) => {
           const active = tab === t.id
+          const badge =
+            t.id === "open" ? counts.open :
+            t.id === "in_progress" ? counts.in_progress :
+            t.id === "resolved" ? counts.resolved : counts.total
           return (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`relative flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${
-                active ? "text-white" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-200"
+              className={`relative flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 ${
+                active ? "text-white" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
               }`}
             >
               {active && (
                 <motion.span
                   layoutId="support-tab-pill"
-                  className="absolute inset-0 rounded-xl"
+                  className="absolute inset-0 rounded-xl shadow-bloom"
                   style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
               <span className="relative z-10">{t.label}</span>
+              {badge > 0 && (
+                <span
+                  className={`relative z-10 min-w-4 h-4 px-1 rounded-full text-[8px] font-black tabular-nums flex items-center justify-center ${
+                    active ? "bg-white/25 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+                  }`}
+                >
+                  {badge}
+                </span>
+              )}
             </button>
           )
         })}
@@ -204,25 +268,32 @@ export default function SupportPage() {
           <Loader2 className="animate-spin text-primary" size={28} />
         </div>
       ) : tickets.length === 0 ? (
-        <div className="py-20 text-center text-slate-400">
-          <Inbox size={36} className="mx-auto mb-2 text-slate-300" />
-          <p className="text-sm font-bold">Sin incidencias</p>
-          <p className="text-[11px] text-slate-400 italic">
-            {tab === "open"
-              ? "Excelente: no hay clientes esperando 💖"
-              : "No hay reportes en este filtro."}
-          </p>
-        </div>
+        <EmptyStateIllustration
+          variant="no-orders"
+          title={tab === "open" ? "Sin incidencias abiertas" : "Sin incidencias"}
+          subtitle={
+            tab === "open"
+              ? "Excelente: ninguna clienta está esperando una respuesta"
+              : tab === "resolved"
+              ? "Aquí aparecerán los casos cerrados"
+              : "No hay reportes en este filtro"
+          }
+        />
       ) : (
         <div className="space-y-5">
           {groups.map(([day, items]) => (
             <div key={day}>
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 px-2">
-                {day}
-              </p>
+              <div className="sticky top-0 z-10 -mx-1 px-3 py-1.5 mb-2 bg-slate-50/85 dark:bg-slate-950/85 backdrop-blur-md flex items-center gap-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                  {day}
+                </p>
+                <span className="text-[8px] font-bold text-slate-400 dark:text-slate-500">· {items.length}</span>
+                <div className="flex-1 h-px bg-gradient-to-r from-slate-200 dark:from-slate-700 to-transparent" />
+              </div>
               <div className="space-y-2">
                 {items.map((t) => {
                   const meta = categoryMeta(t.category)
+                  const isOpen = t.status === "open"
                   return (
                     <motion.button
                       key={t.id}
@@ -230,45 +301,53 @@ export default function SupportPage() {
                       layout
                       whileTap={{ scale: 0.99 }}
                       onClick={() => setSelected(t)}
-                      className="w-full text-left bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 hover:border-primary/30 transition-colors rounded-2xl p-3 shadow-sm"
+                      className="relative w-full text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-primary/30 dark:hover:border-primary/40 hover:shadow-md transition-all rounded-2xl p-3 shadow-sm overflow-hidden"
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-xl shrink-0">
-                          {meta.emoji}
+                      {/* Barra lateral de color por estatus */}
+                      <div
+                        className={`absolute left-0 top-0 bottom-0 w-1 ${
+                          isOpen
+                            ? "bg-rose-400"
+                            : t.status === "in_progress"
+                            ? "bg-sky-400"
+                            : "bg-emerald-400"
+                        }`}
+                      />
+                      <div className="flex items-start gap-3 pl-2">
+                        <div className="relative shrink-0">
+                          <Avatar name={t.customer_name || "Cliente"} size={40} />
+                          <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-[11px]">
+                            {meta.emoji}
+                          </span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2 mb-0.5">
-                            <p className="text-sm font-black truncate">
+                            <p className="text-sm font-black truncate text-slate-900 dark:text-slate-100">
                               {t.customer_name || "Cliente"}
                             </p>
                             <span
                               className={`text-[8px] font-black uppercase tracking-widest border px-1.5 py-0.5 rounded-full shrink-0 ${statusTone(t.status)}`}
                             >
-                              {t.status === "open" && "Nueva"}
-                              {t.status === "in_progress" && "En curso"}
-                              {t.status === "resolved" && "Resuelta"}
+                              {statusLabel(t.status)}
                             </span>
                           </div>
                           <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 truncate">
                             {meta.label}
                           </p>
                           {t.description && (
-                            <p className="text-[11px] text-slate-500 truncate italic">
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate italic">
                               "{t.description}"
                             </p>
                           )}
-                          <div className="flex items-center gap-2 mt-1 text-[9px] text-slate-400 font-bold">
+                          <div className="flex items-center gap-2 mt-1 text-[9px] text-slate-400 dark:text-slate-500 font-bold flex-wrap">
                             {t.sale_id && (
-                              <span className="tabular-nums">
-                                Folio {shortId(t.sale_id)}
-                              </span>
+                              <span className="tabular-nums">Folio {shortId(t.sale_id)}</span>
                             )}
-                            <span>·</span>
+                            {t.sale_id && <span>·</span>}
                             <span className="flex items-center gap-1">
                               {t.image_url ? (
                                 <>
-                                  <ImageIcon size={9} className="text-emerald-500" />{" "}
-                                  con foto
+                                  <ImageIcon size={9} className="text-emerald-500" /> con foto
                                 </>
                               ) : (
                                 <>

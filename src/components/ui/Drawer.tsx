@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, type PanInfo } from "framer-motion"
 import { X } from "lucide-react"
 import clsx from "clsx"
 import { useEffect } from "react"
@@ -10,6 +10,8 @@ interface DrawerProps {
   onClose: () => void
   side?: "left" | "right" | "bottom"
   size?: "sm" | "md" | "lg"
+  /** Desactivar drag-to-dismiss en bottom sheets. Default: activado. */
+  draggable?: boolean
 }
 
 export default function Drawer({
@@ -18,7 +20,8 @@ export default function Drawer({
   children,
   onClose,
   side = "bottom",
-  size = "md"
+  size = "md",
+  draggable = true,
 }: DrawerProps) {
 
   /* ESC */
@@ -29,6 +32,16 @@ export default function Drawer({
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
+  }, [open, onClose])
+
+  /* Bloquear scroll del body cuando está abierto */
+  useEffect(() => {
+    if (!open) return
+    const original = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = original
+    }
   }, [open])
 
   const sizes = {
@@ -49,6 +62,13 @@ export default function Drawer({
     bottom: { initial: { y: "100%" }, animate: { y: 0 }, exit: { y: "100%" } }
   }
 
+  function handleDragEnd(_e: any, info: PanInfo) {
+    // Cerrar si el usuario arrastra >120px o velocidad >500px/s hacia abajo
+    if (info.offset.y > 120 || info.velocity.y > 500) {
+      onClose()
+    }
+  }
+
   return (
     <AnimatePresence>
       {open && (
@@ -60,7 +80,7 @@ export default function Drawer({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
           />
 
           {/* DRAWER */}
@@ -68,47 +88,55 @@ export default function Drawer({
             initial={motionVariants[side].initial}
             animate={motionVariants[side].animate}
             exit={motionVariants[side].exit}
-            transition={{ type: "spring", stiffness: 280, damping: 28 }}
+            transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            drag={side === "bottom" && draggable ? "y" : false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.4 }}
+            onDragEnd={handleDragEnd}
             className={clsx(
-              "relative bg-white flex flex-col",
-              "border border-gray-100",
+              "relative flex flex-col",
+              "bg-white dark:bg-slate-900",
+              "border border-slate-100 dark:border-slate-800",
               "shadow-[0_20px_60px_rgba(0,0,0,0.25)]",
+              "text-slate-900 dark:text-slate-100",
 
               side === "bottom"
-                ? "w-full rounded-t-[2rem] max-h-[90vh]"
+                ? "w-full rounded-t-[2rem] max-h-[90vh] touch-pan-y"
                 : `w-full ${sizes[size]} h-full rounded-l-[2rem]`,
 
               sidePosition[side]
             )}
+            style={{ paddingBottom: side === "bottom" ? "env(safe-area-inset-bottom)" : undefined }}
           >
 
             {/* HANDLE (solo mobile bottom) */}
             {side === "bottom" && (
-              <div className="flex justify-center py-2">
-                <div className="h-1.5 w-10 rounded-full bg-gray-300" />
+              <div className="flex justify-center pt-2.5 pb-1 cursor-grab active:cursor-grabbing">
+                <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
               </div>
             )}
 
             {/* HEADER */}
             {title && (
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
 
-                <h3 className="text-[15px] font-semibold text-slate-800">
+                <h3 className="text-[15px] font-black text-slate-900 dark:text-slate-100 tracking-tight">
                   {title}
                 </h3>
 
                 <button
                   onClick={onClose}
-                  className="h-9 w-9 flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-95 transition"
+                  aria-label="Cerrar"
+                  className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
                 >
-                  <X size={16} className="text-slate-400" />
+                  <X size={16} />
                 </button>
 
               </div>
             )}
 
             {/* CONTENT */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 scroll-container-ios">
 
               {children}
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { AlertTriangle, Package, MinusCircle, PlusCircle } from "lucide-react"
+import { AlertTriangle, MinusCircle, PlusCircle, PackageX } from "lucide-react"
 
 import { getProducts } from "../products/productService"
 import type { Product, Variant } from "../../types/database"
@@ -8,6 +8,9 @@ import {
   CreateVariantModal,
   MovementModal,
 } from "../movements/ProductModals"
+import KpiCard from "../../components/ui/KpiCard"
+import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
+import Skeleton from "../../components/ui/Skeleton"
 
 interface LowItem {
   product: Product
@@ -73,41 +76,35 @@ export default function LowStockView() {
     <div className="space-y-3 pb-10">
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-amber-50 border border-amber-100 p-3">
-          <p className="text-[8px] font-black uppercase tracking-widest text-amber-700/70">
-            Bajo mínimo
-          </p>
-          <p className="text-2xl font-black text-amber-700 tabular-nums">
-            {summary.total}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-rose-50 border border-rose-100 p-3">
-          <p className="text-[8px] font-black uppercase tracking-widest text-rose-700/70">
-            Sin stock
-          </p>
-          <p className="text-2xl font-black text-rose-600 tabular-nums">
-            {summary.empty}
-          </p>
-        </div>
+        <KpiCard
+          label="Bajo mínimo"
+          value={summary.total}
+          tone={summary.total > 0 ? "warn" : "default"}
+          icon={<AlertTriangle size={9} />}
+          hint={summary.total > 0 ? "Reabastecer pronto" : "Todo OK"}
+        />
+        <KpiCard
+          label="Sin stock"
+          value={summary.empty}
+          tone={summary.empty > 0 ? "danger" : "default"}
+          icon={<PackageX size={9} />}
+          hint={summary.empty > 0 ? "Cero piezas disponibles" : "Sin agotados"}
+        />
       </div>
 
       {/* Lista */}
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-16 rounded-2xl bg-slate-100/60 animate-pulse"
-            />
+            <Skeleton key={i} className="h-16 w-full" rounded="xl" />
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="py-14 text-center border-2 border-dashed border-emerald-200 rounded-3xl bg-emerald-50/30">
-          <Package size={28} className="mx-auto text-emerald-500 mb-2" />
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
-            Todo tu inventario está en regla
-          </p>
-        </div>
+        <EmptyStateIllustration
+          variant="no-orders"
+          title="Todo tu inventario está en regla"
+          subtitle="No tienes variantes por debajo de su mínimo. ¡Bien hecho!"
+        />
       ) : (
         <div className="space-y-2">
           <AnimatePresence>
@@ -121,20 +118,20 @@ export default function LowStockView() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: -10 }}
-                  className={`flex items-center justify-between gap-3 p-3 rounded-2xl border ${
+                  className={`flex items-center justify-between gap-3 p-3 rounded-2xl border shadow-sm hover:shadow-md transition-shadow ${
                     empty
-                      ? "bg-rose-50/50 border-rose-100"
-                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                      ? "bg-rose-50/60 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30"
+                      : "bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800"
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-black text-slate-800 truncate">
+                    <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 truncate">
                       {product.name}
                     </p>
-                    <p className="text-[9px] font-bold text-slate-500 truncate">
+                    <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 truncate">
                       {variant.variant_name}
                       {variant.sku && (
-                        <span className="text-slate-400"> · {variant.sku}</span>
+                        <span className="text-slate-400 dark:text-slate-500"> · {variant.sku}</span>
                       )}
                     </p>
                   </div>
@@ -142,12 +139,12 @@ export default function LowStockView() {
                   <div className="text-right shrink-0">
                     <p
                       className={`text-sm font-black tabular-nums ${
-                        empty ? "text-rose-500" : "text-amber-600"
+                        empty ? "text-rose-500 dark:text-rose-300" : "text-amber-600 dark:text-amber-400"
                       }`}
                     >
                       {stock}/{product.min_stock ?? 0}
                     </p>
-                    <p className="text-[8px] font-bold text-slate-400 flex items-center gap-1 justify-end">
+                    <p className="text-[8px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1 justify-end">
                       <AlertTriangle size={9} />
                       faltan {diff > 0 ? diff : 1}
                     </p>
@@ -156,7 +153,7 @@ export default function LowStockView() {
                   <motion.button
                     whileTap={{ scale: 0.92 }}
                     onClick={() => handleEntrada(variant)}
-                    className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center active:scale-90 transition-transform shadow-md shadow-emerald-500/20"
+                    className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center press shadow-[0_8px_20px_-4px_rgba(16,185,129,0.45)] hover:brightness-110"
                     title="Registrar entrada"
                   >
                     <PlusCircle size={16} />
