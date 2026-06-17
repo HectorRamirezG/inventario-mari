@@ -44,6 +44,7 @@ import {
 } from "../profile/profileService";
 import { fetchCustomerStatsByEmails, type CustomerStat } from "./customerStatsService";
 import RfmBadge from "../../components/ui/RfmBadge";
+import WhatsAppTemplateMenu from "./WhatsAppTemplateMenu";
 
 const waLink = (raw?: string | null) => {
   const p = intlPhone(raw);
@@ -539,7 +540,7 @@ function SaleCard({
             className="overflow-hidden mb-3 space-y-3"
           >
             {/* Contactos rápidos */}
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 items-center">
               {wa && (
                 <a
                   href={wa}
@@ -550,6 +551,7 @@ function SaleCard({
                   <MessageCircle size={10} /> WhatsApp
                 </a>
               )}
+              {effectivePhone && <WhatsAppTemplateMenu sale={sale} compact />}
               {effectivePhone && (
                 <a
                   href={`tel:${cleanPhone(effectivePhone)}`}

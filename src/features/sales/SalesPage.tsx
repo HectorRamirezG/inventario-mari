@@ -85,6 +85,41 @@ export default function SalesPage() {
     };
   }, [actions, state.cart.length]);
 
+  // Hotkeys locales de la pantalla Caja.
+  // Se evita capturar cuando el foco está en un input/textarea para no
+  // interferir con la escritura del admin.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName?.toLowerCase()
+      const inField =
+        tag === "input" || tag === "textarea" || tag === "select" || target?.isContentEditable
+      if (inField) {
+        if (e.key === "Escape" && target instanceof HTMLElement) target.blur()
+        return
+      }
+      if (e.key === "/") {
+        e.preventDefault()
+        document
+          .querySelector<HTMLInputElement>("input[placeholder='Buscar...']")
+          ?.focus()
+        return
+      }
+      if (e.key.toLowerCase() === "s" && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setScannerOpen(true)
+        return
+      }
+      if (e.key.toLowerCase() === "c" && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault()
+        setShowCustomer((v) => !v)
+        return
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, []);
+
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return state.results;
@@ -155,7 +190,6 @@ export default function SalesPage() {
   }, [state.cart, state.total, state.cartTier]);
 
   const tone = TIER_TONE[state.cartTier];
-  const balanceNum = Number(state.balance) || 0;
 
   return (
     <div className="px-3 pt-1 pb-28">
@@ -623,6 +657,12 @@ export default function SalesPage() {
               </p>
             </div>
 
+            <QuickAmounts
+              total={state.total}
+              currentPaid={Number(state.paid) || 0}
+              onPick={(v) => actions.setPaid(v)}
+            />
+
             <input
               type="number"
               inputMode="decimal"
@@ -673,18 +713,7 @@ export default function SalesPage() {
 
             {/* Cambio / saldo pendiente */}
             {state.cart.length > 0 && Number(state.paid) > 0 && (
-              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
-                <span className="text-slate-400">
-                  {balanceNum > 0 ? "Saldo pendiente" : "Cambio"}
-                </span>
-                <span
-                  className={
-                    balanceNum > 0 ? "text-rose-500" : "text-emerald-500"
-                  }
-                >
-                  {formatMoney(Math.abs(balanceNum))}
-                </span>
-              </div>
+              <ChangeBanner total={state.total} paid={Number(state.paid)} />
             )}
 
             <Button
@@ -889,6 +918,90 @@ function DeliveryBlock({ state, actions }: { state: any; actions: any }) {
       </AnimatePresence>
     </div>
   );
+}
+
+/* ════════════════════════ QuickAmounts y ChangeBanner ════════════════════════ */
+function QuickAmounts({
+  total,
+  currentPaid,
+  onPick,
+}: {
+  total: number
+  currentPaid: number
+  onPick: (v: number) => void
+}) {
+  const presets = [50, 100, 200, 500, 1000].filter((v) => v <= Math.max(total, 1000) * 2)
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      <button
+        type="button"
+        onClick={() => onPick(Number(total.toFixed(2)))}
+        className={`px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${
+          Math.abs(currentPaid - total) < 0.01
+            ? "bg-primary text-white border-primary shadow-bloom"
+            : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 hover:border-primary/40"
+        }`}
+        title="Pago exacto al total"
+      >
+        Exacto
+      </button>
+      {presets.map((v) => {
+        const active = Math.abs(currentPaid - v) < 0.01
+        return (
+          <button
+            key={v}
+            type="button"
+            onClick={() => onPick(v)}
+            className={`px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all tabular-nums ${
+              active
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-200 hover:border-slate-400"
+            }`}
+          >
+            ${v}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function ChangeBanner({ total, paid }: { total: number; paid: number }) {
+  const diff = paid - total
+  if (Math.abs(diff) < 0.005) {
+    return (
+      <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border-2 border-emerald-200 dark:border-emerald-500/30 p-3 text-center">
+        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+          Cobro exacto
+        </p>
+        <p className="text-2xl font-black text-emerald-700 dark:text-emerald-300 mt-0.5">
+          ✓ Sin cambio
+        </p>
+      </div>
+    )
+  }
+  if (diff > 0) {
+    return (
+      <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border-2 border-emerald-200 dark:border-emerald-500/30 p-3 text-center">
+        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+          Devolver al cliente
+        </p>
+        <p className="text-3xl md:text-4xl font-black text-emerald-700 dark:text-emerald-300 tabular-nums mt-1">
+          {formatMoney(diff)}
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="rounded-2xl bg-rose-50 dark:bg-rose-500/10 border-2 border-rose-200 dark:border-rose-500/30 p-3 text-center">
+      <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">
+        Falta por cobrar
+      </p>
+      <p className="text-2xl font-black text-rose-700 dark:text-rose-300 tabular-nums mt-0.5">
+        {formatMoney(Math.abs(diff))}
+      </p>
+    </div>
+  )
 }
 
 /* ════════════════════════ CustomerHistoryCard ════════════════════════

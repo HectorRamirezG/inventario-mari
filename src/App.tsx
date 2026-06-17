@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, Suspense, lazy } from "react"
 import { Toaster } from "react-hot-toast"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -34,19 +34,20 @@ import {
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
-import PricingPage from "./features/pricing/PricingPage"
-import DashboardPage from "./features/dashboard/DashboardPage"
-import SalesPage from "./features/sales/SalesPage"
-import ApartadosPage from "./features/apartados/ApartadosPage"
-import SettingsPage from "./features/settings/SettingsPage"
-import BusinessRulesPage from "./features/settings/BusinessRulesPage"
 import LoginPage from "./features/auth/LoginPage"
 import PublicTicketPage from "./features/public/PublicTicketPage"
 import ClientShopPage from "./features/client/ClientShopPage"
-import ClientOrdersPage from "./features/client/ClientOrdersPage"
-import MyReportsPage from "./features/client/MyReportsPage"
-import CyclesPage from "./features/cycles/CyclesPage"
-import SupportPage from "./features/support/SupportPage"
+
+const PricingPage = lazy(() => import("./features/pricing/PricingPage"))
+const DashboardPage = lazy(() => import("./features/dashboard/DashboardPage"))
+const SalesPage = lazy(() => import("./features/sales/SalesPage"))
+const ApartadosPage = lazy(() => import("./features/apartados/ApartadosPage"))
+const SettingsPage = lazy(() => import("./features/settings/SettingsPage"))
+const BusinessRulesPage = lazy(() => import("./features/settings/BusinessRulesPage"))
+const ClientOrdersPage = lazy(() => import("./features/client/ClientOrdersPage"))
+const MyReportsPage = lazy(() => import("./features/client/MyReportsPage"))
+const CyclesPage = lazy(() => import("./features/cycles/CyclesPage"))
+const SupportPage = lazy(() => import("./features/support/SupportPage"))
 
 import ThemeToggle from "./components/ui/ThemeToggle"
 import CommandPalette from "./components/ui/CommandPalette"
@@ -538,15 +539,17 @@ function AdminShell() {
                 transition={{ duration: 0.15 }}
                 className="pb-24 md:pb-12"
               >
-                {section === "hoy" && <DashboardPage />}
-                {section === "catalogo" && <InventoryPage />}
-                {section === "caja" && <SalesPage />}
-                {section === "pendientes" && <ApartadosPage />}
-                {section === "soporte" && <SupportPage />}
-                {section === "ciclos" && isAdmin && <CyclesPage />}
-                {section === "calculadora" && isAdmin && <PricingPage />}
-                {section === "reglas" && isAdmin && <BusinessRulesPage />}
-                {section === "ajustes" && <SettingsPage />}
+                <Suspense fallback={<FullScreenSpinner />}>
+                  {section === "hoy" && <DashboardPage />}
+                  {section === "catalogo" && <InventoryPage />}
+                  {section === "caja" && <SalesPage />}
+                  {section === "pendientes" && <ApartadosPage />}
+                  {section === "soporte" && <SupportPage />}
+                  {section === "ciclos" && isAdmin && <CyclesPage />}
+                  {section === "calculadora" && isAdmin && <PricingPage />}
+                  {section === "reglas" && isAdmin && <BusinessRulesPage />}
+                  {section === "ajustes" && <SettingsPage />}
+                </Suspense>
               </motion.div>
             </AnimatePresence>
           </div>
@@ -761,38 +764,40 @@ function ShopShell() {
       {/* CONTENIDO */}
       <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios">
         <div className="max-w-3xl mx-auto px-4 py-4 pb-20">
-          <Routes>
-            <Route path="/" element={<ClientShopPage />} />
-            <Route
-              path="/mis-pedidos"
-              element={
-                isLogged ? (
-                  <ClientOrdersPage />
-                ) : (
-                  <Navigate
-                    to="/login"
-                    replace
-                    state={{ from: "/mis-pedidos" }}
-                  />
-                )
-              }
-            />
-            <Route
-              path="/mis-reportes"
-              element={
-                isLogged ? (
-                  <MyReportsPage />
-                ) : (
-                  <Navigate
-                    to="/login"
-                    replace
-                    state={{ from: "/mis-reportes" }}
-                  />
-                )
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<FullScreenSpinner />}>
+            <Routes>
+              <Route path="/" element={<ClientShopPage />} />
+              <Route
+                path="/mis-pedidos"
+                element={
+                  isLogged ? (
+                    <ClientOrdersPage />
+                  ) : (
+                    <Navigate
+                      to="/login"
+                      replace
+                      state={{ from: "/mis-pedidos" }}
+                    />
+                  )
+                }
+              />
+              <Route
+                path="/mis-reportes"
+                element={
+                  isLogged ? (
+                    <MyReportsPage />
+                  ) : (
+                    <Navigate
+                      to="/login"
+                      replace
+                      state={{ from: "/mis-reportes" }}
+                    />
+                  )
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </div>
       </main>
 

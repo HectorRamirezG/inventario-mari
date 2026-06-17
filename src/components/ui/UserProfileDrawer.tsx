@@ -13,6 +13,7 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  Sparkles,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -27,6 +28,9 @@ import {
 import ProductImageUploader from "./ProductImageUploader"
 import SmartLocationInput from "./SmartLocationInput"
 import Skeleton from "./Skeleton"
+import RfmBadge from "./RfmBadge"
+import { fetchMyShoppingStats, type MyShoppingStats } from "../../features/profile/myShoppingStatsService"
+import { formatMoney } from "../../lib/format"
 
 interface Props {
   open: boolean
@@ -267,6 +271,8 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                     label="Cambiar foto de perfil"
                   />
 
+                  {email && <MyShoppingStatsCard email={email} />}
+
                   {/* Datos básicos */}
                   <section className="space-y-3">
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
@@ -421,6 +427,88 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
       )}
     </AnimatePresence>,
     document.body
+  )
+}
+
+function MyShoppingStatsCard({ email }: { email: string }) {
+  const [stats, setStats] = useState<MyShoppingStats | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    fetchMyShoppingStats(email)
+      .then((s) => {
+        if (alive) setStats(s)
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [email])
+
+  if (loading) {
+    return <Skeleton className="h-32 w-full" rounded="lg" />
+  }
+  if (!stats || stats.visits === 0) return null
+
+  return (
+    <section className="rounded-3xl p-4 border border-primary/15 bg-gradient-to-br from-primary/5 via-fuchsia-50/40 to-purple-50/40 dark:from-primary/10 dark:via-fuchsia-500/5 dark:to-purple-500/5">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+          <Sparkles size={11} /> Tu historial
+        </h4>
+        <RfmBadge tier={stats.tier} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <Stat label="Compras" value={String(stats.visits)} />
+        <Stat label="Gastado" value={formatMoney(stats.totalSpent)} />
+        <Stat
+          label={stats.pendingBalance > 0 ? "Pendiente" : "Al corriente"}
+          value={stats.pendingBalance > 0 ? formatMoney(stats.pendingBalance) : "✓"}
+          tone={stats.pendingBalance > 0 ? "amber" : "emerald"}
+        />
+      </div>
+
+      {stats.savingsVsMenudeo > 0 && (
+        <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 text-center mb-2">
+          Has ahorrado {formatMoney(stats.savingsVsMenudeo)} en mayoreo
+        </p>
+      )}
+
+      {stats.firstPurchaseIso && (
+        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 text-center">
+          Cliente desde {new Date(stats.firstPurchaseIso).toLocaleDateString("es-MX", { month: "long", year: "numeric" })}
+        </p>
+      )}
+    </section>
+  )
+}
+
+function Stat({
+  label,
+  value,
+  tone = "primary",
+}: {
+  label: string
+  value: string
+  tone?: "primary" | "emerald" | "amber"
+}) {
+  const toneCls = {
+    primary: "text-primary",
+    emerald: "text-emerald-600 dark:text-emerald-400",
+    amber: "text-amber-700 dark:text-amber-300",
+  }[tone]
+  return (
+    <div className="rounded-2xl bg-white/70 dark:bg-slate-900/40 backdrop-blur p-2 text-center">
+      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+        {label}
+      </p>
+      <p className={`text-sm font-black tabular-nums mt-0.5 ${toneCls}`}>{value}</p>
+    </div>
   )
 }
 

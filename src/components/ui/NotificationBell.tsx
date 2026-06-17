@@ -109,6 +109,7 @@ export default function NotificationBell({
   const { items, unread, markAsRead, markAllRead, removeNotification } =
     useNotifications()
   const [open, setOpen] = useState(false)
+  const [filter, setFilter] = useState<"unread" | "today" | "all">("unread")
   const btnRef = useRef<HTMLButtonElement>(null)
   const navigate = useNavigate()
 
@@ -237,6 +238,32 @@ export default function NotificationBell({
                 </div>
               </div>
 
+              <div className="flex items-center gap-1 px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
+                {(
+                  [
+                    { id: "unread", label: `Sin leer (${unread})` },
+                    { id: "today", label: "Hoy" },
+                    { id: "all", label: `Todas (${items.length})` },
+                  ] as const
+                ).map((f) => {
+                  const active = filter === f.id
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setFilter(f.id)}
+                      className={`h-7 px-3 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${
+                        active
+                          ? "bg-primary text-white shadow-bloom"
+                          : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  )
+                })}
+              </div>
+
               {/* Lista */}
               {items.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-12 px-6 text-center">
@@ -250,7 +277,21 @@ export default function NotificationBell({
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/60">
-                  {items.map((n) => {
+                  {items
+                    .filter((n) => {
+                      if (filter === "unread") return !n.read_at
+                      if (filter === "today") {
+                        const d = new Date(n.created_at)
+                        const today = new Date()
+                        return (
+                          d.getFullYear() === today.getFullYear() &&
+                          d.getMonth() === today.getMonth() &&
+                          d.getDate() === today.getDate()
+                        )
+                      }
+                      return true
+                    })
+                    .map((n) => {
                     const Icon = ICON[n.type] ?? Bell
                     const tone = COLOR[n.type] ?? "bg-slate-50/70 text-slate-600"
                     const rowBg = ROW_BG[n.type] ?? ""

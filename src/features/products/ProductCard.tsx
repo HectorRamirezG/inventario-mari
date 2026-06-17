@@ -16,6 +16,7 @@ import {
 import toast from "react-hot-toast"
 
 import VariantImageCarousel from "../../components/ui/VariantImageCarousel"
+import QuickStockPopover from "./QuickStockPopover"
 import ProductLightbox, { type LightboxSlide } from "../../components/ui/ProductLightbox"
 import { formatMoney } from "../../lib/format"
 import type { Product, Variant } from "../../types/database"
@@ -110,6 +111,7 @@ export default function ProductCard({
 
   // Popover de acción rápida del botón "+"
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const [stockOpen, setStockOpen] = useState(false)
   const popoverRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!popoverOpen) return
@@ -321,17 +323,36 @@ export default function ProductCard({
                 {minPrice ? formatMoney(minPrice) : "—"}
               </span>
               {variants.length > 0 && (
-                <span
-                  className={`text-[9px] font-black uppercase tracking-widest tabular-nums ${
-                    totalStock === 0
-                      ? "text-rose-500"
-                      : lowStock
-                      ? "text-amber-600"
-                      : "text-emerald-600"
-                  }`}
-                >
-                  {totalStock} pz
-                </span>
+                <div className="relative inline-block">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setStockOpen((v) => !v)
+                    }}
+                    className={`text-[9px] font-black uppercase tracking-widest tabular-nums rounded-full px-2 py-0.5 transition-colors ${
+                      totalStock === 0
+                        ? "bg-rose-50 dark:bg-rose-500/15 text-rose-600 hover:bg-rose-100"
+                        : lowStock
+                        ? "bg-amber-50 dark:bg-amber-500/15 text-amber-700 hover:bg-amber-100"
+                        : "bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 hover:bg-emerald-100"
+                    }`}
+                    title="Ajustar stock rápido"
+                  >
+                    {totalStock} pz
+                  </button>
+                  <QuickStockPopover
+                    open={stockOpen}
+                    variants={variants.map((v) => ({
+                      id: v.id,
+                      variant_name: v.variant_name,
+                      stock: Number(v.stock) || 0,
+                    }))}
+                    productName={product.name}
+                    onClose={() => setStockOpen(false)}
+                    onSaved={refresh}
+                  />
+                </div>
               )}
             </div>
             {variants.length === 0 && (
