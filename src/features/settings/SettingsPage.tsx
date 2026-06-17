@@ -13,6 +13,8 @@ import {
   Loader2,
   Truck,
   Building2,
+  AlertTriangle,
+  Trash2,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
@@ -33,6 +35,7 @@ import {
   saveBankAccount,
   DEFAULT_BANK,
 } from "./bankAccountService"
+import { resetAppData, type ResetReport } from "./resetAppService"
 
 export default function SettingsPage() {
   const { info, update, reset } = useStoreInfo()
@@ -360,6 +363,9 @@ export default function SettingsPage() {
         </Section>
       )}
 
+      {/* ZONA PELIGROSA — solo admin */}
+      {isAdmin && <DangerZoneSection />}
+
       {/* CUENTA */}
       <Section
         icon={<UserCircle size={14} />}
@@ -455,5 +461,182 @@ function Field({
       </span>
       {children}
     </label>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   DANGER ZONE — reset operativo
+   Limpia productos, ventas, ciclos, imágenes. NO toca cuentas de
+   usuarios ni configuración. Requiere doble confirmación: cliquear
+   "Resetear", escribir RESETEAR exacto y volver a confirmar.
+   ════════════════════════════════════════════════════════════════════ */
+function DangerZoneSection() {
+  const [open, setOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [report, setReport] = useState<ResetReport | null>(null)
+
+  const canRun = confirmText.trim().toUpperCase() === "RESETEAR" && !busy
+
+  async function handleReset() {
+    if (!canRun) return
+    if (
+      !window.confirm(
+        "⚠️ Última confirmación.\n\nEsto borra TODOS los productos, variantes, ventas, ciclos, fotos y movimientos. Los USUARIOS y la CONFIGURACIÓN se preservan.\n\n¿Continuar?"
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    const tid = toast.loading("Reseteando datos operativos...")
+    try {
+      const r = await resetAppData()
+      setReport(r)
+      const totalRows = Object.values(r.tables).reduce((a, b) => a + b, 0)
+      const hadErrors = r.errors.length > 0
+      if (hadErrors) {
+        toast.error(
+          `Reset parcial: ${totalRows} filas y ${r.storage_deleted} archivos eliminados, ${r.errors.length} errores. Revisa el reporte.`,
+          { id: tid, duration: 6000 }
+        )
+      } else {
+        toast.success(
+          `✓ Reseteado: ${totalRows} filas y ${r.storage_deleted} archivos eliminados.`,
+          { id: tid, duration: 5000 }
+        )
+      }
+      setConfirmText("")
+      setOpen(false)
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falló el reset", { id: tid })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-3xl p-5 mb-4 border-2 border-rose-200 dark:border-rose-500/30 bg-rose-50/50 dark:bg-rose-500/5 space-y-3"
+    >
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg bg-rose-500 text-white flex items-center justify-center shadow-bloom">
+          <AlertTriangle size={14} />
+        </div>
+        <div>
+          <h3 className="text-[11px] font-black uppercase tracking-widest text-rose-700 dark:text-rose-300">
+            Zona peligrosa
+          </h3>
+          <p className="text-[9px] font-bold text-rose-600/80 dark:text-rose-400/80">
+            Resetear datos operativos
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-white dark:bg-slate-900/60 border border-rose-200/60 dark:border-rose-500/20 p-3 text-[11px] leading-snug text-slate-700 dark:text-slate-200 space-y-1.5">
+        <p className="font-bold">Al ejecutar el reset se borrarán:</p>
+        <ul className="list-disc pl-4 space-y-0.5 text-slate-600 dark:text-slate-300">
+          <li>Productos, variantes y movimientos de stock</li>
+          <li>Ventas, items, pagos y comprobantes</li>
+          <li>Tickets de soporte y notificaciones</li>
+          <li>Ciclos de inventario, inyecciones y gastos</li>
+          <li>Fotos del bucket (excepto avatars de usuarios)</li>
+        </ul>
+        <p className="font-bold pt-1.5">NO se tocan:</p>
+        <ul className="list-disc pl-4 space-y-0.5 text-emerald-700 dark:text-emerald-400">
+          <li>Cuentas de Mari, admins y clientes registrados</li>
+          <li>Configuración de tienda, envíos, banco, reglas y precios</li>
+          <li>Avatars de los usuarios</li>
+        </ul>
+      </div>
+
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="w-full h-11 rounded-xl bg-white dark:bg-slate-900/60 border-2 border-rose-300 dark:border-rose-500/40 text-rose-600 dark:text-rose-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 active:scale-[0.99] transition-all"
+        >
+          <Trash2 size={12} /> Resetear datos operativos
+        </button>
+      ) : (
+        <div className="space-y-2.5">
+          <label className="text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 block">
+            Escribe <span className="font-mono">RESETEAR</span> para confirmar
+          </label>
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="RESETEAR"
+            autoFocus
+            disabled={busy}
+            className="w-full h-11 px-3 rounded-xl border-2 border-rose-300 dark:border-rose-500/40 bg-white dark:bg-slate-900 text-sm font-black uppercase tracking-widest tabular-nums outline-none focus:border-rose-500 disabled:opacity-50"
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                setConfirmText("")
+              }}
+              disabled={busy}
+              className="flex-1 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={!canRun}
+              className="flex-[2] h-11 rounded-xl bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {busy ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Trash2 size={13} />
+              )}
+              Sí, borrar todo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {report && (
+        <motion.div
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 p-3 space-y-2"
+        >
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+            Último reset
+          </p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums">
+            {Object.entries(report.tables).map(([k, v]) => (
+              <div key={k} className="flex justify-between">
+                <span className="text-slate-500">{k}</span>
+                <span className="font-black">{v}</span>
+              </div>
+            ))}
+            <div className="flex justify-between col-span-2 pt-1 mt-1 border-t border-slate-200 dark:border-slate-700">
+              <span className="text-slate-500">archivos de storage</span>
+              <span className="font-black">{report.storage_deleted}</span>
+            </div>
+          </div>
+          {report.errors.length > 0 && (
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200/60 p-2 text-[10px] text-rose-700 dark:text-rose-300 space-y-0.5">
+              <p className="font-black uppercase tracking-widest">
+                {report.errors.length} errores
+              </p>
+              {report.errors.slice(0, 5).map((e, i) => (
+                <p key={i} className="font-bold truncate">
+                  · {e.where}: {e.message}
+                </p>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+    </motion.section>
   )
 }
