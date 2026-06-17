@@ -335,7 +335,6 @@ export default function ReviewsDrawer({
                       <input
                         type="file"
                         accept="image/*"
-                        capture="environment"
                         className="hidden"
                         onChange={(e) =>
                           handleFile(e.target.files?.[0] ?? null)
