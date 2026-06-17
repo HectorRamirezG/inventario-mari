@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { Copy, Check, Building2 } from "lucide-react"
-import toast from "react-hot-toast"
 
 import { useBankAccount, hasBankAccount } from "../../features/settings/bankAccountService"
+import { copyToClipboard } from "../../lib/clipboard"
 
 /**
  * Tarjeta compacta con los datos bancarios de la tienda + botón
@@ -13,9 +13,9 @@ export default function BankAccountCard() {
   if (!hasBankAccount(bank)) return null
 
   return (
-    <div className="rounded-2xl border border-sky-200/60 bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-500/10 dark:to-blue-500/10 p-3 space-y-2">
+    <div className="rounded-2xl border border-sky-200/60 dark:border-sky-500/30 bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-500/10 dark:to-blue-500/10 p-3 space-y-2">
       <div className="flex items-center gap-2 mb-1">
-        <div className="w-8 h-8 rounded-lg bg-sky-500 text-white flex items-center justify-center shrink-0">
+        <div className="w-8 h-8 rounded-lg bg-sky-500 text-white flex items-center justify-center shrink-0 shadow-sm">
           <Building2 size={14} />
         </div>
         <div>
@@ -36,7 +36,7 @@ export default function BankAccountCard() {
       </div>
 
       {bank.notes && (
-        <p className="text-[9px] text-sky-800/80 dark:text-sky-300/80 leading-snug pt-1 border-t border-sky-200/40">
+        <p className="text-[9px] text-sky-800/80 dark:text-sky-300/80 leading-snug pt-1 border-t border-sky-200/40 dark:border-sky-500/20">
           {bank.notes}
         </p>
       )}
@@ -47,22 +47,19 @@ export default function BankAccountCard() {
 function CopyRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const [copied, setCopied] = useState(false)
   const handle = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
+    const ok = await copyToClipboard(value, `${label} copiado`)
+    if (ok) {
       setCopied(true)
-      toast.success(`${label} copiado`)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
-      toast.error("No se pudo copiar")
     }
   }
   return (
     <button
       type="button"
       onClick={handle}
-      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white/80 dark:bg-slate-900/40 hover:bg-white active:scale-[0.99] transition-all text-left"
+      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white/80 dark:bg-slate-900/40 hover:bg-white dark:hover:bg-slate-900/70 press text-left"
     >
-      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 shrink-0">
+      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shrink-0">
         {label}
       </span>
       <span

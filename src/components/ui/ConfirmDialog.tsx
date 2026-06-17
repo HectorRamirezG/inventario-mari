@@ -37,8 +37,8 @@ export default function ConfirmDialog({
   }, [open])
 
   const toneStyles = {
-    danger: "bg-rose-50 text-rose-600 border-rose-100",
-    primary: "bg-pink-50 text-pink-600 border-pink-100"
+    danger: "bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-100 dark:border-rose-500/30",
+    primary: "bg-pink-50 dark:bg-primary/15 text-pink-600 dark:text-primary border-pink-100 dark:border-primary/30"
   }
 
   return (
@@ -52,7 +52,7 @@ export default function ConfirmDialog({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onCancel}
-            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-md"
           />
 
           {/* MODAL */}
@@ -64,7 +64,7 @@ export default function ConfirmDialog({
             className={clsx(
               "relative w-full sm:max-w-sm",
               "rounded-t-[2rem] sm:rounded-[2rem]",
-              "bg-white border border-gray-100",
+              "bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800",
               "shadow-[0_20px_60px_rgba(0,0,0,0.25)]",
               "p-6"
             )}
@@ -73,9 +73,9 @@ export default function ConfirmDialog({
             {/* CLOSE */}
             <button
               onClick={onCancel}
-              className="absolute top-4 right-4 h-8 w-8 flex items-center justify-center rounded-full hover:bg-gray-100 active:scale-95 transition"
+              className="absolute top-4 right-4 h-8 w-8 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-500/15 hover:text-rose-500 dark:hover:text-rose-300 transition press"
             >
-              <X size={16} className="text-slate-400" />
+              <X size={16} />
             </button>
 
             {/* CONTENT */}
@@ -91,12 +91,12 @@ export default function ConfirmDialog({
               </div>
 
               <div className="flex-1">
-                <h3 className="text-[15px] font-semibold text-slate-800 leading-tight">
+                <h3 className="text-[15px] font-black text-slate-900 dark:text-slate-100 leading-tight">
                   {title}
                 </h3>
 
                 {description && (
-                  <p className="text-sm text-slate-500 mt-1">
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-snug">
                     {description}
                   </p>
                 )}

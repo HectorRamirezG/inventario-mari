@@ -22,6 +22,7 @@ import { formatMoney } from "../../lib/format"
 import type { Product, Variant } from "../../types/database"
 import { deleteProduct, updateVariant } from "./productService"
 import { applyMovement } from "../movements/movementService"
+import { confirmAction } from "../../lib/confirm"
 
 interface Props {
   product: Product
@@ -171,7 +172,13 @@ export default function ProductCard({
   }
 
   async function handleDelete() {
-    if (!confirm(`¿Eliminar "${product.name}"?`)) return
+    const ok = await confirmAction({
+      title: `¿Eliminar "${product.name}"?`,
+      description: "Se eliminará el producto y todas sus variantes. Esta acción no se puede deshacer.",
+      confirmLabel: "Sí, eliminar",
+      tone: "danger",
+    })
+    if (!ok) return
     try {
       await deleteProduct(product.id)
       toast.success("Producto eliminado")

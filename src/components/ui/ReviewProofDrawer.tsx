@@ -21,6 +21,7 @@ import confetti from "canvas-confetti"
 import { supabase } from "../../lib/supabase"
 import { sound } from "../../lib/sound"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
+import { promptDialog } from "../../lib/prompt"
 import {
   approveProof,
   rejectProof,
@@ -180,11 +181,17 @@ export default function ReviewProofDrawer({
 
   async function handleReject() {
     if (!proof) return
-    const reason =
-      window.prompt(
-        "Motivo del rechazo (opcional, el cliente lo verá):",
-        "El monto no coincide con tu apartado."
-      ) ?? undefined
+    const reason = (await promptDialog({
+      title: "Motivo del rechazo",
+      description: "Opcional, pero ayuda a que el cliente entienda y vuelva a enviar el comprobante correcto.",
+      defaultValue: "El monto no coincide con tu apartado.",
+      placeholder: "Ej. La foto está borrosa o no se ve el monto",
+      confirmLabel: "Rechazar y notificar",
+      multiline: true,
+      maxLength: 280,
+    })) ?? undefined
+    // Si el usuario canceló (null), no rechazamos
+    if (reason === undefined) return
     setSaving(true)
     const tid = toast.loading("Rechazando comprobante...")
     try {
