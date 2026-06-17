@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, Suspense, lazy } from "react"
+import { useEffect, useMemo, useRef, useState, Suspense, lazy } from "react"
 import { Toaster } from "react-hot-toast"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -83,6 +83,14 @@ type AdminSection =
   | "soporte"
   | "reglas"
   | "ajustes"
+
+/** Saludo segun la hora del dia. */
+function greeting(): string {
+  const h = new Date().getHours()
+  if (h < 12) return "Buen día"
+  if (h < 19) return "Buenas tardes"
+  return "Buenas noches"
+}
 
 const ADMIN_MENU: {
   id: AdminSection
@@ -212,6 +220,8 @@ function FullScreenSpinner() {
 /* ============================================================== */
 function AdminShell() {
   const [section, setSection] = useState<AdminSection>("hoy")
+  // Para page transitions con direccion: ref con la seccion previa.
+  const prevSectionRef = useRef<AdminSection>("hoy")
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [hubOpen, setHubOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -220,6 +230,18 @@ function AdminShell() {
   const { role, signOut, fullName, email } = useAuth()
   const avatarUrl = useMyAvatar()
   const isAdmin = role === "admin"
+
+  // Calculamos la direccion del slide ANTES de actualizar el ref.
+  // Si vamos "adelante" en el menu (de Catalogo a Pendientes p.ej) => +1
+  // Si vamos "atras" => -1
+  const sectionOrder = ADMIN_MENU.map((m) => m.id) as AdminSection[]
+  const prevIdx = sectionOrder.indexOf(prevSectionRef.current)
+  const curIdx = sectionOrder.indexOf(section)
+  const slideDir = curIdx >= prevIdx ? 1 : -1
+  // Actualizamos el ref para el proximo render
+  useEffect(() => {
+    prevSectionRef.current = section
+  }, [section])
 
   // Listener global para abrir el drawer de comprobante desde notificaciones
   // y desde el deep link ?proof=xxx
@@ -470,19 +492,21 @@ function AdminShell() {
         <header className="md:hidden z-50 bg-white/85 dark:bg-slate-900/85 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 px-4 py-2 shrink-0">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <div
+              <motion.div
+                whileHover={{ rotate: [0, -10, 10, -10, 0], scale: 1.05 }}
+                transition={{ duration: 0.6 }}
                 className="w-8 h-8 rounded-xl flex items-center justify-center shadow-bloom shrink-0"
                 style={{
                   background: "linear-gradient(135deg,#e6007e,#a855f7)",
                 }}
               >
                 <Sparkles className="text-white" size={14} />
-              </div>
+              </motion.div>
               <div className="min-w-0">
-                <p className="text-[8px] uppercase tracking-widest text-slate-400 font-black leading-none">
-                  Hola
+                <p className="text-[8px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-black leading-none">
+                  {greeting()}
                 </p>
-                <p className="text-xs font-black truncate">
+                <p className="text-xs font-black truncate text-slate-900 dark:text-slate-100">
                   {fullName?.split(" ")[0] ?? email?.split("@")[0] ?? "Mari"}
                 </p>
               </div>
@@ -520,12 +544,18 @@ function AdminShell() {
         {/* Header desktop */}
         <header className="hidden md:flex z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 px-6 py-3 shrink-0 items-center justify-between gap-4">
           <div>
-            <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black leading-none mb-0.5">
+            <p className="text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-black leading-none mb-0.5">
               {role === "admin" ? "Administradora" : "Equipo Mari"}
             </p>
-            <h1 className="text-xl font-black tracking-tight leading-none">
-              Hola, {fullName?.split(" ")[0] ?? email?.split("@")[0] ?? "Mari"}{" "}
-              <span className="text-primary">✨</span>
+            <h1 className="text-xl font-black tracking-tight leading-none text-slate-900 dark:text-slate-100">
+              {greeting()}, {fullName?.split(" ")[0] ?? email?.split("@")[0] ?? "Mari"}{" "}
+              <motion.span
+                animate={{ rotate: [0, 14, -8, 14, 0], scale: [1, 1.15, 1, 1.1, 1] }}
+                transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 4, ease: "easeInOut" }}
+                className="inline-block text-primary"
+              >
+                ✨
+              </motion.span>
             </h1>
           </div>
           <div className="flex items-center gap-3">
@@ -574,13 +604,14 @@ function AdminShell() {
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios bg-slate-50/30 dark:bg-slate-950/50 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0"
         >
           <div className="w-full max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-6">
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="wait" custom={slideDir}>
               <motion.div
                 key={section}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.15 }}
+                custom={slideDir}
+                initial={{ opacity: 0, x: slideDir * 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: slideDir * -20 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               >
                 <ErrorBoundary scope={`admin:${section}`}>
                   <Suspense fallback={<FullScreenSpinner />}>
@@ -705,19 +736,26 @@ function DockButton({
           transition={{ type: "spring", bounce: 0.2, duration: 0.35 }}
         />
       )}
-      <div className="relative">
+      <motion.div
+        className="relative"
+        animate={active ? { scale: [1, 1.18, 1] } : { scale: 1 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+      >
         <Icon size={20} strokeWidth={active ? 2.5 : 2} />
         {badge > 0 && (
           <motion.span
             key={badge}
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="absolute -top-1.5 -right-2 min-w-[14px] h-3.5 px-1 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center"
+            initial={{ scale: 0, rotate: -180 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 460, damping: 18 }}
+            className="absolute -top-1.5 -right-2 min-w-[14px] h-3.5 px-1 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center shadow-sm"
           >
             {badge}
+            {/* Halo pulse para llamar la atención */}
+            <span className="absolute inset-0 rounded-full bg-rose-500 -z-10 animate-ping opacity-75" />
           </motion.span>
         )}
-      </div>
+      </motion.div>
       <span className="text-[9px] font-black uppercase tracking-tight mt-0.5">
         {label}
       </span>

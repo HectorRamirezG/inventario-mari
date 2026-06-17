@@ -191,7 +191,7 @@ export default function ApartadosPage() {
           }
         />
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2 stagger-list">
           <AnimatePresence mode="popLayout">
             {state.sales.map((sale) => (
               <SaleCard

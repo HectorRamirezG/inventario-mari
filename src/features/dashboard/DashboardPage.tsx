@@ -98,17 +98,21 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="max-w-[960px] mx-auto space-y-6 pb-28 px-2">
+    <div className="relative max-w-[960px] mx-auto space-y-6 pb-28 px-2">
+      {/* Orbs decorativos detrás del contenido */}
+      <span className="deco-orb deco-orb-pink top-0 -left-20 w-72 h-72" />
+      <span className="deco-orb deco-orb-violet top-40 -right-24 w-80 h-80" />
+
       {/* HEADER */}
-      <div className="flex items-end justify-between gap-3 px-2 flex-wrap">
+      <div className="flex items-end justify-between gap-3 px-2 flex-wrap relative">
         <div className="min-w-0">
-          <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black leading-none mb-1">
+          <p className="text-[9px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-black leading-none mb-1">
             Centro financiero
           </p>
-          <h2 className="text-2xl font-black tracking-tight">
-            Resumen <span className="text-primary">Pro</span>
+          <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">
+            Resumen <span className="text-gradient-brand">Pro</span>
           </h2>
-          <p className="text-[11px] text-slate-500 mt-1">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
             Tus números reales — ingresos, costo, ganancia y por cobrar.
           </p>
         </div>
