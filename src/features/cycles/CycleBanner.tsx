@@ -58,7 +58,7 @@ export default function CycleBanner() {
       >
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center shadow-bloom shrink-0"
-          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+          className="bg-brand"
         >
           <PlayCircle className="text-white" size={18} />
         </div>
@@ -92,7 +92,7 @@ export default function CycleBanner() {
         style={{
           background: beReached
             ? "linear-gradient(180deg,#10b981,#34d399)"
-            : "linear-gradient(180deg,#e6007e,#a855f7)",
+            : "linear-gradient(180deg, var(--brand-from), var(--brand-to))",
         }}
       />
       <div className="flex items-center gap-3 mb-2 pl-2">
@@ -101,7 +101,7 @@ export default function CycleBanner() {
           style={{
             background: beReached
               ? "linear-gradient(135deg,#10b981,#34d399)"
-              : "linear-gradient(135deg,#e6007e,#a855f7)",
+              : "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
           }}
         >
           {beReached ? (
@@ -140,7 +140,7 @@ export default function CycleBanner() {
             style={{
               background: beReached
                 ? "linear-gradient(90deg,#10b981,#34d399)"
-                : "linear-gradient(90deg,#e6007e,#a855f7)",
+                : "linear-gradient(90deg, var(--brand-from), var(--brand-to))",
             }}
           />
         </div>

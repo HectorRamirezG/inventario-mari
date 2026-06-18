@@ -423,7 +423,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60">
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-bloom"
-            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+            className="bg-brand"
           >
             <UserCircle size={22} />
           </div>
@@ -747,7 +747,7 @@ function UserPrefsSection() {
       <div className="flex items-center gap-2">
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-bloom"
-          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+          className="bg-brand"
         >
           <Sparkles size={14} />
         </div>

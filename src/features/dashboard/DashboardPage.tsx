@@ -421,7 +421,7 @@ function FinanceHero({
       {/* Banda de color */}
       <div
         className="h-1.5"
-        style={{ background: "linear-gradient(90deg,#e6007e,#a855f7)" }}
+        style={{ background: "linear-gradient(90deg, var(--brand-from), var(--brand-to))" }}
       />
 
       <div className="p-5 md:p-6">

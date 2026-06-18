@@ -124,6 +124,28 @@ export default function ClientHero({ customerName, isLogged }: Props) {
     return () => clearInterval(t)
   }, [slides.length])
 
+  // Modo festivo: dispara confetti una sola vez por sesión + cada 90s
+  // si la pestaña está activa. Respeta prefs (confetti=false lo bloquea).
+  useEffect(() => {
+    if (!rules.holiday_mode_enabled) return
+    let cancelled = false
+    const fire = () => {
+      if (cancelled) return
+      import("../../lib/confetti").then(({ fireConfetti }) =>
+        fireConfetti({ count: 60, duration: 1600 }),
+      )
+    }
+    const initial = window.setTimeout(fire, 800)
+    const recurring = window.setInterval(() => {
+      if (document.visibilityState === "visible") fire()
+    }, 90_000)
+    return () => {
+      cancelled = true
+      window.clearTimeout(initial)
+      window.clearInterval(recurring)
+    }
+  }, [rules.holiday_mode_enabled])
+
   if (slides.length === 0) return null
 
   const slide = slides[Math.min(idx, slides.length - 1)]

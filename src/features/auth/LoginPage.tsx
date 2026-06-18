@@ -146,7 +146,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-2 mb-6">
           <div
             className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-bloom"
-            style={{ background: "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)" }}
+            className="bg-brand"
           >
             <Sparkles size={18} className="text-white" />
           </div>
@@ -261,7 +261,7 @@ export default function LoginPage() {
             disabled={loading}
             className="h-12 rounded-2xl font-black text-sm text-white shadow-bloom flex items-center justify-center gap-2 disabled:opacity-60"
             style={{
-              background: "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
+              background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
             }}
           >
             {loading ? (

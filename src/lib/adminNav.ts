@@ -81,7 +81,7 @@ export const ADMIN_SECTIONS: AdminSectionEntry[] = [
     caption: "Nueva venta o apartado",
     icon: ShoppingCart,
     pin: true,
-    accent: "linear-gradient(135deg,#e6007e,#a855f7)",
+    accent: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
     shortcut: "2",
     hint: "Procesar nueva venta",
   },

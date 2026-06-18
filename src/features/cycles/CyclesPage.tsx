@@ -215,7 +215,7 @@ function ActiveCycleHero({
   const days = daysAgo(cycle.started_at)
   const gradient = beReached
     ? "linear-gradient(135deg,#10b981,#34d399)"
-    : "linear-gradient(135deg,#e6007e,#a855f7)"
+    : "linear-gradient(135deg, var(--brand-from), var(--brand-to))"
 
   return (
     <motion.div
@@ -475,7 +475,7 @@ function NoActiveCycle({ onOpen }: { onOpen: () => void }) {
     >
       <div
         className="w-14 h-14 rounded-2xl mx-auto mb-3 flex items-center justify-center shadow-bloom"
-        style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+        className="bg-brand"
       >
         <PlayCircle className="text-white" size={26} />
       </div>
@@ -502,7 +502,7 @@ function NoActiveCycle({ onOpen }: { onOpen: () => void }) {
         <button
           onClick={onOpen}
           className="h-11 px-5 rounded-2xl text-white text-xs font-black uppercase tracking-widest shadow-bloom inline-flex items-center gap-2"
-          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+          className="bg-brand"
         >
           <Plus size={14} /> Abrir mi primer ciclo
         </button>
@@ -673,7 +673,7 @@ function ModalShell({
             <div
               className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-bloom"
               style={{
-                background: "linear-gradient(135deg,#e6007e,#a855f7)",
+                background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
               }}
             >
               <Icon className="text-white" size={18} />
@@ -773,7 +773,7 @@ function OpenCycleModal({
         >
           <div
             className="w-9 h-9 rounded-xl flex items-center justify-center shadow-bloom shrink-0"
-            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+            className="bg-brand"
           >
             <Wand2 className="text-white" size={14} />
           </div>
@@ -870,7 +870,7 @@ function OpenCycleModal({
         onClick={submit}
         disabled={busy}
         className="mt-5 w-full h-11 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
-        style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+        className="bg-brand"
       >
         {busy ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
         Abrir ciclo

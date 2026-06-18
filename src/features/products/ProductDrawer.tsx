@@ -303,7 +303,7 @@ export default function ProductDrawer({
                   style={{
                     background: headerCover
                       ? "transparent"
-                      : "linear-gradient(135deg,#e6007e,#a855f7)",
+                      : "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
                   }}
                 >
                   {headerCover ? (

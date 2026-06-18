@@ -370,7 +370,7 @@ export default function BuySheet({
                             aria-label="Sumar"
                             className="w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom disabled:opacity-30 active:scale-90 transition-transform"
                             style={{
-                              background: "linear-gradient(135deg,#e6007e,#a855f7)",
+                              background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
                             }}
                           >
                             <Plus size={14} strokeWidth={3} />
@@ -447,7 +447,7 @@ export default function BuySheet({
                 disabled={totalUnits === 0}
                 className="w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-40 active:scale-[0.98] transition-transform"
                 style={{
-                  background: "linear-gradient(135deg,#e6007e,#a855f7)",
+                  background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
                 }}
               >
                 <ShoppingBag size={16} />

@@ -170,7 +170,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
               <div className="flex items-center gap-2 min-w-0">
                 <div
                   className="w-8 h-8 rounded-xl flex items-center justify-center shadow-bloom shrink-0"
-                  style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                  className="bg-brand"
                 >
                   <Wallet size={14} className="text-white" />
                 </div>
@@ -208,7 +208,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                   style={{
                     background: isPaid
                       ? "linear-gradient(135deg,#10b981,#34d399)"
-                      : "linear-gradient(135deg,#e6007e,#a855f7)",
+                      : "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
                   }}
                 />
                 <div className="relative">
@@ -240,7 +240,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                           className="h-full rounded-full"
                           style={{
                             background:
-                              "linear-gradient(90deg,#e6007e,#a855f7)",
+                              "linear-gradient(90deg, var(--brand-from), var(--brand-to))",
                           }}
                         />
                       </div>
@@ -333,8 +333,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                             rel="noopener noreferrer"
                             className="flex items-center justify-center gap-2 h-12 rounded-2xl font-black text-white text-sm shadow-bloom press-hard"
                             style={{
-                              background:
-                                "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
+                              background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
                             }}
                           >
                             <CreditCard size={16} />
@@ -557,7 +556,7 @@ function InnerTab({
         <motion.span
           layoutId="paycenter-tab-pill"
           className="absolute inset-0 rounded-xl shadow-bloom"
-          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+          className="bg-brand"
           transition={{ type: "spring", stiffness: 380, damping: 30 }}
         />
       )}

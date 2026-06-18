@@ -97,8 +97,7 @@ export default function StoriesBar({ enabled, showAddCta, onAdd }: Props) {
             <div
               className="w-16 h-16 rounded-full p-[2px]"
               style={{
-                background:
-                  "linear-gradient(135deg,#e6007e,#f97316,#a855f7)",
+                background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
               }}
             >
               <div className="w-full h-full rounded-full overflow-hidden bg-white dark:bg-slate-900 p-[2px]">

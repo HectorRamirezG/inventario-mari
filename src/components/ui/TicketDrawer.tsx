@@ -205,7 +205,7 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
                 <div className="flex items-center gap-2 min-w-0">
                   <div
                     className="w-8 h-8 rounded-xl flex items-center justify-center shadow-bloom shrink-0"
-                    style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                    className="bg-brand"
                   >
                     <Sparkles size={14} className="text-white" />
                   </div>
@@ -302,8 +302,7 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
                         whileTap={{ scale: 0.98 }}
                         className="relative w-full overflow-hidden rounded-2xl p-3.5 flex items-center gap-3 text-left shadow-bloom press-hard"
                         style={{
-                          background:
-                            "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
+                          background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
                         }}
                       >
                         {/* Brillo decorativo */}
