@@ -122,27 +122,35 @@ export async function deleteStory(id: string): Promise<void> {
   if (error) throw error
 }
 
-/** Sube imagen al bucket `product-images/stories/...` y retorna URL pública. */
+/** Sube imagen O video al bucket `product-images/stories/...` y retorna URL pública.
+ *  - Imágenes pasan por compressImage (defaults: 1280px, q78, webp).
+ *  - Videos se suben tal cual (max 25MB). */
 export async function uploadStoryImage(file: File): Promise<string> {
-  // Stories: efímeras, peso bajo es prioridad. Defaults nuevos.
-  const compact = await compressImage(file)
-  const ext = (compact.name.split(".").pop() || "jpg").toLowerCase()
+  const isVideo = file.type.startsWith("video/")
+  if (isVideo && file.size > 25 * 1024 * 1024) {
+    throw new Error("El video pesa más de 25MB")
+  }
+  const payload = isVideo ? file : await compressImage(file)
+  const ext = (payload.name.split(".").pop() || (isVideo ? "mp4" : "jpg")).toLowerCase()
   const path = `stories/${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 8)}.${ext}`
 
   const { error } = await supabase.storage
     .from("product-images")
-    .upload(path, compact, {
+    .upload(path, payload, {
       cacheControl: "3600",
       upsert: false,
-      contentType: compact.type || "image/jpeg",
+      contentType: payload.type || (isVideo ? "video/mp4" : "image/jpeg"),
     })
   if (error) throw error
 
   const { data } = supabase.storage.from("product-images").getPublicUrl(path)
   return data.publicUrl
 }
+
+/** Detecta si una URL apunta a video por extensión. */
+export { isVideoUrl } from "../../lib/media"
 
 /** Marca una story como vista. Idempotente, sin rate limit server-side
  *  (el cliente decide cuándo llamarlo — típicamente una vez por sesión). */

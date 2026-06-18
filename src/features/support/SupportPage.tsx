@@ -33,6 +33,7 @@ import {
 import { formatDateTime, shortId } from "../../lib/format"
 import KpiCard from "../../components/ui/KpiCard"
 import Avatar from "../../components/ui/Avatar"
+import { isVideoUrl } from "../../lib/media"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import PageHeader from "../../components/ui/PageHeader"
 import { useLocalStorageState } from "../../lib/useLocalStorageState"
@@ -346,7 +347,8 @@ export default function SupportPage() {
                             <span className="flex items-center gap-1">
                               {t.image_url ? (
                                 <>
-                                  <ImageIcon size={9} className="text-emerald-500" /> con foto
+                                  <ImageIcon size={9} className="text-emerald-500" />{" "}
+                                  {isVideoUrl(t.image_url) ? "con video" : "con foto"}
                                 </>
                               ) : (
                                 <>
@@ -518,12 +520,22 @@ function TicketDrawer({
                     rel="noreferrer"
                     className="block rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 relative group"
                   >
-                    <img
-                      src={ticket.image_url}
-                      alt="Evidencia"
-                      className="w-full max-h-72 object-cover"
-                      loading="lazy"
-                    />
+                    {isVideoUrl(ticket.image_url) ? (
+                      <video
+                        src={ticket.image_url}
+                        className="w-full max-h-72 object-cover"
+                        controls
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : (
+                      <img
+                        src={ticket.image_url}
+                        alt="Evidencia"
+                        className="w-full max-h-72 object-cover"
+                        loading="lazy"
+                      />
+                    )}
                     <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/40 backdrop-blur text-white text-[9px] font-black uppercase flex items-center gap-1">
                       <ExternalLink size={9} /> Abrir
                     </span>

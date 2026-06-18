@@ -54,23 +54,28 @@ export async function uploadSupportImage(input: {
   saleId: string | null
   file: File
 }): Promise<string> {
-  if (!input.file.type.startsWith("image/")) {
-    throw new Error("Sólo imágenes")
+  const isVideo = input.file.type.startsWith("video/")
+  if (!input.file.type.startsWith("image/") && !isVideo) {
+    throw new Error("Sólo imágenes o videos")
   }
-  if (input.file.size > 5 * 1024 * 1024) {
-    throw new Error("La foto pesa más de 5MB")
+  const limit = isVideo ? 25 * 1024 * 1024 : 5 * 1024 * 1024
+  if (input.file.size > limit) {
+    throw new Error(isVideo ? "El video pesa más de 25MB" : "La foto pesa más de 5MB")
   }
-  // Comprime client-side antes de subir
-  // Adjuntos de soporte: captura para entender el problema, no necesita
-  // nitidez de catálogo. q72 a 1024px.
-  const compact = await compressImage(input.file, { maxWidth: 1024, quality: 0.72 })
-  const ext = compact.name.split(".").pop()?.toLowerCase() || "jpg"
+  const payload = isVideo
+    ? input.file
+    : await compressImage(input.file, { maxWidth: 1024, quality: 0.72 })
+  const ext = payload.name.split(".").pop()?.toLowerCase() || (isVideo ? "mp4" : "jpg")
   const sub = input.saleId ?? "anon"
   const path = `support/${sub}/${crypto.randomUUID()}.${ext}`
 
   const { error: upErr } = await supabase.storage
     .from("product-images")
-    .upload(path, compact, { cacheControl: "31536000", upsert: false })
+    .upload(path, payload, {
+      cacheControl: "31536000",
+      upsert: false,
+      contentType: payload.type || (isVideo ? "video/mp4" : "image/jpeg"),
+    })
   if (upErr) throw upErr
 
   const {

@@ -61,6 +61,7 @@ import { notifyAdmins } from "../notifications/notificationsService"
 import WishesDrawer from "../wishes/WishesDrawer"
 import StoriesBar from "../stories/StoriesBar"
 import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
+import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
 import ReviewsDrawer from "../reviews/ReviewsDrawer"
 
 // Estructura mínima del catálogo público
@@ -675,6 +676,14 @@ export default function ClientShopPage() {
             setBuySheetPreselectedVariant(p.variants[0]?.id ?? null)
             setBuySheetProduct(p)
           }
+        }}
+      />
+
+      <ProductOfTheDay
+        products={products}
+        onOpen={(p) => {
+          setBuySheetPreselectedVariant(p.variants[0]?.id ?? null)
+          setBuySheetProduct(p as any)
         }}
       />
 

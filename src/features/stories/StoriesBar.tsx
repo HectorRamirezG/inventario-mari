@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Plus } from "lucide-react"
+import { Sparkles, Plus, Play } from "lucide-react"
 
-import { listActiveStories, type Story } from "./storiesService"
+import { listActiveStories, isVideoUrl, type Story } from "./storiesService"
 import StoryViewer from "./StoryViewer"
 import Skeleton from "../../components/ui/Skeleton"
 import { imageAvatar } from "../../lib/imageTransform"
@@ -102,15 +102,30 @@ export default function StoriesBar({ enabled, showAddCta, onAdd }: Props) {
               }}
             >
               <div className="w-full h-full rounded-full overflow-hidden bg-white dark:bg-slate-900 p-[2px]">
-                <img
-                  src={imageAvatar(s.image_url) || s.image_url}
-                  alt={s.caption || ""}
-                  loading="lazy"
-                  decoding="async"
-                  width={128}
-                  height={128}
-                  className="w-full h-full rounded-full object-cover"
-                />
+                {isVideoUrl(s.image_url) ? (
+                  <div className="relative w-full h-full rounded-full overflow-hidden">
+                    <video
+                      src={s.image_url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <Play size={14} className="text-white" fill="white" />
+                    </div>
+                  </div>
+                ) : (
+                  <img
+                    src={imageAvatar(s.image_url) || s.image_url}
+                    alt={s.caption || ""}
+                    loading="lazy"
+                    decoding="async"
+                    width={128}
+                    height={128}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                )}
               </div>
             </div>
             <span className="text-[8px] font-black uppercase tracking-tighter text-slate-500 dark:text-slate-400 max-w-[64px] truncate">

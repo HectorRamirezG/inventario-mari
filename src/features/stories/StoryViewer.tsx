@@ -3,7 +3,7 @@ import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, ChevronLeft, ChevronRight, ExternalLink, Eye } from "lucide-react"
 
-import { registerStoryView, type Story } from "./storiesService"
+import { registerStoryView, isVideoUrl, type Story } from "./storiesService"
 
 interface Props {
   stories: Story[]
@@ -117,17 +117,32 @@ export default function StoryViewer({
         onPointerUp={() => setPaused(false)}
         onPointerLeave={() => setPaused(false)}
       >
-        {/* Imagen actual */}
-        <motion.img
-          key={current.id}
-          src={current.image_url}
-          alt={current.caption || ""}
-          initial={{ opacity: 0, scale: 1.05 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          className="max-h-full max-w-full object-contain select-none"
-          draggable={false}
-        />
+        {/* Media actual (foto o video) */}
+        {isVideoUrl(current.image_url) ? (
+          <motion.video
+            key={current.id}
+            src={current.image_url}
+            initial={{ opacity: 0, scale: 1.05 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="max-h-full max-w-full object-contain select-none"
+            autoPlay
+            playsInline
+            loop
+            muted
+          />
+        ) : (
+          <motion.img
+            key={current.id}
+            src={current.image_url}
+            alt={current.caption || ""}
+            initial={{ opacity: 0, scale: 1.05 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+            className="max-h-full max-w-full object-contain select-none"
+            draggable={false}
+          />
+        )}
 
         {/* Barras de progreso arriba */}
         <div className="absolute top-0 inset-x-0 z-10 pt-safe px-3 pt-3 flex gap-1">

@@ -49,6 +49,7 @@ import { useBusinessRules } from "../settings/businessRulesService"
  * alto para evitar layout shift.
  */
 const TrendChart = lazy(() => import("./TrendChart"))
+const InsightsPanel = lazy(() => import("./InsightsPanel"))
 
 function ChartSkeleton() {
   return (
@@ -255,6 +256,11 @@ export default function DashboardPage() {
               data={stats?.trend ?? []}
               periodLabel={periodLabelFor(period)}
             />
+          </Suspense>
+
+          {/* Insights inteligentes (sin IA externa) */}
+          <Suspense fallback={null}>
+            <InsightsPanel />
           </Suspense>
 
           {/* Valor de inventario */}

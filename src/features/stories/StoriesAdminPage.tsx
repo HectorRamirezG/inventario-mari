@@ -26,6 +26,7 @@ import {
   extendStory,
   uploadStoryImage,
   formatTimeRemaining,
+  isVideoUrl,
   type Story,
 } from "./storiesService"
 import { useBusinessRules } from "../settings/businessRulesService"
@@ -243,12 +244,23 @@ export default function StoriesAdminPage() {
                   transition={{ delay: Math.min(i * 0.03, 0.2) }}
                   className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 shadow-sm group"
                 >
-                  <img
-                    src={s.image_url}
-                    alt={s.caption || ""}
-                    className={`w-full h-full object-cover ${muted ? "opacity-50" : ""}`}
-                    loading="lazy"
-                  />
+                  {isVideoUrl(s.image_url) ? (
+                    <video
+                      src={s.image_url}
+                      className={`w-full h-full object-cover ${muted ? "opacity-50" : ""}`}
+                      muted
+                      loop
+                      playsInline
+                      preload="metadata"
+                    />
+                  ) : (
+                    <img
+                      src={s.image_url}
+                      alt={s.caption || ""}
+                      className={`w-full h-full object-cover ${muted ? "opacity-50" : ""}`}
+                      loading="lazy"
+                    />
+                  )}
 
                   {/* Gradiente para legibilidad */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/40 pointer-events-none" />
@@ -416,8 +428,10 @@ function CreateStoryModal({
       setPreview(null)
       return
     }
-    if (f.size > 5 * 1024 * 1024) {
-      toast.error("La imagen pesa más de 5MB")
+    const isVideo = f.type.startsWith("video/")
+    const limit = isVideo ? 25 * 1024 * 1024 : 5 * 1024 * 1024
+    if (f.size > limit) {
+      toast.error(isVideo ? "El video pesa más de 25MB" : "La imagen pesa más de 5MB")
       return
     }
     setFile(f)
@@ -508,14 +522,25 @@ function CreateStoryModal({
               </button>
             </div>
 
-            {/* Imagen */}
+            {/* Preview (imagen o video) */}
             {preview ? (
               <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800">
-                <img
-                  src={preview}
-                  alt="preview"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
+                {file?.type.startsWith("video/") ? (
+                  <video
+                    src={preview}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                  />
+                ) : (
+                  <img
+                    src={preview}
+                    alt="preview"
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => handleFile(null)}
@@ -534,11 +559,11 @@ function CreateStoryModal({
                   Sube una foto
                 </p>
                 <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500">
-                  Vertical 3:4 · máx 5MB
+                  Foto o video vertical · imagen ≤5MB · video ≤25MB
                 </p>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   className="hidden"
                   onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
                 />

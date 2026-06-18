@@ -57,12 +57,14 @@ export default function SupportModal({
       setPreview(null)
       return
     }
-    if (!f.type.startsWith("image/")) {
-      toast.error("Solo imágenes")
+    const isVideo = f.type.startsWith("video/")
+    if (!f.type.startsWith("image/") && !isVideo) {
+      toast.error("Solo imágenes o videos")
       return
     }
-    if (f.size > 5 * 1024 * 1024) {
-      toast.error("La foto pesa más de 5MB")
+    const limit = isVideo ? 25 * 1024 * 1024 : 5 * 1024 * 1024
+    if (f.size > limit) {
+      toast.error(isVideo ? "El video pesa más de 25MB" : "La foto pesa más de 5MB")
       return
     }
     setFile(f)
@@ -257,11 +259,21 @@ export default function SupportModal({
 
                   {preview ? (
                     <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700">
-                      <img
-                        src={preview}
-                        alt="Evidencia"
-                        className="w-full max-h-56 object-cover"
-                      />
+                      {file?.type.startsWith("video/") ? (
+                        <video
+                          src={preview}
+                          className="w-full max-h-56 object-cover"
+                          controls
+                          playsInline
+                          muted
+                        />
+                      ) : (
+                        <img
+                          src={preview}
+                          alt="Evidencia"
+                          className="w-full max-h-56 object-cover"
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={() => handleFile(null)}
@@ -275,13 +287,13 @@ export default function SupportModal({
                     <label className="flex items-center justify-center gap-2 h-20 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors">
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,video/*"
                         className="hidden"
                         onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
                       />
                       <Camera size={18} className="text-slate-400" />
                       <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                        Tomar / subir foto
+                        Tomar / subir foto o video
                       </span>
                     </label>
                   )}
