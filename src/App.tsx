@@ -85,6 +85,7 @@ import {
 } from "./features/notifications/notificationChecks"
 import { registerPushSW } from "./lib/pushNative"
 import { useMyAvatar } from "./lib/useMyAvatar"
+import { useSidebarCounts } from "./lib/useSidebarCounts"
 import { preloadBusinessRules, useBusinessRules } from "./features/settings/businessRulesService"
 
 // ──────────────────────────────────────────────────────────────────
@@ -279,6 +280,9 @@ function AdminShell() {
   }, [sidebarExpanded])
   const { role, signOut, fullName, email, session } = useAuth()
   const avatarUrl = useMyAvatar()
+  // Contadores globales para badges del sidebar (apartados/soporte/wishes/reviews).
+  // Se refresca al cambiar tabs y cuando algún módulo dispara eventos broadcast.
+  const sidebarCounts = useSidebarCounts()
   const rules = useBusinessRules()
   const isAdmin = role === "admin"
 
@@ -606,8 +610,20 @@ function AdminShell() {
             const renderItem = (m: AdminSectionEntry, idx: number) => {
               const Icon = m.icon
               const active = section === m.id
-              const showBadge =
-                m.id === "pendientes" && apartadoBadge > 0
+              // Badge dinámico por sección. `pendientes` combina el contador
+              // del realtime in-memory (apartadoBadge — alerta de venta nueva
+              // disparada por broadcast) con el conteo de pendientes globales.
+              // El resto leen del hook centralizado useSidebarCounts.
+              const liveCount = (() => {
+                if (m.id === "pendientes") {
+                  return Math.max(apartadoBadge, sidebarCounts.pendientes)
+                }
+                if (m.id === "soporte") return sidebarCounts.soporte
+                if (m.id === "sugerencias") return sidebarCounts.sugerencias
+                if (m.id === "resenias") return sidebarCounts.resenias
+                return 0
+              })()
+              const showBadge = liveCount > 0
               return (
                 <button
                   key={m.id}
@@ -631,12 +647,12 @@ function AdminShell() {
                     <Icon size={20} strokeWidth={active ? 2.5 : 2} />
                     {showBadge && (
                       <motion.span
-                        key={apartadoBadge}
+                        key={liveCount}
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
                         className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center"
                       >
-                        {apartadoBadge}
+                        {liveCount > 99 ? "99+" : liveCount}
                       </motion.span>
                     )}
                   </div>
@@ -645,10 +661,18 @@ function AdminShell() {
                       <span className="text-xs font-bold flex-1 text-left truncate">
                         {m.label}
                       </span>
-                      {idx < 9 && (
-                        <kbd className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-primary">
-                          {idx + 1}
-                        </kbd>
+                      {/* En modo expandido: si tiene badge muestra el conteo
+                          a la derecha de forma sutil; si no, atajo numérico. */}
+                      {showBadge ? (
+                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 tabular-nums">
+                          {liveCount > 99 ? "99+" : liveCount}
+                        </span>
+                      ) : (
+                        idx < 9 && (
+                          <kbd className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-primary">
+                            {idx + 1}
+                          </kbd>
+                        )
                       )}
                     </>
                   ) : (
@@ -830,11 +854,35 @@ function AdminShell() {
 
         {/* Header desktop */}
         <header className="hidden md:flex z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 px-6 py-3 shrink-0 items-center justify-between gap-4">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-black leading-none mb-0.5">
-              {role === "admin" ? "Administradora" : "Equipo Mari"}
-            </p>
-            <h1 className="text-xl font-black tracking-tight leading-none text-slate-900 dark:text-slate-100">
+          <div className="min-w-0">
+            {/* Breadcrumb compacto: clicable a Hoy + sección actual.
+                Reemplaza al label estático "Administradora" / "Equipo Mari"
+                porque el rol ya lo ves en la pill del sidebar expandido. */}
+            <nav
+              aria-label="Breadcrumb"
+              className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-black leading-none mb-0.5"
+            >
+              <button
+                onClick={() => setSection("hoy")}
+                className={`transition-colors ${
+                  section === "hoy"
+                    ? "text-primary"
+                    : "text-slate-400 hover:text-primary"
+                }`}
+              >
+                Inicio
+              </button>
+              {section !== "hoy" && (
+                <>
+                  <span className="text-slate-300 dark:text-slate-600">›</span>
+                  <span className="text-slate-700 dark:text-slate-300 truncate max-w-[280px]">
+                    {visibleMenu.find((m) => m.id === section)?.label ??
+                      (section === "ajustes" ? "Ajustes" : section)}
+                  </span>
+                </>
+              )}
+            </nav>
+            <h1 className="text-xl font-black tracking-tight leading-none text-slate-900 dark:text-slate-100 truncate">
               {greeting()}, {fullName?.split(" ")[0] ?? email?.split("@")[0] ?? "Mari"}{" "}
               <motion.span
                 animate={{ rotate: [0, 14, -8, 14, 0], scale: [1, 1.15, 1, 1.1, 1] }}
