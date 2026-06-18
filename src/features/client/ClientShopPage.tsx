@@ -30,6 +30,7 @@ import { supabase } from "../../lib/supabase"
 import { formatMoney } from "../../lib/format"
 import { imageThumbnail } from "../../lib/imageTransform"
 import { useAuth } from "../../lib/useAuth"
+import { fetchMyProfile } from "../profile/profileService"
 import { sound } from "../../lib/sound"
 import { useWishlist } from "../../lib/useWishlist"
 import SmartLocationInput from "../../components/ui/SmartLocationInput"
@@ -136,7 +137,7 @@ function saveGuest(g: GuestInfo) {
  */
 export default function ClientShopPage() {
   const navigate = useNavigate()
-  const { email: authEmail, fullName: authName, session } = useAuth()
+  const { email: authEmail, fullName: authName, session, user } = useAuth()
   const isLogged = !!session
   const thresholds = useTierThresholds()
   const shippingCfg = useShippingConfig()
@@ -170,6 +171,36 @@ export default function ClientShopPage() {
   const [openGuestForm, setOpenGuestForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [guest, setGuest] = useState<GuestInfo>(() => loadGuest())
+
+  /**
+   * Cuando el cliente está LOGUEADO y tiene perfil con datos, los usamos
+   * para AUTO-LLENAR los campos del guest que aún están vacíos. NO
+   * sobreescribimos lo que el cliente ya escribió a mano — sólo rellenamos
+   * los huecos. De ese modo cuando va a comprar no necesita re-escribir
+   * teléfono ni dirección si ya los tiene en su perfil.
+   */
+  useEffect(() => {
+    if (!session || !user?.id) return
+    let alive = true
+    ;(async () => {
+      try {
+        const profile = await fetchMyProfile(user.id)
+        if (!alive || !profile) return
+        setGuest((prev) => ({
+          name: prev.name || profile.full_name || authName || "",
+          email: prev.email || profile.email || authEmail || "",
+          phone: prev.phone || profile.phone || "",
+          address: prev.address || profile.address || "",
+          locationUrl: prev.locationUrl || profile.location_url || "",
+        }))
+      } catch {
+        /* silencio: profile puede no existir aún */
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [session, user?.id, authName, authEmail])
 
   // Reglas de negocio (reactivas a cambios del admin en tiempo real)
   const bRules = useBusinessRules()

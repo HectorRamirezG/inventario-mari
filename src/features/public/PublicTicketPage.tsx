@@ -12,6 +12,7 @@ import { useAuth, isStaffOrAdmin } from "../../lib/useAuth"
 import ReportPaymentButton from "../../components/ui/ReportPaymentButton"
 import RequestExtensionButton from "../client/RequestExtensionButton"
 import SupportModal from "../support/SupportModal"
+import DeliveryStatusChip from "../../components/ui/DeliveryStatusChip"
 interface TicketItem {
   id: string
   product_name: string
@@ -57,6 +58,8 @@ export default function PublicTicketPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [openSupport, setOpenSupport] = useState(false)
+  /** Status de la comanda más reciente asociada a esta venta. */
+  const [deliveryStatus, setDeliveryStatus] = useState<string | null>(null)
   const store = getStoreInfo()
 
   /** Vuelve a un home contextual según el usuario logueado. */
@@ -138,6 +141,24 @@ export default function PublicTicketPage() {
         return incoming
       })
     }
+
+    /** Carga el status de la comanda más reciente. */
+    const loadDelivery = async () => {
+      try {
+        const { data } = await supabase
+          .from("delivery_notes")
+          .select("status")
+          .eq("sale_id", ticket.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+        if (!alive) return
+        setDeliveryStatus((data?.[0] as any)?.status ?? null)
+      } catch {
+        /* tabla puede no existir */
+      }
+    }
+    loadDelivery()
+
     const channel = supabase
       .channel(`ticket-${ticket.id}`)
       .on(
@@ -159,6 +180,16 @@ export default function PublicTicketPage() {
           filter: `sale_id=eq.${ticket.id}`,
         },
         apply
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "delivery_notes",
+          filter: `sale_id=eq.${ticket.id}`,
+        },
+        loadDelivery
       )
       .subscribe()
     return () => {
@@ -392,6 +423,35 @@ export default function PublicTicketPage() {
               {isPaid ? "Pagado completo" : "Saldo pendiente"}
             </span>
           </div>
+
+          {/* Status de la comanda de entrega — visible cuando hay comanda
+              activa. Le da al cliente certeza visual del progreso de
+              su entrega: asignada → en camino → entregada. */}
+          {deliveryStatus && (
+            <div className="mt-3 rounded-2xl border border-sky-200 dark:border-sky-500/30 bg-sky-50/60 dark:bg-sky-500/10 px-4 py-3 flex items-center gap-3">
+              <DeliveryStatusChip
+                status={deliveryStatus}
+                size="md"
+                pulseInTransit
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-[9px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-300">
+                  Entrega
+                </p>
+                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-tight">
+                  {deliveryStatus === "picked_up"
+                    ? "Tu pedido va en camino, te avisamos cuando llegue"
+                    : deliveryStatus === "delivered"
+                      ? "Entregado · esperamos que te encante 💖"
+                      : deliveryStatus === "sent"
+                        ? "Repartidor asignado, pronto sale a entregar"
+                        : deliveryStatus === "cancelled"
+                          ? "La entrega fue cancelada"
+                          : "Estamos preparando tu entrega"}
+                </p>
+              </div>
+            </div>
+          )}
         </motion.div>
 
         {/* CTA: pagar online */}

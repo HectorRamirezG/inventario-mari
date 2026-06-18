@@ -11,6 +11,7 @@ import PaymentCenterDrawer from "../../components/ui/PaymentCenterDrawer"
 import Skeleton from "../../components/ui/Skeleton"
 import SupportModal from "../support/SupportModal"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
+import DeliveryStatusChip from "../../components/ui/DeliveryStatusChip"
 import {
   useBusinessRules,
   canClaim,
@@ -37,6 +38,8 @@ export default function ClientOrdersPage() {
   const [paymentOrder, setPaymentOrder] = useState<MyOrder | null>(null)
   const [openSupport, setOpenSupport] = useState(false)
   const [supportSaleId, setSupportSaleId] = useState<string | null>(null)
+  /** sale_id -> status de su comanda más reciente (si existe). */
+  const [deliveryBySale, setDeliveryBySale] = useState<Record<string, string>>({})
   const rules = useBusinessRules()
 
   useEffect(() => {
@@ -50,8 +53,33 @@ export default function ClientOrdersPage() {
         .order("created_at", { ascending: false })
         .limit(50)
       if (!alive) return
-      setOrders((data as MyOrder[]) ?? [])
+      const list = (data as MyOrder[]) ?? []
+      setOrders(list)
       setLoading(false)
+      // Carga delivery status de todas en batch
+      if (list.length > 0) {
+        try {
+          const { data: deliveries } = await supabase
+            .from("delivery_notes")
+            .select("sale_id,status,created_at")
+            .in(
+              "sale_id",
+              list.map((o) => o.id),
+            )
+            .order("created_at", { ascending: false })
+          if (!alive || !deliveries) return
+          const map: Record<string, string> = {}
+          for (const row of deliveries as Array<{
+            sale_id: string
+            status: string
+          }>) {
+            if (!map[row.sale_id]) map[row.sale_id] = row.status
+          }
+          setDeliveryBySale(map)
+        } catch {
+          /* tabla puede no existir aún */
+        }
+      }
     })()
     return () => {
       alive = false
@@ -133,16 +161,23 @@ export default function ClientOrdersPage() {
                 </p>
                 <p className="text-sm font-black">{shortId(o.id)}</p>
               </div>
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black uppercase ${
-                  paid
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-amber-50 text-amber-700"
-                }`}
-              >
-                {paid ? <CheckCircle2 size={10} /> : <Clock size={10} />}
-                {paid ? "Pagado" : "Pendiente"}
-              </span>
+              <div className="flex flex-col items-end gap-1">
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black uppercase ${
+                    paid
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {paid ? <CheckCircle2 size={10} /> : <Clock size={10} />}
+                  {paid ? "Pagado" : "Pendiente"}
+                </span>
+                {/* Chip de entrega — visible siempre que la venta tenga comanda */}
+                <DeliveryStatusChip
+                  status={deliveryBySale[o.id]}
+                  size="xs"
+                />
+              </div>
             </div>
             <p className="text-xs text-slate-500">{formatDate(o.created_at)}</p>
             <div className="flex items-center justify-between mt-2">

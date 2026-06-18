@@ -26,6 +26,42 @@ export function useApartados() {
   // última actividad: si un cliente sube un comprobante, su tarjeta brinca
   // al inicio del tablero).
   const [latestProofAt, setLatestProofAt] = useState<Record<string, string>>({});
+  /**
+   * Mapa sale_id → status de la comanda ACTIVA más reciente (si la hay).
+   * Sólo nos importa la más reciente porque una venta normalmente tiene
+   * sólo una comanda viva en cualquier momento. Sirve para mostrar el
+   * chip "🛵 En camino" / "✅ Entregada" en la tarjeta.
+   */
+  const [deliveryStatusBySale, setDeliveryStatusBySale] = useState<
+    Record<string, string>
+  >({});
+
+  const refreshDelivery = useCallback(async (saleIds: string[]) => {
+    if (saleIds.length === 0) {
+      setDeliveryStatusBySale({});
+      return;
+    }
+    try {
+      const { data } = await supabase
+        .from("delivery_notes")
+        .select("sale_id, status, created_at")
+        .in("sale_id", saleIds)
+        .order("created_at", { ascending: false });
+      if (!data) return;
+      // Nos quedamos con la primera (más reciente) por sale_id.
+      const map: Record<string, string> = {};
+      for (const row of data as Array<{
+        sale_id: string;
+        status: string;
+        created_at: string;
+      }>) {
+        if (!map[row.sale_id]) map[row.sale_id] = row.status;
+      }
+      setDeliveryStatusBySale(map);
+    } catch {
+      /* silencio: tabla puede no existir aún */
+    }
+  }, []);
 
   const refreshProofs = useCallback(async (saleIds: string[]) => {
     if (saleIds.length === 0) {
@@ -58,13 +94,15 @@ export function useApartados() {
         limit: 200,
       });
       setSales(data);
-      refreshProofs(data.map((s) => s.id));
+      const ids = data.map((s) => s.id);
+      refreshProofs(ids);
+      refreshDelivery(ids);
     } catch (e: any) {
       toast.error(e?.message ?? "Error cargando apartados");
     } finally {
       setLoading(false);
     }
-  }, [filter, onlyLayaway, refreshProofs]);
+  }, [filter, onlyLayaway, refreshProofs, refreshDelivery]);
 
   useEffect(() => {
     refresh();
@@ -125,11 +163,21 @@ export function useApartados() {
         },
         () => refresh()
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "delivery_notes",
+          filter: idsFilter,
+        },
+        () => refreshDelivery(ids)
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [sales, refresh, refreshProofs]);
+  }, [sales, refresh, refreshProofs, refreshDelivery]);
 
   /**
    * Última actividad de una venta = max(created_at, último pago, último
@@ -232,6 +280,7 @@ export function useApartados() {
       search,
       totals,
       pendingProofIds,
+      deliveryStatusBySale,
     },
     actions: {
       setFilter,

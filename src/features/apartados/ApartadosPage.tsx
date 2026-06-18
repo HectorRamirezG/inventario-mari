@@ -49,6 +49,7 @@ import {
 } from "../profile/profileService";
 import { fetchCustomerStatsByEmails, type CustomerStat } from "./customerStatsService";
 import RfmBadge from "../../components/ui/RfmBadge";
+import DeliveryStatusChip from "../../components/ui/DeliveryStatusChip";
 import WhatsAppTemplateMenu from "./WhatsAppTemplateMenu";
 
 const waLink = (raw?: string | null) => {
@@ -218,6 +219,7 @@ export default function ApartadosPage() {
                   }
                   stats={stat}
                   hasPendingProof={state.pendingProofIds.has(sale.id)}
+                  deliveryStatus={state.deliveryStatusBySale[sale.id] ?? null}
                   cancelGuard={canCancelSale(rules, sale, { isVip })}
                   onPay={() => setSelected(sale)}
                   onTicket={() => setTicketSale(sale)}
@@ -274,6 +276,7 @@ const SaleCard = memo(function SaleCardImpl({
   profile,
   stats,
   hasPendingProof,
+  deliveryStatus,
   cancelGuard,
   onPay,
   onTicket,
@@ -285,6 +288,8 @@ const SaleCard = memo(function SaleCardImpl({
   profile?: UserProfileDetail;
   stats?: CustomerStat;
   hasPendingProof?: boolean;
+  /** Status de la comanda más reciente (si existe). */
+  deliveryStatus?: string | null;
   cancelGuard?: { allowed: boolean; reason?: string };
   onPay: () => void;
   onTicket: () => void;
@@ -443,6 +448,10 @@ const SaleCard = memo(function SaleCardImpl({
               >
                 💸 Comprobante
               </motion.span>
+            )}
+            {/* Chip de estatus de comanda (si la venta tiene comanda activa) */}
+            {deliveryStatus && (
+              <DeliveryStatusChip status={deliveryStatus} size="xs" />
             )}
             {isPaid && (
               <Badge tone="ok" className="text-[8px] px-1.5 py-0 rounded-full font-black">
