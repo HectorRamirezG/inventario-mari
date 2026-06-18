@@ -101,39 +101,29 @@ export default defineConfig({
     },
   },
   build: {
-    // Code-splitting agresivo: separamos vendors pesados en sus propios
-    // chunks para que (a) se cacheen aparte y no invaliden al cambiar
-    // código de la app, y (b) descarguen en paralelo. Reduce el bundle
-    // inicial entre 400-600kb.
+    // Code-splitting de vendors pesados.
+    //
+    // IMPORTANTE: `recharts` y `html2canvas` y `jspdf` y `html5-qrcode`
+    // ya viajan en chunks dedicados gracias a dynamic imports (lazy() +
+    // import() dentro de la app), así que NO los listamos acá. Si los
+    // forzáramos aquí entraríamos en conflicto con el chunking automático
+    // de Rollup para los dynamic imports y rompería el build.
+    //
+    // Sólo agrupamos los vendors que se importan SIEMPRE estáticamente
+    // (React, lucide, supabase, framer-motion, etc.), para que vivan en
+    // chunks separados y se cacheen aparte del código de la app.
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          if (!id.includes('node_modules')) return undefined
-          // Lo más pesado de todo: lo dejamos en chunks dedicados
-          if (id.includes('recharts') || id.includes('d3-')) return 'vendor-charts'
-          if (id.includes('html5-qrcode')) return 'vendor-qrcode'
-          if (id.includes('html2canvas')) return 'vendor-html2canvas'
-          if (id.includes('jspdf')) return 'vendor-jspdf'
-          if (id.includes('framer-motion')) return 'vendor-motion'
-          if (id.includes('@supabase')) return 'vendor-supabase'
-          if (id.includes('lucide-react')) return 'vendor-icons'
-          if (id.includes('react-router')) return 'vendor-router'
-          if (id.includes('fuse.js')) return 'vendor-fuse'
-          if (id.includes('canvas-confetti')) return 'vendor-confetti'
-          // React + ReactDOM se quedan juntos
-          if (
-            id.includes('node_modules/react/') ||
-            id.includes('node_modules/react-dom/') ||
-            id.includes('scheduler')
-          ) {
-            return 'vendor-react'
-          }
-          return 'vendor'
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-fuse': ['fuse.js'],
+          'vendor-confetti': ['canvas-confetti'],
         },
       },
     },
-    // Genera mapas de fuente livianos para debugging en prod (no aumenta
-    // mucho el deploy y ayuda a leer errores).
     sourcemap: false,
     // Threshold del warning de chunks gigantes — informativo.
     chunkSizeWarningLimit: 800,
