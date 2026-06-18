@@ -19,7 +19,6 @@ import {
   Maximize2,
   LayoutGrid,
   List,
-  LifeBuoy,
   ScanLine,
   Heart,
   Star,
@@ -738,6 +737,21 @@ export default function ClientShopPage() {
             </span>
           </button>
         )}
+        {/* Pídelo a Beauty's Me — antes era FAB flotante en la izquierda,
+            ahora vive aquí integrado al header para no chocar con el FAB
+            de WhatsApp ni con el de carrito. Solo si wishes_enabled. */}
+        {bRules.wishes_enabled && (
+          <button
+            type="button"
+            onClick={() => setOpenWishes(true)}
+            aria-label="Pídelo a Beauty's Me"
+            title="Pídenos algo que no encuentras"
+            className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-sm shrink-0 active:scale-95"
+            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+          >
+            <Sparkles size={14} />
+          </button>
+        )}
       </div>
 
       {/* Filtros: categoría + sort */}
@@ -923,38 +937,11 @@ export default function ClientShopPage() {
         )}
       </AnimatePresence>
 
-      {/* FAB de soporte (siempre visible, izquierda) */}
-      <motion.button
-        type="button"
-        onClick={() => setOpenSupport(true)}
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.4 }}
-        whileTap={{ scale: 0.9 }}
-        aria-label="Centro de soporte"
-        title="¿Necesitas ayuda?"
-        className="fixed bottom-16 left-4 z-40 w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-primary shadow-[0_10px_30px_-10px_rgba(15,23,42,0.25)] flex items-center justify-center hover:scale-105 transition-transform"
-      >
-        <LifeBuoy size={18} />
-      </motion.button>
-
-      {/* FAB "Pídelo a Beauty's Me" — solo si la regla wishes_enabled está activa */}
-      {bRules.wishes_enabled && (
-        <motion.button
-          type="button"
-          onClick={() => setOpenWishes(true)}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.5 }}
-          whileTap={{ scale: 0.9 }}
-          aria-label="Pídelo a Beauty's Me"
-          title="Pídenos algo que no encuentras"
-          className="fixed bottom-[7.5rem] left-4 z-40 w-12 h-12 rounded-2xl text-white shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)] flex items-center justify-center hover:scale-105 transition-transform"
-          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
-        >
-          <Heart size={18} fill="white" />
-        </motion.button>
-      )}
+      {/* FABs flotantes lado izquierdo: AHORA solo vive WhatsAppSupportFab
+          (renderizado por App.tsx para todas las rutas cliente). Antes había
+          dos FABs duplicados aquí (soporte LifeBuoy + corazón "Pídelo") que
+          se superponían con el de WhatsApp. Movimos "Pídelo" al header y
+          quitamos LifeBuoy porque ya hay WhatsApp + botón soporte en header. */}
 
       {/* Drawer carrito */}
       <AnimatePresence>

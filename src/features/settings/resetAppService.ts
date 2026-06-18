@@ -219,16 +219,58 @@ export async function resetAppData(): Promise<ResetReport> {
     errors: [],
   }
 
-  // 1) Borra tablas en orden FK-safe
-  for (const t of TABLES_IN_ORDER) {
-    await deleteAllRows(t, report)
+  // 1) Intento PRIMERO la RPC SECURITY DEFINER `reset_app_data` — esta
+  //    bypasea RLS y limpia tablas donde el cliente NO tiene DELETE
+  //    (support_tickets, notifications, etc.). Si la RPC no existe (404)
+  //    o falla, caemos al método tabla-por-tabla (legacy).
+  const rpcOk = await tryRpcReset(report)
+
+  if (!rpcOk) {
+    // Fallback: borra tablas en orden FK-safe desde el cliente
+    for (const t of TABLES_IN_ORDER) {
+      await deleteAllRows(t, report)
+    }
+    // 2) Resetea pricing_config (UPDATE, no DELETE)
+    await resetPricingConfig(report)
   }
 
-  // 2) Resetea pricing_config (UPDATE, no DELETE)
-  await resetPricingConfig(report)
-
-  // 3) Limpia el bucket de imágenes (excepto avatars/)
+  // 3) Limpia el bucket de imágenes (excepto avatars/). Esto SIEMPRE
+  //    corre desde el cliente porque storage no se toca desde la RPC.
   await purgeStorage(report)
 
   return report
+}
+
+/**
+ * Llama a la RPC `reset_app_data` del servidor. Devuelve true si la
+ * función existe y completó (rellena `report.tables`), false si no
+ * existe (caller debe hacer fallback al método legacy).
+ */
+async function tryRpcReset(report: ResetReport): Promise<boolean> {
+  const { data, error } = await supabase.rpc("reset_app_data")
+  if (error) {
+    // Función no existe → caller hace fallback. NO es error.
+    if (
+      /function .* does not exist|404|not found/i.test(error.message) ||
+      error.code === "PGRST202" ||
+      error.code === "42883"
+    ) {
+      return false
+    }
+    // Error real (ej. "requires admin role"): reportamos y abortamos
+    report.errors.push({ where: "rpc:reset_app_data", message: error.message })
+    return true
+  }
+  // data esperado: { ok: true, caller: "...", tables: { products: 10, ... } }
+  const payload = (data ?? {}) as { tables?: Record<string, number | { error: string }> }
+  const tables = payload.tables ?? {}
+  for (const [name, val] of Object.entries(tables)) {
+    if (typeof val === "number") {
+      report.tables[name] = val
+    } else if (val && typeof val === "object" && "error" in val) {
+      report.tables[name] = 0
+      report.errors.push({ where: `rpc:${name}`, message: String(val.error) })
+    }
+  }
+  return true
 }
