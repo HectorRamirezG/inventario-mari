@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { TrendingUp, TrendingDown } from "lucide-react"
 import {
   ResponsiveContainer,
@@ -35,6 +35,25 @@ export interface TrendChartProps {
 }
 
 export default function TrendChart({ data, periodLabel }: TrendChartProps) {
+  // Lee el color del tema desde CSS vars para que el chart se tiña
+  // automáticamente al cambiar el accent en Reglas.
+  const [brandColor, setBrandColor] = useState<string>(() => {
+    if (typeof window === "undefined") return "#e6007e"
+    const v = getComputedStyle(document.documentElement)
+      .getPropertyValue("--brand-from")
+      .trim()
+    return v || "#e6007e"
+  })
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const v = getComputedStyle(document.documentElement)
+        .getPropertyValue("--brand-from")
+        .trim()
+      if (v && v !== brandColor) setBrandColor(v)
+    }, 2000)
+    return () => window.clearInterval(id)
+  }, [brandColor])
+
   // Limita los ticks visibles del eje X según cantidad de datos
   const tickEvery = useMemo(() => {
     if (data.length <= 10) return 1
@@ -70,8 +89,8 @@ export default function TrendChart({ data, periodLabel }: TrendChartProps) {
             <AreaChart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 4 }}>
               <defs>
                 <linearGradient id="grad-revenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#e6007e" stopOpacity={0.45} />
-                  <stop offset="95%" stopColor="#e6007e" stopOpacity={0} />
+                  <stop offset="5%" stopColor={brandColor} stopOpacity={0.45} />
+                  <stop offset="95%" stopColor={brandColor} stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="grad-profit" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.45} />
@@ -108,7 +127,7 @@ export default function TrendChart({ data, periodLabel }: TrendChartProps) {
                 yAxisId="left"
                 type="monotone"
                 dataKey="revenue"
-                stroke="#e6007e"
+                stroke={brandColor}
                 strokeWidth={2}
                 fill="url(#grad-revenue)"
               />

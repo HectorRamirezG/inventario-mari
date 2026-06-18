@@ -102,7 +102,7 @@ export default function ActionHub({ open, onClose, actions }: Props) {
                 >
                   <div
                     className="w-11 h-11 rounded-2xl flex items-center justify-center text-white shadow-bloom"
-                    style={{ background: a.accent ?? "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                    style={{ background: a.accent ?? "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
                   >
                     <a.icon size={20} />
                   </div>

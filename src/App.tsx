@@ -677,10 +677,7 @@ function AdminShell() {
                 setSection("hoy")
               }
             }}
-            className="relative w-12 h-12 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
-            style={{
-              background: "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
-            }}
+            className="bg-brand relative w-12 h-12 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
             aria-label="Beauty's Me"
             title={`Beauty's Me${logoTaps > 0 ? ` (${logoTaps}/7)` : ""}`}
           >
@@ -961,10 +958,7 @@ function AdminShell() {
               <motion.div
                 whileHover={{ rotate: [0, -10, 10, -10, 0], scale: 1.05 }}
                 transition={{ duration: 0.6 }}
-                className="w-8 h-8 rounded-xl flex items-center justify-center shadow-bloom shrink-0"
-                style={{
-                  background: "linear-gradient(135deg,#e6007e,#a855f7)",
-                }}
+                className="bg-brand w-8 h-8 rounded-xl flex items-center justify-center shadow-bloom shrink-0"
               >
                 <Sparkles className="text-white" size={14} />
               </motion.div>
@@ -990,8 +984,7 @@ function AdminShell() {
               <button
                 onClick={() => setProfileOpen(true)}
                 aria-label="Mi perfil"
-                className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
-                style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                className="bg-brand w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
               >
                 {avatarUrl ? (
                   <img
@@ -1072,8 +1065,7 @@ function AdminShell() {
             <button
               onClick={() => setProfileOpen(true)}
               aria-label="Mi perfil"
-              className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
-              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+              className="bg-brand w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
               title={fullName ?? email ?? "Mi perfil"}
             >
               {avatarUrl ? (
@@ -1154,17 +1146,13 @@ function AdminShell() {
               whileTap={{ scale: 0.85 }}
               onClick={() => setHubOpen(true)}
               aria-label="Acciones rápidas"
-              className="relative -mt-7 w-[52px] h-[52px] rounded-full text-white flex items-center justify-center shadow-[0_10px_30px_-8px_rgba(230,0,126,0.5)]"
-              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+              className="bg-brand relative -mt-7 w-[52px] h-[52px] rounded-full text-white flex items-center justify-center shadow-[0_10px_30px_-8px_rgba(230,0,126,0.5)]"
             >
               <Plus size={22} strokeWidth={3} />
               <motion.span
                 animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0, 0.4] }}
                 transition={{ duration: 2.4, repeat: Infinity }}
-                className="absolute inset-0 rounded-full -z-10"
-                style={{
-                  background: "linear-gradient(135deg,#e6007e,#a855f7)",
-                }}
+                className="bg-brand absolute inset-0 rounded-full -z-10"
               />
             </motion.button>
 
@@ -1294,10 +1282,7 @@ function ShopShell() {
       <header className="z-50 bg-white/85 dark:bg-slate-900/85 backdrop-blur-xl border-b border-pink-50 dark:border-slate-800 px-4 py-2 shrink-0">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
           <Link to="/" className="flex items-center gap-2 min-w-0 active:scale-95 transition-transform">
-            <div
-              className="w-9 h-9 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
-              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
-            >
+            <div className="bg-brand w-9 h-9 rounded-2xl flex items-center justify-center shadow-bloom shrink-0">
               <Sparkles className="text-white" size={16} />
             </div>
             <div className="min-w-0">
@@ -1327,8 +1312,7 @@ function ShopShell() {
               <button
                 onClick={() => setProfileOpen(true)}
                 aria-label="Mi perfil"
-                className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
-                style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                className="bg-brand w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
                 title={fullName ?? email ?? "Mi perfil"}
               >
                 {avatarUrl ? (

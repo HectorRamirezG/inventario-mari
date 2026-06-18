@@ -631,7 +631,7 @@ export default function NotificationBell({
                                   className="text-[9px] font-black uppercase tracking-widest text-white px-2 py-0.5 rounded-full shadow-bloom active:scale-95 transition-transform"
                                   style={{
                                     background:
-                                      "linear-gradient(135deg,#e6007e,#a855f7)",
+                                      "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
                                   }}
                                 >
                                   {cta} →

@@ -772,8 +772,7 @@ export default function ClientShopPage() {
             onClick={() => setOpenWishes(true)}
             aria-label="Pídelo a Beauty's Me"
             title="Pídenos algo que no encuentras"
-            className="w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-sm shrink-0 active:scale-95"
-            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+            className="bg-brand w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-sm shrink-0 active:scale-95"
           >
             <Sparkles size={14} />
           </button>
@@ -874,8 +873,7 @@ export default function ClientShopPage() {
                 {active && (
                   <motion.span
                     layoutId="shop-view-pill"
-                    className="absolute inset-0 rounded-full"
-                    style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                    className="bg-brand absolute inset-0 rounded-full"
                     transition={{ type: "spring", stiffness: 380, damping: 28 }}
                   />
                 )}
@@ -992,8 +990,7 @@ export default function ClientShopPage() {
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0 }}
             onClick={() => setOpenCart(true)}
-            className="fixed bottom-16 right-4 z-40 h-12 rounded-2xl px-4 text-white font-black flex items-center gap-2 shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)]"
-            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+            className="bg-brand fixed bottom-16 right-4 z-40 h-12 rounded-2xl px-4 text-white font-black flex items-center gap-2 shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)]"
           >
             <ShoppingBag size={16} />
             <span className="text-sm">
@@ -1090,10 +1087,7 @@ export default function ClientShopPage() {
                       </span>
                       <button
                         onClick={() => changeQty(c.variant_id, 1)}
-                        className="w-7 h-7 rounded-full text-white flex items-center justify-center"
-                        style={{
-                          background: "linear-gradient(135deg,#e6007e,#a855f7)",
-                        }}
+                        className="bg-brand w-7 h-7 rounded-full text-white flex items-center justify-center"
                       >
                         <Plus size={12} />
                       </button>
@@ -1172,10 +1166,7 @@ export default function ClientShopPage() {
                 <button
                   onClick={startCheckout}
                   disabled={submitting}
-                  className="w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
-                  style={{
-                    background: "linear-gradient(135deg,#e6007e,#a855f7)",
-                  }}
+                  className="bg-brand w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
                 >
                   <Receipt size={16} />
                   Apartar y generar ticket
@@ -1210,12 +1201,7 @@ export default function ClientShopPage() {
               className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-premium"
             >
               <div className="flex items-center gap-2 mb-4">
-                <div
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
-                  style={{
-                    background: "linear-gradient(135deg,#e6007e,#a855f7)",
-                  }}
-                >
+                <div className="bg-brand w-10 h-10 rounded-2xl flex items-center justify-center shadow-bloom shrink-0">
                   <Sparkles className="text-white" size={18} />
                 </div>
                 <div>
@@ -1272,10 +1258,7 @@ export default function ClientShopPage() {
                   type="button"
                   onClick={submitLayaway}
                   disabled={submitting}
-                  className="flex-1 h-11 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
-                  style={{
-                    background: "linear-gradient(135deg,#e6007e,#a855f7)",
-                  }}
+                  className="bg-brand flex-1 h-11 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {submitting ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -1668,8 +1651,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
             </span>
             <button
               onClick={() => variant && onOpenBuy(variant.id)}
-              className="w-8 h-8 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform shrink-0"
-              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+              className="bg-brand w-8 h-8 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform shrink-0"
               aria-label="Elegir tonos"
             >
               <Plus size={13} strokeWidth={3} />
@@ -1815,10 +1797,9 @@ const ProductCardClient = memo(function ProductCardClientImpl({
               e.stopPropagation()
               if (variant) onOpenBuy(variant.id)
             }}
-            className={`${
+            className={`bg-brand ${
               isFocus ? "w-11 h-11" : "w-9 h-9"
             } shrink-0 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform`}
-            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
             aria-label="Agregar al carrito"
           >
             <Plus size={14} strokeWidth={3} />

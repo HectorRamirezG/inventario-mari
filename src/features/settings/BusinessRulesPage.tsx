@@ -545,9 +545,9 @@ export default function BusinessRulesPage() {
                   key={color}
                   type="button"
                   onClick={() => patch({ theme_accent: color })}
-                  aria-label={color}
-                  title={color}
-                  className={`relative h-10 rounded-xl ring-2 transition-all ${
+                  aria-label={ACCENT_LABELS[color]}
+                  title={ACCENT_LABELS[color]}
+                  className={`relative h-12 rounded-xl ring-2 transition-all ${
                     form.theme_accent === color
                       ? "ring-slate-900 dark:ring-white scale-105"
                       : "ring-transparent hover:ring-slate-300"
@@ -566,6 +566,9 @@ export default function BusinessRulesPage() {
               ),
             )}
           </div>
+          <p className="text-[9px] font-bold text-slate-400 text-center mt-2 italic">
+            Actual: {ACCENT_LABELS[form.theme_accent]}
+          </p>
         </div>
 
         <RuleRow
@@ -936,17 +939,30 @@ function Hint({ children }: { children: React.ReactNode }) {
 
 /**
  * Mapa de preview visual de cada accent. Se usa solo en el page de
- * reglas — la aplicación real del tema vive en `applyThemeAccent()`
- * dentro de `useTheme.ts` y `index.css`.
+ * reglas — la aplicación real del tema vive en `applyAccent()` (lib/applyTheme.ts)
+ * que actualiza --brand-from / --brand-to en runtime.
+ *
+ * Cada accent es un BI-COLOR: el preview muestra los dos tonos del
+ * gradient real para que Mari elija con confianza.
  */
 const ACCENT_PREVIEW: Record<BusinessRules["theme_accent"], string> = {
   pink: "linear-gradient(135deg,#e6007e,#a855f7)",
-  violet: "linear-gradient(135deg,#7c3aed,#a855f7)",
-  rose: "linear-gradient(135deg,#e11d48,#f43f5e)",
-  amber: "linear-gradient(135deg,#f59e0b,#fb923c)",
-  emerald: "linear-gradient(135deg,#10b981,#34d399)",
+  violet: "linear-gradient(135deg,#7c3aed,#ec4899)",
+  rose: "linear-gradient(135deg,#e11d48,#f97316)",
+  amber: "linear-gradient(135deg,#f59e0b,#dc2626)",
+  emerald: "linear-gradient(135deg,#10b981,#0ea5e9)",
   sky: "linear-gradient(135deg,#0ea5e9,#6366f1)",
-  indigo: "linear-gradient(135deg,#4f46e5,#7c3aed)",
+  indigo: "linear-gradient(135deg,#4f46e5,#06b6d4)",
+}
+
+const ACCENT_LABELS: Record<BusinessRules["theme_accent"], string> = {
+  pink: "Rosa · Violeta",
+  violet: "Violeta · Rosa",
+  rose: "Rojo · Naranja",
+  amber: "Ámbar · Rojo",
+  emerald: "Verde · Azul",
+  sky: "Azul · Índigo",
+  indigo: "Índigo · Cian",
 }
 
 /**

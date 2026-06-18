@@ -229,7 +229,7 @@ export default function SupportPage() {
                 <motion.span
                   layoutId="support-tab-pill"
                   className="absolute inset-0 rounded-xl shadow-bloom"
-                  style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+                  style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}

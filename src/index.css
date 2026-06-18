@@ -7,6 +7,12 @@
   --color-primary-active: #a00058;
   --color-primary-subtle: #fff0f7;
   --color-primary-glass: rgba(230, 0, 126, 0.05);
+  /* Bi-color del gradient de marca. applyAccent() las sobreescribe en
+     runtime cuando el admin elige un tema desde Reglas. Las clases
+     `.bg-brand` / `.text-gradient-brand` y los componentes los usan
+     para que toda la app reaccione automáticamente. */
+  --brand-from: #e6007e;
+  --brand-to: #a855f7;
 
   --color-accent: #fdf2f8;
   --color-accent-hover: #fce7f3;
@@ -329,6 +335,31 @@
 
 /* --- UTILIDADES DE DISEÑO AVANZADO --- */
 @layer utilities {
+
+  /* Brand bi-color. Lee --brand-from / --brand-to del root, que
+     applyAccent() sobreescribe cuando el admin elige tema en Reglas. */
+  .bg-brand {
+    background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+  }
+  .bg-brand-v {
+    background-image: linear-gradient(180deg, var(--brand-from), var(--brand-to));
+  }
+  .bg-brand-h {
+    background-image: linear-gradient(90deg, var(--brand-from), var(--brand-to));
+  }
+  .text-gradient-brand {
+    background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .ring-brand {
+    --tw-ring-color: var(--brand-from);
+  }
+  .shadow-brand {
+    box-shadow: 0 18px 38px -10px color-mix(in srgb, var(--brand-from) 38%, transparent);
+  }
 
   /* Animaciones */
   @keyframes slideUpFade {
@@ -737,14 +768,6 @@ html[data-motion="high"] *::after {
   }
   .ripple-hover:hover::after {
     @apply bg-primary/5;
-  }
-
-  /* Helper: gradiente de texto rosa->violeta listo para usar */
-  .text-gradient-brand {
-    background-image: linear-gradient(135deg, #e6007e, #a855f7);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
   }
 
   /* Helper: tarjeta con halo de color al hover (dark friendly) */

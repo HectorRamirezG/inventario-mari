@@ -379,7 +379,7 @@ export default function ProductCard({
               }}
               aria-label="Acción rápida"
               className="w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform"
-              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+              style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
             >
               <Plus size={14} strokeWidth={3} />
             </button>

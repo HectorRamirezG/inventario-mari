@@ -195,7 +195,7 @@ export default function ClientOrdersPage() {
                     className="h-full rounded-full"
                     style={{
                       width: `${pct}%`,
-                      background: "linear-gradient(90deg,#e6007e,#a855f7)",
+                      background: "linear-gradient(90deg, var(--brand-from), var(--brand-to))",
                     }}
                   />
                 </div>
@@ -220,7 +220,7 @@ export default function ClientOrdersPage() {
                   className="relative overflow-hidden w-full h-11 rounded-xl flex items-center justify-center gap-2 text-white text-[11px] font-black uppercase tracking-widest shadow-bloom press-hard"
                   style={{
                     background:
-                      "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
+                      "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)",
                   }}
                 >
                   <Wallet size={13} />

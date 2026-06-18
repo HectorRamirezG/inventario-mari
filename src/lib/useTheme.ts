@@ -25,13 +25,19 @@ function applyTheme(theme: Theme) {
   const effective = theme === "system" ? getSystemTheme() : theme
   document.documentElement.dataset.theme = effective
   document.documentElement.style.colorScheme = effective
-  // Refresca <meta name="theme-color"> para barra del navegador móvil
+  // Refresca <meta name="theme-color"> para barra del navegador móvil.
+  // En modo claro usa el color del tema actual desde --brand-from para
+  // que la barra del SO se mantenga sincronizada con el accent elegido.
   const meta = document.querySelector('meta[name="theme-color"]')
   if (meta) {
-    meta.setAttribute(
-      "content",
-      effective === "dark" ? "#0f172a" : "#e6007e"
-    )
+    if (effective === "dark") {
+      meta.setAttribute("content", "#0f172a")
+    } else {
+      const brand = getComputedStyle(document.documentElement)
+        .getPropertyValue("--brand-from")
+        .trim()
+      meta.setAttribute("content", brand || "#e6007e")
+    }
   }
 }
 

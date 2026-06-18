@@ -50,10 +50,21 @@ export function fireConfetti(options: ConfettiOptions = {}) {
   // Respetar regla global del admin (BusinessRules)
   if (!getBusinessRules().confetti_on_purchase) return
 
+  // Lee el bi-color del tema actual desde CSS vars para que el confetti
+  // refleje el accent que el admin eligió. Si las vars no existen
+  // (boot temprano), cae a la paleta default.
+  const cs = getComputedStyle(document.documentElement)
+  const brandFrom = cs.getPropertyValue("--brand-from").trim()
+  const brandTo = cs.getPropertyValue("--brand-to").trim()
+  const dynamicDefault =
+    brandFrom && brandTo
+      ? [brandFrom, brandTo, "#f59e0b", "#10b981", "#3b82f6"]
+      : DEFAULT_COLORS
+
   const {
     duration = 1800,
     count = 80,
-    colors = DEFAULT_COLORS,
+    colors = dynamicDefault,
   } = options
 
   // Limpiar canvas previo si seguía vivo

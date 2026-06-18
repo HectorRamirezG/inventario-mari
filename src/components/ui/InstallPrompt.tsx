@@ -21,7 +21,7 @@ export default function InstallPrompt({ className = "" }: Props) {
         >
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-bloom"
-            style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
+            style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
           >
             <Download size={16} />
           </div>
