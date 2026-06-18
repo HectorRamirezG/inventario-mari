@@ -137,7 +137,7 @@ export async function uploadPaymentProof(input: {
   try {
     const { data: sale } = await supabase
       .from("sales")
-      .select("customer_name,customer_email")
+      .select("customer_name,customer_email,public_token")
       .eq("id", input.saleId)
       .maybeSingle()
     const who = (sale as any)?.customer_name ?? input.customerEmail ?? "Cliente"
@@ -157,8 +157,30 @@ export async function uploadPaymentProof(input: {
         customer_email: input.customerEmail,
       },
     })
+
+    // ───── Acuse al CLIENTE: "recibimos tu comprobante" ─────
+    const clientEmail =
+      input.customerEmail || ((sale as any)?.customer_email ?? null)
+    if (clientEmail) {
+      await notifyClient(clientEmail, {
+        type: "payment_proof_received",
+        title: "Recibimos tu comprobante",
+        body: isCash
+          ? "Mari validará tu pago en efectivo en cuanto lo reciba físicamente."
+          : `Tu transferencia${amountTxt} ya está en la fila para revisión. Te avisamos cuando se apruebe.`,
+        link: (sale as any)?.public_token
+          ? `/ticket/${(sale as any).public_token}`
+          : null,
+        metadata: {
+          proof_id: proof.id,
+          sale_id: input.saleId,
+          amount: input.amount,
+          method: input.method,
+        },
+      })
+    }
   } catch (e: any) {
-    debug.warn("[proofs] notify admins falló:", e?.message)
+    debug.warn("[proofs] notify falló:", e?.message)
   }
 
   return proof

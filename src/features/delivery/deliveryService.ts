@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { notifyClient, notifyAdmins } from "../notifications/notificationsService"
 
 /**
  * Delivery Notes (Comandas de entrega) — service.
@@ -144,6 +145,63 @@ export async function updateDeliveryStatus(
     .update(patch)
     .eq("id", id)
   if (error) throw error
+
+  // ───── Notificaciones cliente + admin según nuevo estatus ─────
+  // Recuperamos email/nombre del cliente desde la sale asociada.
+  if (status === "picked_up" || status === "delivered") {
+    try {
+      const { data: note } = await supabase
+        .from("delivery_notes")
+        .select("sale_id,driver_name")
+        .eq("id", id)
+        .maybeSingle()
+      if (note?.sale_id) {
+        const { data: sale } = await supabase
+          .from("sales")
+          .select("customer_email,customer_name,public_token")
+          .eq("id", note.sale_id)
+          .maybeSingle()
+        if (sale && (sale as any).customer_email) {
+          if (status === "picked_up") {
+            await notifyClient((sale as any).customer_email, {
+              type: "delivery_picked_up",
+              title: "Tu pedido va en camino 🛵",
+              body: note.driver_name
+                ? `${note.driver_name} ya tiene tu pedido y va para allá.`
+                : "El repartidor ya tiene tu pedido y va para allá.",
+              link: (sale as any).public_token
+                ? `/ticket/${(sale as any).public_token}`
+                : null,
+              metadata: { delivery_id: id, sale_id: note.sale_id, driver: note.driver_name },
+            })
+          } else {
+            await notifyClient((sale as any).customer_email, {
+              type: "delivery_delivered",
+              title: "Tu pedido fue entregado 💖",
+              body: "Esperamos te encante. Cualquier cosa, escríbenos.",
+              link: (sale as any).public_token
+                ? `/ticket/${(sale as any).public_token}`
+                : null,
+              metadata: { delivery_id: id, sale_id: note.sale_id },
+            })
+          }
+        }
+        // Notif a admins también para que vean el movimiento en su buzón
+        await notifyAdmins({
+          type: status === "picked_up" ? "delivery_picked_up" : "delivery_delivered",
+          title:
+            status === "picked_up"
+              ? `Comanda en camino${note.driver_name ? " · " + note.driver_name : ""}`
+              : `Comanda entregada${note.driver_name ? " · " + note.driver_name : ""}`,
+          body: null,
+          link: `/apartados?sale=${note.sale_id}`,
+          metadata: { delivery_id: id, sale_id: note.sale_id },
+        })
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
 }
 
 export async function deleteDeliveryNote(id: string): Promise<void> {
@@ -198,7 +256,37 @@ export async function getPublicDeliveryNote(
     p_token: token,
   })
   if (error) throw error
-  return (data as PublicDeliveryNote) ?? null
+  const note = (data as PublicDeliveryNote) ?? null
+
+  // ───── Registra que el repartidor ABRIÓ el link (una sola vez) ─────
+  // Usamos localStorage para no spammear: marcamos el token como "visto"
+  // y solo notificamos a Mari la primera vez.
+  if (note && typeof window !== "undefined") {
+    const KEY = `mari:delivery-opened:${token}`
+    try {
+      if (!localStorage.getItem(KEY)) {
+        localStorage.setItem(KEY, new Date().toISOString())
+        // Notif a admins en background, no bloquea la vista pública
+        notifyAdmins({
+          type: "delivery_picked_up",
+          title: `${note.driver_name ?? "El repartidor"} abrió la comanda`,
+          body: note.customer.name
+            ? `Pedido de ${note.customer.name}. Ya tiene la info.`
+            : "El repartidor ya tiene los datos del pedido.",
+          link: `/apartados?sale=${note.sale.id}`,
+          metadata: {
+            sale_id: note.sale.id,
+            driver: note.driver_name,
+            event: "opened_link",
+          },
+        }).catch(() => {})
+      }
+    } catch {
+      /* localStorage puede no estar disponible */
+    }
+  }
+
+  return note
 }
 
 /* ─────────── Helpers ─────────── */

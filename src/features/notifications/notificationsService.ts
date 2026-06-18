@@ -3,12 +3,53 @@ import { supabase } from "../../lib/supabase"
 import { sound } from "../../lib/sound"
 import { useAuth, isStaffOrAdmin, type AppRole } from "../../lib/useAuth"
 import { debug } from "../../lib/debug"
+import {
+  NOTIF_TYPE_CATEGORY,
+  shouldPlayForNotif,
+  type NotifCategory,
+} from "../../lib/notifPrefs"
 
 export type NotifType =
+  // ───── Originales
   | "payment_added"
   | "sale_paid"
   | "sale_cancelled"
   | "new_layaway"
+  // ───── Pagos y comprobantes
+  | "payment_proof"
+  | "payment_proof_uploaded"
+  | "payment_proof_received"
+  | "payment_proof_reminder"
+  | "payment_approved"
+  | "payment_rejected"
+  | "proof_rejected"
+  | "price_adjusted"
+  // ───── Apartados
+  | "layaway_extension"
+  | "layaway_due_soon"
+  | "layaway_stale"
+  // ───── Soporte
+  | "support_ticket"
+  | "support_resolved"
+  // ───── Wishes
+  | "wish_created"
+  | "wish_status"
+  | "wish_available"
+  // ───── Reviews
+  | "review_created"
+  | "review_published"
+  // ───── Delivery
+  | "delivery_picked_up"
+  | "delivery_delivered"
+  | "delivery_not_opened"
+  // ───── Stock
+  | "stock_low"
+  | "stock_back"
+  // ───── Milestones / ciclo de vida
+  | "daily_goal"
+  | "birthday"
+  | "new_customer"
+  | "abandoned_cart"
 
 export interface AppNotification {
   id: string
@@ -29,6 +70,39 @@ function roleScope(role: AppRole): "client" | "admin" {
 }
 
 /* -------------------- API plana -------------------- */
+
+/**
+ * Elige el método de `sound` adecuado según la categoría de la notif y
+ * respeta las preferencias del usuario (quiet hours, mute, etc.).
+ *
+ * Centralizado aquí para que TANTO el realtime hook como
+ * `triggerLocalNotification` lo usen y sean consistentes.
+ */
+export function playForType(type: string): void {
+  const { sound: canSound, haptic: canHaptic } = shouldPlayForNotif(type)
+  if (!canSound && !canHaptic) return
+  const cat: NotifCategory = NOTIF_TYPE_CATEGORY[type] ?? "system"
+  // Si no se permite sonido pero sí vibración (quiet hours partial), llamamos
+  // a la función igual: cada método ya respeta `getPrefs().haptics` y
+  // `getPrefs().sounds` internamente. Aquí solo elegimos el "color" del audio.
+  const method =
+    cat === "proofs" || cat === "sales"
+      ? "notifyMoney"
+      : cat === "support"
+      ? "notifyAlert"
+      : cat === "wishes" || cat === "reviews"
+      ? "notifySoft"
+      : cat === "delivery"
+      ? "notifyDelivery"
+      : cat === "stock"
+      ? "notifyStock"
+      : cat === "milestone"
+      ? "notifyMilestone"
+      : "notify"
+  // Si el global de sound está apagado pero quiet hours permite haptic,
+  // igual lo permite (el método de sound respeta prefs.sounds).
+  sound.play(method as any)
+}
 
 export async function fetchNotifications(
   scope: "client" | "admin",
@@ -72,6 +146,40 @@ export async function markAllRead() {
 
 export async function removeNotification(id: string) {
   await supabase.from("notifications").delete().eq("id", id)
+}
+
+/** Marca una notif como NO leída (volver a destacar). */
+export async function markAsUnread(id: string) {
+  await supabase.from("notifications").update({ read_at: null }).eq("id", id)
+}
+
+/**
+ * Dispara una notificación nativa del sistema (Web Notification API).
+ * Sólo funciona si el usuario otorgó permiso. Útil para mostrar push
+ * locales aunque el origen sea el realtime de Supabase (no push remoto).
+ *
+ * No falla si el navegador no soporta o el permiso fue rechazado.
+ */
+export function triggerLocalNotification(input: {
+  title: string
+  body?: string | null
+  tag?: string
+  icon?: string
+}): void {
+  if (typeof window === "undefined" || typeof Notification === "undefined") return
+  if (Notification.permission !== "granted") return
+  try {
+    const n = new Notification(input.title, {
+      body: input.body ?? undefined,
+      icon: input.icon ?? "/icon-192.png",
+      tag: input.tag,
+      silent: false,
+    })
+    // Cierre automático después de 8 segundos para no apilar
+    setTimeout(() => n.close(), 8000)
+  } catch {
+    /* noop */
+  }
 }
 
 /* -------------------- Hook reactivo -------------------- */
@@ -134,7 +242,18 @@ export function useNotifications(opts: {
           if (n.recipient_role !== scope) return
           if (n.recipient_email && n.recipient_email !== email) return
           setItems((prev) => [n, ...prev].slice(0, 50))
-          sound.play("notify")
+          // Sonido inteligente: respeta quiet hours, mute por categoría,
+          // y elige el efecto correcto según el tipo.
+          playForType(n.type)
+          // Push local del navegador (si el permiso está concedido).
+          // Esto funciona aunque la app esté en background dentro del
+          // mismo tab — pero no si la app está cerrada (eso lo cubre
+          // Web Push del SW).
+          triggerLocalNotification({
+            title: n.title,
+            body: n.body,
+            tag: n.id,
+          })
           opts.onNew?.(n)
         }
       )
@@ -174,7 +293,16 @@ export function useNotifications(opts: {
 
   const unread = items.filter((n) => !n.read_at).length
 
-  return { items, unread, loading, refresh, markAsRead, markAllRead, removeNotification }
+  return {
+    items,
+    unread,
+    loading,
+    refresh,
+    markAsRead,
+    markAsUnread,
+    markAllRead,
+    removeNotification,
+  }
 }
 
 /* ─────────── Helpers para DISPARAR notificaciones ─────────── */

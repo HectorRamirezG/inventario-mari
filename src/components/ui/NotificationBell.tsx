@@ -15,71 +15,169 @@ import {
   Receipt,
   Sparkles,
   LifeBuoy,
+  Package,
+  PackageX,
+  PackageCheck,
+  Truck,
+  AlertTriangle,
+  Trophy,
+  Gift,
+  UserPlus,
+  Star,
+  MessageCircle,
+  Cake,
+  Heart,
+  Loader2,
+  RotateCcw,
 } from "lucide-react"
+import toast from "react-hot-toast"
 
 import { useNotifications, type AppNotification } from "../../features/notifications/notificationsService"
 import { formatRelative } from "../../lib/format"
+import { useAuth, isStaffOrAdmin } from "../../lib/useAuth"
+import { approveProof, rejectProof } from "../../features/payments/paymentProofsService"
+import { promptDialog } from "../../lib/prompt"
 
 const ICON: Record<string, typeof CreditCard> = {
+  // Pagos
   payment_added: CreditCard,
   sale_paid: CheckCircle2,
   sale_cancelled: XCircle,
   new_layaway: ShoppingBag,
+  payment_proof: Receipt,
   payment_proof_uploaded: Receipt,
-  payment_proof_rejected: XCircle,
+  payment_proof_received: Receipt,
+  payment_proof_reminder: AlertTriangle,
+  payment_approved: CheckCircle2,
+  payment_rejected: XCircle,
   proof_rejected: XCircle,
   price_adjusted: Sparkles,
+  // Apartados
+  layaway_extension: ShoppingBag,
+  layaway_due_soon: AlertTriangle,
+  layaway_stale: AlertTriangle,
+  // Soporte
   support_ticket: Bell,
   support_resolved: LifeBuoy,
+  // Wishes
+  wish_created: Heart,
+  wish_status: Sparkles,
+  wish_available: Sparkles,
+  // Reviews
+  review_created: Star,
+  review_published: Star,
+  // Delivery
+  delivery_picked_up: Truck,
+  delivery_delivered: PackageCheck,
+  delivery_not_opened: AlertTriangle,
+  // Stock
+  stock_low: PackageX,
+  stock_back: Package,
+  // Milestones / lifecycle
+  daily_goal: Trophy,
+  birthday: Cake,
+  new_customer: UserPlus,
+  abandoned_cart: ShoppingBag,
 }
 
 /* Colores pastel ULTRA claros (compactos). El icono lleva su color más
  * intenso; el fondo es suavísimo para no saturar la lista. */
 const COLOR: Record<string, string> = {
-  payment_added:
-    "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  sale_paid:
-    "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  sale_cancelled:
-    "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  new_layaway:
-    "bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  payment_proof_uploaded:
-    "bg-sky-50/70 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300",
-  payment_proof_rejected:
-    "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  proof_rejected:
-    "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
-  price_adjusted:
-    "bg-pink-50/70 dark:bg-pink-500/10 text-pink-700 dark:text-pink-300",
-  support_ticket:
-    "bg-violet-50/70 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300",
-  support_resolved:
-    "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  // Verde — éxito / dinero entrando
+  payment_added: "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  sale_paid: "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  payment_approved: "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  support_resolved: "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  delivery_delivered: "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  stock_back: "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  wish_available: "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  review_published: "bg-emerald-50/70 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  // Rojo — cancelado, rechazado, alerta dura
+  sale_cancelled: "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  payment_rejected: "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  proof_rejected: "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  delivery_not_opened: "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  stock_low: "bg-rose-50/70 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  // Ámbar — atención / recordatorio
+  new_layaway: "bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  payment_proof_reminder: "bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  layaway_due_soon: "bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  layaway_stale: "bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  abandoned_cart: "bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  // Sky — info, comprobantes, entregas en camino
+  payment_proof: "bg-sky-50/70 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  payment_proof_uploaded: "bg-sky-50/70 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  payment_proof_received: "bg-sky-50/70 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  delivery_picked_up: "bg-sky-50/70 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300",
+  // Pink — celebración, ajuste, soporte
+  price_adjusted: "bg-pink-50/70 dark:bg-pink-500/10 text-pink-700 dark:text-pink-300",
+  daily_goal: "bg-pink-50/70 dark:bg-pink-500/10 text-pink-700 dark:text-pink-300",
+  birthday: "bg-pink-50/70 dark:bg-pink-500/10 text-pink-700 dark:text-pink-300",
+  new_customer: "bg-pink-50/70 dark:bg-pink-500/10 text-pink-700 dark:text-pink-300",
+  // Violet — wishes, soporte, layaway extension
+  support_ticket: "bg-violet-50/70 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  wish_created: "bg-violet-50/70 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  wish_status: "bg-violet-50/70 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  layaway_extension: "bg-violet-50/70 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  // Amarillo — reviews
+  review_created: "bg-amber-50/70 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300",
 }
 
 /* Fondo suave del ROW (no del icono) según tipo. Mantiene tipografía esbelta. */
 const ROW_BG: Record<string, string> = {
   payment_added: "bg-emerald-50/40 dark:bg-emerald-500/5",
   sale_paid: "bg-emerald-50/40 dark:bg-emerald-500/5",
-  sale_cancelled: "bg-rose-50/40 dark:bg-rose-500/5",
-  new_layaway: "bg-amber-50/40 dark:bg-amber-500/5",
-  payment_proof_uploaded: "bg-sky-50/40 dark:bg-sky-500/5",
-  payment_proof_rejected: "bg-rose-50/40 dark:bg-rose-500/5",
-  proof_rejected: "bg-rose-50/40 dark:bg-rose-500/5",
-  price_adjusted: "bg-pink-50/40 dark:bg-pink-500/5",
-  support_ticket: "bg-violet-50/40 dark:bg-violet-500/5",
+  payment_approved: "bg-emerald-50/40 dark:bg-emerald-500/5",
   support_resolved: "bg-emerald-50/40 dark:bg-emerald-500/5",
+  delivery_delivered: "bg-emerald-50/40 dark:bg-emerald-500/5",
+  stock_back: "bg-emerald-50/40 dark:bg-emerald-500/5",
+  wish_available: "bg-emerald-50/40 dark:bg-emerald-500/5",
+  review_published: "bg-emerald-50/40 dark:bg-emerald-500/5",
+  sale_cancelled: "bg-rose-50/40 dark:bg-rose-500/5",
+  payment_rejected: "bg-rose-50/40 dark:bg-rose-500/5",
+  proof_rejected: "bg-rose-50/40 dark:bg-rose-500/5",
+  delivery_not_opened: "bg-rose-50/40 dark:bg-rose-500/5",
+  stock_low: "bg-rose-50/40 dark:bg-rose-500/5",
+  new_layaway: "bg-amber-50/40 dark:bg-amber-500/5",
+  payment_proof_reminder: "bg-amber-50/40 dark:bg-amber-500/5",
+  layaway_due_soon: "bg-amber-50/40 dark:bg-amber-500/5",
+  layaway_stale: "bg-amber-50/40 dark:bg-amber-500/5",
+  abandoned_cart: "bg-amber-50/40 dark:bg-amber-500/5",
+  payment_proof: "bg-sky-50/40 dark:bg-sky-500/5",
+  payment_proof_uploaded: "bg-sky-50/40 dark:bg-sky-500/5",
+  payment_proof_received: "bg-sky-50/40 dark:bg-sky-500/5",
+  delivery_picked_up: "bg-sky-50/40 dark:bg-sky-500/5",
+  price_adjusted: "bg-pink-50/40 dark:bg-pink-500/5",
+  daily_goal: "bg-pink-50/40 dark:bg-pink-500/5",
+  birthday: "bg-pink-50/40 dark:bg-pink-500/5",
+  new_customer: "bg-pink-50/40 dark:bg-pink-500/5",
+  support_ticket: "bg-violet-50/40 dark:bg-violet-500/5",
+  wish_created: "bg-violet-50/40 dark:bg-violet-500/5",
+  wish_status: "bg-violet-50/40 dark:bg-violet-500/5",
+  layaway_extension: "bg-violet-50/40 dark:bg-violet-500/5",
+  review_created: "bg-amber-50/40 dark:bg-amber-500/5",
 }
 
 /** Etiqueta del CTA según tipo de notificación. */
 function actionLabel(type: string): string | null {
-  if (type === "payment_proof_uploaded") return "Revisar pago"
+  if (type === "payment_proof_uploaded" || type === "payment_proof") return "Revisar pago"
   if (type === "new_layaway") return "Ver apartado"
   if (type === "payment_added") return "Ver pedido"
   if (type === "price_adjusted") return "Ver pedido"
-  if (type === "payment_proof_rejected") return "Ver pedido"
+  if (type === "payment_proof_rejected" || type === "proof_rejected") return "Ver pedido"
   if (type === "sale_paid" || type === "sale_cancelled") return "Ver pedido"
+  if (type === "delivery_picked_up" || type === "delivery_delivered") return "Ver pedido"
+  if (type === "delivery_not_opened") return "Llamar"
+  if (type === "wish_available") return "Ver tienda"
+  if (type === "wish_created" || type === "wish_status") return "Ver deseo"
+  if (type === "stock_low" || type === "stock_back") return "Ver inventario"
+  if (type === "support_ticket") return "Atender"
+  if (type === "support_resolved") return "Ver respuesta"
+  if (type === "review_created") return "Moderar"
+  if (type === "layaway_due_soon" || type === "layaway_stale") return "Ver apartados"
+  if (type === "daily_goal") return "Ver dashboard"
+  if (type === "new_customer") return "Ver pedidos"
+  if (type === "birthday") return "Saludar"
   return null
 }
 
@@ -92,10 +190,14 @@ export default function NotificationBell({
 }: {
   align?: "left" | "right"
 }) {
-  const { items, unread, markAsRead, markAllRead, removeNotification } =
+  const { items, unread, markAsRead, markAsUnread, markAllRead, removeNotification } =
     useNotifications()
+  const { role } = useAuth()
+  const isAdmin = isStaffOrAdmin(role)
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState<"unread" | "today" | "all">("unread")
+  const [busyApprove, setBusyApprove] = useState<string | null>(null)
+  const [busyReject, setBusyReject] = useState<string | null>(null)
   const btnRef = useRef<HTMLButtonElement>(null)
   const navigate = useNavigate()
 
@@ -120,7 +222,10 @@ export default function NotificationBell({
     setOpen(false)
 
     // Acciones especiales: en lugar de navegar, abre el drawer apropiado
-    if (n.type === "payment_proof_uploaded") {
+    if (
+      n.type === "payment_proof_uploaded" ||
+      n.type === "payment_proof"
+    ) {
       const proofId = n.metadata?.proof_id as string | undefined
       if (proofId) {
         window.dispatchEvent(
@@ -145,6 +250,55 @@ export default function NotificationBell({
         return
       }
       navigate(n.link)
+    }
+  }
+
+  /** Aprobar comprobante directamente desde la notif (sin abrir drawer). */
+  const handleInlineApprove = async (n: AppNotification) => {
+    const proofId = n.metadata?.proof_id as string | undefined
+    const amount = Number(n.metadata?.amount ?? 0)
+    const method = (n.metadata?.method as string) ?? "transferencia"
+    if (!proofId || amount <= 0) {
+      // Faltan datos: abre el drawer para que el admin complete
+      handleClick(n)
+      return
+    }
+    setBusyApprove(n.id)
+    try {
+      await approveProof(proofId, amount, method)
+      toast.success("Pago aprobado")
+      await markAsRead(n.id)
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo aprobar")
+    } finally {
+      setBusyApprove(null)
+    }
+  }
+
+  /** Rechazar comprobante con motivo directo desde la notif. */
+  const handleInlineReject = async (n: AppNotification) => {
+    const proofId = n.metadata?.proof_id as string | undefined
+    if (!proofId) {
+      handleClick(n)
+      return
+    }
+    const reason = await promptDialog({
+      title: "Motivo del rechazo",
+      description: "Le aparecerá al cliente para que envíe uno nuevo.",
+      placeholder: "Ej. Monto no coincide, imagen borrosa…",
+      confirmLabel: "Rechazar",
+      multiline: true,
+    })
+    if (reason === null) return
+    setBusyReject(n.id)
+    try {
+      await rejectProof(proofId, reason || undefined)
+      toast.success("Comprobante rechazado")
+      await markAsRead(n.id)
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo rechazar")
+    } finally {
+      setBusyReject(null)
     }
   }
 
@@ -297,6 +451,12 @@ export default function NotificationBell({
                       (n.type === "proof_rejected" || n.type === "payment_proof_rejected")
                         ? (n.metadata as any)?.reason ?? n.body ?? null
                         : null
+                    const isProof =
+                      isAdmin &&
+                      (n.type === "payment_proof" || n.type === "payment_proof_uploaded") &&
+                      !!n.metadata?.proof_id
+                    const inlineApproveBusy = busyApprove === n.id
+                    const inlineRejectBusy = busyReject === n.id
                     return (
                       <div
                         key={n.id}
@@ -336,11 +496,42 @@ export default function NotificationBell({
                                 </p>
                               </div>
                             )}
+                            {/* Acciones inline para comprobantes (admin) */}
+                            {isProof && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleInlineApprove(n)}
+                                  disabled={inlineApproveBusy || inlineRejectBusy}
+                                  className="flex-1 h-6 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
+                                >
+                                  {inlineApproveBusy ? (
+                                    <Loader2 size={10} className="animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 size={10} />
+                                  )}
+                                  Aprobar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleInlineReject(n)}
+                                  disabled={inlineApproveBusy || inlineRejectBusy}
+                                  className="flex-1 h-6 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-rose-500 hover:bg-rose-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
+                                >
+                                  {inlineRejectBusy ? (
+                                    <Loader2 size={10} className="animate-spin" />
+                                  ) : (
+                                    <XCircle size={10} />
+                                  )}
+                                  Rechazar
+                                </button>
+                              </div>
+                            )}
                             <div className="flex items-center justify-between gap-2 mt-0.5">
                               <p className="text-[9px] text-slate-400 font-bold leading-none">
                                 {formatRelative(n.created_at)}
                               </p>
-                              {cta && (
+                              {cta && !isProof && (
                                 <button
                                   type="button"
                                   onClick={() => handleClick(n)}
@@ -356,14 +547,26 @@ export default function NotificationBell({
                             </div>
                           </div>
                         </div>
-                        <button
-                          onClick={() => removeNotification(n.id)}
-                          className="opacity-0 group-hover:opacity-100 sm:opacity-100 w-5 h-5 rounded-md flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500 self-start"
-                          title="Quitar"
-                          aria-label="Quitar notificación"
-                        >
-                          <Trash2 size={10} />
-                        </button>
+                        <div className="flex flex-col items-center gap-0.5 self-start opacity-60 hover:opacity-100 transition-opacity">
+                          {n.read_at && (
+                            <button
+                              onClick={() => markAsUnread(n.id)}
+                              className="w-5 h-5 rounded-md flex items-center justify-center text-slate-400 hover:bg-primary/10 hover:text-primary"
+                              title="Marcar como no leída"
+                              aria-label="Marcar como no leída"
+                            >
+                              <RotateCcw size={9} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => removeNotification(n.id)}
+                            className="w-5 h-5 rounded-md flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500"
+                            title="Quitar"
+                            aria-label="Quitar notificación"
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </div>
                       </div>
                     )
                   })}

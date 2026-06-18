@@ -116,12 +116,48 @@ export const sound = {
     setTimeout(() => beep(1108.73, 80, 0.05), 70)
     vibrate([15, 25, 15])
   },
+  /** Variante: cobro/comprobante → campana corta y dulce. */
+  notifyMoney: () => {
+    bell(1318.51, 280, 0.05)
+    vibrate([15, 20, 15])
+  },
+  /** Variante: soporte / alerta → tono más serio (descendente). */
+  notifyAlert: () => {
+    beep(660, 90, 0.05)
+    setTimeout(() => beep(523.25, 110, 0.05), 80)
+    vibrate([20, 30, 20])
+  },
+  /** Variante: deseo/reseña → toque corto agradable. */
+  notifySoft: () => {
+    beep(1046.5, 50, 0.04)
+    setTimeout(() => beep(1318.51, 60, 0.04), 60)
+    vibrate(12)
+  },
+  /** Variante: entrega/repartidor → dos pulsos rítmicos. */
+  notifyDelivery: () => {
+    beep(740, 70, 0.05)
+    setTimeout(() => beep(880, 90, 0.05), 90)
+    vibrate([10, 20, 10, 20, 10])
+  },
+  /** Variante: stock crítico → urgente, dos tonos bajos. */
+  notifyStock: () => {
+    beep(440, 100, 0.06)
+    setTimeout(() => beep(370, 130, 0.06), 110)
+    vibrate([30, 30, 30])
+  },
+  /** Variante: meta alcanzada → fanfare corto, ascendente. */
+  notifyMilestone: () => {
+    bell(659.25, 260, 0.05) // E5
+    setTimeout(() => bell(987.77, 280, 0.05), 80) // B5
+    setTimeout(() => bell(1318.51, 320, 0.05), 170) // E6
+    vibrate([20, 30, 20, 30, 20])
+  },
   /**
    * Atajo genérico: `sound.play("notify")`. Permite que código externo
    * pase un string sin importar el método concreto. Si el nombre no
    * existe, hace fallback a `tap`.
    */
-  play: (name: "tap" | "scan" | "success" | "error" | "notify") => {
+  play: (name: "tap" | "scan" | "success" | "error" | "notify" | "notifyMoney" | "notifyAlert" | "notifySoft" | "notifyDelivery" | "notifyStock" | "notifyMilestone") => {
     const fn = (sound as any)[name]
     if (typeof fn === "function") fn()
     else (sound as any).tap()

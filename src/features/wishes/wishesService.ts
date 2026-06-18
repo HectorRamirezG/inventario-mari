@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { notifyAdmins, notifyClient } from "../notifications/notificationsService"
 
 /**
  * Wishes — sugerencias y peticiones del cliente.
@@ -105,7 +106,18 @@ export async function createWish(input: CreateWishInput): Promise<Wish> {
     .select()
     .single()
   if (error) throw error
-  return data as Wish
+  const wish = data as Wish
+
+  // Notifica a admins (best-effort)
+  await notifyAdmins({
+    type: "wish_created",
+    title: `Nueva sugerencia: ${payload.title.slice(0, 60)}`,
+    body: `${payload.customer_name ?? "Cliente"}${payload.size ? " · talla " + payload.size : ""}${payload.color ? " · " + payload.color : ""}. Revísala para responder.`,
+    link: "/admin",
+    metadata: { wish_id: wish.id, customer_email: payload.customer_email },
+  })
+
+  return wish
 }
 
 /** Lista wishes del cliente (por email). Ordenado por creación desc. */
@@ -160,7 +172,36 @@ export async function updateWishStatus(
     .select()
     .single()
   if (error) throw error
-  return data as Wish
+  const wish = data as Wish
+
+  // Notif al cliente con copy específico por status
+  if (wish.customer_email) {
+    const baseTitle =
+      status === "available"
+        ? "¡Tu deseo ya está disponible!"
+        : status === "unavailable"
+        ? "Tu deseo aún no se puede conseguir"
+        : status === "fulfilled"
+        ? "Mari cerró tu sugerencia"
+        : status === "reviewing"
+        ? "Mari está analizando tu deseo"
+        : null
+    if (baseTitle) {
+      await notifyClient(wish.customer_email, {
+        type: status === "available" ? "wish_available" : "wish_status",
+        title: baseTitle,
+        body: adminNote
+          ? `${adminNote.slice(0, 160)}`
+          : status === "available"
+          ? `"${wish.title}" ya lo tenemos. Pásate a la tienda a verlo.`
+          : `Te avisamos del cambio en "${wish.title}".`,
+        link: "/mis-deseos",
+        metadata: { wish_id: wish.id, status, admin_note: adminNote ?? null },
+      })
+    }
+  }
+
+  return wish
 }
 
 /** Elimina un wish (admin). */

@@ -21,6 +21,10 @@ import {
   Sparkles,
   Calculator,
   Percent,
+  Bell,
+  BellOff,
+  Moon as MoonIcon,
+  CheckCircle2,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
@@ -50,6 +54,13 @@ import { resetAppData, type ResetReport } from "./resetAppService"
 import { confirmAction } from "../../lib/confirm"
 import { useUserPrefs } from "../../lib/userPrefs"
 import Toggle from "../../components/ui/Toggle"
+import {
+  useNotifPrefs,
+  NOTIF_CATEGORY_META,
+  ALL_CATEGORIES,
+  type NotifCategory,
+} from "../../lib/notifPrefs"
+import { ensurePushPermission, isPushSupported } from "../../lib/pushNative"
 
 export default function SettingsPage() {
   const { info, update, reset } = useStoreInfo()
@@ -387,6 +398,9 @@ export default function SettingsPage() {
 
       {/* PREFERENCIAS DEL USUARIO */}
       <UserPrefsSection />
+
+      {/* NOTIFICACIONES */}
+      <NotifPrefsSection />
 
       {/* ZONA PELIGROSA — solo admin */}
       {isAdmin && <DangerZoneSection />}
@@ -738,6 +752,271 @@ function UserPrefsSection() {
             />
           </label>
         ))}
+      </div>
+
+      <p className="text-[9px] text-slate-400 dark:text-slate-500 text-center italic pt-1">
+        Estas preferencias se guardan en este dispositivo
+      </p>
+    </motion.section>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   PREFERENCIAS DE NOTIFICACIONES
+   - Sonido al recibir
+   - Vibración al recibir
+   - Quiet hours
+   - Push nativas (opt-in con permiso del navegador)
+   - Categorías silenciadas
+   ════════════════════════════════════════════════════════════════════ */
+function NotifPrefsSection() {
+  const { prefs, setPref, toggleCategory } = useNotifPrefs()
+  const [busyPush, setBusyPush] = useState(false)
+  const [permState, setPermState] = useState<NotificationPermission | "unsupported">(
+    typeof window !== "undefined" && "Notification" in window
+      ? Notification.permission
+      : "unsupported",
+  )
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return
+    const i = setInterval(() => setPermState(Notification.permission), 1500)
+    return () => clearInterval(i)
+  }, [])
+
+  const handlePushToggle = async (next: boolean) => {
+    if (!next) {
+      setPref("pushNativeEnabled", false)
+      toast.success("Push nativas desactivadas")
+      return
+    }
+    if (!isPushSupported()) {
+      toast.error("Tu navegador no soporta push nativas")
+      return
+    }
+    setBusyPush(true)
+    try {
+      const ok = await ensurePushPermission()
+      if (ok) {
+        setPref("pushNativeEnabled", true)
+        toast.success("Push nativas activadas")
+      } else {
+        toast.error("No otorgaste permiso de notificación")
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo activar push")
+    } finally {
+      setBusyPush(false)
+    }
+  }
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="surface-card p-5 mb-4 space-y-3"
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow-bloom"
+          style={{ background: "linear-gradient(135deg,#0ea5e9,#a855f7)" }}
+        >
+          <Bell size={14} />
+        </div>
+        <div>
+          <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
+            Notificaciones
+          </h3>
+          <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400">
+            Sonidos, push, horario silencioso y categorías
+          </p>
+        </div>
+      </div>
+
+      {/* Switches globales */}
+      <div className="space-y-1.5">
+        <label className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+            {prefs.enabled ? <Bell size={14} /> : <BellOff size={14} />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+              Recibir notificaciones
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+              Apaga esto para silenciar absolutamente todo. La campana sigue visible.
+            </p>
+          </div>
+          <Toggle
+            checked={prefs.enabled}
+            onChange={(v) => setPref("enabled", v)}
+            label="Recibir notificaciones"
+          />
+        </label>
+
+        <label className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60">
+          <div className="w-9 h-9 rounded-xl bg-sky-500 text-white flex items-center justify-center shrink-0">
+            <Volume2 size={14} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+              Sonido al recibir
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+              Tono diferente por tipo: dinero, alertas, deseos, entregas.
+            </p>
+          </div>
+          <Toggle
+            checked={prefs.soundOnIncoming}
+            onChange={(v) => setPref("soundOnIncoming", v)}
+            label="Sonido al recibir"
+          />
+        </label>
+
+        <label className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60">
+          <div className="w-9 h-9 rounded-xl bg-violet-500 text-white flex items-center justify-center shrink-0">
+            <Smartphone size={14} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+              Vibración al recibir
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+              Vibración corta y discreta (no aplica en desktop).
+            </p>
+          </div>
+          <Toggle
+            checked={prefs.hapticOnIncoming}
+            onChange={(v) => setPref("hapticOnIncoming", v)}
+            label="Vibración al recibir"
+          />
+        </label>
+
+        {/* Push nativas */}
+        <label className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60">
+          <div
+            className="w-9 h-9 rounded-xl text-white flex items-center justify-center shrink-0"
+            style={{ background: "linear-gradient(135deg,#0ea5e9,#a855f7)" }}
+          >
+            <Bell size={14} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 leading-tight flex items-center gap-1.5">
+              Notificaciones del sistema
+              {permState === "granted" && (
+                <CheckCircle2 size={11} className="text-emerald-500" />
+              )}
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+              {permState === "unsupported"
+                ? "Tu navegador no las soporta."
+                : permState === "denied"
+                ? "Bloqueadas en el navegador. Habilítalas desde el candado de la URL."
+                : permState === "granted"
+                ? "Permiso concedido. Verás las notificaciones aunque tengas otro tab abierto."
+                : "Recibe avisos del sistema operativo aunque tengas otro tab abierto."}
+            </p>
+          </div>
+          {busyPush ? (
+            <Loader2 size={14} className="animate-spin text-slate-400 mt-2" />
+          ) : (
+            <Toggle
+              checked={prefs.pushNativeEnabled && permState === "granted"}
+              onChange={handlePushToggle}
+              disabled={permState === "unsupported" || permState === "denied"}
+              label="Push del sistema"
+            />
+          )}
+        </label>
+
+        {/* Quiet hours */}
+        <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-slate-700 dark:bg-slate-600 text-white flex items-center justify-center shrink-0">
+              <MoonIcon size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+                Horario silencioso
+              </p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+                Las notificaciones llegan pero no suenan ni vibran en este rango.
+              </p>
+            </div>
+            <Toggle
+              checked={prefs.quietHours.enabled}
+              onChange={(v) =>
+                setPref("quietHours", { ...prefs.quietHours, enabled: v })
+              }
+              label="Activar horario silencioso"
+            />
+          </div>
+          {prefs.quietHours.enabled && (
+            <div className="grid grid-cols-2 gap-2 mt-3 pl-12">
+              <label className="block">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                  Desde
+                </span>
+                <input
+                  type="time"
+                  value={prefs.quietHours.from}
+                  onChange={(e) =>
+                    setPref("quietHours", { ...prefs.quietHours, from: e.target.value })
+                  }
+                  className="settings-input mt-1"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                  Hasta
+                </span>
+                <input
+                  type="time"
+                  value={prefs.quietHours.to}
+                  onChange={(e) =>
+                    setPref("quietHours", { ...prefs.quietHours, to: e.target.value })
+                  }
+                  className="settings-input mt-1"
+                />
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Categorías */}
+      <div className="space-y-1.5 pt-1">
+        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 pl-1">
+          Silenciar categorías
+        </p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {ALL_CATEGORIES.map((cat: NotifCategory) => {
+            const meta = NOTIF_CATEGORY_META[cat]
+            const muted = prefs.mutedCategories.includes(cat)
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => toggleCategory(cat)}
+                className={`flex items-center gap-2 p-2 rounded-xl border transition-all text-left ${
+                  muted
+                    ? "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 opacity-60"
+                    : "bg-white dark:bg-slate-800/40 border-emerald-200 dark:border-emerald-500/30 shadow-sm"
+                }`}
+              >
+                <span className="text-base">{meta.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+                    {meta.label}
+                  </p>
+                  <p className="text-[8px] text-slate-500 dark:text-slate-400 leading-snug">
+                    {muted ? "Silenciada" : meta.hint}
+                  </p>
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       <p className="text-[9px] text-slate-400 dark:text-slate-500 text-center italic pt-1">

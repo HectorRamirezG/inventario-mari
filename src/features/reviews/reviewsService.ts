@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { notifyAdmins, notifyClient } from "../notifications/notificationsService"
 
 /**
  * Reviews — reseñas con foto del cliente.
@@ -90,7 +91,20 @@ export async function createReview(input: CreateReviewInput): Promise<Review> {
     .select()
     .single()
   if (error) throw error
-  return data as Review
+  const review = data as Review
+
+  // Notifica a admins (best-effort) que llegó una reseña nueva
+  await notifyAdmins({
+    type: "review_created",
+    title: `Nueva reseña ${"⭐".repeat(payload.rating)}${"☆".repeat(5 - payload.rating)}`,
+    body: payload.comment
+      ? `${payload.customer_name ?? "Cliente"}: "${payload.comment.slice(0, 120)}"`
+      : `${payload.customer_name ?? "Cliente"} dejó ${payload.rating}/5 estrellas. Revísala para publicarla.`,
+    link: "/admin",
+    metadata: { review_id: review.id, product_id: payload.product_id, rating: payload.rating },
+  })
+
+  return review
 }
 
 /** Reseñas aprobadas de un producto, en orden cronológico inverso. */
@@ -194,7 +208,21 @@ export async function moderateReview(
     .select()
     .single()
   if (error) throw error
-  return data as Review
+  const review = data as Review
+
+  // Si publicamos la reseña, avisamos al cliente que su reseña fue
+  // publicada para reforzar su engagement.
+  if (status === "approved" && review.customer_email) {
+    await notifyClient(review.customer_email, {
+      type: "review_published",
+      title: "¡Tu reseña fue publicada!",
+      body: "Gracias por compartir tu opinión. Ya es visible para los demás clientes.",
+      link: "/tienda",
+      metadata: { review_id: review.id, product_id: review.product_id },
+    })
+  }
+
+  return review
 }
 
 /** Elimina permanentemente. */

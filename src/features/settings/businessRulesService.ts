@@ -85,6 +85,11 @@ export interface BusinessRules {
   daily_pending_alert_enabled: boolean
   daily_pending_alert_threshold: number
 
+  /** Meta diaria de ventas en pesos. Cuando se alcanza, dispara una
+   *  notificación (sólo una vez por día) tipo "milestone" para celebrar. */
+  daily_sales_goal_enabled: boolean
+  daily_sales_goal_amount: number
+
   /* ════════════════ MÓDULOS DEL CLIENTE (switcheables) ════════════════
    * Cada uno activa/desactiva una sección completa de la PWA del cliente.
    * Filosofía: Mari decide qué ver el cliente. Si apaga uno, desaparece.
@@ -148,6 +153,9 @@ export const DEFAULT_RULES: BusinessRules = {
   daily_pending_alert_enabled: false,
   daily_pending_alert_threshold: 3000,
 
+  daily_sales_goal_enabled: false,
+  daily_sales_goal_amount: 5000,
+
   // Módulos del cliente
   wishes_enabled: true,
   stories_enabled: false,
@@ -207,6 +215,10 @@ function merge(raw: any): BusinessRules {
     daily_pending_alert_enabled: !!raw.daily_pending_alert_enabled,
     daily_pending_alert_threshold:
       Number(raw.daily_pending_alert_threshold) || DEFAULT_RULES.daily_pending_alert_threshold,
+
+    daily_sales_goal_enabled: !!raw.daily_sales_goal_enabled,
+    daily_sales_goal_amount:
+      Number(raw.daily_sales_goal_amount) || DEFAULT_RULES.daily_sales_goal_amount,
 
     // Módulos del cliente (default según DEFAULT_RULES)
     wishes_enabled: raw.wishes_enabled ?? DEFAULT_RULES.wishes_enabled,

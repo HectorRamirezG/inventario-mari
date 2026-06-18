@@ -16,6 +16,10 @@ import {
 import toast from "react-hot-toast"
 import { useAuth } from "../../lib/useAuth"
 import { supabase } from "../../lib/supabase"
+import {
+  notifyAdmins,
+  notifyClient,
+} from "../notifications/notificationsService"
 
 type Mode = "signin" | "signup" | "magic" | "reset"
 
@@ -44,6 +48,23 @@ export default function LoginPage() {
         toast.success(
           "Cuenta creada. Revisa tu correo si te pide confirmar."
         )
+        // Notif al cliente nuevo (bienvenida) y a admins (heads-up)
+        const cleanEmail = email.trim().toLowerCase()
+        const displayName = (fullName || email.split("@")[0] || "Cliente").trim()
+        notifyClient(cleanEmail, {
+          type: "new_customer",
+          title: `¡Bienvenida${displayName ? ", " + displayName : ""}! 💖`,
+          body: "Tu cuenta de Beauty's Me ya está lista. Explora la tienda y arma tu wishlist.",
+          link: "/tienda",
+          metadata: { signup_at: new Date().toISOString() },
+        }).catch(() => {})
+        notifyAdmins({
+          type: "new_customer",
+          title: `Nueva clienta: ${displayName}`,
+          body: cleanEmail,
+          link: "/apartados",
+          metadata: { email: cleanEmail, name: displayName },
+        }).catch(() => {})
       } else if (mode === "magic") {
         await sendMagicLink(email.trim())
         toast.success("Te enviamos un enlace mágico ✨")

@@ -139,6 +139,8 @@ export async function createSale(payload: CreateSalePayload) {
   //    a) Si la venta tiene email de cliente registrado, le avisamos
   //       que Mari le creó un pedido y queda apartado/pagado.
   //    b) Si NO tiene email, igual notificamos a admins (para historial).
+  //    c) Si el pedido es FORÁNEO con envío, además notif extra a admins
+  //       con resalte para preparar paquetería.
   try {
     const isPaid = payload.balance <= 0;
     if (payload.email && payload.email.trim()) {
@@ -165,6 +167,23 @@ export async function createSale(payload: CreateSalePayload) {
         body: `Cliente: ${payload.customer}`,
         link: "/apartados",
         metadata: { sale_id: sale.id, total: payload.total, balance: payload.balance },
+      });
+    }
+
+    // c) Pedido foráneo → notif extra para preparar paquetería
+    if (payload.is_foreign_shipping) {
+      await notifyAdmins({
+        type: "new_layaway",
+        title: `📦 Pedido foráneo de ${payload.customer}`,
+        body: `Envío $${(payload.shipping_amount ?? 0).toFixed(2)}. Prepara paquetería y guía.`,
+        link: `/apartados?sale=${sale.id}`,
+        metadata: {
+          sale_id: sale.id,
+          is_foreign: true,
+          shipping: payload.shipping_amount,
+          address: payload.address,
+          location: payload.location,
+        },
       });
     }
   } catch {

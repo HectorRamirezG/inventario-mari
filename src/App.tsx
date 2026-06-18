@@ -76,6 +76,11 @@ import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
 import { useAuth, isStaffOrAdmin } from "./lib/useAuth"
 import { useRealtimeNotifications } from "./lib/useRealtime"
+import {
+  runAdminChecks,
+  runClientChecks,
+} from "./features/notifications/notificationChecks"
+import { registerPushSW } from "./lib/pushNative"
 import { useMyAvatar } from "./lib/useMyAvatar"
 import { preloadBusinessRules, useBusinessRules } from "./features/settings/businessRulesService"
 
@@ -290,6 +295,24 @@ function AdminShell() {
 
   useGlobalShortcuts()
   useRealtimeNotifications()
+
+  // Alertas at-load: comprobantes sin revisar, apartados sin movimiento,
+  // stock bajo, comandas no abiertas, meta del día, etc. Se evalúan al
+  // cargar y al cambiar de rol/sesión. Usan checkpoints en localStorage
+  // para no spammear.
+  useEffect(() => {
+    if (!session) return
+    // Asegura que el service worker esté listo para push del SO
+    registerPushSW().catch(() => {})
+    const t = setTimeout(() => {
+      if (isAdmin) {
+        runAdminChecks()
+      } else if (email) {
+        runClientChecks(email)
+      }
+    }, 1500) // espera 1.5s para no competir con la carga inicial
+    return () => clearTimeout(t)
+  }, [session, isAdmin, email])
 
   const visibleMenu = useMemo(
     () => sidebarSections(rules, isAdmin),
