@@ -35,6 +35,9 @@ import {
   Heart,
   Camera,
   Star,
+  ChevronsLeft,
+  ChevronsRight,
+  Search,
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
@@ -95,6 +98,7 @@ import {
   dockSections,
   visibleSections,
   type AdminSection,
+  type AdminSectionEntry,
 } from "./lib/adminNav"
 
 /** Saludo segun la hora del dia. */
@@ -256,6 +260,23 @@ function AdminShell() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [proofId, setProofId] = useState<string | null>(null)
   const [apartadoBadge, setApartadoBadge] = useState(0)
+  // Sidebar desktop: modo compacto (icon-only 80px) o expandido (label 232px).
+  // Persiste en localStorage para respetar la preferencia entre sesiones.
+  // Atajo "[" toggle (ver useGlobalShortcuts más abajo).
+  const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false
+    return localStorage.getItem("admin_sidebar_expanded") === "1"
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "admin_sidebar_expanded",
+        sidebarExpanded ? "1" : "0",
+      )
+    } catch {
+      /* storage bloqueado en modo privado: degradar a sesión actual */
+    }
+  }, [sidebarExpanded])
   const { role, signOut, fullName, email, session } = useAuth()
   const avatarUrl = useMyAvatar()
   const rules = useBusinessRules()
@@ -337,6 +358,12 @@ function AdminShell() {
     () => sidebarSections(rules, isAdmin),
     [rules, isAdmin]
   )
+  // Ref espejo para que los listeners globales (bindeados una sola vez)
+  // siempre vean el visibleMenu más reciente sin re-bindearse.
+  const visibleMenuRef = useRef(visibleMenu)
+  useEffect(() => {
+    visibleMenuRef.current = visibleMenu
+  }, [visibleMenu])
 
   const dockMenu = useMemo(
     () => dockSections(rules, isAdmin),
@@ -380,6 +407,31 @@ function AdminShell() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault()
         setPaletteOpen((p) => !p)
+      }
+      // "[" colapsa/expande el sidebar desktop (ignora si estás escribiendo)
+      if (e.key === "[" && !(e.metaKey || e.ctrlKey || e.altKey)) {
+        const tag = (e.target as HTMLElement | null)?.tagName
+        const editable = (e.target as HTMLElement | null)?.isContentEditable
+        if (tag === "INPUT" || tag === "TEXTAREA" || editable) return
+        e.preventDefault()
+        setSidebarExpanded((v) => !v)
+      }
+      // Atajos numéricos 1..9 → saltar a sección N del sidebar.
+      // Solo si NO se está escribiendo y sin modificadores (evita romper ⌘1 nativos).
+      if (
+        /^[1-9]$/.test(e.key) &&
+        !(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)
+      ) {
+        const tag = (e.target as HTMLElement | null)?.tagName
+        const editable = (e.target as HTMLElement | null)?.isContentEditable
+        if (tag === "INPUT" || tag === "TEXTAREA" || editable) return
+        const idx = Number(e.key) - 1
+        const target = visibleMenuRef.current[idx]
+        if (target) {
+          e.preventDefault()
+          setSection(target.id)
+          if (target.id === "pendientes") setApartadoBadge(0)
+        }
       }
     }
     const badgeHandler = () => setApartadoBadge((c) => c + 1)
@@ -474,13 +526,22 @@ function AdminShell() {
 
   return (
     <div className="fixed inset-0 flex flex-col md:flex-row bg-white dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors duration-300">
-      {/* ─── RAIL DESKTOP (vertical, 80px) ─── */}
-      <aside className="hidden md:flex md:flex-col w-20 shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-100 dark:border-slate-800 py-4">
-        <div className="flex items-center justify-center mb-6">
+      {/* ─── RAIL DESKTOP (vertical: 80px compacto / 232px expandido) ───
+          - Scrollable cuando el menú excede la altura disponible
+          - Toggle con botón + atajo "["
+          - Agrupa pinned (principales) y resto bajo divider sutil
+          - Tooltips ricos al hover en modo compacto */}
+      <aside
+        className={`hidden md:flex md:flex-col shrink-0 bg-white/85 dark:bg-slate-900/85 backdrop-blur-xl border-r border-slate-100 dark:border-slate-800 transition-[width] duration-200 ease-out ${
+          sidebarExpanded ? "w-[232px]" : "w-20"
+        }`}
+      >
+        {/* Header del rail: logo + toggle. NO scrollea. */}
+        <div className="shrink-0 flex items-center gap-2 px-3 py-4">
           <Link
             to="/admin"
             onClick={() => setSection("hoy")}
-            className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-bloom"
+            className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
             style={{
               background: "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
             }}
@@ -488,58 +549,191 @@ function AdminShell() {
           >
             <Sparkles className="text-white" size={20} />
           </Link>
+          {sidebarExpanded && (
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none">
+                Beauty's
+              </p>
+              <p className="text-sm font-black italic text-slate-900 dark:text-slate-100 leading-tight">
+                Me Admin
+              </p>
+            </div>
+          )}
+          <button
+            onClick={() => setSidebarExpanded((v) => !v)}
+            className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center shrink-0 press"
+            aria-label={sidebarExpanded ? "Colapsar menú" : "Expandir menú"}
+            title={`${sidebarExpanded ? "Colapsar" : "Expandir"} ( [ )`}
+          >
+            {sidebarExpanded ? (
+              <ChevronsLeft size={14} />
+            ) : (
+              <ChevronsRight size={14} />
+            )}
+          </button>
         </div>
 
-        <nav className="flex-1 flex flex-col gap-1 px-2">
-          {visibleMenu.map((m) => {
-            const Icon = m.icon
-            const active = section === m.id
-            const showBadge = m.id === "pendientes" && apartadoBadge > 0
-            return (
-              <button
-                key={m.id}
-                onClick={() => {
-                  setSection(m.id)
-                  if (m.id === "pendientes") setApartadoBadge(0)
-                }}
-                className={`group relative flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all ${
-                  active
-                    ? "bg-primary/10 text-primary"
-                    : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                }`}
-                title={m.label}
-              >
-                <div className="relative">
-                  <Icon size={20} strokeWidth={active ? 2.5 : 2} />
-                  {showBadge && (
-                    <motion.span
-                      key={apartadoBadge}
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center"
-                    >
-                      {apartadoBadge}
-                    </motion.span>
+        {/* Quick action: buscar / Command Palette.
+            En compacto solo el icono; en expandido pinta hint del shortcut. */}
+        <button
+          onClick={() => setPaletteOpen(true)}
+          className={`mx-2 mb-2 shrink-0 flex items-center gap-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-colors press ${
+            sidebarExpanded ? "px-3 py-2 justify-start" : "h-10 justify-center"
+          }`}
+          title="Buscar (⌘K)"
+        >
+          <Search size={14} className="shrink-0" />
+          {sidebarExpanded && (
+            <>
+              <span className="text-[11px] font-bold flex-1 text-left">
+                Buscar
+              </span>
+              <kbd className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                ⌘K
+              </kbd>
+            </>
+          )}
+        </button>
+
+        {/* Nav scrollable */}
+        <nav
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 pb-2 custom-scrollbar"
+          aria-label="Navegación principal"
+        >
+          {(() => {
+            const pinned = visibleMenu.filter((m) => m.pin)
+            const extra = visibleMenu.filter((m) => !m.pin)
+            const renderItem = (m: AdminSectionEntry, idx: number) => {
+              const Icon = m.icon
+              const active = section === m.id
+              const showBadge =
+                m.id === "pendientes" && apartadoBadge > 0
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => {
+                    setSection(m.id)
+                    if (m.id === "pendientes") setApartadoBadge(0)
+                  }}
+                  className={`group relative w-full flex items-center rounded-2xl transition-all ${
+                    sidebarExpanded
+                      ? "px-3 py-2.5 gap-3"
+                      : "flex-col gap-1 py-2.5 justify-center"
+                  } ${
+                    active
+                      ? "bg-primary/10 text-primary"
+                      : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                  }`}
+                  title={sidebarExpanded ? "" : m.label}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <div className="relative shrink-0">
+                    <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+                    {showBadge && (
+                      <motion.span
+                        key={apartadoBadge}
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center"
+                      >
+                        {apartadoBadge}
+                      </motion.span>
+                    )}
+                  </div>
+                  {sidebarExpanded ? (
+                    <>
+                      <span className="text-xs font-bold flex-1 text-left truncate">
+                        {m.label}
+                      </span>
+                      {idx < 9 && (
+                        <kbd className="text-[9px] font-black px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-400 group-hover:text-primary">
+                          {idx + 1}
+                        </kbd>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-[9px] font-black uppercase tracking-tight text-center leading-tight">
+                      {m.label}
+                    </span>
                   )}
-                </div>
-                <span className="text-[9px] font-black uppercase tracking-tight">
-                  {m.label}
-                </span>
-                {active && (
-                  <motion.span
-                    layoutId="rail-indicator"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full bg-primary"
-                  />
+                  {active && (
+                    <motion.span
+                      layoutId="rail-indicator"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 rounded-r-full bg-primary"
+                    />
+                  )}
+                </button>
+              )
+            }
+            return (
+              <div className="flex flex-col gap-1">
+                {pinned.map((m, i) => renderItem(m, i))}
+                {extra.length > 0 && (
+                  <>
+                    <div
+                      className={`my-2 ${
+                        sidebarExpanded ? "px-3" : "px-2"
+                      } flex items-center gap-2`}
+                    >
+                      {sidebarExpanded && (
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+                          Más
+                        </span>
+                      )}
+                      <hr className="flex-1 border-slate-200/70 dark:border-slate-700/70" />
+                    </div>
+                    {extra.map((m, i) =>
+                      renderItem(m, pinned.length + i),
+                    )}
+                  </>
                 )}
-              </button>
+              </div>
             )
-          })}
+          })()}
         </nav>
 
-        <div className="flex flex-col items-center gap-2 px-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        {/* Footer: ajustes + tema + logout. NO scrollea. */}
+        <div
+          className={`shrink-0 border-t border-slate-100 dark:border-slate-800 px-2 py-2 ${
+            sidebarExpanded ? "flex flex-col gap-1" : "flex flex-col items-center gap-2"
+          }`}
+        >
+          {/* Pill de usuario actual SOLO en modo expandido. Ahorra cognitive
+              load — el admin sabe siempre con qué cuenta está logueado. */}
+          {sidebarExpanded && (fullName || email) && (
+            <button
+              onClick={() => setProfileOpen(true)}
+              className="flex items-center gap-2 px-2 py-1.5 mb-1 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 text-left press"
+              title="Mi perfil"
+            >
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <UserIcon size={14} className="text-slate-400" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-black text-slate-800 dark:text-slate-200 leading-tight truncate">
+                  {fullName ?? "Mi cuenta"}
+                </p>
+                <p className="text-[9px] font-bold text-slate-400 leading-tight truncate">
+                  {role === "admin" ? "Admin" : "Staff"} · {email}
+                </p>
+              </div>
+            </button>
+          )}
           <button
             onClick={() => setSection("ajustes")}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${
+            className={`flex items-center rounded-2xl transition-colors ${
+              sidebarExpanded
+                ? "px-3 py-2 gap-3 w-full"
+                : "w-12 h-12 justify-center"
+            } ${
               section === "ajustes"
                 ? "bg-primary/10 text-primary"
                 : "bg-slate-50 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-slate-200"
@@ -547,17 +741,35 @@ function AdminShell() {
             title={fullName ?? email ?? "Ajustes"}
             aria-label="Ajustes"
           >
-            <SettingsIcon size={18} />
+            <SettingsIcon size={18} className="shrink-0" />
+            {sidebarExpanded && (
+              <span className="text-xs font-bold flex-1 text-left truncate">
+                Ajustes
+              </span>
+            )}
           </button>
-          <ThemeToggle />
-          <button
-            onClick={() => signOut()}
-            className="w-12 h-12 rounded-2xl flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-            title="Cerrar sesión"
-            aria-label="Cerrar sesión"
+          <div
+            className={`flex ${
+              sidebarExpanded ? "items-center gap-1" : "flex-col items-center gap-2"
+            }`}
           >
-            <LogOut size={18} />
-          </button>
+            <ThemeToggle />
+            <button
+              onClick={() => signOut()}
+              className={`flex items-center rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 transition-colors ${
+                sidebarExpanded
+                  ? "px-3 py-2 gap-3 flex-1"
+                  : "w-12 h-12 justify-center"
+              }`}
+              title="Cerrar sesión"
+              aria-label="Cerrar sesión"
+            >
+              <LogOut size={18} className="shrink-0" />
+              {sidebarExpanded && (
+                <span className="text-xs font-bold truncate">Salir</span>
+              )}
+            </button>
+          </div>
         </div>
       </aside>
 
