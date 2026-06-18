@@ -256,7 +256,7 @@ function AdminShell() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [proofId, setProofId] = useState<string | null>(null)
   const [apartadoBadge, setApartadoBadge] = useState(0)
-  const { role, signOut, fullName, email } = useAuth()
+  const { role, signOut, fullName, email, session } = useAuth()
   const avatarUrl = useMyAvatar()
   const rules = useBusinessRules()
   const isAdmin = role === "admin"
