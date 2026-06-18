@@ -214,7 +214,7 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                     href="/login"
                     onClick={onClose}
                     className="inline-flex items-center gap-2 h-11 px-5 rounded-2xl text-white text-xs font-black uppercase tracking-widest shadow-bloom"
-                    className="bg-brand"
+                    style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
                   >
                     Iniciar sesión
                   </a>
@@ -246,7 +246,8 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                         <div
                           className="w-24 h-24 rounded-3xl flex items-center justify-center text-white text-3xl font-black shadow-bloom"
                           style={{
-                            background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                            background:
+                              "linear-gradient(135deg,#e6007e,#a855f7)",
                           }}
                         >
                           {initials || "👤"}
@@ -325,7 +326,8 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                       disabled={saving}
                       className="w-full h-12 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
                       style={{
-                        background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                        background:
+                          "linear-gradient(135deg,#e6007e,#a855f7)",
                       }}
                     >
                       {saving ? (

@@ -140,7 +140,7 @@ export default function SupportModal({
                 <div
                   className="w-10 h-10 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
                   style={{
-                    background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                    background: "linear-gradient(135deg,#e6007e,#a855f7)",
                   }}
                 >
                   <LifeBuoy size={18} className="text-white" />
@@ -310,7 +310,7 @@ export default function SupportModal({
                   disabled={submitting || description.trim().length < 3}
                   className="w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-40 active:scale-[0.98] transition-transform"
                   style={{
-                    background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                    background: "linear-gradient(135deg,#e6007e,#a855f7)",
                   }}
                 >
                   {submitting ? (

@@ -544,7 +544,7 @@ export default function EditSaleAdjustModal({
                 onClick={handleSave}
                 disabled={saving || loadingItems}
                 className="w-full h-12 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
-                className="bg-brand"
+                style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
               >
                 {saving ? (
                   <Loader2 size={14} className="animate-spin" />

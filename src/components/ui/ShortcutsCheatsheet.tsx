@@ -94,7 +94,7 @@ export default function ShortcutsCheatsheet({ open, onClose }: Props) {
               <div className="flex items-center gap-2.5">
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center shadow-bloom"
-                  className="bg-brand"
+                  style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
                 >
                   <Keyboard size={16} className="text-white" />
                 </div>

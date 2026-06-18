@@ -103,7 +103,7 @@ export default function KeyboardHelpDialog({
                 <div
                   className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-bloom"
                   style={{
-                    background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                    background: "linear-gradient(135deg,#e6007e,#a855f7)",
                   }}
                 >
                   <Keyboard size={16} className="text-white" />

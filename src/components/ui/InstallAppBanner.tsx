@@ -39,7 +39,7 @@ export default function InstallAppBanner() {
         className="mb-3 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 to-violet-500/10 px-3 py-2.5 flex items-center gap-3"
       >
         <div className="w-9 h-9 rounded-xl text-white flex items-center justify-center shrink-0 shadow-bloom"
-          className="bg-brand">
+          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}>
           <Download size={14} />
         </div>
         <div className="flex-1 min-w-0">

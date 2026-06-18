@@ -534,40 +534,38 @@ export default function BusinessRulesPage() {
               </p>
               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
                 Cambia el tono de botones, badges activos y elementos
-                destacados de toda la app. Es bi-color: cada opción combina
-                dos tonos para el gradient.
+                destacados de toda la app.
               </p>
             </div>
           </div>
           <div className="grid grid-cols-7 gap-1.5">
-            {ACCENT_OPTIONS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => patch({ theme_accent: id })}
-                aria-label={label}
-                title={label}
-                className={`relative h-12 rounded-xl ring-2 transition-all ${
-                  form.theme_accent === id
-                    ? "ring-slate-900 dark:ring-white scale-105"
-                    : "ring-transparent hover:ring-slate-300"
-                }`}
-                style={{
-                  background: ACCENT_PREVIEW[id],
-                }}
-              >
-                {form.theme_accent === id && (
-                  <CheckCircle2
-                    size={14}
-                    className="absolute inset-0 m-auto text-white drop-shadow"
-                  />
-                )}
-              </button>
-            ))}
+            {(["pink", "violet", "rose", "amber", "emerald", "sky", "indigo"] as const).map(
+              (color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => patch({ theme_accent: color })}
+                  aria-label={color}
+                  title={color}
+                  className={`relative h-10 rounded-xl ring-2 transition-all ${
+                    form.theme_accent === color
+                      ? "ring-slate-900 dark:ring-white scale-105"
+                      : "ring-transparent hover:ring-slate-300"
+                  }`}
+                  style={{
+                    background: ACCENT_PREVIEW[color],
+                  }}
+                >
+                  {form.theme_accent === color && (
+                    <CheckCircle2
+                      size={14}
+                      className="absolute inset-0 m-auto text-white drop-shadow"
+                    />
+                  )}
+                </button>
+              ),
+            )}
           </div>
-          <p className="text-[9px] font-bold text-slate-400 text-center mt-2 italic">
-            Actual: {ACCENT_OPTIONS.find((o) => o.id === form.theme_accent)?.label}
-          </p>
         </div>
 
         <RuleRow
@@ -943,23 +941,13 @@ function Hint({ children }: { children: React.ReactNode }) {
  */
 const ACCENT_PREVIEW: Record<BusinessRules["theme_accent"], string> = {
   pink: "linear-gradient(135deg,#e6007e,#a855f7)",
-  violet: "linear-gradient(135deg,#7c3aed,#ec4899)",
-  rose: "linear-gradient(135deg,#e11d48,#f97316)",
-  amber: "linear-gradient(135deg,#f59e0b,#dc2626)",
-  emerald: "linear-gradient(135deg,#10b981,#0ea5e9)",
+  violet: "linear-gradient(135deg,#7c3aed,#a855f7)",
+  rose: "linear-gradient(135deg,#e11d48,#f43f5e)",
+  amber: "linear-gradient(135deg,#f59e0b,#fb923c)",
+  emerald: "linear-gradient(135deg,#10b981,#34d399)",
   sky: "linear-gradient(135deg,#0ea5e9,#6366f1)",
-  indigo: "linear-gradient(135deg,#4f46e5,#06b6d4)",
+  indigo: "linear-gradient(135deg,#4f46e5,#7c3aed)",
 }
-
-const ACCENT_OPTIONS: { id: BusinessRules["theme_accent"]; label: string }[] = [
-  { id: "pink", label: "Rosa · Violeta" },
-  { id: "violet", label: "Violeta · Rosa" },
-  { id: "rose", label: "Rojo · Naranja" },
-  { id: "amber", label: "Ámbar · Rojo" },
-  { id: "emerald", label: "Verde · Azul" },
-  { id: "sky", label: "Azul · Índigo" },
-  { id: "indigo", label: "Índigo · Cian" },
-]
 
 /**
  * Campo de texto genérico para reglas (mensaje, etiqueta, banner).

@@ -417,7 +417,7 @@ const SaleCard = memo(function SaleCardImpl({
                 ? "linear-gradient(135deg,#10b981,#34d399)"
                 : urgent
                 ? "linear-gradient(135deg,#ef4444,#fb7185)"
-                : "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                : "linear-gradient(135deg,#e6007e,#a855f7)",
             }}
           >
             {initials || "??"}
@@ -740,7 +740,7 @@ const SaleCard = memo(function SaleCardImpl({
               style={{
                 background: urgent
                   ? "linear-gradient(135deg,#ef4444,#f43f5e)"
-                  : "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                  : "linear-gradient(135deg,#e6007e,#a855f7)",
               }}
             >
               <Wallet size={12} /> {urgent ? "Cobrar urgente" : "Abonar"}

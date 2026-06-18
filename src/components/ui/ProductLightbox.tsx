@@ -395,7 +395,7 @@ export default function ProductLightbox({
               aria-label="Agregar al carrito"
               className="absolute bottom-6 right-6 w-14 h-14 rounded-full text-white flex items-center justify-center shadow-bloom z-20 active:scale-90 transition-transform"
               style={{
-                background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                background: "linear-gradient(135deg,#e6007e,#a855f7)",
                 marginBottom: "env(safe-area-inset-bottom)",
               }}
             >

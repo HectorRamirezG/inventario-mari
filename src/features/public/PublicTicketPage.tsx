@@ -221,7 +221,7 @@ export default function PublicTicketPage() {
         <button
           onClick={goHome}
           className="mt-6 h-11 px-5 rounded-2xl text-white text-xs font-black uppercase tracking-widest shadow-bloom inline-flex items-center gap-2"
-          className="bg-brand"
+          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
         >
           <Home size={14} /> Ir al inicio
         </button>
@@ -273,7 +273,7 @@ export default function PublicTicketPage() {
         >
           <div
             className="w-9 h-9 rounded-2xl flex items-center justify-center shadow-bloom"
-            className="bg-brand"
+            style={{ background: "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)" }}
           >
             <Sparkles size={16} className="text-white" />
           </div>
@@ -300,7 +300,7 @@ export default function PublicTicketPage() {
             style={{
               background: isPaid
                 ? "linear-gradient(90deg,#10b981,#34d399)"
-                : "linear-gradient(90deg, var(--brand-from), var(--brand-to))",
+                : "linear-gradient(90deg,#e6007e,#a855f7)",
             }}
           />
 
@@ -472,7 +472,7 @@ export default function PublicTicketPage() {
             target="_blank"
             rel="noopener noreferrer"
             className="mt-4 flex items-center justify-center gap-2 h-14 rounded-2xl font-black text-white text-sm shadow-bloom"
-            className="bg-brand"
+            style={{ background: "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)" }}
           >
             <CreditCard size={18} />
             Pagar saldo pendiente
@@ -602,7 +602,7 @@ function ProgressBlock({
           transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
           className="absolute inset-y-0 left-0 rounded-full"
           style={{
-            background: "linear-gradient(90deg, var(--brand-from), var(--brand-to))",
+            background: "linear-gradient(90deg,#e6007e,#a855f7)",
           }}
         />
         {flash && (

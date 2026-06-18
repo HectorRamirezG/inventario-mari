@@ -27,7 +27,7 @@ export default function AbandonedCartBanner({ onResume }: Props) {
       >
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-bloom shrink-0"
-          className="bg-brand"
+          style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
         >
           <ShoppingBag size={16} />
         </div>

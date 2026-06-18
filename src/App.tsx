@@ -679,7 +679,7 @@ function AdminShell() {
             }}
             className="relative w-12 h-12 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
             style={{
-              background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+              background: "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
             }}
             aria-label="Beauty's Me"
             title={`Beauty's Me${logoTaps > 0 ? ` (${logoTaps}/7)` : ""}`}
@@ -963,7 +963,7 @@ function AdminShell() {
                 transition={{ duration: 0.6 }}
                 className="w-8 h-8 rounded-xl flex items-center justify-center shadow-bloom shrink-0"
                 style={{
-                  background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                  background: "linear-gradient(135deg,#e6007e,#a855f7)",
                 }}
               >
                 <Sparkles className="text-white" size={14} />
@@ -991,7 +991,7 @@ function AdminShell() {
                 onClick={() => setProfileOpen(true)}
                 aria-label="Mi perfil"
                 className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
-                className="bg-brand"
+                style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
               >
                 {avatarUrl ? (
                   <img
@@ -1073,7 +1073,7 @@ function AdminShell() {
               onClick={() => setProfileOpen(true)}
               aria-label="Mi perfil"
               className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
-              className="bg-brand"
+              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
               title={fullName ?? email ?? "Mi perfil"}
             >
               {avatarUrl ? (
@@ -1155,7 +1155,7 @@ function AdminShell() {
               onClick={() => setHubOpen(true)}
               aria-label="Acciones rápidas"
               className="relative -mt-7 w-[52px] h-[52px] rounded-full text-white flex items-center justify-center shadow-[0_10px_30px_-8px_rgba(230,0,126,0.5)]"
-              className="bg-brand"
+              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
             >
               <Plus size={22} strokeWidth={3} />
               <motion.span
@@ -1163,7 +1163,7 @@ function AdminShell() {
                 transition={{ duration: 2.4, repeat: Infinity }}
                 className="absolute inset-0 rounded-full -z-10"
                 style={{
-                  background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                  background: "linear-gradient(135deg,#e6007e,#a855f7)",
                 }}
               />
             </motion.button>
@@ -1296,7 +1296,7 @@ function ShopShell() {
           <Link to="/" className="flex items-center gap-2 min-w-0 active:scale-95 transition-transform">
             <div
               className="w-9 h-9 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
-              className="bg-brand"
+              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
             >
               <Sparkles className="text-white" size={16} />
             </div>
@@ -1328,7 +1328,7 @@ function ShopShell() {
                 onClick={() => setProfileOpen(true)}
                 aria-label="Mi perfil"
                 className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
-                className="bg-brand"
+                style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
                 title={fullName ?? email ?? "Mi perfil"}
               >
                 {avatarUrl ? (

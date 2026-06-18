@@ -139,7 +139,7 @@ export default function OnboardingTour() {
 
             <div
               className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-bloom mb-3"
-              className="bg-brand"
+              style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
             >
               <Icon size={22} />
             </div>
@@ -176,7 +176,7 @@ export default function OnboardingTour() {
                 type="button"
                 onClick={next}
                 className="h-11 px-5 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-bloom"
-                className="bg-brand"
+                style={{ background: "linear-gradient(135deg,#e6007e,#a855f7)" }}
               >
                 {step === steps.length - 1 ? "Empezar" : "Siguiente"}
                 <ChevronRight size={14} />

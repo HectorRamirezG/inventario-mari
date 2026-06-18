@@ -77,7 +77,7 @@ const CalculatorTab = ({
           <div
             className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-bloom shrink-0"
             style={{
-              background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+              background: "linear-gradient(135deg,#e6007e,#a855f7)",
             }}
           >
             <Zap size={18} strokeWidth={2.5} />
