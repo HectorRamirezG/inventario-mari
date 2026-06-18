@@ -253,6 +253,16 @@ export async function approveProof(
       metadata: { proof_id: proofId, sale_id: prev.sale_id, amount, method },
     })
   }
+
+  // Avisa a otros componentes (NotificationBell, drawers) que el proof
+  // ya cambió de estado, para que escondan acciones inline al instante.
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("mari:proof-status", {
+        detail: { proofId, status: "approved" },
+      }),
+    )
+  }
 }
 
 export async function rejectProof(proofId: string, reason?: string): Promise<void> {
@@ -285,5 +295,13 @@ export async function rejectProof(proofId: string, reason?: string): Promise<voi
       link: publicToken ? `/ticket/${publicToken}` : null,
       metadata: { proof_id: proofId, sale_id: prev.sale_id, reason: reason ?? null },
     })
+  }
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("mari:proof-status", {
+        detail: { proofId, status: "rejected" },
+      }),
+    )
   }
 }

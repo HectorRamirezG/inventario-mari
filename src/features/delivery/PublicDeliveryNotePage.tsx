@@ -26,7 +26,7 @@ import {
   type DeliveryStatus,
 } from "../delivery/deliveryService"
 import { formatMoney, formatDateTime } from "../../lib/format"
-import Avatar from "../../components/ui/Avatar"
+import CustomerInfoCard from "../../components/ui/CustomerInfoCard"
 import Skeleton from "../../components/ui/Skeleton"
 import { useAuth } from "../../lib/useAuth"
 
@@ -141,17 +141,17 @@ export default function PublicDeliveryNotePage() {
       <div className="h-2" style={{ background: "linear-gradient(90deg,#0ea5e9,#6366f1)" }} />
 
       <div className="max-w-md mx-auto px-4 pt-4 space-y-3">
-        {/* Header con cliente */}
+        {/* Header de comanda con estatus */}
         <motion.section
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-slate-900 rounded-3xl shadow-premium p-5"
+          className="bg-white dark:bg-slate-900 rounded-3xl shadow-premium p-4"
         >
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-100 dark:bg-sky-500/15 text-sky-600 dark:text-sky-300 flex items-center justify-center">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-sky-100 dark:bg-sky-500/15 text-sky-600 dark:text-sky-300 flex items-center justify-center shrink-0">
               <Truck size={16} />
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
                 Comanda de entrega
               </p>
@@ -160,31 +160,19 @@ export default function PublicDeliveryNotePage() {
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-3">
-            <Avatar
-              name={note.customer.name}
-              src={note.customer.avatar_url}
-              size={56}
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                Entregar a
-              </p>
-              <p className="text-base font-black text-slate-900 dark:text-slate-100 leading-tight truncate">
-                {note.customer.name || "Cliente"}
-              </p>
-              {note.customer.phone && (
-                <a
-                  href={`tel:${note.customer.phone}`}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-primary mt-0.5"
-                >
-                  <Phone size={11} /> {note.customer.phone}
-                </a>
-              )}
-            </div>
-          </div>
         </motion.section>
+
+        {/* Datos del cliente — usa el componente reutilizable */}
+        <CustomerInfoCard
+          name={note.customer.name}
+          email={note.customer.email}
+          phone={note.customer.phone}
+          address={note.delivery_address || undefined}
+          locationUrl={note.delivery_location_url || undefined}
+          avatarUrl={note.customer.avatar_url}
+          size="md"
+          showActions
+        />
 
         {/* Total a cobrar — destacado */}
         <motion.section
@@ -229,61 +217,60 @@ export default function PublicDeliveryNotePage() {
           </div>
         </motion.section>
 
-        {/* Logística — dirección + hora */}
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.08 }}
-          className="bg-white dark:bg-slate-900 rounded-3xl shadow-premium p-5 space-y-3"
-        >
-          {note.delivery_address && (
-            <Row
-              icon={<MapPin size={14} className="text-rose-500" />}
-              label="Dirección"
-              value={note.delivery_address}
-            />
-          )}
-          {note.delivery_zone && (
-            <Row
-              icon={<MapPin size={14} className="text-slate-400" />}
-              label="Zona"
-              value={note.delivery_zone}
-            />
-          )}
-          {note.meeting_point && (
-            <Row
-              icon={<MapPin size={14} className="text-amber-500" />}
-              label="Punto medio"
-              value={note.meeting_point}
-            />
-          )}
-          {note.delivery_time_target && (
-            <Row
-              icon={<Clock size={14} className="text-sky-500" />}
-              label="Hora prometida"
-              value={note.delivery_time_target}
-            />
-          )}
-          {note.driver_name && (
-            <Row
-              icon={<UserIcon size={14} className="text-violet-500" />}
-              label="Repartidor"
-              value={note.driver_name}
-            />
-          )}
+        {/* Logística extra — zona, punto medio, hora, repartidor */}
+        {(note.delivery_zone ||
+          note.meeting_point ||
+          note.delivery_time_target ||
+          note.driver_name ||
+          mapUrl) && (
+          <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 }}
+            className="bg-white dark:bg-slate-900 rounded-3xl shadow-premium p-5 space-y-3"
+          >
+            {note.delivery_zone && (
+              <Row
+                icon={<MapPin size={14} className="text-slate-400" />}
+                label="Zona"
+                value={note.delivery_zone}
+              />
+            )}
+            {note.meeting_point && (
+              <Row
+                icon={<MapPin size={14} className="text-amber-500" />}
+                label="Punto medio"
+                value={note.meeting_point}
+              />
+            )}
+            {note.delivery_time_target && (
+              <Row
+                icon={<Clock size={14} className="text-sky-500" />}
+                label="Hora prometida"
+                value={note.delivery_time_target}
+              />
+            )}
+            {note.driver_name && (
+              <Row
+                icon={<UserIcon size={14} className="text-violet-500" />}
+                label="Repartidor"
+                value={note.driver_name}
+              />
+            )}
 
-          {mapUrl && (
-            <a
-              href={mapUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full h-11 mt-2 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom press"
-            >
-              <ExternalLink size={13} />
-              Abrir mapa
-            </a>
-          )}
-        </motion.section>
+            {mapUrl && (
+              <a
+                href={mapUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full h-11 mt-2 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom press"
+              >
+                <ExternalLink size={13} />
+                Abrir mapa
+              </a>
+            )}
+          </motion.section>
+        )}
 
         {/* Items del pedido */}
         <motion.section

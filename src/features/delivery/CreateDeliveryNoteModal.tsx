@@ -39,6 +39,7 @@ import {
 import { formatMoney, formatRelative } from "../../lib/format"
 import { copyToClipboard } from "../../lib/clipboard"
 import { confirmAction } from "../../lib/confirm"
+import CustomerInfoCard from "../../components/ui/CustomerInfoCard"
 import type { Sale } from "../../types/database"
 
 interface Props {
@@ -85,6 +86,9 @@ export default function CreateDeliveryNoteModal({
   const [paymentMethod, setPaymentMethod] = useState("efectivo")
   const [amountToCollect, setAmountToCollect] = useState(0)
   const [notes, setNotes] = useState("")
+  /** Toggle para mostrar el bloque "modificar dirección" (oculto por
+   *  default porque heredamos la del cliente). */
+  const [editAddress, setEditAddress] = useState(false)
 
   const [submitting, setSubmitting] = useState(false)
   const [createdNote, setCreatedNote] = useState<DeliveryNote | null>(null)
@@ -122,6 +126,7 @@ export default function CreateDeliveryNoteModal({
     setTimeTarget("")
     setMeetingPoint("")
     setAmountToCollect(Number(sale.balance) || 0)
+    setEditAddress(false)
     setPaymentMethod(Number(sale.balance) > 0 ? "efectivo" : "ya_pagado")
     setNotes("")
     setDeletingId(null)
@@ -145,7 +150,10 @@ export default function CreateDeliveryNoteModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!sale) return
-    if (!driverPhone.trim() && !deliveryAddress.trim()) {
+    // Necesitamos al menos un dato útil para el repartidor: teléfono
+    // suyo (para mandar WhatsApp) o dirección (la del cliente cuenta).
+    const hasAnyAddress = !!(deliveryAddress.trim() || sale.customer_address)
+    if (!driverPhone.trim() && !hasAnyAddress) {
       toast.error("Necesitas al menos teléfono del repartidor o dirección")
       return
     }
@@ -376,6 +384,18 @@ export default function CreateDeliveryNoteModal({
                     </button>
                   )}
 
+                  {/* Datos del cliente (heredados de la venta, NO se re-escriben) */}
+                  <CustomerInfoCard
+                    name={sale.customer_name}
+                    email={sale.customer_email}
+                    phone={sale.customer_phone}
+                    address={sale.customer_address}
+                    locationUrl={sale.customer_location}
+                    size="sm"
+                    tone="muted"
+                    showActions={false}
+                  />
+
                   {/* Repartidores conocidos */}
                   {drivers.length > 0 && (
                     <div>
@@ -397,6 +417,7 @@ export default function CreateDeliveryNoteModal({
                     </div>
                   )}
 
+                  {/* === Datos del REPARTIDOR (los únicos obligatorios) === */}
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="Repartidor" icon={<Truck size={11} />}>
                       <input
@@ -420,39 +441,8 @@ export default function CreateDeliveryNoteModal({
                     </Field>
                   </div>
 
-                  <Field
-                    label="Dirección de entrega"
-                    icon={<MapPin size={11} />}
-                  >
-                    <input
-                      type="text"
-                      value={deliveryAddress}
-                      onChange={(e) => setDeliveryAddress(e.target.value)}
-                      placeholder="Calle, número, colonia, CP"
-                      className="settings-input"
-                    />
-                  </Field>
-
-                  <Field label="Pin de mapa (Google Maps / Waze)">
-                    <input
-                      type="url"
-                      value={locationUrl}
-                      onChange={(e) => setLocationUrl(e.target.value)}
-                      placeholder="https://maps.google.com/..."
-                      className="settings-input"
-                    />
-                  </Field>
-
+                  {/* === EXTRAS de entrega === */}
                   <div className="grid grid-cols-2 gap-2">
-                    <Field label="Zona" icon={<MapPin size={11} />}>
-                      <input
-                        type="text"
-                        value={zone}
-                        onChange={(e) => setZone(e.target.value)}
-                        placeholder="Metro Hidalgo"
-                        className="settings-input"
-                      />
-                    </Field>
                     <Field
                       label="Hora prometida"
                       icon={<Clock size={11} />}
@@ -465,17 +455,78 @@ export default function CreateDeliveryNoteModal({
                         className="settings-input"
                       />
                     </Field>
+                    <Field label="Zona" icon={<MapPin size={11} />}>
+                      <input
+                        type="text"
+                        value={zone}
+                        onChange={(e) => setZone(e.target.value)}
+                        placeholder="Centro"
+                        className="settings-input"
+                      />
+                    </Field>
                   </div>
 
-                  <Field label="Punto medio (si aplica)">
+                  <Field
+                    label="Punto medio (si aplica)"
+                    icon={<MapPin size={11} />}
+                  >
                     <input
                       type="text"
                       value={meetingPoint}
                       onChange={(e) => setMeetingPoint(e.target.value)}
-                      placeholder="Estación Hidalgo, salida Av. Juárez"
+                      placeholder="Ej. Estación Hidalgo, salida Av. Juárez"
                       className="settings-input"
                     />
                   </Field>
+
+                  {/* === Sobreescribir dirección (sólo si difiere de la del cliente) === */}
+                  {!editAddress ? (
+                    <button
+                      type="button"
+                      onClick={() => setEditAddress(true)}
+                      className="w-full text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-primary border border-dashed border-slate-200 dark:border-slate-700 rounded-xl h-9 flex items-center justify-center gap-1.5"
+                    >
+                      <MapPin size={11} />
+                      Cambiar dirección o pin
+                    </button>
+                  ) : (
+                    <div className="space-y-2 rounded-2xl border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/40">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                          Dirección alterna (solo esta comanda)
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditAddress(false)
+                            setDeliveryAddress(sale.customer_address ?? "")
+                            setLocationUrl(sale.customer_location ?? "")
+                          }}
+                          className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-500"
+                        >
+                          Usar la del cliente
+                        </button>
+                      </div>
+                      <Field label="Dirección" icon={<MapPin size={11} />}>
+                        <input
+                          type="text"
+                          value={deliveryAddress}
+                          onChange={(e) => setDeliveryAddress(e.target.value)}
+                          placeholder="Calle, número, colonia, CP"
+                          className="settings-input"
+                        />
+                      </Field>
+                      <Field label="Pin de mapa (Google Maps / Waze)">
+                        <input
+                          type="url"
+                          value={locationUrl}
+                          onChange={(e) => setLocationUrl(e.target.value)}
+                          placeholder="https://maps.google.com/..."
+                          className="settings-input"
+                        />
+                      </Field>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-2">
                     <Field

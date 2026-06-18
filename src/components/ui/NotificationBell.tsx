@@ -37,6 +37,7 @@ import { formatRelative } from "../../lib/format"
 import { useAuth, isStaffOrAdmin } from "../../lib/useAuth"
 import { approveProof, rejectProof } from "../../features/payments/paymentProofsService"
 import { promptDialog } from "../../lib/prompt"
+import { supabase } from "../../lib/supabase"
 
 const ICON: Record<string, typeof CreditCard> = {
   // Pagos
@@ -198,8 +199,70 @@ export default function NotificationBell({
   const [filter, setFilter] = useState<"unread" | "today" | "all">("unread")
   const [busyApprove, setBusyApprove] = useState<string | null>(null)
   const [busyReject, setBusyReject] = useState<string | null>(null)
+  /**
+   * Map de proof_id → status real (approved/rejected/pending). Lo cargamos
+   * cuando abrimos el bell para saber qué notifs de comprobante ya fueron
+   * procesadas — así escondemos los botones inline y mostramos un chip de
+   * status definitivo en vez del CTA.
+   */
+  const [proofStatus, setProofStatus] = useState<Record<string, string>>({})
   const btnRef = useRef<HTMLButtonElement>(null)
   const navigate = useNavigate()
+
+  /** Recolecta proof_ids de las notifs visibles y consulta status en batch. */
+  useEffect(() => {
+    if (!open || !isAdmin) return
+    const ids = Array.from(
+      new Set(
+        items
+          .filter(
+            (n) =>
+              n.type === "payment_proof" || n.type === "payment_proof_uploaded",
+          )
+          .map((n) => n.metadata?.proof_id as string | undefined)
+          .filter((x): x is string => !!x),
+      ),
+    )
+    if (ids.length === 0) {
+      setProofStatus({})
+      return
+    }
+    let alive = true
+    ;(async () => {
+      try {
+        const { data } = await supabase
+          .from("payment_proofs")
+          .select("id,status")
+          .in("id", ids)
+        if (!alive || !data) return
+        const map: Record<string, string> = {}
+        for (const row of data as Array<{ id: string; status: string }>) {
+          map[row.id] = row.status
+        }
+        setProofStatus(map)
+      } catch {
+        /* silencio: si falla simplemente no bloqueamos */
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [open, items, isAdmin])
+
+  /**
+   * Listener global: cuando otro componente (ReviewProofDrawer, palette,
+   * etc.) aprueba/rechaza un proof, actualiza el state local para que
+   * los botones se escondan al instante en el bell.
+   */
+  useEffect(() => {
+    const handler = (e: any) => {
+      const detail = e?.detail
+      if (!detail?.proofId || !detail?.status) return
+      setProofStatus((m) => ({ ...m, [detail.proofId]: detail.status }))
+    }
+    window.addEventListener("mari:proof-status", handler)
+    return () => window.removeEventListener("mari:proof-status", handler)
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -266,6 +329,8 @@ export default function NotificationBell({
     setBusyApprove(n.id)
     try {
       await approveProof(proofId, amount, method)
+      // Optimistic update del status para que los botones desaparezcan ya.
+      setProofStatus((m) => ({ ...m, [proofId]: "approved" }))
       toast.success("Pago aprobado")
       await markAsRead(n.id)
     } catch (e: any) {
@@ -293,6 +358,7 @@ export default function NotificationBell({
     setBusyReject(n.id)
     try {
       await rejectProof(proofId, reason || undefined)
+      setProofStatus((m) => ({ ...m, [proofId]: "rejected" }))
       toast.success("Comprobante rechazado")
       await markAsRead(n.id)
     } catch (e: any) {
@@ -451,10 +517,18 @@ export default function NotificationBell({
                       (n.type === "proof_rejected" || n.type === "payment_proof_rejected")
                         ? (n.metadata as any)?.reason ?? n.body ?? null
                         : null
+                    const proofIdMeta = n.metadata?.proof_id as string | undefined
+                    const proofCurrentStatus = proofIdMeta
+                      ? proofStatus[proofIdMeta]
+                      : undefined
+                    const proofAlreadyHandled =
+                      proofCurrentStatus === "approved" ||
+                      proofCurrentStatus === "rejected"
                     const isProof =
                       isAdmin &&
                       (n.type === "payment_proof" || n.type === "payment_proof_uploaded") &&
-                      !!n.metadata?.proof_id
+                      !!proofIdMeta &&
+                      !proofAlreadyHandled
                     const inlineApproveBusy = busyApprove === n.id
                     const inlineRejectBusy = busyReject === n.id
                     return (
@@ -525,6 +599,25 @@ export default function NotificationBell({
                                   )}
                                   Rechazar
                                 </button>
+                              </div>
+                            )}
+                            {/* Estado final cuando ya se procesó */}
+                            {proofAlreadyHandled && (
+                              <div
+                                className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                  proofCurrentStatus === "approved"
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                                    : "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
+                                }`}
+                              >
+                                {proofCurrentStatus === "approved" ? (
+                                  <CheckCircle2 size={10} />
+                                ) : (
+                                  <XCircle size={10} />
+                                )}
+                                {proofCurrentStatus === "approved"
+                                  ? "Ya aprobado"
+                                  : "Ya rechazado"}
                               </div>
                             )}
                             <div className="flex items-center justify-between gap-2 mt-0.5">

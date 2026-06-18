@@ -12,8 +12,6 @@ import {
   Banknote,
   AlertCircle,
   MapPin,
-  Phone,
-  MessageCircle,
 } from "lucide-react"
 import toast from "react-hot-toast"
 import confetti from "canvas-confetti"
@@ -23,6 +21,7 @@ import { sound } from "../../lib/sound"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { promptDialog } from "../../lib/prompt"
 import { extractLatLng, staticMapUrl } from "../../lib/geocoding"
+import CustomerInfoCard from "./CustomerInfoCard"
 import {
   approveProof,
   rejectProof,
@@ -306,77 +305,25 @@ export default function ReviewProofDrawer({
 
                   {/* Datos del cliente + venta */}
                   {sale && (
-                    <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-3 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div className="min-w-0">
-                          <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black">
-                            Cliente
-                          </p>
-                          <p className="text-sm font-black truncate">
-                            {sale.customer_name ?? "—"}
-                          </p>
-                          {sale.customer_email && (
-                            <p className="text-[10px] text-slate-500 truncate">
-                              {sale.customer_email}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black">
-                            Fecha
-                          </p>
-                          <p className="text-[10px] text-slate-500">
+                    <div className="space-y-2">
+                      {/* Tarjeta uniforme de cliente con WhatsApp/llamar/mapa */}
+                      <CustomerInfoCard
+                        name={sale.customer_name}
+                        email={sale.customer_email}
+                        phone={sale.customer_phone}
+                        address={sale.customer_address}
+                        locationUrl={sale.customer_location}
+                        size="sm"
+                        tone="muted"
+                        showActions
+                        footer={
+                          <p className="text-[9px] font-bold text-slate-400 text-right">
                             {formatDateTime(sale.created_at)}
                           </p>
-                        </div>
-                      </div>
+                        }
+                      />
 
-                      {/* Contacto + ubicación: chips clickeables para que
-                          Mari pueda llamar / WhatsAppear / abrir el pin en
-                          Maps sin salir del drawer de revisión. */}
-                      {(sale.customer_phone ||
-                        sale.customer_address ||
-                        sale.customer_location) && (
-                        <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-700">
-                          {sale.customer_phone && (
-                            <>
-                              <a
-                                href={`https://wa.me/${sale.customer_phone.replace(/\D/g, "")}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100"
-                              >
-                                <MessageCircle size={10} /> WhatsApp
-                              </a>
-                              <a
-                                href={`tel:${sale.customer_phone.replace(/\D/g, "")}`}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-[9px] font-black uppercase tracking-widest"
-                              >
-                                <Phone size={10} /> {sale.customer_phone}
-                              </a>
-                            </>
-                          )}
-                          {sale.customer_location && (
-                            <a
-                              href={sale.customer_location}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-[9px] font-black uppercase tracking-widest hover:bg-blue-100"
-                              title="Abrir ubicación en Google Maps"
-                            >
-                              <MapPin size={10} /> Abrir pin
-                            </a>
-                          )}
-                        </div>
-                      )}
-                      {sale.customer_address && (
-                        <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 italic flex items-start gap-1.5 leading-snug">
-                          <MapPin size={10} className="mt-0.5 shrink-0 text-slate-400" />
-                          {sale.customer_address}
-                        </p>
-                      )}
-
-                      {/* Mini preview del mapa si tenemos coordenadas en el link */}
+                      {/* Mini preview del mapa si tenemos coordenadas */}
                       {(() => {
                         const ll = extractLatLng(sale.customer_location ?? "")
                         if (!ll) return null
@@ -403,7 +350,7 @@ export default function ReviewProofDrawer({
                         )
                       })()}
 
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700">
+                      <div className="grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 dark:bg-slate-800/60 p-3">
                         <Kpi
                           label="Total"
                           value={formatMoney(sale.total)}
