@@ -240,7 +240,7 @@ export default function PublicTicketPage() {
   const totalReal = Math.max(0, subtotalReal - adjReal + shipReal)
   const paidReal =
     ticket.payments?.reduce((a, p) => a + Number(p.amount || 0), 0) ??
-    Number(ticket.paid) || 0
+    (Number(ticket.paid) || 0)
   const balanceReal = Math.max(0, totalReal - paidReal)
 
   const pct = totalReal > 0 ? Math.min(100, (paidReal / totalReal) * 100) : 0
