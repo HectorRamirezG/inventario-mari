@@ -22,6 +22,7 @@ import type { Sale, SaleItem } from "../../types/database"
 import { previewCascade, toCascadeLine, type CascadeLine } from "./saleCascade"
 import { getPricingConfig } from "../pricing/pricingConfigService"
 import type { PricingConfig } from "../pricing/pricingTypes"
+import { notifyClient } from "../notifications/notificationsService"
 
 interface Props {
   open: boolean
@@ -34,7 +35,7 @@ type Tier = "menudeo" | "medio" | "mayoreo"
 const TIER_LIST: Tier[] = ["menudeo", "medio", "mayoreo"]
 const TIER_LABEL: Record<Tier, string> = {
   menudeo: "Menudeo",
-  medio: "Medio",
+  medio: "Medio mayoreo",
   mayoreo: "Mayoreo",
 }
 
@@ -211,8 +212,6 @@ export default function EditSaleAdjustModal({
         )
       })
 
-      const dirtyAny = updates.length > 0 || removed.length > 0
-
       // 1) UPDATE de líneas modificadas
       for (const it of updates) {
         const profit =
@@ -256,31 +255,71 @@ export default function EditSaleAdjustModal({
         }
       }
 
-      if (dirtyAny) {
-        const paid = Number(sale.paid) || 0
-        const ship = Number(sale.shipping_amount) || 0
-        const total = Math.max(0, newSubtotal - signedAdj + ship)
-        const balance = Math.max(0, total - paid)
-        const { error: upErr } = await supabase
-          .from("sales")
-          .update({
-            total,
-            balance,
-            status: balance <= 0 ? "paid" : "pending",
-            adjustment_amount: signedAdj || null,
-            adjustment_reason: reason.trim() || null,
-          })
-          .eq("id", sale.id)
-        if (upErr) throw upErr
-      } else {
-        // Solo ajuste manual → usar la RPC oficial
-        const { error } = await supabase.rpc("admin_adjust_sale", {
-          p_sale_id: sale.id,
-          p_adjustment: signedAdj,
-          p_reason: reason.trim() || null,
-          p_force_tier: null,
+      // Update único de la cabecera de la venta. Usamos SIEMPRE el cálculo
+      // local (cascade ya consideró tier, ajuste, envío y pagos previos)
+      // para garantizar que total y balance queden consistentes y el
+      // cliente no vea "Total $375 / Falta $440" cuando lo abra.
+      const paid = Number(sale.paid) || 0
+      const ship = Number(sale.shipping_amount) || 0
+      const finalTotal = Math.max(0, newSubtotal - signedAdj + ship)
+      const finalBalance = Math.max(0, finalTotal - paid)
+      const finalStatus =
+        sale.status === "cancelled"
+          ? "cancelled"
+          : finalBalance <= 0
+            ? "paid"
+            : "pending"
+
+      const { error: upErr } = await supabase
+        .from("sales")
+        .update({
+          total: finalTotal,
+          balance: finalBalance,
+          status: finalStatus,
+          adjustment_amount: signedAdj || null,
+          adjustment_reason: reason.trim() || null,
         })
-        if (error) throw error
+        .eq("id", sale.id)
+      if (upErr) throw upErr
+
+      // Notif al CLIENTE con motivo + delta exacto. Solo si tenemos su
+      // email. Es best-effort: si falla la RLS no rompe el flujo.
+      if (sale.customer_email) {
+        const prevTotal = Number(sale.total) || 0
+        const delta = finalTotal - prevTotal // negativo = bajó
+        const tierChange = cascade && cascade.oldTier !== cascade.newTier
+        let title: string
+        let body: string
+        if (tierChange && delta < 0) {
+          title = `Tu ticket bajó a ${cascade!.newTier === "mayoreo" ? "precio mayoreo" : "medio mayoreo"}`
+          body = `Ahorras ${formatMoney(Math.abs(delta))}. ${reason.trim() ? reason.trim() : "Mari aplicó el ajuste por la cantidad de piezas."}`
+        } else if (delta < 0) {
+          title = `Descuento aplicado · ${formatMoney(Math.abs(delta))}`
+          body = reason.trim() || "Mari aplicó un descuento a tu pedido."
+        } else if (delta > 0) {
+          title = `Cargo adicional · ${formatMoney(delta)}`
+          body = reason.trim() || "Se ajustó el total de tu pedido."
+        } else {
+          title = "Tu pedido fue actualizado"
+          body = reason.trim() || "Mari ajustó tu pedido."
+        }
+        await notifyClient(sale.customer_email, {
+          type: "price_adjusted",
+          title,
+          body: `${body}\n\nNuevo total: ${formatMoney(finalTotal)} · Falta: ${formatMoney(finalBalance)}`,
+          link: sale.public_token ? `/ticket/${sale.public_token}` : null,
+          metadata: {
+            sale_id: sale.id,
+            old_total: prevTotal,
+            new_total: finalTotal,
+            new_balance: finalBalance,
+            delta,
+            adjustment: signedAdj,
+            reason: reason.trim() || null,
+            old_tier: cascade?.oldTier ?? null,
+            new_tier: cascade?.newTier ?? null,
+          },
+        })
       }
 
       sound.success()

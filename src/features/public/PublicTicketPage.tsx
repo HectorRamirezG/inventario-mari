@@ -397,6 +397,36 @@ export default function PublicTicketPage() {
                     </div>
                   </motion.div>
                 )}
+                {/* Banner de tier escalonado: si alguna línea va a precio
+                    distinto de menudeo, lo destacamos para que el cliente
+                    entienda por qué pagó menos por unidad. */}
+                {(() => {
+                  const tiers = new Set(
+                    ticket.items.map((i) => (i.tier || "menudeo").toLowerCase()),
+                  )
+                  const hasMayoreo = tiers.has("mayoreo")
+                  const hasMedio = tiers.has("medio")
+                  if (!hasMayoreo && !hasMedio) return null
+                  const label = hasMayoreo ? "mayoreo" : "medio mayoreo"
+                  return (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.18 }}
+                      className="mt-2 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 text-sky-700"
+                    >
+                      <span className="text-base" aria-hidden>✨</span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-widest leading-tight">
+                          Precio {label} aplicado
+                        </p>
+                        <p className="text-[10px] font-bold leading-tight opacity-80">
+                          Pagas el precio especial por la cantidad de piezas.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )
+                })()}
               </div>
             )
           })()}

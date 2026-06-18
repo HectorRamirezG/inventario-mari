@@ -19,7 +19,7 @@ export function publicTicketUrl(sale: Pick<Sale, "id" | "public_token">): string
 
 const TIER_TAG: Record<string, string> = {
   menudeo: "Menudeo",
-  medio: "Medio",
+  medio: "Medio mayoreo",
   mayoreo: "Mayoreo",
 }
 

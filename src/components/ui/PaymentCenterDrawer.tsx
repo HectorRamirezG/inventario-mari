@@ -122,9 +122,14 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
 
   if (typeof document === "undefined" || !sale) return null
 
-  const isPaid = sale.balance <= 0
+  // Defensa contra balance desincronizado: si el ajuste/cambio de tier
+  // dejó `balance` viejo, lo recalculamos en vivo desde total y paid.
+  const safeTotal = Number(sale.total) || 0
+  const safePaid = Number(sale.paid) || 0
+  const safeBalance = Math.max(0, safeTotal - safePaid)
+  const isPaid = safeBalance <= 0
   const pct =
-    sale.total > 0 ? Math.min(100, (sale.paid / sale.total) * 100) : 0
+    safeTotal > 0 ? Math.min(100, (safePaid / safeTotal) * 100) : 0
   const payments = sale.payments ?? []
   const proofsCount = proofs.length
 
@@ -217,12 +222,12 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                         : "text-primary"
                     }`}
                   >
-                    {formatMoney(isPaid ? sale.paid : sale.balance)}
+                    {formatMoney(isPaid ? safePaid : safeBalance)}
                   </p>
                   <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1">
                     {isPaid
-                      ? `Total cobrado: ${formatMoney(sale.paid)}`
-                      : `de ${formatMoney(sale.total)} totales`}
+                      ? `Total cobrado: ${formatMoney(safePaid)}`
+                      : `de ${formatMoney(safeTotal)} totales`}
                   </p>
 
                   {!isPaid && (
@@ -341,7 +346,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                         {/* Reporte de comprobante en modo compact */}
                         <ReportPaymentButton
                           saleId={sale.id}
-                          balance={Number(sale.balance) || 0}
+                          balance={safeBalance}
                           customerEmail={authEmail ?? null}
                           compact
                           onUploaded={() => {

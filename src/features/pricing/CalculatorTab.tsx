@@ -27,7 +27,7 @@ type Tier = "menudeo" | "medio" | "mayoreo";
 
 const TIER_LABEL: Record<Tier, string> = {
   menudeo: "Menudeo",
-  medio: "Medio",
+  medio: "Medio mayoreo",
   mayoreo: "Mayoreo",
 };
 

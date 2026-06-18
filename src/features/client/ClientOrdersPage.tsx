@@ -140,8 +140,17 @@ export default function ClientOrdersPage() {
         </p>
       </div>
       {orders.map((o) => {
-        const pct = o.total > 0 ? Math.min(100, (o.paid / o.total) * 100) : 0
-        const paid = o.balance <= 0
+        // Defensa contra datos inconsistentes en BD: si balance no
+        // cuadra con total - paid (por ajustes viejos), recalculamos
+        // localmente para que el cliente NUNCA vea "Total $375 / Falta
+        // $440". El backend se sincroniza la próxima vez que Mari toque
+        // la venta.
+        const safePaid = Number(o.paid) || 0
+        const safeTotal = Number(o.total) || 0
+        const computedBalance = Math.max(0, safeTotal - safePaid)
+        const balance = computedBalance
+        const pct = safeTotal > 0 ? Math.min(100, (safePaid / safeTotal) * 100) : 0
+        const paid = balance <= 0
         return (
           <motion.div
             key={o.id}
@@ -195,7 +204,7 @@ export default function ClientOrdersPage() {
                     Pagado {formatMoney(o.paid)}
                   </span>
                   <span className="font-black text-primary">
-                    Falta {formatMoney(o.balance)}
+                    Falta {formatMoney(balance)}
                   </span>
                 </div>
               </>

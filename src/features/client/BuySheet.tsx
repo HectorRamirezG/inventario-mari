@@ -9,10 +9,18 @@ import {
   Package,
   Sparkles,
   AlertTriangle,
+  Target,
 } from "lucide-react"
 
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"
+import {
+  detectCartTier,
+  priceForTier,
+  piecesToNextTier,
+  TIER_LABEL,
+} from "../sales/salesTier"
+import type { PricingTier } from "../pricing/pricingTypes"
 
 /* Estructura mínima reutilizable desde ClientShopPage */
 export interface BuySheetVariant {
@@ -20,7 +28,13 @@ export interface BuySheetVariant {
   product_id: string
   variant_name: string
   stock: number
+  /** Precio "actual" mostrado en el catálogo (suele ser menudeo). */
   price: number
+  /** Precios por nivel — cuando existen el sheet puede mostrar la
+   *  proyección de ahorro al añadir más piezas. */
+  price_menudeo?: number | null
+  price_medio?: number | null
+  price_mayoreo?: number | null
   image_url: string | null
 }
 
@@ -37,6 +51,12 @@ interface Props {
   product: BuySheetProduct | null
   /** Cantidades pre-cargadas (las que ya tiene el carrito por variante) */
   initialQty?: Record<string, number>
+  /** Cantidad TOTAL de piezas que el cliente YA tiene en el carrito
+   *  (de cualquier producto). Sirve para proyectar el tier en vivo
+   *  mientras añade más en este sheet. */
+  baseCartQty?: number
+  /** Umbrales del tier configurados por Mari. */
+  thresholds?: { medio_min_qty: number; mayoreo_min_qty: number }
   onClose: () => void
   /** Recibe el batch completo: solo variantes con qty > 0 */
   onConfirm: (lines: { variantId: string; qty: number }[]) => void
@@ -51,6 +71,8 @@ export default function BuySheet({
   open,
   product,
   initialQty,
+  baseCartQty = 0,
+  thresholds,
   onClose,
   onConfirm,
 }: Props) {
@@ -99,13 +121,71 @@ export default function BuySheet({
     [qty]
   )
 
+  /**
+   * Tier proyectado del carrito si confirmáramos ahora: la cantidad
+   * TOTAL son las piezas que el cliente ya tenía + las que está
+   * agregando en este sheet. Mari fija los umbrales (3 piezas para
+   * medio, 6 para mayoreo por default).
+   */
+  const projectedQty = baseCartQty + totalUnits
+  const projectedTier: PricingTier = useMemo(() => {
+    if (!thresholds) return "menudeo"
+    return detectCartTier(projectedQty, {
+      umbral_medio: thresholds.medio_min_qty,
+      umbral_mayoreo: thresholds.mayoreo_min_qty,
+    })
+  }, [projectedQty, thresholds])
+
+  /** Lo que falta para subir al próximo tier (si aplica). */
+  const nextStep = useMemo(() => {
+    if (!thresholds) return null
+    return piecesToNextTier(projectedQty, {
+      umbral_medio: thresholds.medio_min_qty,
+      umbral_mayoreo: thresholds.mayoreo_min_qty,
+    })
+  }, [projectedQty, thresholds])
+
+  /** Precio efectivo de una variante con el tier proyectado. Si la
+   *  variante no tiene precios escalonados cargados, cae a `price`. */
+  function effectivePrice(v: BuySheetVariant): number {
+    if (
+      v.price_menudeo == null &&
+      v.price_medio == null &&
+      v.price_mayoreo == null
+    ) {
+      return v.price
+    }
+    return priceForTier(
+      {
+        price_menudeo: v.price_menudeo ?? v.price,
+        price_medio: v.price_medio ?? null,
+        price_mayoreo: v.price_mayoreo ?? null,
+      },
+      projectedTier,
+    )
+  }
+
   const totalAmt = useMemo(() => {
     if (!product) return 0
     return product.variants.reduce((acc, v) => {
       const q = qty[v.id] ?? 0
-      return acc + q * v.price
+      return acc + q * effectivePrice(v)
     }, 0)
-  }, [qty, product])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qty, product, projectedTier])
+
+  /** Ahorro proyectado vs menudeo si subió de tier. */
+  const projectedSavings = useMemo(() => {
+    if (!product || projectedTier === "menudeo") return 0
+    return product.variants.reduce((acc, v) => {
+      const q = qty[v.id] ?? 0
+      if (q === 0) return acc
+      const menudeo = v.price_menudeo ?? v.price
+      const effective = effectivePrice(v)
+      return acc + q * Math.max(0, menudeo - effective)
+    }, 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qty, product, projectedTier])
 
   function onDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.y > 120 || info.velocity.y > 600) onClose()
@@ -186,6 +266,17 @@ export default function BuySheet({
 
             {/* Lista de variantes con selector +/- */}
             <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scroll-container-ios">
+              {/* Banner de tier: muestra siempre que haya algo en este sheet
+                  o en el carrito previo. Le dice al cliente exactamente
+                  qué precio se le va a aplicar y cuánto le falta para subir. */}
+              {thresholds && (projectedQty > 0) && (
+                <TierBanner
+                  tier={projectedTier}
+                  next={nextStep}
+                  savings={projectedSavings}
+                />
+              )}
+
               {product.variants.length === 0 ? (
                 <div className="py-12 text-center text-slate-400">
                   <Package size={28} className="mx-auto mb-2" />
@@ -196,6 +287,10 @@ export default function BuySheet({
                   const q = qty[v.id] ?? 0
                   const out = v.stock <= 0
                   const atMax = !out && q >= v.stock
+                  const menudeoPrice = v.price_menudeo ?? v.price
+                  const effective = effectivePrice(v)
+                  const hasDiscount =
+                    projectedTier !== "menudeo" && effective < menudeoPrice
                   return (
                     <motion.div
                       key={v.id}
@@ -224,9 +319,16 @@ export default function BuySheet({
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-black truncate">{v.variant_name}</p>
-                          <p className="text-sm font-black text-primary tabular-nums">
-                            {formatMoney(v.price)}
-                          </p>
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <p className="text-sm font-black text-primary tabular-nums">
+                              {formatMoney(effective)}
+                            </p>
+                            {hasDiscount && (
+                              <span className="text-[9px] font-bold text-slate-400 line-through tabular-nums">
+                                {formatMoney(menudeoPrice)}
+                              </span>
+                            )}
+                          </div>
                           {out ? (
                             <p className="text-[9px] font-black uppercase text-rose-500">
                               Agotado
@@ -303,14 +405,30 @@ export default function BuySheet({
             {/* Footer: resumen + CTA único */}
             <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 shrink-0 space-y-3">
               {totalUnits > 0 ? (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-bold">
-                    {totalUnits} {totalUnits === 1 ? "pieza" : "piezas"}
-                  </span>
-                  <span className="font-black text-base tabular-nums">
-                    {formatMoney(totalAmt)}
-                  </span>
-                </div>
+                <>
+                  {/* Si el tier proyectado dió descuento, lo destacamos */}
+                  {projectedTier !== "menudeo" && (
+                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                      <span className="text-emerald-600 dark:text-emerald-300 flex items-center gap-1">
+                        <Sparkles size={11} />
+                        Precio {TIER_LABEL[projectedTier]}
+                      </span>
+                      {projectedSavings > 0 && (
+                        <span className="text-emerald-600 dark:text-emerald-300 tabular-nums">
+                          Ahorras {formatMoney(projectedSavings)}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-bold">
+                      {totalUnits} {totalUnits === 1 ? "pieza" : "piezas"}
+                    </span>
+                    <span className="font-black text-base tabular-nums">
+                      {formatMoney(totalAmt)}
+                    </span>
+                  </div>
+                </>
               ) : (
                 <p className="text-[10px] text-center text-slate-400 italic">
                   Elige al menos una pieza para continuar
@@ -336,5 +454,79 @@ export default function BuySheet({
       )}
     </AnimatePresence>,
     document.body
+  )
+}
+
+/**
+ * Banner de tier proyectado que ve el cliente arriba del listado.
+ * Tres estados:
+ *   - mayoreo (verde): "¡Mayoreo activo!"
+ *   - medio (sky):     "Precio medio mayoreo activo. Lleva N más para mayoreo"
+ *   - menudeo (amber): "Lleva N piezas más para bajar a medio mayoreo"
+ *
+ * El copy usa siempre "medio mayoreo" para evitar confusión con "Medio".
+ */
+function TierBanner({
+  tier,
+  next,
+  savings,
+}: {
+  tier: PricingTier
+  next: { tier: PricingTier; missing: number } | null
+  savings: number
+}) {
+  if (tier === "mayoreo") {
+    return (
+      <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 p-3 flex items-start gap-2">
+        <Sparkles size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+            ¡Precio mayoreo activo!
+          </p>
+          {savings > 0 && (
+            <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">
+              Ahorras {formatMoney(savings)} vs. menudeo
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+  if (tier === "medio") {
+    return (
+      <div className="rounded-2xl bg-sky-50 dark:bg-sky-500/15 border border-sky-200 dark:border-sky-500/30 p-3 flex items-start gap-2">
+        <Sparkles size={14} className="text-sky-600 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300">
+            Precio medio mayoreo activo
+          </p>
+          {savings > 0 && (
+            <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300 mt-0.5">
+              Ahorras {formatMoney(savings)} vs. menudeo
+            </p>
+          )}
+          {next && next.missing > 0 && (
+            <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mt-1">
+              🎯 Lleva {next.missing} {next.missing === 1 ? "pieza" : "piezas"} más para mayoreo
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
+  // menudeo
+  if (!next) return null
+  return (
+    <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 p-3 flex items-start gap-2">
+      <Target size={14} className="text-amber-600 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
+          Lleva {next.missing} {next.missing === 1 ? "pieza" : "piezas"} más
+        </p>
+        <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mt-0.5">
+          Y desbloqueas precio {TIER_LABEL[next.tier].toLowerCase()}.
+        </p>
+      </div>
+    </div>
   )
 }
