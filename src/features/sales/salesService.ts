@@ -18,7 +18,7 @@ export interface CreateSalePayload {
   // Envío / entrega
   shipping_amount?: number | null;
   is_foreign_shipping?: boolean | null;
-  // Opcional: email del cliente (para notifs cruzadas si Mari le pega un correo)
+  // Opcional: email del cliente (para notifs cruzadas si le pega un correo)
   email?: string | null;
 }
 
@@ -137,7 +137,7 @@ export async function createSale(payload: CreateSalePayload) {
 
   // 4. Notificaciones (best-effort, no rompen el flujo)
   //    a) Si la venta tiene email de cliente registrado, le avisamos
-  //       que Mari le creó un pedido y queda apartado/pagado.
+  //       que le creó un pedido y queda apartado/pagado.
   //    b) Si NO tiene email, igual notificamos a admins (para historial).
   //    c) Si el pedido es FORÁNEO con envío, además notif extra a admins
   //       con resalte para preparar paquetería.
@@ -147,8 +147,8 @@ export async function createSale(payload: CreateSalePayload) {
       await notifyClient(payload.email, {
         type: isPaid ? "sale_paid" : "new_layaway",
         title: isPaid
-          ? "Mari registró tu pedido pagado"
-          : "Mari te apartó un nuevo pedido",
+          ? "registró tu pedido pagado"
+          : "te apartó un nuevo pedido",
         body: isPaid
           ? `Total: ${formatMoney(payload.total)}. Ya puedes consultar tu ticket.`
           : `Total: ${formatMoney(payload.total)}. Pagado: ${formatMoney(paidNum)}. Saldo: ${formatMoney(payload.balance)}.`,

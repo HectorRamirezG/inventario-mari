@@ -124,7 +124,7 @@ export default function BuySheet({
   /**
    * Tier proyectado del carrito si confirmáramos ahora: la cantidad
    * TOTAL son las piezas que el cliente ya tenía + las que está
-   * agregando en este sheet. Mari fija los umbrales (3 piezas para
+   * agregando en este sheet. fija los umbrales (3 piezas para
    * medio, 6 para mayoreo por default).
    */
   const projectedQty = baseCartQty + totalUnits

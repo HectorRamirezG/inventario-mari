@@ -169,7 +169,7 @@ export async function uploadPaymentProof(input: {
         type: "payment_proof_received",
         title: "Recibimos tu comprobante",
         body: isCash
-          ? "Mari validará tu pago en efectivo en cuanto lo reciba físicamente."
+          ? "validará tu pago en efectivo en cuanto lo reciba físicamente."
           : `Tu transferencia${amountTxt} ya está en la fila para revisión. Te avisamos cuando se apruebe.`,
         link: (sale as any)?.public_token
           ? `/ticket/${(sale as any).public_token}`

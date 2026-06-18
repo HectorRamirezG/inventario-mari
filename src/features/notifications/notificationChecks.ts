@@ -280,12 +280,12 @@ async function checkBirthday(email: string): Promise<void> {
   await notifyClient(clean, {
     type: "birthday",
     title: `¡Feliz cumpleaños${profile.name ? ", " + profile.name : ""}! 🎂`,
-    body: "Mari te manda un saludo enorme y muchísimo éxito hoy. Pasa al chat para tu sorpresa.",
+    body: "te manda un saludo enorme y muchísimo éxito hoy. Pasa al chat para tu sorpresa.",
     link: "/tienda",
     metadata: { date: todayKey() },
   })
 
-  // Y a Mari le avisamos para que arme algo bonito si quiere
+  // Y a le avisamos para que arme algo bonito si quiere
   await notifyAdmins({
     type: "birthday",
     title: `🎂 Cumpleaños hoy: ${profile.name ?? clean}`,

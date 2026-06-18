@@ -4,7 +4,7 @@ import { notifyAdmins } from "../notifications/notificationsService"
 /**
  * Cliente solicita extender el plazo del apartado. No modifica fechas
  * en la BD (no existe apartado_due_date); en su lugar crea una
- * notificación accionable para Mari con metadata para que ella
+ * notificación accionable para con metadata para que ella
  * decida aceptar/rechazar manualmente.
  */
 export async function requestLayawayExtension(opts: {

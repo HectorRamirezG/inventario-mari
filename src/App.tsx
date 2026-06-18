@@ -13,28 +13,19 @@ import {
 
 import {
   Sparkles,
-  Calendar,
   Package,
-  ShoppingCart,
-  Bookmark,
-  Tag,
-  TrendingUp,
   Settings as SettingsIcon,
   LogOut,
   LogIn,
   ScanLine,
   BookmarkPlus,
-  Zap,
   Plus,
   Command,
   Store,
   Receipt as ReceiptIcon,
   User as UserIcon,
   LifeBuoy,
-  ScrollText,
   Heart,
-  Camera,
-  Star,
   ChevronsLeft,
   ChevronsRight,
   Search,
@@ -63,6 +54,7 @@ const SupportPage = lazy(() => import("./features/support/SupportPage"))
 
 import ThemeToggle from "./components/ui/ThemeToggle"
 import CommandPalette from "./components/ui/CommandPalette"
+import KeyboardHelpDialog from "./components/ui/KeyboardHelpDialog"
 import ActionHub, { type HubAction } from "./components/ui/ActionHub"
 import NotificationBell from "./components/ui/NotificationBell"
 import ConnectionBanner from "./components/ui/ConnectionBanner"
@@ -258,6 +250,7 @@ function AdminShell() {
   const prevSectionRef = useRef<AdminSection>("hoy")
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [hubOpen, setHubOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [proofId, setProofId] = useState<string | null>(null)
   const [apartadoBadge, setApartadoBadge] = useState(0)
@@ -408,17 +401,81 @@ function AdminShell() {
       }
     }
     const kbdHandler = (e: KeyboardEvent) => {
+      // Helper para gatear si el usuario está escribiendo (input/textarea/CE).
+      const isTyping = () => {
+        const tag = (e.target as HTMLElement | null)?.tagName
+        const editable = (e.target as HTMLElement | null)?.isContentEditable
+        return tag === "INPUT" || tag === "TEXTAREA" || !!editable
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault()
         setPaletteOpen((p) => !p)
       }
       // "[" colapsa/expande el sidebar desktop (ignora si estás escribiendo)
       if (e.key === "[" && !(e.metaKey || e.ctrlKey || e.altKey)) {
-        const tag = (e.target as HTMLElement | null)?.tagName
-        const editable = (e.target as HTMLElement | null)?.isContentEditable
-        if (tag === "INPUT" || tag === "TEXTAREA" || editable) return
+        if (isTyping()) return
         e.preventDefault()
         setSidebarExpanded((v) => !v)
+      }
+      // "?" abre la hoja de atajos (siempre y cuando no estés escribiendo)
+      if (e.key === "?" && !(e.metaKey || e.ctrlKey || e.altKey)) {
+        if (isTyping()) return
+        e.preventDefault()
+        setHelpOpen((v) => !v)
+      }
+      // "n" abre el ActionHub (nuevo / quick add) — gmail-style
+      if (
+        e.key.toLowerCase() === "n" &&
+        !(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)
+      ) {
+        if (isTyping()) return
+        e.preventDefault()
+        setHubOpen((v) => !v)
+      }
+      // "g" + tecla → goto sección (gmail-style). "g h" = Hoy, etc.
+      // Detectamos el "g" inicial y dejamos un timeout corto para el
+      // siguiente tecleo. Si en 1.2s no llega nada o llega tecla inválida,
+      // se cancela.
+      if (
+        e.key.toLowerCase() === "g" &&
+        !(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)
+      ) {
+        if (isTyping()) return
+        e.preventDefault()
+        // Guardamos un flag temporal en window para el siguiente keydown.
+        ;(window as any).__mariGotoArmed = true
+        setTimeout(() => {
+          ;(window as any).__mariGotoArmed = false
+        }, 1200)
+        return
+      }
+      if (
+        (window as any).__mariGotoArmed === true &&
+        !(e.metaKey || e.ctrlKey || e.altKey)
+      ) {
+        if (isTyping()) {
+          ;(window as any).__mariGotoArmed = false
+          return
+        }
+        const map: Record<string, AdminSection> = {
+          h: "hoy",
+          c: "caja",
+          p: "pendientes",
+          i: "catalogo", // i de "inventario"
+          s: "soporte",
+          w: "sugerencias", // w de "wishes"
+          r: "resenias",
+          y: "ciclos", // y de "cycles"
+          a: "ajustes",
+        }
+        const target = map[e.key.toLowerCase()]
+        ;(window as any).__mariGotoArmed = false
+        if (target && visibleMenuRef.current.some((m) => m.id === target)) {
+          e.preventDefault()
+          setSection(target)
+          if (target === "pendientes") setApartadoBadge(0)
+          return
+        }
       }
       // Atajos numéricos 1..9 → saltar a sección N del sidebar.
       // Solo si NO se está escribiendo y sin modificadores (evita romper ⌘1 nativos).
@@ -426,9 +483,7 @@ function AdminShell() {
         /^[1-9]$/.test(e.key) &&
         !(e.metaKey || e.ctrlKey || e.altKey || e.shiftKey)
       ) {
-        const tag = (e.target as HTMLElement | null)?.tagName
-        const editable = (e.target as HTMLElement | null)?.isContentEditable
-        if (tag === "INPUT" || tag === "TEXTAREA" || editable) return
+        if (isTyping()) return
         const idx = Number(e.key) - 1
         const target = visibleMenuRef.current[idx]
         if (target) {
@@ -904,6 +959,15 @@ function AdminShell() {
                 ⌘K
               </kbd>
             </button>
+            {/* Botón discreto a la hoja de atajos. También se abre con "?" */}
+            <button
+              onClick={() => setHelpOpen(true)}
+              aria-label="Ver atajos de teclado"
+              title="Atajos (?)"
+              className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center press"
+            >
+              <span className="text-sm font-black">?</span>
+            </button>
             <NotificationBell />
             <button
               onClick={() => setProfileOpen(true)}
@@ -1022,6 +1086,7 @@ function AdminShell() {
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <KeyboardHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ActionHub open={hubOpen} onClose={() => setHubOpen(false)} actions={hubActions} />
       <UserProfileDrawer open={profileOpen} onClose={() => setProfileOpen(false)} />
       <ReviewProofDrawer
@@ -1137,7 +1202,7 @@ function ShopShell() {
             </div>
             <div className="min-w-0">
               <h1 className="text-sm font-black tracking-tighter leading-none">
-                Mari <span className="text-primary">Beauty's Me</span>
+                <span className="text-primary">Beauty's Me</span>
               </h1>
               <p className="text-[8px] uppercase tracking-widest text-slate-400 leading-tight mt-0.5">
                 {isLogged

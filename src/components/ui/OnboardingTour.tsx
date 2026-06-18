@@ -80,7 +80,7 @@ export default function OnboardingTour() {
   const [step, setStep] = useState(0)
   const rules = useBusinessRules()
 
-  // Filtra los pasos según las reglas activas en este momento (Mari decide
+  // Filtra los pasos según las reglas activas en este momento (decide
   // qué módulos ve el cliente y el tour solo presenta lo que sí va a ver).
   const steps = useMemo(
     () => ALL_STEPS.filter((s) => !s.flag || rules[s.flag]),

@@ -18,7 +18,7 @@ import { supabase } from "../../lib/supabase"
  *     `avatars/` (fotos de perfil)
  *
  * QUÉ SE PRESERVA
- *   • auth.users                  (cuentas de Mari y clientes)
+ *   • auth.users                  (cuentas de y clientes)
  *   • user_profiles               (datos del perfil y avatars)
  *   • app_settings, business_rules, bank_accounts, pricing_config
  *   • storage avatars/

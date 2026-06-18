@@ -77,7 +77,7 @@ export default function ClientHero({ customerName, isLogged }: Props) {
   const rules = useBusinessRules()
   const [idx, setIdx] = useState(0)
 
-  // Filtra slides según reglas activas. Cuando Mari apaga un módulo
+  // Filtra slides según reglas activas. Cuando apaga un módulo
   // (wishes, stories, reviews) el slide correspondiente desaparece sin
   // tocar código de este componente.
   const slides = useMemo(

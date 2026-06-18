@@ -292,16 +292,16 @@ export default function EditSaleAdjustModal({
         let body: string
         if (tierChange && delta < 0) {
           title = `Tu ticket bajó a ${cascade!.newTier === "mayoreo" ? "precio mayoreo" : "medio mayoreo"}`
-          body = `Ahorras ${formatMoney(Math.abs(delta))}. ${reason.trim() ? reason.trim() : "Mari aplicó el ajuste por la cantidad de piezas."}`
+          body = `Ahorras ${formatMoney(Math.abs(delta))}. ${reason.trim() ? reason.trim() : "aplicó el ajuste por la cantidad de piezas."}`
         } else if (delta < 0) {
           title = `Descuento aplicado · ${formatMoney(Math.abs(delta))}`
-          body = reason.trim() || "Mari aplicó un descuento a tu pedido."
+          body = reason.trim() || "aplicó un descuento a tu pedido."
         } else if (delta > 0) {
           title = `Cargo adicional · ${formatMoney(delta)}`
           body = reason.trim() || "Se ajustó el total de tu pedido."
         } else {
           title = "Tu pedido fue actualizado"
-          body = reason.trim() || "Mari ajustó tu pedido."
+          body = reason.trim() || "ajustó tu pedido."
         }
         await notifyClient(sale.customer_email, {
           type: "price_adjusted",

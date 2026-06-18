@@ -92,7 +92,7 @@ export interface BusinessRules {
 
   /* ════════════════ MÓDULOS DEL CLIENTE (switcheables) ════════════════
    * Cada uno activa/desactiva una sección completa de la PWA del cliente.
-   * Filosofía: Mari decide qué ver el cliente. Si apaga uno, desaparece.
+   * Filosofía: decide qué ver el cliente. Si apaga uno, desaparece.
    * ═══════════════════════════════════════════════════════════════════════ */
 
   /** Módulo "Mis deseos" del cliente: petición de productos

@@ -6,7 +6,7 @@ import { copyToClipboard } from "../../lib/clipboard"
 
 /**
  * Tarjeta compacta con los datos bancarios de la tienda + botón
- * "Copiar" por campo. Si Mari aún no configuró sus datos, no se muestra.
+ * "Copiar" por campo. Si aún no configuró sus datos, no se muestra.
  */
 export default function BankAccountCard() {
   const bank = useBankAccount()

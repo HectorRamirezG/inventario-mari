@@ -183,9 +183,9 @@ export async function updateWishStatus(
         : status === "unavailable"
         ? "Tu deseo aún no se puede conseguir"
         : status === "fulfilled"
-        ? "Mari cerró tu sugerencia"
+        ? "cerró tu sugerencia"
         : status === "reviewing"
-        ? "Mari está analizando tu deseo"
+        ? "está analizando tu deseo"
         : null
     if (baseTitle) {
       await notifyClient(wish.customer_email, {

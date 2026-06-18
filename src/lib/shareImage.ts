@@ -3,7 +3,7 @@ import { debug } from "./debug"
 
 // IMPORTANTE: html2canvas (~200 KB gz) y jspdf (~150 KB gz) son pesados.
 // Los cargamos en runtime SOLO cuando el usuario pide imagen o PDF, así el
-// bundle inicial es mucho más liviano (Mari abre la app rapidísimo y solo
+// bundle inicial es mucho más liviano (abre la app rapidísimo y solo
 // paga el peso cuando va a generar un comprobante).
 async function loadHtml2Canvas() {
   const mod = await import("html2canvas")

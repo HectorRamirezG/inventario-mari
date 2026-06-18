@@ -143,7 +143,7 @@ export default function ClientOrdersPage() {
         // Defensa contra datos inconsistentes en BD: si balance no
         // cuadra con total - paid (por ajustes viejos), recalculamos
         // localmente para que el cliente NUNCA vea "Total $375 / Falta
-        // $440". El backend se sincroniza la próxima vez que Mari toque
+        // $440". El backend se sincroniza la próxima vez que toque
         // la venta.
         const safePaid = Number(o.paid) || 0
         const safeTotal = Number(o.total) || 0

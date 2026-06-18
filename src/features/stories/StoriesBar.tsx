@@ -10,7 +10,7 @@ import { imageAvatar } from "../../lib/imageTransform"
 interface Props {
   /** Solo visible si la regla `stories_enabled` está activa. */
   enabled: boolean
-  /** Opcional: si Mari es admin/staff puede mostrar "agregar story" */
+  /** Opcional: si es admin/staff puede mostrar "agregar story" */
   showAddCta?: boolean
   onAdd?: () => void
 }

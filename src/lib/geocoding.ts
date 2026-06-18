@@ -2,7 +2,7 @@
  * Servicios de geocoding usando OpenStreetMap + Nominatim.
  * 100% gratis, sin API key, sin billing. Rate limit ~1 req/segundo.
  *
- * Ideal para apps pequeñas/medianas. Si en el futuro Mari tiene volumen
+ * Ideal para apps pequeñas/medianas. Si en el futuro tiene volumen
  * alto (>100 búsquedas/min), considerar migrar a Mapbox (50k/mes gratis)
  * o pagar Google Places.
  *
@@ -231,7 +231,7 @@ export function buildMapsUrl(lat: number, lng: number, label?: string): string {
  * URL de imagen estática del mapa con un pin marcado.
  * Usa staticmap.openstreetmap.de — gratis, sin API key.
  * No usar en producción de alto volumen (ellos piden cache local agresivo);
- * para uso normal de Mari está perfecto.
+ * para uso normal de está perfecto.
  *
  *   <img src={staticMapUrl(lat, lng)} />
  */

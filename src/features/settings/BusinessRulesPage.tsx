@@ -414,7 +414,7 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Camera}
           title="Stories del día"
-          description="Mari sube 3-5 fotos diarias estilo Instagram dentro de la tienda. El cliente las ve al abrir. (Pendiente de implementar)"
+          description="sube 3-5 fotos diarias estilo Instagram dentro de la tienda. El cliente las ve al abrir. (Pendiente de implementar)"
           enabled={form.stories_enabled}
           onToggle={(v) => patch({ stories_enabled: v })}
         />
@@ -422,7 +422,7 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Star}
           title="Reseñas con foto"
-          description="Los clientes suben reseñas con foto del producto. Mari aprueba antes de publicar. Vista compacta dentro de cada producto. (Pendiente de implementar)"
+          description="Los clientes suben reseñas con foto del producto. aprueba antes de publicar. Vista compacta dentro de cada producto. (Pendiente de implementar)"
           enabled={form.reviews_enabled}
           onToggle={(v) => patch({ reviews_enabled: v })}
         />

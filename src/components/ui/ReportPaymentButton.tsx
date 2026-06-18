@@ -439,7 +439,7 @@ export default function ReportPaymentButton({
           </div>
         </div>
 
-        {/* Datos bancarios copiables (sólo si Mari los configuró) */}
+        {/* Datos bancarios copiables (sólo si los configuró) */}
         <div className="mb-3">
           <BankAccountCard />
         </div>

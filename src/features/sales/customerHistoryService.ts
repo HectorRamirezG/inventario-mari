@@ -20,7 +20,7 @@ export interface CustomerSnapshot {
  * Útil para auto-completar al teclear el nombre en una nueva venta.
  *
  * Nota: agrupamos por `customer_name` normalizado (lowercase/trim).
- * Si Mari crece, se puede migrar a una tabla `customers` real y un
+ * Si crece, se puede migrar a una tabla `customers` real y un
  * `customer_id` en sales, pero para una tienda chica esto basta.
  */
 export async function searchCustomers(

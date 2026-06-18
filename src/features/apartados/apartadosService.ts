@@ -194,7 +194,7 @@ export async function cancelSale(saleId: string, reason?: string | null) {
     .eq("id", saleId)
     .maybeSingle();
 
-  // Si Mari escribió un motivo, lo guardamos en notes para que quede
+  // Si escribió un motivo, lo guardamos en notes para que quede
   // en el historial. No tenemos columna dedicada `cancellation_reason`
   // en sales, así que lo concatenamos.
   const patch: Record<string, unknown> = { status: "cancelled" };
@@ -214,7 +214,7 @@ export async function cancelSale(saleId: string, reason?: string | null) {
       type: "sale_cancelled",
       title: "Tu pedido fue cancelado",
       body:
-        `Mari canceló este pedido. Si tenías un abono pagado, te contactaremos para devolverlo.${reasonTxt}`,
+        `canceló este pedido. Si tenías un abono pagado, te contactaremos para devolverlo.${reasonTxt}`,
       link: (prev as any).public_token
         ? `/ticket/${(prev as any).public_token}`
         : null,

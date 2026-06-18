@@ -333,7 +333,7 @@ export interface NotifyInput {
  * No requiere conocer correos: el filtro se hace por
  * `recipient_role='admin'` y los admins se suscriben a ese canal.
  *
- * Se usa cuando un cliente realiza una acción que Mari debe ver:
+ * Se usa cuando un cliente realiza una acción que debe ver:
  * crea apartado, sube comprobante, abre ticket de soporte, pide
  * extensión de plazo, etc.
  */
@@ -360,7 +360,7 @@ export async function notifyAdmins(input: NotifyInput): Promise<void> {
  * tiene email registrado en la venta (compra de mostrador), no se
  * envía nada — no es error.
  *
- * Se usa cuando Mari realiza una acción que el cliente debe ver:
+ * Se usa cuando realiza una acción que el cliente debe ver:
  * aprueba/rechaza un comprobante, agrega un pago manual, marca como
  * pagado/cancelado, resuelve ticket, etc.
  */

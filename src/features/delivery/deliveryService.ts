@@ -7,7 +7,7 @@ import { notifyClient, notifyAdmins } from "../notifications/notificationsServic
  * Persistencia y reglas en `supabase/delivery_notes.sql`.
  * Workflow: draft → sent → picked_up → delivered (o cancelled).
  *
- * Patrón: Mari arma la comanda asociada a una venta y obtiene un
+ * Patrón: arma la comanda asociada a una venta y obtiene un
  * `public_token` para mandar por WhatsApp al repartidor. El repartidor
  * abre el link y ve toda la info via `getPublicDeliveryNote(token)`.
  */
@@ -437,7 +437,7 @@ export async function getPublicDeliveryNote(
 
   // ───── Registra que el repartidor ABRIÓ el link (una sola vez) ─────
   // Usamos localStorage para no spammear: marcamos el token como "visto"
-  // y solo notificamos a Mari la primera vez.
+  // y solo notificamos a la primera vez.
   if (note && typeof window !== "undefined") {
     const KEY = `mari:delivery-opened:${token}`
     try {

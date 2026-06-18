@@ -39,7 +39,7 @@ const META: Record<
     bg: "bg-slate-100 dark:bg-slate-800",
     text: "text-slate-600 dark:text-slate-300",
     ring: "ring-slate-200 dark:ring-slate-700",
-    customerHint: "Mari está armando tu entrega",
+    customerHint: "está armando tu entrega",
   },
   sent: {
     label: "Asignada",
