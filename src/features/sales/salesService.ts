@@ -1,5 +1,7 @@
 import { supabase } from "../../lib/supabase";
 import type { CartItem } from "./salesTier";
+import { notifyClient, notifyAdmins } from "../notifications/notificationsService";
+import { formatMoney } from "../../lib/format";
 
 export interface CreateSalePayload {
   customer: string;
@@ -16,6 +18,8 @@ export interface CreateSalePayload {
   // Envío / entrega
   shipping_amount?: number | null;
   is_foreign_shipping?: boolean | null;
+  // Opcional: email del cliente (para notifs cruzadas si Mari le pega un correo)
+  email?: string | null;
 }
 
 /**
@@ -45,6 +49,7 @@ export async function createSale(payload: CreateSalePayload) {
     .from("sales")
     .insert({
       customer_name: payload.customer,
+      customer_email: payload.email?.trim().toLowerCase() || null,
       customer_phone: payload.phone ?? null,
       customer_address: payload.address ?? null,
       customer_location: payload.location ?? null,
@@ -128,6 +133,42 @@ export async function createSale(payload: CreateSalePayload) {
     if (paymentError) {
       return rollback(`No se pudo registrar el pago: ${paymentError.message}`);
     }
+  }
+
+  // 4. Notificaciones (best-effort, no rompen el flujo)
+  //    a) Si la venta tiene email de cliente registrado, le avisamos
+  //       que Mari le creó un pedido y queda apartado/pagado.
+  //    b) Si NO tiene email, igual notificamos a admins (para historial).
+  try {
+    const isPaid = payload.balance <= 0;
+    if (payload.email && payload.email.trim()) {
+      await notifyClient(payload.email, {
+        type: isPaid ? "sale_paid" : "new_layaway",
+        title: isPaid
+          ? "Mari registró tu pedido pagado"
+          : "Mari te apartó un nuevo pedido",
+        body: isPaid
+          ? `Total: ${formatMoney(payload.total)}. Ya puedes consultar tu ticket.`
+          : `Total: ${formatMoney(payload.total)}. Pagado: ${formatMoney(paidNum)}. Saldo: ${formatMoney(payload.balance)}.`,
+        link: (sale as any).public_token
+          ? `/ticket/${(sale as any).public_token}`
+          : null,
+        metadata: { sale_id: sale.id, total: payload.total, balance: payload.balance },
+      });
+    } else {
+      // Notif silenciosa a admins para que vean en su buzón la venta de mostrador
+      await notifyAdmins({
+        type: isPaid ? "sale_paid" : "new_layaway",
+        title: isPaid
+          ? `Venta de mostrador ${formatMoney(payload.total)}`
+          : `Nuevo apartado de mostrador ${formatMoney(payload.total)}`,
+        body: `Cliente: ${payload.customer}`,
+        link: "/apartados",
+        metadata: { sale_id: sale.id, total: payload.total, balance: payload.balance },
+      });
+    }
+  } catch {
+    /* silencio: notificación es best-effort */
   }
 
   return sale;

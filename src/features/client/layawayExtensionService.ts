@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { notifyAdmins } from "../notifications/notificationsService"
 
 /**
  * Cliente solicita extender el plazo del apartado. No modifica fechas
@@ -22,23 +23,21 @@ export async function requestLayawayExtension(opts: {
     .filter(Boolean)
     .join("\n")
 
-  const link = `/admin?sale=${opts.saleId}`
-  const metadata = {
-    sale_id: opts.saleId,
-    type: "layaway_extension_request",
-    days_requested: opts.daysRequested,
-    reason: opts.reason ?? null,
-  }
-
-  const payload = {
-    recipient_role: "admin" as const,
+  await notifyAdmins({
     type: "layaway_extension",
     title,
     body,
-    link,
-    metadata,
-  }
+    link: `/admin?sale=${opts.saleId}`,
+    metadata: {
+      sale_id: opts.saleId,
+      type: "layaway_extension_request",
+      days_requested: opts.daysRequested,
+      reason: opts.reason ?? null,
+    },
+  })
 
-  const { error } = await supabase.from("notifications").insert(payload)
-  if (error) throw new Error(error.message)
+  // El parámetro `supabase` queda importado por si se requiere ampliar
+  // el endpoint a una RPC más adelante (audit log, etc.). Por ahora la
+  // notificación centralizada es suficiente.
+  void supabase
 }

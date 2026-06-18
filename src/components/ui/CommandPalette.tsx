@@ -17,6 +17,7 @@ import {
   Package,
   ShoppingBag,
   Loader2,
+  Tag,
   type LucideIcon,
 } from "lucide-react"
 import toast from "react-hot-toast"

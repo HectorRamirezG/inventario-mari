@@ -176,3 +176,81 @@ export function useNotifications(opts: {
 
   return { items, unread, loading, refresh, markAsRead, markAllRead, removeNotification }
 }
+
+/* ─────────── Helpers para DISPARAR notificaciones ─────────── */
+
+/**
+ * Payload base para crear una notificación. Lo usamos desde cualquier
+ * service que quiera avisar a admins o a un cliente específico.
+ *
+ * IMPORTANTE: Las RLS de la tabla `notifications` permiten INSERT a
+ * cualquier sesión autenticada con role anon (porque la app usa el
+ * `anon` key). Si tu policy es más estricta, esto fallará silenciosamente
+ * y verás un warning en consola sin romper el flujo principal.
+ */
+export interface NotifyInput {
+  type: NotifType | string
+  title: string
+  body?: string | null
+  link?: string | null
+  metadata?: Record<string, any> | null
+}
+
+/**
+ * Inserta una notificación dirigida a TODOS los admins/staff.
+ * No requiere conocer correos: el filtro se hace por
+ * `recipient_role='admin'` y los admins se suscriben a ese canal.
+ *
+ * Se usa cuando un cliente realiza una acción que Mari debe ver:
+ * crea apartado, sube comprobante, abre ticket de soporte, pide
+ * extensión de plazo, etc.
+ */
+export async function notifyAdmins(input: NotifyInput): Promise<void> {
+  try {
+    const { error } = await supabase.from("notifications").insert({
+      recipient_role: "admin",
+      recipient_email: null,
+      type: input.type,
+      title: input.title,
+      body: input.body ?? null,
+      link: input.link ?? null,
+      metadata: input.metadata ?? null,
+    })
+    if (error) debug.warn("[notify] admins fallo:", error.message)
+  } catch (e: any) {
+    debug.warn("[notify] admins excepción:", e?.message)
+  }
+}
+
+/**
+ * Inserta una notificación dirigida a UN cliente específico.
+ * Se identifica por `recipient_email` (lowercase). Si el cliente no
+ * tiene email registrado en la venta (compra de mostrador), no se
+ * envía nada — no es error.
+ *
+ * Se usa cuando Mari realiza una acción que el cliente debe ver:
+ * aprueba/rechaza un comprobante, agrega un pago manual, marca como
+ * pagado/cancelado, resuelve ticket, etc.
+ */
+export async function notifyClient(
+  email: string | null | undefined,
+  input: NotifyInput,
+): Promise<void> {
+  if (!email) return
+  const clean = email.trim().toLowerCase()
+  if (!clean) return
+  try {
+    const { error } = await supabase.from("notifications").insert({
+      recipient_role: "client",
+      recipient_email: clean,
+      type: input.type,
+      title: input.title,
+      body: input.body ?? null,
+      link: input.link ?? null,
+      metadata: input.metadata ?? null,
+    })
+    if (error) debug.warn("[notify] client fallo:", error.message)
+  } catch (e: any) {
+    debug.warn("[notify] client excepción:", e?.message)
+  }
+}

@@ -56,6 +56,7 @@ import {
   calcShipping,
 } from "../pricing/shippingService"
 import { getBusinessRules, useBusinessRules, isWithinBusinessHours } from "../settings/businessRulesService"
+import { notifyAdmins } from "../notifications/notificationsService"
 import WishesDrawer from "../wishes/WishesDrawer"
 import StoriesBar from "../stories/StoriesBar"
 import ReviewsDrawer from "../reviews/ReviewsDrawer"
@@ -567,6 +568,21 @@ export default function ClientShopPage() {
 
       // Persiste datos del invitado para próximas compras
       saveGuest(guest)
+
+      // Notifica a admins (best-effort) que entró un nuevo apartado
+      await notifyAdmins({
+        type: "new_layaway",
+        title: `Nuevo apartado de ${guest.name.trim()}`,
+        body: `Total ${formatMoney(total)} · ${repricedCart.length} producto(s). Revisa Apartados.`,
+        link: "/apartados",
+        metadata: {
+          sale_id: sale.id,
+          customer_email: guest.email.trim().toLowerCase(),
+          customer_name: guest.name.trim(),
+          total,
+          items: repricedCart.length,
+        },
+      })
 
       sound.success()
       toast.success("✨ ¡Apartado creado!", { id: tid })

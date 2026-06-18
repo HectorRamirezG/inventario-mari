@@ -1,6 +1,8 @@
 import { supabase } from "../../lib/supabase";
 import type { Sale } from "../../types/database";
 import { debug } from "../../lib/debug";
+import { notifyClient } from "../notifications/notificationsService";
+import { formatMoney } from "../../lib/format";
 
 /**
  * Lista las ventas/apartados con sus items y pagos asociados.
@@ -128,10 +130,11 @@ export async function addPayment(
     .insert({ sale_id: saleId, amount, method });
   if (payErr) throw new Error(payErr.message);
 
-  // 2) Recalcular paid/balance/status en sales
+  // 2) Recalcular paid/balance/status en sales (también traemos email
+  //    y datos para poder notificar al cliente al final).
   const { data: sale, error: selErr } = await supabase
     .from("sales")
-    .select("total,paid,status")
+    .select("total,paid,status,customer_email,customer_name,public_token")
     .eq("id", saleId)
     .maybeSingle();
   if (selErr || !sale) throw new Error(selErr?.message ?? "Venta no encontrada");
@@ -147,6 +150,31 @@ export async function addPayment(
     .update({ paid: newPaid, balance: newBalance, status: newStatus })
     .eq("id", saleId);
   if (updErr) throw new Error(updErr.message);
+
+  // 3) Notificar al cliente (si tiene email). Si liquida el saldo lo
+  //    decimos diferente. Best-effort: si falla no aborta el flujo.
+  if ((sale as any).customer_email) {
+    const liquidado = newStatus === "paid";
+    await notifyClient((sale as any).customer_email, {
+      type: liquidado ? "sale_paid" : "payment_added",
+      title: liquidado
+        ? "Pago completo registrado"
+        : `Abono de ${formatMoney(amount)} registrado`,
+      body: liquidado
+        ? `Tu pedido quedó liquidado. ¡Gracias!`
+        : `Pagado: ${formatMoney(newPaid)} de ${formatMoney(total)}. Saldo restante: ${formatMoney(newBalance)}.`,
+      link: (sale as any).public_token
+        ? `/ticket/${(sale as any).public_token}`
+        : null,
+      metadata: {
+        sale_id: saleId,
+        amount,
+        method,
+        balance: newBalance,
+        status: newStatus,
+      },
+    });
+  }
 }
 
 /**
@@ -155,11 +183,32 @@ export async function addPayment(
  * automáticamente al pasar a status='cancelled'.
  */
 export async function cancelSale(saleId: string) {
+  // Leemos primero el email del cliente para poder notificarle
+  // después del cancel.
+  const { data: prev } = await supabase
+    .from("sales")
+    .select("customer_email,customer_name,public_token")
+    .eq("id", saleId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("sales")
     .update({ status: "cancelled" })
     .eq("id", saleId);
   if (error) throw new Error(error.message);
+
+  if (prev && (prev as any).customer_email) {
+    await notifyClient((prev as any).customer_email, {
+      type: "sale_cancelled",
+      title: "Tu pedido fue cancelado",
+      body:
+        "Mari canceló este pedido. Si tenías un abono pagado, te contactaremos para devolverlo.",
+      link: (prev as any).public_token
+        ? `/ticket/${(prev as any).public_token}`
+        : null,
+      metadata: { sale_id: saleId },
+    });
+  }
 }
 
 /**
