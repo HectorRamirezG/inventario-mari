@@ -217,7 +217,8 @@ export async function uploadWishImage(
   file: File,
   customerEmail: string,
 ): Promise<string> {
-  const compact = await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+  // Wishes: foto orientativa de lo que el cliente quiere. q72 a 1024px.
+  const compact = await compressImage(file, { maxWidth: 1024, quality: 0.72 })
   const ext = (compact.name.split(".").pop() || "jpg").toLowerCase()
   const slug =
     customerEmail

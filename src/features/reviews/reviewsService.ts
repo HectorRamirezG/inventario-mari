@@ -237,7 +237,9 @@ export async function uploadReviewImage(
   file: File,
   customerEmail: string,
 ): Promise<string> {
-  const compact = await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+  // Reseñas con foto: las ven otros clientes, vale la pena mantener
+  // calidad media. Defaults del compresor (1280px, q78, WebP).
+  const compact = await compressImage(file)
   const ext = (compact.name.split(".").pop() || "jpg").toLowerCase()
   const slug =
     customerEmail

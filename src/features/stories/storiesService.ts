@@ -124,7 +124,8 @@ export async function deleteStory(id: string): Promise<void> {
 
 /** Sube imagen al bucket `product-images/stories/...` y retorna URL pública. */
 export async function uploadStoryImage(file: File): Promise<string> {
-  const compact = await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+  // Stories: efímeras, peso bajo es prioridad. Defaults nuevos.
+  const compact = await compressImage(file)
   const ext = (compact.name.split(".").pop() || "jpg").toLowerCase()
   const path = `stories/${Date.now()}-${Math.random()
     .toString(36)

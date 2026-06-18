@@ -60,7 +60,10 @@ export async function uploadPaymentProof(input: {
     }
 
     // Comprime client-side antes de subir (foto del cel 5MB → ~250KB).
-    const compact = await compressImage(input.file, { maxWidth: 1600, quality: 0.82 })
+    // Comprobantes de pago: tamaño chico es suficiente para legibilidad
+    // de monto/fecha. q72 a 1024px reduce ~70% vs el original sin perder
+    // info útil.
+    const compact = await compressImage(input.file, { maxWidth: 1024, quality: 0.72 })
     const ext = compact.name.split(".").pop()?.toLowerCase() || "jpg"
     const path = `proofs/${input.saleId}/${crypto.randomUUID()}.${ext}`
 

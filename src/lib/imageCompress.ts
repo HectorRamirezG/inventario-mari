@@ -41,10 +41,10 @@ export async function compressImage(
   opts: CompressOptions = {},
 ): Promise<File> {
   const {
-    maxWidth = 1600,
-    maxHeight = 1600,
-    quality = 0.82,
-    threshold = 800 * 1024,
+    maxWidth = 1280,
+    maxHeight = 1280,
+    quality = 0.78,
+    threshold = 500 * 1024,
     format,
   } = opts
 
@@ -153,10 +153,34 @@ function canvasToBlob(
 }
 
 function pickOutputType(inputType: string): string {
-  // PNG con transparencia → seguimos en PNG (calidad no aplica)
+  // PNG con transparencia → seguimos en PNG (calidad no aplica).
+  // El compresor de Supabase reescribirá luego al servir.
   if (inputType === "image/png") return "image/png"
-  // Resto → JPEG comprimido (mejor compatibilidad y peso)
+  // Si el browser soporta WebP encoding en canvas, lo preferimos:
+  // pesa ~30% menos que JPEG con calidad equivalente y todos los
+  // browsers modernos lo decodifican.
+  if (supportsWebpEncode()) return "image/webp"
+  // Fallback: JPEG (universal)
   return "image/jpeg"
+}
+
+/**
+ * Detecta una sola vez si el canvas puede codificar WebP. Memoiza el
+ * resultado para no reejecutarlo en cada upload.
+ */
+let _webpSupport: boolean | undefined
+function supportsWebpEncode(): boolean {
+  if (typeof _webpSupport === "boolean") return _webpSupport
+  try {
+    const c = document.createElement("canvas")
+    c.width = 1
+    c.height = 1
+    const dataUrl = c.toDataURL("image/webp")
+    _webpSupport = dataUrl.startsWith("data:image/webp")
+  } catch {
+    _webpSupport = false
+  }
+  return _webpSupport
 }
 
 function extensionFor(type: string): string {

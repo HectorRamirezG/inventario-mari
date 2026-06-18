@@ -61,7 +61,9 @@ export async function uploadSupportImage(input: {
     throw new Error("La foto pesa más de 5MB")
   }
   // Comprime client-side antes de subir
-  const compact = await compressImage(input.file, { maxWidth: 1600, quality: 0.82 })
+  // Adjuntos de soporte: captura para entender el problema, no necesita
+  // nitidez de catálogo. q72 a 1024px.
+  const compact = await compressImage(input.file, { maxWidth: 1024, quality: 0.72 })
   const ext = compact.name.split(".").pop()?.toLowerCase() || "jpg"
   const sub = input.saleId ?? "anon"
   const path = `support/${sub}/${crypto.randomUUID()}.${ext}`

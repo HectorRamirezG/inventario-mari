@@ -41,7 +41,8 @@ export default function ProductImageUploader({
     setUploading(true)
     try {
       // Comprime client-side (5MB del cel → 200-400KB) antes de subir.
-      const compact = await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+      // Catalogo: foto principal del producto. Defaults nuevos (1280px, q78, WebP).
+      const compact = await compressImage(file)
       const ext = compact.name.split(".").pop() || "jpg"
       const path = `${folder}/${crypto.randomUUID()}.${ext}`
       const { error } = await supabase.storage
