@@ -11,6 +11,7 @@ import KpiCard from "../../components/ui/KpiCard";
 import Avatar from "../../components/ui/Avatar";
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration";
 import { MovementCardSkeleton } from "../../components/ui/Skeletons";
+import PageHeader from "../../components/ui/PageHeader";
 
 const fmtDate = (dt: string) =>
   new Date(dt).toLocaleString("es-MX", {
@@ -95,24 +96,22 @@ export default function MovementHistoryPage() {
     <div className="flex flex-col gap-4 pb-44 px-2 max-w-2xl mx-auto">
       {/* HEADER sticky con backdrop-blur */}
       <div className="sticky top-0 z-20 -mx-2 px-2 pt-4 pb-2 bg-slate-50/85 dark:bg-slate-950/85 backdrop-blur-xl space-y-3">
-        <div className="flex items-center justify-between px-2">
-          <div>
-            <h2 className="text-sm font-black uppercase tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
-              <Clock size={14} className="text-primary" /> Historial
-            </h2>
-            <p className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-              {filtered.length} {filtered.length === 1 ? "movimiento" : "movimientos"}
-            </p>
-          </div>
-          <button
-            onClick={() => window.location.reload()}
-            aria-label="Refrescar"
-            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-primary flex items-center justify-center press"
-            title="Refrescar"
-          >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-          </button>
-        </div>
+        <PageHeader
+          icon={Clock}
+          title="Historial"
+          subtitle={`${filtered.length} ${filtered.length === 1 ? "movimiento" : "movimientos"}`}
+          right={
+            <button
+              onClick={() => window.location.reload()}
+              aria-label="Refrescar"
+              className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-primary flex items-center justify-center press"
+              title="Refrescar"
+            >
+              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            </button>
+          }
+          noDivider
+        />
 
         {/* KPI STRIP */}
         <div className="grid grid-cols-4 gap-2">

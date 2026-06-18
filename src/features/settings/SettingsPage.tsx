@@ -54,6 +54,7 @@ import { resetAppData, type ResetReport, TABLE_LABEL } from "./resetAppService"
 import { confirmAction } from "../../lib/confirm"
 import { useUserPrefs } from "../../lib/userPrefs"
 import Toggle from "../../components/ui/Toggle"
+import PageHeader from "../../components/ui/PageHeader"
 import {
   useNotifPrefs,
   NOTIF_CATEGORY_META,
@@ -153,15 +154,11 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl mx-auto px-3 pt-1 pb-28">
       {/* HEADER */}
-      <div className="mb-4 px-2">
-        <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-slate-900 dark:text-slate-100">
-          <SettingsIcon size={14} className="text-primary" />
-          Configuración
-        </h2>
-        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">
-          Información de la tienda y seguridad
-        </p>
-      </div>
+      <PageHeader
+        icon={SettingsIcon}
+        title="Configuración"
+        subtitle="Información de la tienda y seguridad"
+      />
 
       {/* INFO DE TIENDA */}
       <Section icon={<Store size={14} />} title="Información de la tienda">

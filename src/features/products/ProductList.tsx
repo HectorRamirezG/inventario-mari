@@ -8,6 +8,7 @@ import ProductDrawer from "./ProductDrawer"
 import { getProducts } from "./productService"
 import type { Product } from "../../types/database"
 import Skeleton from "../../components/ui/Skeleton"
+import PageHeader from "../../components/ui/PageHeader"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import { debug } from "../../lib/debug"
 
@@ -171,23 +172,20 @@ export default function ProductList() {
   return (
     <div className="flex flex-col gap-6 pb-44">
       {/* HEADER + ACTION */}
-      <div className="flex items-center justify-between px-2">
-        <div>
-          <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-slate-900 dark:text-slate-100">
-            <Boxes size={14} className="text-primary" /> Catálogo
-          </h2>
-          <p className="text-[7px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mt-0.5">
-            {filtered.length} productos
-          </p>
-        </div>
-
-        <button
-          onClick={openCreate}
-          className="h-10 px-4 rounded-full bg-primary text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-bloom press-hard"
-        >
-          <Plus size={14} strokeWidth={3} /> Nuevo
-        </button>
-      </div>
+      <PageHeader
+        icon={Boxes}
+        title="Catálogo"
+        subtitle={`${filtered.length} productos`}
+        right={
+          <button
+            onClick={openCreate}
+            className="h-10 px-4 rounded-full bg-primary text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-bloom press-hard"
+          >
+            <Plus size={14} strokeWidth={3} /> Nuevo
+          </button>
+        }
+        noDivider
+      />
 
       {/* Banner guía para "Nueva variante" desde el Action Hub */}
       <AnimatePresence>

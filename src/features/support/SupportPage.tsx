@@ -34,6 +34,7 @@ import { formatDateTime, shortId } from "../../lib/format"
 import KpiCard from "../../components/ui/KpiCard"
 import Avatar from "../../components/ui/Avatar"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
+import PageHeader from "../../components/ui/PageHeader"
 import { useLocalStorageState } from "../../lib/useLocalStorageState"
 
 const STATUS_TABS: { id: SupportStatus | "all"; label: string }[] = [
@@ -169,23 +170,20 @@ export default function SupportPage() {
   return (
     <div className="max-w-3xl mx-auto px-1 pb-12">
       {/* HEADER */}
-      <div className="flex items-end justify-between px-2 mb-3">
-        <div>
-          <h2 className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2 text-slate-900 dark:text-slate-100">
-            <LifeBuoy size={14} className="text-primary" /> Incidencias
-          </h2>
-          <p className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mt-0.5">
-            Buzón de soporte a clientes
-          </p>
-        </div>
-        <button
-          onClick={refresh}
-          aria-label="Refrescar"
-          className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-primary flex items-center justify-center press"
-        >
-          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-        </button>
-      </div>
+      <PageHeader
+        icon={LifeBuoy}
+        title="Incidencias"
+        subtitle="Buzón de soporte a clientes"
+        right={
+          <button
+            onClick={refresh}
+            aria-label="Refrescar"
+            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-primary flex items-center justify-center press"
+          >
+            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          </button>
+        }
+      />
 
       {/* KPI STRIP */}
       <div className="grid grid-cols-3 gap-2 mb-3 px-1">
