@@ -61,6 +61,22 @@ export default function ReportPaymentButton({
   const [amount, setAmount] = useState<number | "">("")
   const [method, setMethod] = useState("transferencia")
   const inputRef = useRef<HTMLInputElement>(null)
+  // Ref al bloque "Subir comprobante" para scroll-into-view cuando
+  // el cliente pulsa "Subir nuevo comprobante" desde el banner de rechazo.
+  const uploadBlockRef = useRef<HTMLDivElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+
+  // Lleva al cliente directo al área de carga después de un rechazo.
+  // Hace scroll y abre la cámara (o galería) sin pasos extra.
+  const focusUpload = (openCamera = true) => {
+    uploadBlockRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    // Pequeño delay para que el scroll termine antes de abrir la cámara
+    // (evita que el visor de cámara overlaye sobre un layout aún animándose).
+    setTimeout(() => {
+      if (openCamera) cameraInputRef.current?.click()
+      else inputRef.current?.click()
+    }, 320)
+  }
 
   // Validación estricta de UUID — bloquea CUALQUIER request con sale_id
   // inválido (undefined/null/"undefined"/cadenas malformadas).
@@ -333,23 +349,45 @@ export default function ReportPaymentButton({
         <motion.div
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl bg-rose-50 dark:bg-rose-500/10 border-2 border-rose-200 dark:border-rose-500/40 p-3 flex items-start gap-2.5"
+          className="rounded-2xl bg-rose-50 dark:bg-rose-500/10 border-2 border-rose-200 dark:border-rose-500/40 p-3 flex flex-col gap-2.5"
         >
-          <div className="w-9 h-9 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0">
-            <AlertCircle size={16} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-black text-rose-800 dark:text-rose-200 leading-tight">
-              Tu pago anterior fue rechazado
-            </p>
-            {lastRejected.rejection_reason && (
-              <p className="text-[10px] font-bold text-rose-700/80 dark:text-rose-200/70 leading-snug mt-0.5">
-                Motivo: {lastRejected.rejection_reason}
+          <div className="flex items-start gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0">
+              <AlertCircle size={16} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black text-rose-800 dark:text-rose-200 leading-tight">
+                Tu pago anterior fue rechazado
               </p>
-            )}
-            <p className="text-[10px] font-bold text-rose-700/80 dark:text-rose-200/70 leading-snug mt-0.5">
-              Vuelve a enviar el comprobante o cambia el método abajo.
-            </p>
+              {lastRejected.rejection_reason && (
+                <p className="text-[10px] font-bold text-rose-700/80 dark:text-rose-200/70 leading-snug mt-0.5">
+                  Motivo: {lastRejected.rejection_reason}
+                </p>
+              )}
+              <p className="text-[10px] font-bold text-rose-700/80 dark:text-rose-200/70 leading-snug mt-0.5">
+                Sube un comprobante nuevo o cámbialo por efectivo.
+              </p>
+            </div>
+          </div>
+          {/* CTA accionable: lleva directo a la cámara para evitar que el
+              cliente se pierda buscando dónde re-subir la foto. */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => focusUpload(true)}
+              className="h-10 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-transform shadow-bloom"
+            >
+              <Camera size={13} />
+              Subir nuevo
+            </button>
+            <button
+              type="button"
+              onClick={() => focusUpload(false)}
+              className="h-10 rounded-xl bg-white dark:bg-slate-800 border-2 border-rose-300 text-rose-700 dark:text-rose-300 text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
+            >
+              <Upload size={13} />
+              Desde galería
+            </button>
           </div>
         </motion.div>
       )}
@@ -382,7 +420,10 @@ export default function ReportPaymentButton({
       </button>
 
       {/* OPCIÓN 2: Subir comprobante (transferencia / mercadopago) */}
-      <div className="rounded-2xl border-2 border-dashed border-amber-300/80 bg-gradient-to-br from-amber-50 to-pink-50/50 dark:from-amber-500/10 dark:to-pink-500/10 p-4">
+      <div
+        ref={uploadBlockRef}
+        className="rounded-2xl border-2 border-dashed border-amber-300/80 bg-gradient-to-br from-amber-50 to-pink-50/50 dark:from-amber-500/10 dark:to-pink-500/10 p-4"
+      >
         <div className="flex items-start gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl bg-amber-400 text-white flex items-center justify-center shrink-0 shadow-bloom">
             <ImageIcon size={18} />
@@ -408,6 +449,7 @@ export default function ReportPaymentButton({
             <Camera size={13} />
             Tomar foto
             <input
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"

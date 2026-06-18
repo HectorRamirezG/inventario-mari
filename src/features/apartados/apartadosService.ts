@@ -185,7 +185,7 @@ export async function addPayment(
  * UPDATE directo. El trigger `restock_on_sale_cancelled` devuelve el stock
  * automáticamente al pasar a status='cancelled'.
  */
-export async function cancelSale(saleId: string) {
+export async function cancelSale(saleId: string, reason?: string | null) {
   // Leemos primero el email del cliente para poder notificarle
   // después del cancel.
   const { data: prev } = await supabase
@@ -194,22 +194,31 @@ export async function cancelSale(saleId: string) {
     .eq("id", saleId)
     .maybeSingle();
 
+  // Si Mari escribió un motivo, lo guardamos en notes para que quede
+  // en el historial. No tenemos columna dedicada `cancellation_reason`
+  // en sales, así que lo concatenamos.
+  const patch: Record<string, unknown> = { status: "cancelled" };
+  if (reason && reason.trim()) {
+    const tag = `[Cancelado: ${reason.trim()}]`;
+    patch.notes = tag;
+  }
   const { error } = await supabase
     .from("sales")
-    .update({ status: "cancelled" })
+    .update(patch)
     .eq("id", saleId);
   if (error) throw new Error(error.message);
 
   if (prev && (prev as any).customer_email) {
+    const reasonTxt = reason && reason.trim() ? `\n\nMotivo: ${reason.trim()}` : "";
     await notifyClient((prev as any).customer_email, {
       type: "sale_cancelled",
       title: "Tu pedido fue cancelado",
       body:
-        "Mari canceló este pedido. Si tenías un abono pagado, te contactaremos para devolverlo.",
+        `Mari canceló este pedido. Si tenías un abono pagado, te contactaremos para devolverlo.${reasonTxt}`,
       link: (prev as any).public_token
         ? `/ticket/${(prev as any).public_token}`
         : null,
-      metadata: { sale_id: saleId },
+      metadata: { sale_id: saleId, reason: reason ?? null },
     });
   }
 }

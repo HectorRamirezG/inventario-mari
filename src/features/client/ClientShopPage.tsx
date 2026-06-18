@@ -869,12 +869,13 @@ export default function ClientShopPage() {
                 : "flex flex-col gap-2 stagger-list"
             }
           >
-            {filtered.map((p) => (
+            {filtered.map((p, idx) => (
               <ProductCardClient
                 key={p.id}
                 product={p}
                 mode={viewMode}
                 isFavorite={wishlist.has(p.id)}
+                priority={idx === 0}
                 onToggleFavorite={() => wishlist.toggle(p.id)}
                 onOpenLightbox={(variantId) => {
                   setLightboxStartVariant(variantId)
@@ -1431,6 +1432,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
   product,
   mode = "grid",
   isFavorite = false,
+  priority = false,
   onToggleFavorite,
   onOpenLightbox,
   onOpenBuy,
@@ -1439,6 +1441,9 @@ const ProductCardClient = memo(function ProductCardClientImpl({
   product: PublicProduct
   mode?: "focus" | "grid" | "list"
   isFavorite?: boolean
+  /** Si true, la imagen principal usa fetchPriority alta y carga eager.
+   *  Sólo el primer producto del listado lo recibe para mejorar LCP. */
+  priority?: boolean
   onToggleFavorite?: () => void
   onOpenLightbox: (variantId: string) => void
   onOpenBuy: (variantId: string) => void
@@ -1552,7 +1557,8 @@ const ProductCardClient = memo(function ProductCardClientImpl({
             <img
               src={imageThumbnail(cover) || cover}
               alt={product.name}
-              loading="lazy"
+              loading={priority ? "eager" : "lazy"}
+              fetchPriority={priority ? "high" : "auto"}
               decoding="async"
               width={160}
               height={160}
@@ -1637,6 +1643,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           onTap={() => variant && onOpenLightbox(variant.id)}
           className="rounded-none"
           showVariantBadge={showVariantBadge}
+          priority={priority}
         />
         {/* Badges esquina superior izquierda: NUEVO / OFERTA.
             Layout en fila (flex-wrap) para no apilarse verticalmente y

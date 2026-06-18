@@ -9,6 +9,7 @@ import {
 import { supabase } from "../../lib/supabase";
 import { sound } from "../../lib/sound";
 import { confirmAction } from "../../lib/confirm";
+import { promptDialog } from "../../lib/prompt";
 import type { Sale } from "../../types/database";
 
 export type ApartadosFilter = "pending" | "paid" | "all";
@@ -252,14 +253,29 @@ export function useApartados() {
     async (saleId: string) => {
       const ok = await confirmAction({
         title: "¿Cancelar esta venta?",
-        description: "El stock se devolverá al inventario automáticamente. No se puede deshacer.",
+        description:
+          "El stock se devolverá al inventario automáticamente. El cliente recibirá una notificación con el motivo. No se puede deshacer.",
         confirmLabel: "Sí, cancelar venta",
         tone: "danger",
       });
       if (!ok) return false;
+      // Pedimos motivo opcional para que el cliente sepa POR QUÉ.
+      // Si lo deja en blanco, igual cancela pero sin motivo.
+      const reason = await promptDialog({
+        title: "Motivo de cancelación (opcional)",
+        description:
+          "Se lo mandamos al cliente para que entienda. Ejemplos: 'Sin stock', 'Pago no acreditado', 'Cliente solicitó cancelar'.",
+        placeholder: "Ej. Sin stock disponible…",
+        confirmLabel: "Cancelar venta",
+        cancelLabel: "Salir sin cancelar",
+        multiline: true,
+        maxLength: 280,
+      });
+      // Si el usuario presiona "Salir sin cancelar" devuelve null → abortar
+      if (reason === null) return false;
       const toastId = toast.loading("Cancelando venta...");
       try {
-        await cancelSale(saleId);
+        await cancelSale(saleId, reason || null);
         toast.success("Venta cancelada (stock devuelto)", { id: toastId });
         await refresh();
         return true;

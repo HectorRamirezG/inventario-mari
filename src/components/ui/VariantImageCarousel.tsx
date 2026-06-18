@@ -25,6 +25,11 @@ interface Props {
    * subió foto propia) — en ese caso la pill solo confunde al cliente.
    */
   showVariantBadge?: boolean
+  /**
+   * Si true, la primera imagen carga eager + fetchPriority="high".
+   * Usar SOLO en el primer card visible del listado para mejorar LCP.
+   */
+  priority?: boolean
 }
 
 /**
@@ -45,6 +50,7 @@ export default function VariantImageCarousel({
   onTap,
   className = "",
   showVariantBadge = true,
+  priority = false,
 }: Props) {
   const active = useMemo(() => {
     if (variants.length === 0) return null
@@ -93,7 +99,8 @@ export default function VariantImageCarousel({
           key={`${active.id}-${safeIdx}`}
           src={imageMedium(activeUrl) || activeUrl}
           alt={active.name}
-          loading="lazy"
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
           decoding="async"
           draggable={false}
           initial={{ opacity: 0, scale: 1.04 }}
