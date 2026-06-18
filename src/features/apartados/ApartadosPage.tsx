@@ -26,7 +26,7 @@ import Badge from "../../components/ui/Badge";
 import PageHeader from "../../components/ui/PageHeader";
 import KpiCard from "../../components/ui/KpiCard";
 import TabBar from "../../components/ui/TabBar";
-import Skeleton from "../../components/ui/Skeleton";
+import { SaleCardSkeleton } from "../../components/ui/Skeletons";
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration";
 import {
   useBusinessRules,
@@ -177,11 +177,7 @@ export default function ApartadosPage() {
 
       {/* LISTADO */}
       {state.loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32 w-full" rounded="xl" />
-          ))}
-        </div>
+        <SaleCardSkeleton count={4} />
       ) : state.sales.length === 0 ? (
         <EmptyStateIllustration
           variant="no-orders"

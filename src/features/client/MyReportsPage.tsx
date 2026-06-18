@@ -19,7 +19,7 @@ import {
 import { formatDateTime, shortId } from "../../lib/format"
 import SupportModal from "../support/SupportModal"
 import PageHeader from "../../components/ui/PageHeader"
-import Skeleton from "../../components/ui/Skeleton"
+import { ReportCardSkeleton } from "../../components/ui/Skeletons"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 
 const STATUS_META: Record<
@@ -95,11 +95,7 @@ export default function MyReportsPage() {
       />
 
       {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-24 w-full" rounded="lg" />
-          ))}
-        </div>
+        <ReportCardSkeleton count={4} />
       ) : tickets.length === 0 ? (
         <EmptyState onCreate={() => setOpenSupport(true)} />
       ) : (

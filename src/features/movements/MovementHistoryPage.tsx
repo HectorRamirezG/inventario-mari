@@ -10,7 +10,7 @@ import { formatMoney as fmtMoney } from "../../lib/format";
 import KpiCard from "../../components/ui/KpiCard";
 import Avatar from "../../components/ui/Avatar";
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration";
-import Skeleton from "../../components/ui/Skeleton";
+import { MovementCardSkeleton } from "../../components/ui/Skeletons";
 
 const fmtDate = (dt: string) =>
   new Date(dt).toLocaleString("es-MX", {
@@ -165,9 +165,7 @@ export default function MovementHistoryPage() {
       {/* LISTADO */}
       <div className="space-y-5">
         {loading ? (
-          [1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32 w-full" rounded="xl" />
-          ))
+          <MovementCardSkeleton count={5} />
         ) : filtered.length === 0 ? (
           <EmptyStateIllustration
             variant="no-orders"

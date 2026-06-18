@@ -20,7 +20,7 @@ import {
 } from "./wishesService"
 import WishesDrawer from "./WishesDrawer"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
-import Skeleton from "../../components/ui/Skeleton"
+import { WishCardSkeleton } from "../../components/ui/Skeletons"
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("es-MX", {
@@ -115,9 +115,7 @@ export default function MyWishesPage() {
       {/* Lista */}
       <div className="space-y-3">
         {loading ? (
-          [1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32 w-full" rounded="xl" />
-          ))
+          <WishCardSkeleton count={3} />
         ) : items.length === 0 ? (
           <EmptyStateIllustration
             variant="cart-empty"

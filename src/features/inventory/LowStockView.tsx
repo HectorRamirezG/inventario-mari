@@ -10,7 +10,7 @@ import {
 } from "../movements/ProductModals"
 import KpiCard from "../../components/ui/KpiCard"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
-import Skeleton from "../../components/ui/Skeleton"
+import { StockRowSkeleton } from "../../components/ui/Skeletons"
 
 interface LowItem {
   product: Product
@@ -94,11 +94,7 @@ export default function LowStockView() {
 
       {/* Lista */}
       {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-16 w-full" rounded="xl" />
-          ))}
-        </div>
+        <StockRowSkeleton count={5} />
       ) : items.length === 0 ? (
         <EmptyStateIllustration
           variant="no-orders"

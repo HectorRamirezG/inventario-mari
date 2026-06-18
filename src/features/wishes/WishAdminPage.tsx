@@ -35,7 +35,7 @@ import PageHeader from "../../components/ui/PageHeader"
 import KpiCard from "../../components/ui/KpiCard"
 import Avatar from "../../components/ui/Avatar"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
-import Skeleton from "../../components/ui/Skeleton"
+import { WishCardSkeleton } from "../../components/ui/Skeletons"
 import { confirmAction } from "../../lib/confirm"
 import { promptDialog } from "../../lib/prompt"
 
@@ -336,9 +336,7 @@ export default function WishAdminPage() {
       {/* Lista */}
       <div className="space-y-5">
         {loading ? (
-          [1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-40 w-full" rounded="xl" />
-          ))
+          <WishCardSkeleton count={4} />
         ) : filtered.length === 0 ? (
           <EmptyStateIllustration
             variant="no-orders"
