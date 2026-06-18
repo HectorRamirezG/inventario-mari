@@ -136,6 +136,16 @@ export async function createReview(input: CreateReviewInput): Promise<Review> {
     },
   })
 
+  // Achievement: primera reseña 5★ que llega a Mari (no se trackea por
+  // sesión; es global "first ever" en este device). Como es one-shot
+  // forever, no molesta aunque corra varias veces.
+  if (payload.rating === 5) {
+    try {
+      const { tryUnlock } = await import("../../lib/achievements")
+      tryUnlock("first_five_star_review")
+    } catch {}
+  }
+
   return review
 }
 

@@ -60,6 +60,7 @@ import { getBusinessRules, useBusinessRules, isWithinBusinessHours } from "../se
 import { notifyAdmins } from "../notifications/notificationsService"
 import WishesDrawer from "../wishes/WishesDrawer"
 import StoriesBar from "../stories/StoriesBar"
+import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
 import ReviewsDrawer from "../reviews/ReviewsDrawer"
 
 // Estructura mínima del catálogo público
@@ -665,6 +666,18 @@ export default function ClientShopPage() {
 
       <StoriesBar enabled={bRules.stories_enabled} />
 
+      {/* Productos vistos recientemente — solo se pinta si hay ≥2 items.
+          El click abre el BuySheet del producto correspondiente.       */}
+      <RecentlyViewedRow
+        onOpen={(productId) => {
+          const p = products.find((x) => x.id === productId)
+          if (p) {
+            setBuySheetPreselectedVariant(p.variants[0]?.id ?? null)
+            setBuySheetProduct(p)
+          }
+        }}
+      />
+
       {!shopOpen && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
@@ -894,10 +907,33 @@ export default function ClientShopPage() {
                 onOpenLightbox={(variantId) => {
                   setLightboxStartVariant(variantId)
                   setLightboxProduct(p)
+                  // Tracking de productos recientes (cliente solo)
+                  import("../../lib/useRecentViews")
+                    .then(({ trackProductView }) => {
+                      const v = p.variants.find((x) => x.id === variantId) ?? p.variants[0]
+                      trackProductView({
+                        id: p.id,
+                        name: p.name,
+                        image: v?.image_urls?.[0] ?? p.image_url ?? null,
+                        price: v?.price_menudeo ?? v?.price ?? 0,
+                      })
+                    })
+                    .catch(() => {})
                 }}
                 onOpenBuy={(variantId) => {
                   setBuySheetPreselectedVariant(variantId)
                   setBuySheetProduct(p)
+                  import("../../lib/useRecentViews")
+                    .then(({ trackProductView }) => {
+                      const v = p.variants.find((x) => x.id === variantId) ?? p.variants[0]
+                      trackProductView({
+                        id: p.id,
+                        name: p.name,
+                        image: v?.image_urls?.[0] ?? p.image_url ?? null,
+                        price: v?.price_menudeo ?? v?.price ?? 0,
+                      })
+                    })
+                    .catch(() => {})
                 }}
                 onOpenReviews={
                   bRules.reviews_enabled

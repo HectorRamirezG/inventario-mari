@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from "react"
-import { Toaster } from "react-hot-toast"
+import { Toaster, toast } from "react-hot-toast"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   BrowserRouter,
@@ -80,6 +80,8 @@ import { useMyAvatar } from "./lib/useMyAvatar"
 import { useSidebarCounts } from "./lib/useSidebarCounts"
 import { preloadBusinessRules, useBusinessRules } from "./features/settings/businessRulesService"
 import { applyAccent, applyForceDark } from "./lib/applyTheme"
+import { applyMotionLevel } from "./lib/applyMotion"
+import { useUserPrefs, isDarkScheduleNow } from "./lib/userPrefs"
 
 // ──────────────────────────────────────────────────────────────────
 // Menús del shell admin/staff. Etiquetas más cortas y orientadas a acción.
@@ -177,6 +179,7 @@ export default function App() {
 function ThemeMount() {
   useTheme()
   const rules = useBusinessRules()
+  const { prefs } = useUserPrefs()
   useEffect(() => {
     // Pre-carga las políticas de negocio en caché para que los services
     // síncronos (getBusinessRules) las tengan disponibles al instante.
@@ -191,6 +194,38 @@ function ThemeMount() {
   useEffect(() => {
     applyForceDark(rules.force_dark_mode)
   }, [rules.force_dark_mode])
+  // Intensidad de animación — atributo data-motion en <html>.
+  useEffect(() => {
+    applyMotionLevel(prefs.motion)
+  }, [prefs.motion])
+  // Dark schedule: cada minuto evalúa si toca dark según horario.
+  // El force_dark_mode del admin sigue ganando por encima de esto.
+  useEffect(() => {
+    if (!prefs.darkSchedule) return
+    const check = () => {
+      if (rules.force_dark_mode) return // admin manda
+      const shouldDark = isDarkScheduleNow(prefs)
+      const root = document.documentElement
+      if (shouldDark && root.dataset.theme !== "dark") {
+        root.dataset.theme = "dark"
+        root.style.colorScheme = "dark"
+      } else if (!shouldDark && root.dataset.themeForced !== "1") {
+        // Restaura preferencia individual leyendo localStorage
+        const saved = localStorage.getItem("mari-theme") ?? "system"
+        const effective =
+          saved === "dark" || saved === "light"
+            ? saved
+            : window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+        root.dataset.theme = effective
+        root.style.colorScheme = effective
+      }
+    }
+    check()
+    const id = window.setInterval(check, 60_000)
+    return () => window.clearInterval(id)
+  }, [prefs.darkSchedule, prefs.darkStart, prefs.darkEnd, prefs, rules.force_dark_mode])
   return null
 }
 
@@ -262,6 +297,11 @@ function AdminShell() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [hubOpen, setHubOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  // Easter egg: contador de taps sobre el logo. A los 7, dispara confetti
+  // + mensaje especial. Se resetea automáticamente al pasar 1.5s sin taps.
+  const [logoTaps, setLogoTaps] = useState(0)
+  const logoTapResetRef = useRef<number | null>(null)
+  const { prefs: userPrefs, set: setUserPref } = useUserPrefs()
   const [profileOpen, setProfileOpen] = useState(false)
   const [proofId, setProofId] = useState<string | null>(null)
   const [apartadoBadge, setApartadoBadge] = useState(0)
@@ -610,24 +650,73 @@ function AdminShell() {
         <div className="shrink-0 flex items-center gap-2 px-3 py-4">
           <Link
             to="/admin"
-            onClick={() => setSection("hoy")}
-            className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
+            onClick={(e) => {
+              // Easter egg: 7 taps en el logo = confetti + mensaje sorpresa.
+              // No bloqueamos navegación; solo contamos el evento.
+              setLogoTaps((prev) => {
+                const next = prev + 1
+                if (logoTapResetRef.current) {
+                  window.clearTimeout(logoTapResetRef.current)
+                }
+                logoTapResetRef.current = window.setTimeout(
+                  () => setLogoTaps(0),
+                  1500,
+                )
+                if (next === 7) {
+                  e.preventDefault()
+                  // Carga lazy para no bloquear el render normal
+                  import("./lib/confetti").then(({ fireConfetti }) =>
+                    fireConfetti({ count: 140, duration: 2600 }),
+                  )
+                  toast.success("¡Mari eres una crack! 💖✨", { duration: 4000 })
+                  return 0
+                }
+                return next
+              })
+              if (logoTaps + 1 < 7) {
+                setSection("hoy")
+              }
+            }}
+            className="relative w-12 h-12 rounded-2xl flex items-center justify-center shadow-bloom shrink-0"
             style={{
               background: "linear-gradient(135deg,#e6007e 0%, #a855f7 100%)",
             }}
             aria-label="Beauty's Me"
+            title={`Beauty's Me${logoTaps > 0 ? ` (${logoTaps}/7)` : ""}`}
           >
             <Sparkles className="text-white" size={20} />
+            {/* Mood emoji elegido por Mari (esquina superior derecha del logo).
+                Solo se muestra si el emoji NO es vacío. */}
+            {userPrefs.moodEmoji && (
+              <span
+                aria-hidden
+                className="absolute -top-1.5 -right-1.5 text-base select-none pointer-events-none drop-shadow"
+                style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.25))" }}
+              >
+                {userPrefs.moodEmoji}
+              </span>
+            )}
           </Link>
           {sidebarExpanded && (
-            <div className="min-w-0 flex-1">
+            <button
+              type="button"
+              onClick={() => {
+                // En expandido permite cambiar el mood cíclicamente
+                const moods = ["✨", "😎", "🔥", "💪", "🌸", "🌙", "🎀", "💖", "☀️"]
+                const i = moods.indexOf(userPrefs.moodEmoji)
+                const next = moods[(i + 1) % moods.length]
+                setUserPref("moodEmoji", next)
+              }}
+              className="min-w-0 flex-1 text-left press"
+              title="Cambiar mood"
+            >
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none">
                 Beauty's
               </p>
-              <p className="text-sm font-black italic text-slate-900 dark:text-slate-100 leading-tight">
-                Me Admin
+              <p className="text-sm font-black italic text-slate-900 dark:text-slate-100 leading-tight flex items-center gap-1.5">
+                Me Admin <span className="text-base">{userPrefs.moodEmoji}</span>
               </p>
-            </div>
+            </button>
           )}
           <button
             onClick={() => setSidebarExpanded((v) => !v)}

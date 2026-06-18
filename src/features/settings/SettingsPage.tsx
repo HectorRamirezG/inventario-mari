@@ -669,14 +669,14 @@ function PricingPrefsSection() {
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   PREFERENCIAS DEL USUARIO — sonidos / haptics / confetti
+   PREFERENCIAS DEL USUARIO — experiencia personalizable
    Persistidas en localStorage. No requieren backend.
    ════════════════════════════════════════════════════════════════════ */
 function UserPrefsSection() {
-  const { prefs, toggle } = useUserPrefs()
+  const { prefs, toggle, set } = useUserPrefs()
 
-  const rows: Array<{
-    key: keyof typeof prefs
+  const toggles: Array<{
+    key: "sounds" | "haptics" | "confetti"
     icon: React.ReactNode
     title: string
     description: string
@@ -708,11 +708,37 @@ function UserPrefsSection() {
     },
   ]
 
+  const SOUND_PACKS: { id: typeof prefs.soundPack; label: string; hint: string }[] = [
+    { id: "default", label: "Default", hint: "Suave y moderno" },
+    { id: "vintage", label: "Vintage", hint: "Caja registradora retro" },
+    { id: "arcade", label: "Arcade", hint: "8-bit divertido" },
+    { id: "premium", label: "Premium", hint: "Chimes finos" },
+  ]
+
+  const MOTION_LEVELS: { id: typeof prefs.motion; label: string; hint: string }[] = [
+    { id: "off", label: "Apagar", hint: "Sin animaciones" },
+    { id: "low", label: "Baja", hint: "Animaciones más rápidas" },
+    { id: "normal", label: "Normal", hint: "Default" },
+    { id: "high", label: "Alta", hint: "Animaciones más expresivas" },
+  ]
+
+  const previewSound = async (packId: typeof prefs.soundPack) => {
+    // Cambia el pack temporalmente para que el sonido refleje la elección
+    const prevPack = prefs.soundPack
+    set("soundPack", packId)
+    const { sound } = await import("../../lib/sound")
+    sound.success()
+    // Restaurar después de un toque (solo si NO era ya el activo)
+    if (prevPack !== packId) {
+      setTimeout(() => set("soundPack", packId), 0)
+    }
+  }
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="surface-card p-5 mb-4 space-y-3"
+      className="surface-card p-5 mb-4 space-y-4"
     >
       <div className="flex items-center gap-2">
         <div
@@ -726,13 +752,14 @@ function UserPrefsSection() {
             Experiencia
           </h3>
           <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400">
-            Sonidos, vibración y celebraciones
+            Sonidos, vibración, animaciones, modo oscuro y horarios
           </p>
         </div>
       </div>
 
+      {/* Toggles base */}
       <div className="space-y-1.5">
-        {rows.map((r) => (
+        {toggles.map((r) => (
           <label
             key={r.key}
             className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 hover:border-primary/30 dark:hover:border-primary/40 cursor-pointer transition-colors"
@@ -757,6 +784,217 @@ function UserPrefsSection() {
             />
           </label>
         ))}
+      </div>
+
+      {/* Volumen: slider 0..100 */}
+      {prefs.sounds && (
+        <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              Volumen
+            </span>
+            <span className="text-[11px] font-black text-primary tabular-nums">
+              {prefs.volume}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={prefs.volume}
+            onChange={(e) => set("volume", Number(e.target.value))}
+            className="w-full h-2 accent-primary"
+            aria-label="Volumen"
+          />
+        </div>
+      )}
+
+      {/* Sound packs */}
+      {prefs.sounds && (
+        <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3 space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+            Pack de sonidos
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {SOUND_PACKS.map((p) => {
+              const active = prefs.soundPack === p.id
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => previewSound(p.id)}
+                  className={`text-left rounded-xl border-2 px-3 py-2 transition-colors ${
+                    active
+                      ? "border-primary bg-primary/5 text-slate-900 dark:text-slate-100"
+                      : "border-slate-200 dark:border-slate-700 hover:border-primary/40 text-slate-700 dark:text-slate-300"
+                  }`}
+                >
+                  <p className="text-[11px] font-black leading-tight">
+                    {p.label}
+                  </p>
+                  <p className="text-[9px] text-slate-400 leading-snug mt-0.5">
+                    {p.hint}
+                  </p>
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[9px] text-slate-400 text-center italic">
+            Toca un pack para escuchar
+          </p>
+        </div>
+      )}
+
+      {/* Intensidad de animación */}
+      <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3 space-y-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+          Intensidad de animación
+        </p>
+        <div className="grid grid-cols-4 gap-1.5">
+          {MOTION_LEVELS.map((m) => {
+            const active = prefs.motion === m.id
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => set("motion", m.id)}
+                className={`rounded-xl border-2 px-2 py-1.5 transition-colors ${
+                  active
+                    ? "border-primary bg-primary/5 text-slate-900 dark:text-slate-100"
+                    : "border-slate-200 dark:border-slate-700 hover:border-primary/40 text-slate-700 dark:text-slate-300"
+                }`}
+              >
+                <p className="text-[10px] font-black leading-tight">{m.label}</p>
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-[9px] text-slate-400 text-center italic">
+          {MOTION_LEVELS.find((m) => m.id === prefs.motion)?.hint}
+        </p>
+      </div>
+
+      {/* Mood emoji */}
+      <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3 space-y-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+          Tu mood del día <span className="text-slate-400 normal-case">(aparece junto al logo)</span>
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {["✨", "😎", "🔥", "💪", "🌸", "🌙", "🎀", "💖", "☀️", "🚀", "🌷", "🦋"].map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => set("moodEmoji", emoji)}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl transition-all ${
+                prefs.moodEmoji === emoji
+                  ? "bg-primary/15 ring-2 ring-primary scale-110"
+                  : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:scale-105"
+              }`}
+              aria-label={`Mood ${emoji}`}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Modo oscuro automático por horario */}
+      <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3 space-y-2">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <div className="w-9 h-9 rounded-xl bg-indigo-500 text-white flex items-center justify-center shrink-0">
+            <MoonIcon size={14} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+              Modo oscuro automático por horario
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+              Cambia a oscuro entre las horas que elijas. Útil para
+              descansar la vista de noche.
+            </p>
+          </div>
+          <Toggle
+            checked={prefs.darkSchedule}
+            onChange={() => toggle("darkSchedule")}
+            label="Dark schedule"
+          />
+        </label>
+        {prefs.darkSchedule && (
+          <div className="flex items-center gap-3 pl-12">
+            <label className="inline-flex items-center gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                De
+              </span>
+              <input
+                type="time"
+                value={prefs.darkStart}
+                onChange={(e) => set("darkStart", e.target.value)}
+                className="h-9 px-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[12px] font-black tabular-nums text-center text-slate-900 dark:text-slate-100"
+              />
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                A
+              </span>
+              <input
+                type="time"
+                value={prefs.darkEnd}
+                onChange={(e) => set("darkEnd", e.target.value)}
+                className="h-9 px-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[12px] font-black tabular-nums text-center text-slate-900 dark:text-slate-100"
+              />
+            </label>
+          </div>
+        )}
+      </div>
+
+      {/* Quiet hours */}
+      <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3 space-y-2">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <div className="w-9 h-9 rounded-xl bg-slate-500 text-white flex items-center justify-center shrink-0">
+            <Volume2 size={14} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+              Horario silencioso
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
+              Las notificaciones llegan pero NO suenan ni vibran entre estas
+              horas. Ideal para la madrugada.
+            </p>
+          </div>
+          <Toggle
+            checked={prefs.quietHoursEnabled}
+            onChange={() => toggle("quietHoursEnabled")}
+            label="Quiet hours"
+          />
+        </label>
+        {prefs.quietHoursEnabled && (
+          <div className="flex items-center gap-3 pl-12">
+            <label className="inline-flex items-center gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                De
+              </span>
+              <input
+                type="time"
+                value={prefs.quietStart}
+                onChange={(e) => set("quietStart", e.target.value)}
+                className="h-9 px-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[12px] font-black tabular-nums text-center text-slate-900 dark:text-slate-100"
+              />
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                A
+              </span>
+              <input
+                type="time"
+                value={prefs.quietEnd}
+                onChange={(e) => set("quietEnd", e.target.value)}
+                className="h-9 px-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[12px] font-black tabular-nums text-center text-slate-900 dark:text-slate-100"
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       <p className="text-[9px] text-slate-400 dark:text-slate-500 text-center italic pt-1">

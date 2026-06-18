@@ -420,16 +420,33 @@ export function useSalesPage() {
       toast.success(msg, { id: toastId });
       clearCart();
 
-      // Milestone: primera venta del día → confetti
+      // Milestones: primera venta del día + counter de racha.
+      // El sistema central de achievements maneja confetti + toast +
+      // sonido del pack activo (no necesita escribir flags manualmente).
       try {
-        const today = new Date().toISOString().slice(0, 10);
-        const lastDay = localStorage.getItem("mari:last-sale-day");
-        if (lastDay !== today) {
-          localStorage.setItem("mari:last-sale-day", today);
-          // Lazy import: el confetti solo se carga si vamos a usarlo
-          import("../../lib/confetti").then(({ fireConfetti }) => {
-            fireConfetti({ count: 70, duration: 1800 });
-          });
+        const { tryUnlock } = await import("../../lib/achievements");
+        tryUnlock("first_sale_today");
+        // Contador de ventas del día — cuando llega a 10, dispara la racha
+        const todayKey = `mari:sales-count:${new Date().toISOString().slice(0, 10)}`;
+        const prev = Number(localStorage.getItem(todayKey)) || 0;
+        const next = prev + 1;
+        localStorage.setItem(todayKey, String(next));
+        if (next >= 10) {
+          tryUnlock("ten_sales_streak");
+        }
+        // Suma del revenue del día — para "daily_goal_reached"
+        const rules2 = getBusinessRules();
+        if (rules2.daily_sales_goal_enabled && rules2.daily_sales_goal_amount > 0) {
+          const revKey = `mari:sales-revenue:${new Date().toISOString().slice(0, 10)}`;
+          const prevRev = Number(localStorage.getItem(revKey)) || 0;
+          const newRev = prevRev + (Number((repricedCart ?? []).reduce(
+            (a, it) => a + (Number(it.qty) || 0) * (Number(it.unit_price) || 0),
+            0,
+          )) || 0);
+          localStorage.setItem(revKey, String(newRev));
+          if (newRev >= rules2.daily_sales_goal_amount) {
+            tryUnlock("daily_goal_reached");
+          }
         }
       } catch {}
     } catch (e: any) {

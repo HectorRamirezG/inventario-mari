@@ -45,6 +45,12 @@ export default function ProductList() {
     try {
       const data = await getProducts()
       setProducts(data)
+      // Achievement: 100 productos en el catálogo
+      if (data.length >= 100) {
+        import("../../lib/achievements")
+          .then(({ tryUnlock }) => tryUnlock("hundred_products"))
+          .catch(() => {})
+      }
     } catch (e) {
       debug.error("Error cargando productos:", e)
       toast.error("No se pudieron cargar los productos")

@@ -12,7 +12,7 @@
  *  - prefs.haptics = false → no vibra
  */
 
-import { getPrefs } from "./userPrefs"
+import { getPrefs, isQuietNow } from "./userPrefs"
 
 let sharedCtx: AudioContext | null = null
 function getCtx(): AudioContext | null {
@@ -30,8 +30,10 @@ function getCtx(): AudioContext | null {
 }
 
 function beep(freq: number, durMs: number, vol = 0.04, type: OscillatorType = "sine", delayMs = 0) {
-  // Respeta preferencia del usuario
-  if (!getPrefs().sounds) return
+  // Respeta preferencia del usuario + volumen + quiet hours
+  const p = getPrefs()
+  if (!p.sounds || p.volume <= 0 || isQuietNow(p)) return
+  const scaledVol = vol * (p.volume / 100)
   const ctx = getCtx()
   if (!ctx) return
   try {
@@ -39,21 +41,22 @@ function beep(freq: number, durMs: number, vol = 0.04, type: OscillatorType = "s
     const gain = ctx.createGain()
     osc.type = type
     osc.frequency.value = freq
-    gain.gain.value = vol
+    gain.gain.value = scaledVol
     osc.connect(gain)
     gain.connect(ctx.destination)
     const start = ctx.currentTime + delayMs / 1000
     osc.start(start)
     // fade out para evitar click
-    gain.gain.setValueAtTime(vol, start)
+    gain.gain.setValueAtTime(scaledVol, start)
     gain.gain.exponentialRampToValueAtTime(0.0001, start + durMs / 1000)
     osc.stop(start + durMs / 1000)
   } catch {}
 }
 
 function buzz(pattern: number | number[]) {
-  // Respeta preferencia del usuario
-  if (!getPrefs().haptics) return
+  // Respeta preferencia del usuario + quiet hours
+  const p = getPrefs()
+  if (!p.haptics || isQuietNow(p)) return
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     try { navigator.vibrate(pattern) } catch {}
   }

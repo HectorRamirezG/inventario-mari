@@ -6,9 +6,14 @@
  * Respeta las preferencias del usuario (userPrefs):
  *  - prefs.sounds = false → no reproduce nada
  *  - prefs.haptics = false → no vibra
+ *  - prefs.volume = 0..100 escala el volumen base
+ *  - prefs.soundPack cambia la "personalidad" de los tonos
+ *  - prefs.quietHoursEnabled + rango → silencia sonido y vibración
+ *    durante el horario configurado (las notifs siguen llegando, solo
+ *    no molestan al usuario).
  */
 
-import { getPrefs } from "./userPrefs"
+import { getPrefs, isQuietNow, type SoundPack } from "./userPrefs"
 
 let audioCtx: AudioContext | null = null
 
@@ -25,16 +30,92 @@ function ctx(): AudioContext | null {
   }
 }
 
-function beep(frequency: number, durationMs = 80, volume = 0.04, type: OscillatorType = "sine") {
-  if (!getPrefs().sounds) return
+/* ─────────── Modificadores por pack ───────────
+ * Cada pack ajusta:
+ *  - waveType: forma de la onda (sine suave, square retro, triangle dulce)
+ *  - pitchShift: semitonos arriba/abajo del default
+ *  - volumeBoost: multiplicador del volumen base (vintage es más fuerte)
+ *  - vibratoExtra: añade swing en notas largas
+ */
+interface PackProfile {
+  wave: OscillatorType
+  pitch: number
+  boost: number
+}
+
+const PACK_PROFILES: Record<SoundPack, PackProfile> = {
+  default: { wave: "sine", pitch: 1.0, boost: 1.0 },
+  vintage: { wave: "triangle", pitch: 0.84, boost: 1.3 }, // cha-ching grave de caja vieja
+  arcade: { wave: "square", pitch: 1.12, boost: 1.0 }, // 8-bit más alto
+  premium: { wave: "sine", pitch: 1.06, boost: 0.85 }, // chimes finos
+}
+
+/**
+ * Calcula el volumen final aplicando:
+ *   - escala 0-1 del slider del usuario (prefs.volume / 100)
+ *   - boost del pack activo
+ * Si el resultado es 0 (slider en 0%), short-circuit a 0 (no reproduce).
+ */
+function effectiveVolume(base: number): number {
+  const p = getPrefs()
+  const slider = (p.volume ?? 70) / 100
+  const pack = PACK_PROFILES[p.soundPack] ?? PACK_PROFILES.default
+  return base * slider * pack.boost
+}
+
+/**
+ * Aplica pitch shift del pack a una frecuencia base (en Hz).
+ * pitchShift se multiplica directamente: 1.0 = sin cambio.
+ */
+function effectiveFreq(baseHz: number): number {
+  const p = getPrefs()
+  const pack = PACK_PROFILES[p.soundPack] ?? PACK_PROFILES.default
+  return baseHz * pack.pitch
+}
+
+/**
+ * ¿Podemos sonar ahora? Compone:
+ *   - prefs.sounds OFF → no
+ *   - quietHoursNow → no (no molesta de madrugada)
+ *   - volumen 0 → no
+ */
+function canPlay(): boolean {
+  const p = getPrefs()
+  if (!p.sounds) return false
+  if (p.volume <= 0) return false
+  if (isQuietNow(p)) return false
+  return true
+}
+
+/**
+ * ¿Podemos vibrar ahora? Compone:
+ *   - prefs.haptics OFF → no
+ *   - quietHoursNow → no
+ */
+function canVibrate(): boolean {
+  const p = getPrefs()
+  if (!p.haptics) return false
+  if (isQuietNow(p)) return false
+  return true
+}
+
+function beep(
+  frequency: number,
+  durationMs = 80,
+  volume = 0.04,
+  type?: OscillatorType,
+) {
+  if (!canPlay()) return
   const c = ctx()
   if (!c) return
   try {
     const osc = c.createOscillator()
     const gain = c.createGain()
-    osc.type = type
-    osc.frequency.value = frequency
-    gain.gain.value = volume
+    const p = getPrefs()
+    const pack = PACK_PROFILES[p.soundPack] ?? PACK_PROFILES.default
+    osc.type = type ?? pack.wave
+    osc.frequency.value = effectiveFreq(frequency)
+    gain.gain.value = effectiveVolume(volume)
     osc.connect(gain)
     gain.connect(c.destination)
     osc.start()
@@ -48,7 +129,7 @@ function beep(frequency: number, durationMs = 80, volume = 0.04, type: Oscillato
 
 /** Campana premium con armónico — ideal para venta cerrada / abono cobrado. */
 function bell(baseHz: number, durationMs = 600, volume = 0.06) {
-  if (!getPrefs().sounds) return
+  if (!canPlay()) return
   const c = ctx()
   if (!c) return
   try {
@@ -58,9 +139,9 @@ function bell(baseHz: number, durationMs = 600, volume = 0.06) {
     const gain = c.createGain()
     fundamental.type = "sine"
     harmonic.type = "sine"
-    fundamental.frequency.value = baseHz
-    harmonic.frequency.value = baseHz * 2.76
-    gain.gain.value = volume
+    fundamental.frequency.value = effectiveFreq(baseHz)
+    harmonic.frequency.value = effectiveFreq(baseHz) * 2.76
+    gain.gain.value = effectiveVolume(volume)
     fundamental.connect(gain)
     harmonic.connect(gain)
     gain.connect(c.destination)
@@ -75,7 +156,7 @@ function bell(baseHz: number, durationMs = 600, volume = 0.06) {
 }
 
 function vibrate(pattern: number | number[]) {
-  if (!getPrefs().haptics) return
+  if (!canVibrate()) return
   if (typeof navigator === "undefined") return
   if ("vibrate" in navigator) {
     try {

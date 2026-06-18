@@ -388,6 +388,39 @@
   }
 }
 
+/* --- INTENSIDAD DE ANIMACIÓN (data-motion en <html>) ---
+   Sobreescribe / refuerza prefers-reduced-motion según la elección
+   explícita del usuario en Preferencias.
+   - off:    todas las animaciones a 0 (igual que reduced motion del SO)
+   - low:    duraciones al 50%, sin scroll smooth para listas largas
+   - normal: defaults (no aplicamos override)
+   - high:   duraciones al 110% para que las animaciones se aprecien
+             más en pantallas grandes (Mari en su PC) */
+html[data-motion="off"] *,
+html[data-motion="off"] *::before,
+html[data-motion="off"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
+
+html[data-motion="low"] *,
+html[data-motion="low"] *::before,
+html[data-motion="low"] *::after {
+  animation-duration: 0.18s !important;
+  transition-duration: 0.12s !important;
+}
+
+html[data-motion="high"] *,
+html[data-motion="high"] *::before,
+html[data-motion="high"] *::after {
+  animation-duration: 0.6s;
+  transition-duration: 0.32s;
+}
+
 /* --- 10. SISTEMA DE CAPAS DE ELEVACIÓN (S-LEVELS) --- */
 @theme {
   /* Profundidades para que las ventanas parezcan flotar sobre el fondo */
