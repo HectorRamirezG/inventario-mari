@@ -32,6 +32,7 @@ interface PublicTicket {
   id: string
   public_token: string
   customer_name: string | null
+  customer_email: string | null
   customer_phone: string | null
   customer_avatar?: string | null
   total: number
@@ -227,8 +228,23 @@ export default function PublicTicketPage() {
     )
   }
 
-  const pct = ticket.total > 0 ? Math.min(100, (ticket.paid / ticket.total) * 100) : 0
-  const isPaid = ticket.balance <= 0
+  // Cálculos canónicos desde los datos primarios. Si la BD vino con
+  // total/balance desincronizados (porque algún flujo viejo no recalculó),
+  // los recomputamos aquí para que el cliente NUNCA vea cifras contradictorias.
+  const subtotalReal = ticket.items.reduce(
+    (a, it) => a + Number(it.qty) * Number(it.unit_price),
+    0,
+  )
+  const adjReal = Number(ticket.adjustment_amount) || 0
+  const shipReal = Number(ticket.shipping_amount) || 0
+  const totalReal = Math.max(0, subtotalReal - adjReal + shipReal)
+  const paidReal =
+    ticket.payments?.reduce((a, p) => a + Number(p.amount || 0), 0) ??
+    Number(ticket.paid) || 0
+  const balanceReal = Math.max(0, totalReal - paidReal)
+
+  const pct = totalReal > 0 ? Math.min(100, (paidReal / totalReal) * 100) : 0
+  const isPaid = balanceReal <= 0
 
   return (
     <div className="min-h-screen pb-24 px-4 pt-8" style={{
@@ -366,14 +382,14 @@ export default function PublicTicketPage() {
                 {adj !== 0 && (
                   <AdjustmentRow amount={adj} reason={reason} />
                 )}
-                <Row label="Total" value={formatMoney(ticket.total)} bold />
-                {ticket.paid > 0 && (
-                  <Row label="Pagado" value={formatMoney(ticket.paid)} success />
+                <Row label="Total" value={formatMoney(totalReal)} bold />
+                {paidReal > 0 && (
+                  <Row label="Pagado" value={formatMoney(paidReal)} success />
                 )}
-                {ticket.balance > 0 && (
+                {balanceReal > 0 && (
                   <Row
                     label="Pendiente"
-                    value={formatMoney(ticket.balance)}
+                    value={formatMoney(balanceReal)}
                     danger
                     bold
                   />
@@ -432,11 +448,11 @@ export default function PublicTicketPage() {
           })()}
 
           {/* Progreso del apartado */}
-          {ticket.is_layaway && ticket.total > 0 && (
+          {ticket.is_layaway && totalReal > 0 && (
             <ProgressBlock
               pct={pct}
-              paid={Number(ticket.paid) || 0}
-              balance={Number(ticket.balance) || 0}
+              paid={paidReal}
+              balance={balanceReal}
             />
           )}
 
@@ -512,7 +528,7 @@ export default function PublicTicketPage() {
           >
             <ReportPaymentButton
               saleId={ticket.id}
-              balance={Number(ticket.balance) || 0}
+              balance={balanceReal}
               customerEmail={session ? null : null}
             />
             {ticket.is_layaway && (
