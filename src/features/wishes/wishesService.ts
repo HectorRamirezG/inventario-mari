@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase"
 import { notifyAdmins, notifyClient } from "../notifications/notificationsService"
+import { compressImage } from "../../lib/imageCompress"
 
 /**
  * Wishes — sugerencias y peticiones del cliente.
@@ -216,7 +217,8 @@ export async function uploadWishImage(
   file: File,
   customerEmail: string,
 ): Promise<string> {
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase()
+  const compact = await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+  const ext = (compact.name.split(".").pop() || "jpg").toLowerCase()
   const slug =
     customerEmail
       .trim()
@@ -229,10 +231,10 @@ export async function uploadWishImage(
 
   const { error } = await supabase.storage
     .from("product-images")
-    .upload(path, file, {
+    .upload(path, compact, {
       cacheControl: "3600",
       upsert: false,
-      contentType: file.type || "image/jpeg",
+      contentType: compact.type || "image/jpeg",
     })
   if (error) throw error
 

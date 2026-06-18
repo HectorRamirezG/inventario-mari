@@ -11,6 +11,15 @@
     <meta name="apple-mobile-web-app-title" content="Beauty's Me" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="description" content="Catálogo, apartados y ventas · Beauty's Me" />
+
+    <!--
+      Preconnect a Supabase: el browser abre la conexión TCP+TLS al servidor
+      antes de la primera query real. Ahorra ~100-200ms del primer fetch.
+      DNS-prefetch como fallback para navegadores que no soportan preconnect.
+    -->
+    <link rel="preconnect" href="https://wnnmugdynldfglabaajk.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://wnnmugdynldfglabaajk.supabase.co" />
+
     <title>Beauty's Me</title>
   </head>
   <body>

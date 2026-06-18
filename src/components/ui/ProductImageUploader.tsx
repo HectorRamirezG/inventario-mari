@@ -3,6 +3,7 @@ import { Camera, Image as ImageIcon, X, Loader2, Upload } from "lucide-react"
 import { motion } from "framer-motion"
 import toast from "react-hot-toast"
 import { supabase } from "../../lib/supabase"
+import { compressImage } from "../../lib/imageCompress"
 
 interface Props {
   value: string | null
@@ -39,11 +40,13 @@ export default function ProductImageUploader({
 
     setUploading(true)
     try {
-      const ext = file.name.split(".").pop() || "jpg"
+      // Comprime client-side (5MB del cel → 200-400KB) antes de subir.
+      const compact = await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+      const ext = compact.name.split(".").pop() || "jpg"
       const path = `${folder}/${crypto.randomUUID()}.${ext}`
       const { error } = await supabase.storage
         .from("product-images")
-        .upload(path, file, { cacheControl: "31536000", upsert: false })
+        .upload(path, compact, { cacheControl: "31536000", upsert: false })
       if (error) throw error
       const {
         data: { publicUrl },

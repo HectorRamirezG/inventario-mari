@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { LazyMotion, domAnimation } from 'framer-motion'
 import './index.css'
 import App from './App.tsx'
 
@@ -32,6 +33,14 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {/* LazyMotion + domAnimation: carga sólo las features básicas de
+        framer-motion (~25kb gz en vez de ~80kb). Necesario `strict={false}`
+        para mantener compatibilidad con componentes que usen `motion.*`
+        directamente. Para usar `m.*` (variante optimizada) habría que
+        migrar todos los componentes; por ahora preferimos el ahorro
+        moderado sin refactor masivo. */}
+    <LazyMotion features={domAnimation} strict={false}>
+      <App />
+    </LazyMotion>
   </StrictMode>,
 )

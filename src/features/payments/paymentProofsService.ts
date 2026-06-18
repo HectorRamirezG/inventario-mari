@@ -5,6 +5,7 @@ import {
   notifyClient,
 } from "../notifications/notificationsService"
 import { formatMoney } from "../../lib/format"
+import { compressImage } from "../../lib/imageCompress"
 
 export type ProofStatus = "pending" | "pending_verification" | "approved" | "rejected"
 
@@ -58,12 +59,14 @@ export async function uploadPaymentProof(input: {
       throw new Error("La foto pesa más de 5MB")
     }
 
-    const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg"
+    // Comprime client-side antes de subir (foto del cel 5MB → ~250KB).
+    const compact = await compressImage(input.file, { maxWidth: 1600, quality: 0.82 })
+    const ext = compact.name.split(".").pop()?.toLowerCase() || "jpg"
     const path = `proofs/${input.saleId}/${crypto.randomUUID()}.${ext}`
 
     const { error: upErr } = await supabase.storage
       .from("product-images")
-      .upload(path, input.file, { cacheControl: "31536000", upsert: false })
+      .upload(path, compact, { cacheControl: "31536000", upsert: false })
     if (upErr) throw upErr
 
     const {

@@ -300,18 +300,37 @@ function AdminShell() {
   // stock bajo, comandas no abiertas, meta del día, etc. Se evalúan al
   // cargar y al cambiar de rol/sesión. Usan checkpoints en localStorage
   // para no spammear.
+  //
+  // Lo lanzamos en `requestIdleCallback` para que NO compita con la
+  // interacción inicial (TTI). Si el browser no lo soporta, fallback a
+  // setTimeout 1.5s.
   useEffect(() => {
     if (!session) return
     // Asegura que el service worker esté listo para push del SO
     registerPushSW().catch(() => {})
-    const t = setTimeout(() => {
+
+    const runChecks = () => {
       if (isAdmin) {
         runAdminChecks()
       } else if (email) {
         runClientChecks(email)
       }
-    }, 1500) // espera 1.5s para no competir con la carga inicial
-    return () => clearTimeout(t)
+    }
+
+    let cancelId: number | undefined
+    const ric: any =
+      typeof window !== "undefined" && (window as any).requestIdleCallback
+    if (ric) {
+      cancelId = ric(runChecks, { timeout: 3000 })
+      return () => {
+        const cic: any =
+          typeof window !== "undefined" && (window as any).cancelIdleCallback
+        if (cancelId != null && cic) cic(cancelId)
+      }
+    } else {
+      const t = setTimeout(runChecks, 1500)
+      return () => clearTimeout(t)
+    }
   }, [session, isAdmin, email])
 
   const visibleMenu = useMemo(

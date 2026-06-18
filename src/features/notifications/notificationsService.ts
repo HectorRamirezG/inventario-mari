@@ -8,6 +8,7 @@ import {
   shouldPlayForNotif,
   type NotifCategory,
 } from "../../lib/notifPrefs"
+import { isDocumentVisible } from "../../lib/useDocumentVisible"
 
 export type NotifType =
   // ───── Originales
@@ -242,9 +243,12 @@ export function useNotifications(opts: {
           if (n.recipient_role !== scope) return
           if (n.recipient_email && n.recipient_email !== email) return
           setItems((prev) => [n, ...prev].slice(0, 50))
-          // Sonido inteligente: respeta quiet hours, mute por categoría,
-          // y elige el efecto correcto según el tipo.
-          playForType(n.type)
+          // Cuando el tab está en background, no reproducimos sonido
+          // (lo verán al volver). Pero SÍ disparamos la notif del SO
+          // porque ese es justo su propósito.
+          if (isDocumentVisible()) {
+            playForType(n.type)
+          }
           // Push local del navegador (si el permiso está concedido).
           // Esto funciona aunque la app esté en background dentro del
           // mismo tab — pero no si la app está cerrada (eso lo cubre

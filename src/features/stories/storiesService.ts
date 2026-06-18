@@ -1,4 +1,5 @@
 import { supabase } from "../../lib/supabase"
+import { compressImage } from "../../lib/imageCompress"
 
 /**
  * Stories — fotos del día estilo Instagram dentro de la tienda.
@@ -123,17 +124,18 @@ export async function deleteStory(id: string): Promise<void> {
 
 /** Sube imagen al bucket `product-images/stories/...` y retorna URL pública. */
 export async function uploadStoryImage(file: File): Promise<string> {
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase()
+  const compact = await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+  const ext = (compact.name.split(".").pop() || "jpg").toLowerCase()
   const path = `stories/${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 8)}.${ext}`
 
   const { error } = await supabase.storage
     .from("product-images")
-    .upload(path, file, {
+    .upload(path, compact, {
       cacheControl: "3600",
       upsert: false,
-      contentType: file.type || "image/jpeg",
+      contentType: compact.type || "image/jpeg",
     })
   if (error) throw error
 

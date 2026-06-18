@@ -4,6 +4,7 @@ import { supabase } from "./supabase"
 import { sound } from "./sound"
 import { isStaffOrAdmin, useAuth } from "./useAuth"
 import { formatMoney } from "./format"
+import { isDocumentVisible } from "./useDocumentVisible"
 
 /**
  * Suscripción global a eventos de Supabase realtime. Solo admin/staff
@@ -35,6 +36,11 @@ export function useRealtimeNotifications() {
           const row: any = payload.new
           if (!row) return
 
+          // Si el tab está en background, dispatch el evento para que
+          // la UI lo procese al volver, pero NO mostramos toast ni sonido
+          // para no espantar al usuario al desbloquear el cel.
+          const inBg = !isDocumentVisible()
+
           // Toast distinto si fue apartado vs venta normal
           const isLayaway = row.is_layaway === true
           const customer = row.customer_name ?? "Cliente nuevo"
@@ -42,8 +48,9 @@ export function useRealtimeNotifications() {
           const fmt = formatMoney(total)
 
           if (isLayaway) {
-            sound.play("notify")
             window.dispatchEvent(new CustomEvent("mari:apartado-new"))
+            if (inBg) return
+            sound.play("notify")
             toast(
               (t) => (
                 <div className="flex items-center gap-3">
@@ -72,7 +79,8 @@ export function useRealtimeNotifications() {
               ),
               { duration: 7000 }
             )
-          } else {
+          } if (inBg) return
+            else {
             sound.play("success")
             toast.success(`Venta nueva · ${customer} · ${fmt}`, {
               duration: 4000,
@@ -88,7 +96,8 @@ export function useRealtimeNotifications() {
           const after: any = payload.new
           if (!before || !after) return
           // Solo notifica si el status PASÓ a paid (no si ya estaba)
-          if (before.status !== "paid" && after.status === "paid") {
+          ifif (!isDocumentVisible()) return
+             (before.status !== "paid" && after.status === "paid") {
             sound.play("success")
             toast.success(
               `Apartado pagado · ${after.customer_name ?? "Cliente"}`,

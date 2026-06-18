@@ -23,7 +23,10 @@ export async function listApartados(opts: {
   onlyLayaway?: boolean;
   limit?: number;
 } = {}) {
-  const { status = "all", onlyLayaway = false, limit = 200 } = opts;
+  // Default 100 ventas (antes 200). La mayoría de tiendas operan con
+  // <50 apartados activos al mismo tiempo, traer 200 es overkill.
+  // Si necesitas más, pasa `limit` explícito.
+  const { status = "all", onlyLayaway = false, limit = 100 } = opts;
 
   let q = supabase
     .from("sales")

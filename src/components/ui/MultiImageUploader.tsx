@@ -12,6 +12,7 @@ import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
 import { debug } from "../../lib/debug"
+import { compressImage } from "../../lib/imageCompress"
 
 interface Props {
   /** Array de URLs. La primera es la principal (portada). */
@@ -51,11 +52,13 @@ export default function MultiImageUploader({
       toast.error(`"${file.name}" pesa más de 5MB`)
       return null
     }
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg"
+    // Comprime client-side antes de subir (5MB → 200-400KB típicos)
+    const compact = await compressImage(file, { maxWidth: 1600, quality: 0.82 })
+    const ext = compact.name.split(".").pop()?.toLowerCase() || "jpg"
     const path = `${folder}/${crypto.randomUUID()}.${ext}`
     const { error } = await supabase.storage
       .from("product-images")
-      .upload(path, file, { cacheControl: "31536000", upsert: false })
+      .upload(path, compact, { cacheControl: "31536000", upsert: false })
     if (error) {
       debug.error("[MultiImageUploader.upload]", { path, error })
       toast.error(`No se pudo subir "${file.name}": ${error.message}`)

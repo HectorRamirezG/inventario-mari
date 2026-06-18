@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase"
 import { debug } from "../../lib/debug"
+import { compressImage } from "../../lib/imageCompress"
 
 export type SupportCategory = "damaged" | "shipping" | "comment"
 export type SupportStatus = "open" | "in_progress" | "resolved"
@@ -59,13 +60,15 @@ export async function uploadSupportImage(input: {
   if (input.file.size > 5 * 1024 * 1024) {
     throw new Error("La foto pesa más de 5MB")
   }
-  const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg"
+  // Comprime client-side antes de subir
+  const compact = await compressImage(input.file, { maxWidth: 1600, quality: 0.82 })
+  const ext = compact.name.split(".").pop()?.toLowerCase() || "jpg"
   const sub = input.saleId ?? "anon"
   const path = `support/${sub}/${crypto.randomUUID()}.${ext}`
 
   const { error: upErr } = await supabase.storage
     .from("product-images")
-    .upload(path, input.file, { cacheControl: "31536000", upsert: false })
+    .upload(path, compact, { cacheControl: "31536000", upsert: false })
   if (upErr) throw upErr
 
   const {
