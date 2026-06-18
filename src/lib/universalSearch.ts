@@ -1,4 +1,4 @@
-import { supabase } from "../../lib/supabase"
+import { supabase } from "./supabase"
 
 /**
  * Búsqueda universal para el CommandPalette.
