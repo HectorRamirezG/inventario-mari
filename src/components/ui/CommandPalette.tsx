@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
+import { useNavigate, useLocation } from "react-router-dom"
 import {
   Search,
   ScanLine,
@@ -46,9 +47,6 @@ interface Command {
   run: () => void
 }
 
-const navigate = (tab: string) =>
-  window.dispatchEvent(new CustomEvent("app:navigate", { detail: { tab } }))
-
 const dispatch = (name: string, detail?: any) =>
   window.dispatchEvent(new CustomEvent(name, { detail }))
 
@@ -74,6 +72,29 @@ export default function CommandPalette({ open, onClose }: Props) {
   const rules = useBusinessRules()
   const { role } = useAuth()
   const isAdmin = role === "admin"
+  const routerNavigate = useNavigate()
+  const location = useLocation()
+
+  /**
+   * Navega a una sección admin. Si NO estamos en /admin (p.ej. estamos
+   * en /tienda o /comanda/xxx), primero hace SPA navigate a /admin y
+   * después dispara el evento que cambia la pestaña dentro del shell.
+   * Si ya estamos en /admin, sólo dispara el evento.
+   *
+   * El delay de 60ms cuando se hace router navigate es para dar tiempo
+   * al AdminShell de montarse y registrar el listener de "app:navigate".
+   */
+  const navigate = (tab: string) => {
+    const inAdmin = location.pathname.startsWith("/admin")
+    if (!inAdmin) {
+      routerNavigate("/admin")
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("app:navigate", { detail: { tab } }))
+      }, 60)
+    } else {
+      window.dispatchEvent(new CustomEvent("app:navigate", { detail: { tab } }))
+    }
+  }
 
   // Resultados dinámicos (productos / ventas / clientes) que se obtienen
   // de la BD cada vez que el usuario escribe 2+ caracteres.

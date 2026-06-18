@@ -252,11 +252,97 @@ export interface PublicDeliveryNote {
 export async function getPublicDeliveryNote(
   token: string,
 ): Promise<PublicDeliveryNote | null> {
-  const { data, error } = await supabase.rpc("get_delivery_note", {
-    p_token: token,
-  })
-  if (error) throw error
-  const note = (data as PublicDeliveryNote) ?? null
+  // Intento 1: RPC `get_delivery_note` (SECURITY DEFINER deployada con
+  // supabase/delivery_notes.sql). Es el camino normal cuando el SQL ya
+  // se corrió.
+  let note: PublicDeliveryNote | null = null
+  try {
+    const { data, error } = await supabase.rpc("get_delivery_note", {
+      p_token: token,
+    })
+    if (!error && data) note = data as PublicDeliveryNote
+  } catch {
+    /* cae al fallback */
+  }
+
+  // Intento 2 (fallback): la RPC NO existe todavía o falló. Hacemos
+  // queries directos contra delivery_notes + sales + sale_items con RLS
+  // abierta para SELECT. Si tampoco existe la tabla, regresa null y la
+  // página muestra "Comanda no disponible".
+  if (!note) {
+    try {
+      const { data: row, error: rowErr } = await supabase
+        .from("delivery_notes")
+        .select("*")
+        .eq("public_token", token)
+        .maybeSingle()
+      if (rowErr || !row) return null
+      const r: any = row
+      const { data: sale } = await supabase
+        .from("sales")
+        .select(
+          "id, customer_name, customer_email, customer_phone, total, paid, balance, is_layaway, status",
+        )
+        .eq("id", r.sale_id)
+        .maybeSingle()
+      const s: any = sale
+      const { data: items } = await supabase
+        .from("sale_items")
+        .select("product_name, variant_name, qty, unit_price")
+        .eq("sale_id", r.sale_id)
+
+      note = {
+        token: r.public_token,
+        status: r.status,
+        driver_name: r.driver_name,
+        driver_phone: r.driver_phone,
+        delivery_address: r.delivery_address,
+        delivery_location_url: r.delivery_location_url,
+        delivery_zone: r.delivery_zone,
+        delivery_time_target: r.delivery_time_target,
+        meeting_point: r.meeting_point,
+        amount_to_collect: Number(r.amount_to_collect) || 0,
+        payment_method_expected: r.payment_method_expected,
+        notes: r.notes,
+        created_at: r.created_at,
+        sale: s
+          ? {
+              id: s.id,
+              total: Number(s.total) || 0,
+              paid: Number(s.paid) || 0,
+              balance: Number(s.balance) || 0,
+              is_layaway: !!s.is_layaway,
+              status: s.status,
+            }
+          : {
+              id: r.sale_id,
+              total: 0,
+              paid: 0,
+              balance: Number(r.amount_to_collect) || 0,
+              is_layaway: false,
+              status: "unknown",
+            },
+        customer: s
+          ? {
+              name: s.customer_name ?? null,
+              email: s.customer_email ?? null,
+              phone: s.customer_phone ?? null,
+              avatar_url: null,
+            }
+          : { name: null, email: null, phone: null, avatar_url: null },
+        items: (items ?? []).map((it: any) => ({
+          name: it.product_name,
+          variant_name: it.variant_name,
+          qty: Number(it.qty) || 0,
+          unit_price: Number(it.unit_price) || 0,
+          subtotal: (Number(it.unit_price) || 0) * (Number(it.qty) || 0),
+          image: null,
+        })),
+      }
+    } catch {
+      return null
+    }
+  }
 
   // ───── Registra que el repartidor ABRIÓ el link (una sola vez) ─────
   // Usamos localStorage para no spammear: marcamos el token como "visto"
