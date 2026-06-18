@@ -79,8 +79,8 @@ export function useRealtimeNotifications() {
               ),
               { duration: 7000 }
             )
-          } if (inBg) return
-            else {
+          } else {
+            if (inBg) return
             sound.play("success")
             toast.success(`Venta nueva · ${customer} · ${fmt}`, {
               duration: 4000,
@@ -96,8 +96,8 @@ export function useRealtimeNotifications() {
           const after: any = payload.new
           if (!before || !after) return
           // Solo notifica si el status PASÓ a paid (no si ya estaba)
-          ifif (!isDocumentVisible()) return
-             (before.status !== "paid" && after.status === "paid") {
+          if (before.status !== "paid" && after.status === "paid") {
+            if (!isDocumentVisible()) return
             sound.play("success")
             toast.success(
               `Apartado pagado · ${after.customer_name ?? "Cliente"}`,
