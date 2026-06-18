@@ -18,6 +18,7 @@ import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
+import TicketTotalsDetailed from "./TicketTotalsDetailed"
 import { getStoreInfo } from "../../lib/useStoreInfo"
 import { useBusinessRules } from "../../features/settings/businessRulesService"
 import Skeleton, { SkeletonText } from "./Skeleton"
@@ -408,13 +409,6 @@ function SummarySection({
   store: ReturnType<typeof getStoreInfo>
 }) {
   const rules = useBusinessRules()
-  const subtotal = ticket.items.reduce(
-    (a, it) => a + Number(it.qty) * Number(it.unit_price),
-    0,
-  )
-  const adj = Number(ticket.adjustment_amount) || 0
-  const ship = Number(ticket.shipping_amount) || 0
-  const isForeign = !!ticket.is_foreign_shipping
 
   return (
     <div className="space-y-4 pt-2">
@@ -456,57 +450,21 @@ function SummarySection({
         ))}
       </div>
 
-      {/* Totales */}
-      <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 space-y-1.5">
-        <Row label="Subtotal" value={formatMoney(subtotal)} />
-        {(isForeign || ship > 0) && (
-          <Row
-            label={isForeign ? "Envío foráneo" : "Envío"}
-            value={ship > 0 ? formatMoney(ship) : "¡Gratis! 🎉"}
-            success={ship === 0 && isForeign}
-          />
-        )}
-        {adj > 0 && (
-          <Row
-            label={ticket.adjustment_reason || "Descuento especial"}
-            value={`- ${formatMoney(adj)}`}
-            discount
-          />
-        )}
-        {adj < 0 && (
-          <Row
-            label={ticket.adjustment_reason || "Cargo extra"}
-            value={`+ ${formatMoney(Math.abs(adj))}`}
-          />
-        )}
-        <Row label="Total" value={formatMoney(ticket.total)} bold />
-        {ticket.paid > 0 && (
-          <Row label="Pagado" value={formatMoney(ticket.paid)} success />
-        )}
-        {ticket.balance > 0 && (
-          <Row label="Pendiente" value={formatMoney(ticket.balance)} danger bold />
-        )}
-      </div>
-
-      {/* Festivo del descuento manual */}
-      {adj > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 6, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ type: "spring", stiffness: 320, damping: 22 }}
-          className="rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-emerald-200 dark:border-emerald-500/30 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-500/10 dark:to-teal-500/10 text-emerald-700 dark:text-emerald-300"
-        >
-          <span className="text-base" aria-hidden>🎉</span>
-          <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-widest leading-tight">
-              ¡Se aplicó un descuento manual!
-            </p>
-            <p className="text-[10px] font-bold leading-tight opacity-80">
-              Te apoyamos con {formatMoney(adj)} ✨
-            </p>
-          </div>
-        </motion.div>
-      )}
+      {/* Totales — desglose compartido con PublicTicketPage */}
+      <TicketTotalsDetailed
+        items={ticket.items.map((it) => ({
+          qty: Number(it.qty),
+          unit_price: Number(it.unit_price),
+        }))}
+        total={ticket.total}
+        paid={ticket.paid}
+        balance={ticket.balance}
+        adjustmentAmount={ticket.adjustment_amount}
+        adjustmentReason={ticket.adjustment_reason}
+        shippingAmount={ticket.shipping_amount}
+        isForeignShipping={ticket.is_foreign_shipping}
+        tone="auto"
+      />
 
       {rules.custom_ticket_message_enabled && rules.custom_ticket_message && (
         <motion.div
@@ -523,45 +481,6 @@ function SummarySection({
       <p className="text-center text-[10px] uppercase tracking-widest text-slate-400 pt-1">
         {store.thanks_message ?? "Gracias por tu compra ✨"}
       </p>
-    </div>
-  )
-}
-
-function Row({
-  label,
-  value,
-  bold,
-  success,
-  danger,
-  discount,
-}: {
-  label: string
-  value: string
-  bold?: boolean
-  success?: boolean
-  danger?: boolean
-  discount?: boolean
-}) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span
-        className={
-          bold
-            ? "font-bold text-slate-700 dark:text-slate-200"
-            : "text-slate-500 dark:text-slate-400"
-        }
-      >
-        {label}
-      </span>
-      <span
-        className={`tabular-nums ${
-          bold ? "font-black text-slate-900 dark:text-slate-100" : "font-bold"
-        } ${success ? "text-emerald-600 dark:text-emerald-400" : ""} ${
-          danger ? "text-rose-600 dark:text-rose-400" : ""
-        } ${discount ? "text-rose-600 dark:text-rose-400" : ""}`}
-      >
-        {value}
-      </span>
     </div>
   )
 }

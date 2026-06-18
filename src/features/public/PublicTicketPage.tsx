@@ -13,6 +13,7 @@ import ReportPaymentButton from "../../components/ui/ReportPaymentButton"
 import RequestExtensionButton from "../client/RequestExtensionButton"
 import SupportModal from "../support/SupportModal"
 import DeliveryStatusChip from "../../components/ui/DeliveryStatusChip"
+import TicketTotalsDetailed from "../../components/ui/TicketTotalsDetailed"
 interface TicketItem {
   id: string
   product_name: string
@@ -356,94 +357,55 @@ export default function PublicTicketPage() {
             ))}
           </div>
 
-          {/* Totales — con envío + ajuste desglosado.
-              Si el admin aplicó un ajuste (admin_adjust_sale), se pinta
-              SIEMPRE la fila entre Subtotal y Total con signo explícito
-              y motivo (p_reason) en texto secundario debajo. */}
+          {/* Totales — desglose canónico compartido con TicketDrawer.
+              `tone="light"` usa el fondo claro de la vista pública y muestra
+              el ajuste con motivo expandido para máxima transparencia. */}
+          <TicketTotalsDetailed
+            items={ticket.items.map((it) => ({
+              qty: Number(it.qty),
+              unit_price: Number(it.unit_price),
+            }))}
+            total={totalReal}
+            paid={paidReal}
+            balance={balanceReal}
+            adjustmentAmount={ticket.adjustment_amount}
+            adjustmentReason={ticket.adjustment_reason}
+            shippingAmount={ticket.shipping_amount}
+            isForeignShipping={ticket.is_foreign_shipping}
+            tone="light"
+            discountCheerText={`Beauty's Me te apoyó con ${formatMoney(
+              Number(ticket.adjustment_amount) || 0
+            )} en este pedido ✨`}
+          />
+
+          {/* Banner de tier escalonado: si alguna línea va a precio
+              distinto de menudeo, lo destacamos para que el cliente
+              entienda por qué pagó menos por unidad. */}
           {(() => {
-            const subtotal = ticket.items.reduce(
-              (a, it) => a + Number(it.qty) * Number(it.unit_price),
-              0
+            const tiers = new Set(
+              ticket.items.map((i) => (i.tier || "menudeo").toLowerCase()),
             )
-            const adj = Number(ticket.adjustment_amount) || 0
-            const ship = Number(ticket.shipping_amount) || 0
-            const isForeign = !!ticket.is_foreign_shipping
-            const reason = (ticket.adjustment_reason ?? "").trim()
+            const hasMayoreo = tiers.has("mayoreo")
+            const hasMedio = tiers.has("medio")
+            if (!hasMayoreo && !hasMedio) return null
+            const label = hasMayoreo ? "mayoreo" : "medio mayoreo"
             return (
-              <div className="bg-slate-50 rounded-2xl p-4 space-y-1">
-                <Row label="Subtotal" value={formatMoney(subtotal)} />
-                {(isForeign || ship > 0) && (
-                  <Row
-                    label={isForeign ? "Envío foráneo" : "Envío"}
-                    value={ship > 0 ? formatMoney(ship) : "¡Gratis! 🎉"}
-                    success={ship === 0 && isForeign}
-                  />
-                )}
-                {adj !== 0 && (
-                  <AdjustmentRow amount={adj} reason={reason} />
-                )}
-                <Row label="Total" value={formatMoney(totalReal)} bold />
-                {paidReal > 0 && (
-                  <Row label="Pagado" value={formatMoney(paidReal)} success />
-                )}
-                {balanceReal > 0 && (
-                  <Row
-                    label="Pendiente"
-                    value={formatMoney(balanceReal)}
-                    danger
-                    bold
-                  />
-                )}
-                {/* Badge festivo de descuento manual */}
-                {adj > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ type: "spring", stiffness: 320, damping: 22, delay: 0.15 }}
-                    className="mt-3 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700"
-                  >
-                    <span className="text-base" aria-hidden>🎉</span>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-black uppercase tracking-widest leading-tight">
-                        ¡Se aplicó un descuento manual!
-                      </p>
-                      <p className="text-[10px] font-bold leading-tight opacity-80">
-                        Beauty's Me te apoyó con {formatMoney(adj)} en este pedido ✨
-                      </p>
-                    </div>
-                  </motion.div>
-                )}
-                {/* Banner de tier escalonado: si alguna línea va a precio
-                    distinto de menudeo, lo destacamos para que el cliente
-                    entienda por qué pagó menos por unidad. */}
-                {(() => {
-                  const tiers = new Set(
-                    ticket.items.map((i) => (i.tier || "menudeo").toLowerCase()),
-                  )
-                  const hasMayoreo = tiers.has("mayoreo")
-                  const hasMedio = tiers.has("medio")
-                  if (!hasMayoreo && !hasMedio) return null
-                  const label = hasMayoreo ? "mayoreo" : "medio mayoreo"
-                  return (
-                    <motion.div
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.18 }}
-                      className="mt-2 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 text-sky-700"
-                    >
-                      <span className="text-base" aria-hidden>✨</span>
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-black uppercase tracking-widest leading-tight">
-                          Precio {label} aplicado
-                        </p>
-                        <p className="text-[10px] font-bold leading-tight opacity-80">
-                          Pagas el precio especial por la cantidad de piezas.
-                        </p>
-                      </div>
-                    </motion.div>
-                  )
-                })()}
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.18 }}
+                className="mt-2 rounded-2xl px-3 py-2.5 flex items-center gap-2 border border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 text-sky-700"
+              >
+                <span className="text-base" aria-hidden>✨</span>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest leading-tight">
+                    Precio {label} aplicado
+                  </p>
+                  <p className="text-[10px] font-bold leading-tight opacity-80">
+                    Pagas el precio especial por la cantidad de piezas.
+                  </p>
+                </div>
+              </motion.div>
             )
           })()}
 
@@ -582,74 +544,6 @@ export default function PublicTicketPage() {
         customerName={ticket.customer_name}
         onClose={() => setOpenSupport(false)}
       />
-    </div>
-  )
-}
-
-function Row({
-  label,
-  value,
-  bold,
-  success,
-  danger,
-  discount,
-}: {
-  label: string
-  value: string
-  bold?: boolean
-  success?: boolean
-  danger?: boolean
-  discount?: boolean
-}) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className={bold ? "font-bold text-slate-700" : "text-slate-500"}>
-        {label}
-      </span>
-      <span
-        className={`tabular-nums ${
-          bold ? "font-black" : "font-bold"
-        } ${success ? "text-emerald-600" : ""} ${danger ? "text-rose-600" : ""} ${
-          discount ? "text-rose-600" : ""
-        }`}
-      >
-        {value}
-      </span>
-    </div>
-  )
-}
-
-/**
- * Fila de Ajuste manual entre Subtotal y Total.
- * Muestra signo explícito (- o +) y debajo, en texto secundario, el motivo
- * capturado por admin_adjust_sale (p_reason). Si no hay motivo, muestra
- * el tipo de ajuste para que el cliente entienda la operación.
- */
-function AdjustmentRow({ amount, reason }: { amount: number; reason: string }) {
-  const isDiscount = amount > 0
-  const sign = isDiscount ? "-" : "+"
-  const tone = isDiscount ? "text-rose-600" : "text-amber-700"
-  const subLabel = isDiscount ? "Descuento" : "Cargo extra"
-  return (
-    <div className="py-0.5">
-      <div className={`flex justify-between text-sm ${tone}`}>
-        <span className="font-bold">Ajuste manual</span>
-        <span className="tabular-nums font-black">
-          {sign}{" "}
-          {new Intl.NumberFormat("es-MX", {
-            style: "currency",
-            currency: "MXN",
-          }).format(Math.abs(amount))}
-        </span>
-      </div>
-      <div className="flex justify-between items-start text-[10px] text-slate-500 mt-0.5">
-        <span className="uppercase tracking-wider font-bold">{subLabel}</span>
-        {reason && (
-          <span className="italic text-right ml-2 max-w-[65%] truncate">
-            "{reason}"
-          </span>
-        )}
-      </div>
     </div>
   )
 }
