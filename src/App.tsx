@@ -79,6 +79,7 @@ import { registerPushSW } from "./lib/pushNative"
 import { useMyAvatar } from "./lib/useMyAvatar"
 import { useSidebarCounts } from "./lib/useSidebarCounts"
 import { preloadBusinessRules, useBusinessRules } from "./features/settings/businessRulesService"
+import { applyAccent, applyForceDark } from "./lib/applyTheme"
 
 // ──────────────────────────────────────────────────────────────────
 // Menús del shell admin/staff. Etiquetas más cortas y orientadas a acción.
@@ -175,11 +176,21 @@ export default function App() {
 /** Pequeño wrapper para inicializar el tema (solo monta el hook). */
 function ThemeMount() {
   useTheme()
+  const rules = useBusinessRules()
   useEffect(() => {
     // Pre-carga las políticas de negocio en caché para que los services
     // síncronos (getBusinessRules) las tengan disponibles al instante.
     preloadBusinessRules().catch(() => {})
   }, [])
+  // Aplica accent color + force dark cada vez que las reglas cambian.
+  // Estos efectos viven aquí porque deben correr ANTES de que cualquier
+  // componente decida su estilo (CSS vars son globales en :root).
+  useEffect(() => {
+    applyAccent(rules.theme_accent)
+  }, [rules.theme_accent])
+  useEffect(() => {
+    applyForceDark(rules.force_dark_mode)
+  }, [rules.force_dark_mode])
   return null
 }
 

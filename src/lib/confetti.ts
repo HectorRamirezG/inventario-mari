@@ -13,6 +13,7 @@
  */
 
 import { getPrefs } from "./userPrefs"
+import { getBusinessRules } from "../features/settings/businessRulesService"
 
 interface ConfettiOptions {
   /** Duración total del efecto en ms. */
@@ -45,6 +46,9 @@ export function fireConfetti(options: ConfettiOptions = {}) {
 
   // Respetar preferencia explícita del usuario
   if (!getPrefs().confetti) return
+
+  // Respetar regla global del admin (BusinessRules)
+  if (!getBusinessRules().confetti_on_purchase) return
 
   const {
     duration = 1800,

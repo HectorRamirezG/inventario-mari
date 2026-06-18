@@ -12,6 +12,16 @@ function getSystemTheme(): "light" | "dark" {
 }
 
 function applyTheme(theme: Theme) {
+  // Si el admin forzó dark mode desde BusinessRules, ignoramos la
+  // preferencia individual y mantenemos dark hasta que se apague el flag.
+  if (
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.themeForced === "1"
+  ) {
+    document.documentElement.dataset.theme = "dark"
+    document.documentElement.style.colorScheme = "dark"
+    return
+  }
   const effective = theme === "system" ? getSystemTheme() : theme
   document.documentElement.dataset.theme = effective
   document.documentElement.style.colorScheme = effective

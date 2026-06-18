@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase"
 import { notifyAdmins, notifyClient } from "../notifications/notificationsService"
 import { compressImage } from "../../lib/imageCompress"
+import { getBusinessRules } from "../settings/businessRulesService"
 
 /**
  * Wishes — sugerencias y peticiones del cliente.
@@ -89,7 +90,13 @@ export interface CreateWishInput {
 
 /** Crea un wish nuevo. Retorna la fila creada. */
 export async function createWish(input: CreateWishInput): Promise<Wish> {
-  const payload = {
+  // Modo directo: el wish entra como "reviewing" (no "available", para
+  // no engañar al cliente diciendo que ya lo tenemos en stock). Esto
+  // ahorra a Mari moverlo manualmente cuando confía en su audiencia.
+  const rules = getBusinessRules()
+  const autoAccept = rules.direct_mode_enabled || rules.auto_accept_wishes
+
+  const payload: Record<string, any> = {
     customer_email: input.customer_email.trim().toLowerCase(),
     customer_name: input.customer_name?.trim() || null,
     customer_phone: input.customer_phone?.trim() || null,
@@ -101,11 +108,24 @@ export async function createWish(input: CreateWishInput): Promise<Wish> {
     size: input.size?.trim() || null,
     color: input.color?.trim() || null,
   }
-  const { data, error } = await supabase
+  if (autoAccept) {
+    payload.status = "reviewing"
+  }
+  let { data, error } = await supabase
     .from("wishes")
     .insert(payload)
     .select()
     .single()
+  if (error && autoAccept && /status|check constraint|permission/i.test(error.message)) {
+    delete payload.status
+    const retry = await supabase
+      .from("wishes")
+      .insert(payload)
+      .select()
+      .single()
+    data = retry.data
+    error = retry.error
+  }
   if (error) throw error
   const wish = data as Wish
 
@@ -113,9 +133,15 @@ export async function createWish(input: CreateWishInput): Promise<Wish> {
   await notifyAdmins({
     type: "wish_created",
     title: `Nueva sugerencia: ${payload.title.slice(0, 60)}`,
-    body: `${payload.customer_name ?? "Cliente"}${payload.size ? " · talla " + payload.size : ""}${payload.color ? " · " + payload.color : ""}. Revísala para responder.`,
+    body: `${payload.customer_name ?? "Cliente"}${payload.size ? " · talla " + payload.size : ""}${payload.color ? " · " + payload.color : ""}. ${
+      autoAccept ? "Aceptada automáticamente (modo directo)." : "Revísala para responder."
+    }`,
     link: "/admin",
-    metadata: { wish_id: wish.id, customer_email: payload.customer_email },
+    metadata: {
+      wish_id: wish.id,
+      customer_email: payload.customer_email,
+      auto_accepted: autoAccept,
+    },
   })
 
   return wish

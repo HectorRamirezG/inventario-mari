@@ -1440,6 +1440,9 @@ const ProductCardClient = memo(function ProductCardClientImpl({
   const [selected, setSelected] = useState<string | null>(
     product.variants[0]?.id ?? null
   )
+  // Reglas del negocio para decidir si mostrar stock y label de urgencia
+  // personalizado al cliente.
+  const rules = useBusinessRules()
   const variant =
     product.variants.find((v) => v.id === selected) ?? product.variants[0]
   const price =
@@ -1722,14 +1725,21 @@ const ProductCardClient = memo(function ProductCardClientImpl({
             </span>
             {/* Indicador de stock inline (antes era pill flotante sobre la
                 imagen, ahora vive junto al precio para que la foto quede
-                limpia y la urgencia se vea junto al CTA). */}
+                limpia y la urgencia se vea junto al CTA).
+                - "Agotado" se muestra SIEMPRE (no podemos engañar al cliente
+                  con un agotado real).
+                - El "Solo quedan X" depende de la regla `show_stock_to_client`
+                  o del umbral default (≤3) si la regla está apagada. La etiqueta
+                  usa `low_stock_label` configurable desde Reglas. */}
             {out ? (
               <span className="inline-block text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 mt-0.5">
                 Agotado
               </span>
-            ) : variant.stock <= 3 ? (
+            ) : (rules.show_stock_to_client && variant.stock <= 10) ||
+              variant.stock <= 3 ? (
               <span className="inline-block text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mt-0.5">
-                ¡Solo {variant.stock} {variant.stock === 1 ? "pieza" : "piezas"}!
+                {rules.low_stock_label || "Apúrate, solo quedan"} {variant.stock}{" "}
+                {variant.stock === 1 ? "pieza" : "piezas"}
               </span>
             ) : null}
           </div>

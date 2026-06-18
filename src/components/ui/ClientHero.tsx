@@ -10,6 +10,7 @@ import {
   PartyPopper,
 } from "lucide-react"
 import { useBusinessRules } from "../../features/settings/businessRulesService"
+import type { WelcomeSlide as RuleSlide } from "../../features/settings/businessRulesService"
 
 interface Slide {
   title: string
@@ -18,6 +19,17 @@ interface Slide {
   icon: React.ReactNode
   /** Si se especifica, solo aparece cuando la regla está activa. */
   flag?: "wishes_enabled" | "stories_enabled" | "reviews_enabled"
+}
+
+/** Mapeo del tema del WelcomeSlide a las propiedades visuales. */
+const SLIDE_VISUAL: Record<RuleSlide["theme"], { accent: string; icon: React.ReactNode }> = {
+  promo: { accent: "from-fuchsia-500 to-pink-500", icon: <Sparkles size={16} className="text-white" /> },
+  mayoreo: { accent: "from-amber-500 to-orange-500", icon: <Star size={16} className="text-white" /> },
+  ticket: { accent: "from-emerald-500 to-teal-500", icon: <ShoppingBag size={16} className="text-white" /> },
+  wishes: { accent: "from-pink-500 to-purple-500", icon: <Heart size={16} className="text-white" /> },
+  stories: { accent: "from-orange-500 to-rose-500", icon: <Camera size={16} className="text-white" /> },
+  reviews: { accent: "from-amber-500 to-pink-500", icon: <Star size={16} className="text-white" /> },
+  bienvenida: { accent: "from-violet-500 to-fuchsia-500", icon: <PartyPopper size={16} className="text-white" /> },
 }
 
 const ALL_SLIDES: Slide[] = [
@@ -80,10 +92,23 @@ export default function ClientHero({ customerName, isLogged }: Props) {
   // Filtra slides según reglas activas. Cuando apaga un módulo
   // (wishes, stories, reviews) el slide correspondiente desaparece sin
   // tocar código de este componente.
-  const slides = useMemo(
-    () => ALL_SLIDES.filter((s) => !s.flag || rules[s.flag]),
-    [rules]
-  )
+  //
+  // Si la regla `welcome_slides_enabled` está ON y hay slides custom
+  // configurados desde Reglas, los reemplazamos al set hardcodeado.
+  const slides = useMemo(() => {
+    if (rules.welcome_slides_enabled && rules.welcome_slides.length > 0) {
+      return rules.welcome_slides.map<Slide>((s) => {
+        const visual = SLIDE_VISUAL[s.theme] ?? SLIDE_VISUAL.bienvenida
+        return {
+          title: s.title,
+          subtitle: s.subtitle,
+          accent: visual.accent,
+          icon: visual.icon,
+        }
+      })
+    }
+    return ALL_SLIDES.filter((s) => !s.flag || rules[s.flag])
+  }, [rules])
 
   // Si las reglas cambian y el índice queda fuera, reset.
   useEffect(() => {
@@ -105,15 +130,56 @@ export default function ClientHero({ customerName, isLogged }: Props) {
   const greeting = isLogged ? "Hola de nuevo" : "Bienvenida"
   const firstName = (customerName ?? "").split(" ")[0] || "Linda"
 
+  // Estilos del banner anclado según tono elegido
+  const BANNER_TONE = {
+    info: "bg-sky-50 dark:bg-sky-500/15 border-sky-200 dark:border-sky-500/30 text-sky-800 dark:text-sky-200",
+    warn: "bg-amber-50 dark:bg-amber-500/15 border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-200",
+    success: "bg-emerald-50 dark:bg-emerald-500/15 border-emerald-200 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-200",
+    promo: "bg-fuchsia-50 dark:bg-fuchsia-500/15 border-fuchsia-200 dark:border-fuchsia-500/30 text-fuchsia-800 dark:text-fuchsia-200",
+  }[rules.pinned_banner_tone]
+  const showBanner =
+    rules.pinned_banner_enabled && rules.pinned_banner_message.trim().length > 0
+
   return (
     <div className="mb-4">
-      <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">
+      {/* Modo festivo + greeting line */}
+      <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black flex items-center gap-1.5">
+        {rules.holiday_mode_enabled && rules.holiday_mode_emoji && (
+          <span aria-hidden>{rules.holiday_mode_emoji}</span>
+        )}
         {greeting}
+        {rules.holiday_mode_enabled && rules.holiday_mode_name && (
+          <span className="text-primary normal-case tracking-tight italic">
+            · {rules.holiday_mode_name}
+          </span>
+        )}
       </p>
       <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
         {firstName}
         <Sparkles size={18} className="text-primary" />
       </h1>
+
+      {/* Banner anclado configurable desde Reglas */}
+      {showBanner && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`mt-3 rounded-2xl border-2 px-3 py-2 flex items-center gap-2 ${BANNER_TONE}`}
+        >
+          <span className="text-base shrink-0" aria-hidden>
+            {rules.pinned_banner_tone === "warn"
+              ? "⚠️"
+              : rules.pinned_banner_tone === "success"
+              ? "✅"
+              : rules.pinned_banner_tone === "promo"
+              ? "🔥"
+              : "ℹ️"}
+          </span>
+          <p className="text-[11px] font-black leading-snug flex-1">
+            {rules.pinned_banner_message}
+          </p>
+        </motion.div>
+      )}
 
       <AnimatePresence mode="wait">
         <motion.button

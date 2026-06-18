@@ -26,6 +26,23 @@ import {
   Camera,
   Star,
   ToggleRight,
+  Zap,
+  CheckCircle2,
+  ThumbsUp,
+  UserMinus,
+  Palette,
+  Moon,
+  Sparkles,
+  Eye,
+  EyeOff,
+  Users,
+  Phone,
+  ImagePlus,
+  Megaphone,
+  Tag,
+  Trash2,
+  Plus,
+  GripVertical,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -38,6 +55,7 @@ import {
   saveBusinessRules,
   DEFAULT_RULES,
   type BusinessRules,
+  type WelcomeSlide,
 } from "./businessRulesService"
 
 export default function BusinessRulesPage() {
@@ -428,6 +446,276 @@ export default function BusinessRulesPage() {
         />
       </Section>
 
+      {/* ════════════ MODO DIRECTO (sin moderación) ════════════ */}
+      <Section
+        icon={<Zap size={14} />}
+        title="Modo directo"
+        subtitle="Operar sin moderar nada — todo entra automático"
+      >
+        <RuleRow
+          icon={Zap}
+          title="Activar modo directo (macro)"
+          description="Atajo que prende los 3 auto-aprueba juntos: comprobantes, reseñas y sugerencias. Se desactiva apagando aquí o cada uno por separado."
+          enabled={form.direct_mode_enabled}
+          onToggle={(v) =>
+            patch({
+              direct_mode_enabled: v,
+              auto_approve_proofs: v,
+              auto_approve_reviews: v,
+              auto_accept_wishes: v,
+            })
+          }
+        />
+
+        <RuleRow
+          icon={CheckCircle2}
+          title="Auto-aprobar comprobantes de pago"
+          description="Cuando el cliente sube su captura de transferencia, queda APROBADO al instante y el pago se aplica al balance. ⚠️ Riesgo de fraude — úsalo solo con clientes verificados."
+          enabled={form.auto_approve_proofs}
+          onToggle={(v) => patch({ auto_approve_proofs: v })}
+        />
+
+        <RuleRow
+          icon={ThumbsUp}
+          title="Auto-aprobar reseñas con foto"
+          description="Las reseñas que suben los clientes se publican directo sin que apruebes. Si tienes reseñas desactivadas en módulos, esto no aplica."
+          enabled={form.auto_approve_reviews}
+          onToggle={(v) => patch({ auto_approve_reviews: v })}
+        />
+
+        <RuleRow
+          icon={Heart}
+          title="Auto-aceptar sugerencias / wishes"
+          description="Las peticiones del cliente entran como aceptadas, no como pendientes. Útil si confías en tu audiencia y quieres mostrarles que cuentas con lo que piden."
+          enabled={form.auto_accept_wishes}
+          onToggle={(v) => patch({ auto_accept_wishes: v })}
+        />
+
+        <RuleRow
+          icon={UserMinus}
+          title="Cliente puede cancelar su apartado"
+          description="Desde el ticket público, el cliente cancela su pedido sin pedirte permiso (respeta la ventana de gracia que configuraste arriba)."
+          enabled={form.client_can_self_cancel}
+          onToggle={(v) => patch({ client_can_self_cancel: v })}
+        />
+      </Section>
+
+      {/* ════════════ APARIENCIA Y TEMA ════════════ */}
+      <Section
+        icon={<Palette size={14} />}
+        title="Apariencia"
+        subtitle="Cambia el color, modo claro/oscuro y modos festivos"
+      >
+        <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0">
+              <Palette size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 leading-tight">
+                Color principal de la marca
+              </p>
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+                Cambia el tono de botones, badges activos y elementos
+                destacados de toda la app.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {(["pink", "violet", "rose", "amber", "emerald", "sky", "indigo"] as const).map(
+              (color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => patch({ theme_accent: color })}
+                  aria-label={color}
+                  title={color}
+                  className={`relative h-10 rounded-xl ring-2 transition-all ${
+                    form.theme_accent === color
+                      ? "ring-slate-900 dark:ring-white scale-105"
+                      : "ring-transparent hover:ring-slate-300"
+                  }`}
+                  style={{
+                    background: ACCENT_PREVIEW[color],
+                  }}
+                >
+                  {form.theme_accent === color && (
+                    <CheckCircle2
+                      size={14}
+                      className="absolute inset-0 m-auto text-white drop-shadow"
+                    />
+                  )}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+
+        <RuleRow
+          icon={Moon}
+          title="Forzar modo oscuro"
+          description="Aplica tema oscuro a TODOS los usuarios sin importar su preferencia. Útil para fechas como Halloween o lanzamientos nocturnos."
+          enabled={form.force_dark_mode}
+          onToggle={(v) => patch({ force_dark_mode: v })}
+        />
+
+        <RuleRow
+          icon={Sparkles}
+          title="Modo festivo"
+          description="Pinta confetti en el header de la tienda y muestra el nombre del evento (Navidad, Buen Fin, etc) junto al logo."
+          enabled={form.holiday_mode_enabled}
+          onToggle={(v) => patch({ holiday_mode_enabled: v })}
+        >
+          <TextField
+            label="Nombre del evento"
+            value={form.holiday_mode_name}
+            onChange={(v) => patch({ holiday_mode_name: v })}
+            placeholder="Ej. Navidad 2026 · Buen Fin"
+            maxLength={40}
+          />
+          <TextField
+            label="Emoji"
+            value={form.holiday_mode_emoji}
+            onChange={(v) => patch({ holiday_mode_emoji: v })}
+            placeholder="🎄"
+            maxLength={4}
+          />
+        </RuleRow>
+      </Section>
+
+      {/* ════════════ EXPERIENCIA DEL CLIENTE ════════════ */}
+      <Section
+        icon={<Sparkles size={14} />}
+        title="Experiencia del cliente"
+        subtitle="Detalles que cambian cómo se ve y se siente la tienda"
+      >
+        <RuleRow
+          icon={Eye}
+          title="Mostrar stock al cliente"
+          description="Pinta 'Solo quedan 3' en cada producto. Genera urgencia y FOMO. Si lo apagas, solo se muestra 'Agotado' cuando llega a 0."
+          enabled={form.show_stock_to_client}
+          onToggle={(v) => patch({ show_stock_to_client: v })}
+        >
+          <TextField
+            label="Etiqueta de urgencia"
+            value={form.low_stock_label}
+            onChange={(v) => patch({ low_stock_label: v })}
+            placeholder="Apúrate, solo quedan"
+            maxLength={40}
+          />
+        </RuleRow>
+
+        <RuleRow
+          icon={Users}
+          title="Mostrar 'X personas viendo esto'"
+          description="Contador psicológico en cada card (un fake controlado entre 2-8 por producto, determinístico). Genera prueba social. No hace tracking real."
+          enabled={form.fake_viewers_enabled}
+          onToggle={(v) => patch({ fake_viewers_enabled: v })}
+        />
+
+        <RuleRow
+          icon={PartyPopper}
+          title="Confetti al comprar"
+          description="Animación de celebración al cerrar venta o aprobar comprobante. Apágalo si prefieres experiencia más sobria."
+          enabled={form.confetti_on_purchase}
+          onToggle={(v) => patch({ confetti_on_purchase: v })}
+        />
+
+        <RuleRow
+          icon={EyeOff}
+          title="Ocultar precios sin sesión"
+          description="El cliente debe iniciar sesión para ver precios del catálogo. Mata el browsing casual pero captura emails. Útil para mayoreo / B2B."
+          enabled={form.hide_prices_until_login}
+          onToggle={(v) => patch({ hide_prices_until_login: v })}
+        />
+
+        <RuleRow
+          icon={Phone}
+          title="Pedir teléfono antes de comprar"
+          description="Si el cliente no tiene teléfono en su perfil, se lo solicita en el carrito antes de cerrar la venta (en lugar de pedirlo después)."
+          enabled={form.require_phone_to_buy}
+          onToggle={(v) => patch({ require_phone_to_buy: v })}
+        />
+      </Section>
+
+      {/* ════════════ MENSAJES PERSONALIZADOS ════════════ */}
+      <Section
+        icon={<Megaphone size={14} />}
+        title="Mensajes en la tienda"
+        subtitle="Edita textos visibles para el cliente: slides, banners, ticket"
+      >
+        <RuleRow
+          icon={MessageSquare}
+          title="Mensaje personalizado en ticket"
+          description="Aparece debajo de los productos en el ticket del cliente. Ideal para agradecimientos, instrucciones especiales o promos."
+          enabled={form.custom_ticket_message_enabled}
+          onToggle={(v) => patch({ custom_ticket_message_enabled: v })}
+        >
+          <TextField
+            label="Mensaje"
+            value={form.custom_ticket_message}
+            onChange={(v) => patch({ custom_ticket_message: v })}
+            placeholder="¡Gracias por tu compra! Síguenos en Instagram"
+            maxLength={200}
+          />
+        </RuleRow>
+
+        <RuleRow
+          icon={ImagePlus}
+          title="Banner anclado en la tienda"
+          description="Aviso superior visible para todos. Ideal para anuncios temporales: 'Cerrado por inventario el 25', 'Envío gratis hoy'."
+          enabled={form.pinned_banner_enabled}
+          onToggle={(v) => patch({ pinned_banner_enabled: v })}
+        >
+          <TextField
+            label="Texto del banner"
+            value={form.pinned_banner_message}
+            onChange={(v) => patch({ pinned_banner_message: v })}
+            placeholder="🚚 Envío GRATIS hoy en compras desde $500"
+            maxLength={140}
+          />
+          <div className="flex items-center gap-1.5 pt-2">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mr-1">
+              Tono:
+            </span>
+            {(
+              [
+                ["info", "Info", "bg-sky-500"],
+                ["warn", "Aviso", "bg-amber-500"],
+                ["success", "Éxito", "bg-emerald-500"],
+                ["promo", "Promo", "bg-fuchsia-500"],
+              ] as const
+            ).map(([id, label, bg]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => patch({ pinned_banner_tone: id })}
+                className={`h-6 px-2.5 rounded-full text-[9px] font-black uppercase tracking-widest text-white ${bg} ${
+                  form.pinned_banner_tone === id
+                    ? "ring-2 ring-offset-1 ring-slate-700 dark:ring-white"
+                    : "opacity-60"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </RuleRow>
+
+        <RuleRow
+          icon={Tag}
+          title="Personalizar slides de bienvenida"
+          description="Edita los mensajes rotantes que ve el cliente al abrir la tienda. Si lo apagas, se usan los slides predeterminados de Beauty's Me."
+          enabled={form.welcome_slides_enabled}
+          onToggle={(v) => patch({ welcome_slides_enabled: v })}
+        >
+          <WelcomeSlidesEditor
+            slides={form.welcome_slides}
+            onChange={(slides) => patch({ welcome_slides: slides })}
+          />
+        </RuleRow>
+      </Section>
+
       {/* SAVE STICKY */}
       <AnimatePresence>
         {dirty && (
@@ -624,5 +912,255 @@ function TimeField({
 function Hint({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[9px] font-bold text-primary/80 italic">{children}</p>
+  )
+}
+
+/* ════════════════════ Componentes nuevos ════════════════════ */
+
+/**
+ * Mapa de preview visual de cada accent. Se usa solo en el page de
+ * reglas — la aplicación real del tema vive en `applyThemeAccent()`
+ * dentro de `useTheme.ts` y `index.css`.
+ */
+const ACCENT_PREVIEW: Record<BusinessRules["theme_accent"], string> = {
+  pink: "linear-gradient(135deg,#e6007e,#a855f7)",
+  violet: "linear-gradient(135deg,#7c3aed,#a855f7)",
+  rose: "linear-gradient(135deg,#e11d48,#f43f5e)",
+  amber: "linear-gradient(135deg,#f59e0b,#fb923c)",
+  emerald: "linear-gradient(135deg,#10b981,#34d399)",
+  sky: "linear-gradient(135deg,#0ea5e9,#6366f1)",
+  indigo: "linear-gradient(135deg,#4f46e5,#7c3aed)",
+}
+
+/**
+ * Campo de texto genérico para reglas (mensaje, etiqueta, banner).
+ * Mantiene look-and-feel con NumberField/TimeField.
+ */
+function TextField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+  multiline = false,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  maxLength?: number
+  multiline?: boolean
+}) {
+  const remaining = maxLength != null ? maxLength - (value?.length ?? 0) : null
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+          {label}
+        </span>
+        {remaining != null && (
+          <span
+            className={`text-[8px] font-bold tabular-nums ${
+              remaining < 10 ? "text-amber-500" : "text-slate-400"
+            }`}
+          >
+            {remaining}
+          </span>
+        )}
+      </div>
+      {multiline ? (
+        <textarea
+          value={value}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          rows={2}
+          className="px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 text-slate-900 dark:text-slate-100 resize-none"
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          maxLength={maxLength}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 text-slate-900 dark:text-slate-100"
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Editor de slides de bienvenida. Lista los slides activos y permite
+ * agregar/editar/eliminar cada uno. Soporta hasta 6 slides para que
+ * el carrusel siga sintiéndose ligero.
+ */
+const SLIDE_THEMES: { id: WelcomeSlide["theme"]; label: string; gradient: string }[] = [
+  { id: "promo", label: "Promo", gradient: "from-fuchsia-500 to-pink-500" },
+  { id: "mayoreo", label: "Mayoreo", gradient: "from-amber-500 to-orange-500" },
+  { id: "ticket", label: "Ticket", gradient: "from-emerald-500 to-teal-500" },
+  { id: "wishes", label: "Wishes", gradient: "from-pink-500 to-purple-500" },
+  { id: "stories", label: "Stories", gradient: "from-orange-500 to-rose-500" },
+  { id: "reviews", label: "Reseñas", gradient: "from-amber-500 to-pink-500" },
+  { id: "bienvenida", label: "Bienvenida", gradient: "from-violet-500 to-fuchsia-500" },
+]
+
+const MAX_SLIDES = 6
+
+function WelcomeSlidesEditor({
+  slides,
+  onChange,
+}: {
+  slides: WelcomeSlide[]
+  onChange: (s: WelcomeSlide[]) => void
+}) {
+  const updateAt = (i: number, patch: Partial<WelcomeSlide>) => {
+    onChange(slides.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
+  }
+  const removeAt = (i: number) => {
+    onChange(slides.filter((_, idx) => idx !== i))
+  }
+  const add = () => {
+    if (slides.length >= MAX_SLIDES) return
+    onChange([
+      ...slides,
+      {
+        title: "Nuevo mensaje",
+        subtitle: "Subtítulo descriptivo",
+        theme: "promo",
+      },
+    ])
+  }
+  const moveUp = (i: number) => {
+    if (i === 0) return
+    const copy = [...slides]
+    const [item] = copy.splice(i, 1)
+    copy.splice(i - 1, 0, item)
+    onChange(copy)
+  }
+  const moveDown = (i: number) => {
+    if (i === slides.length - 1) return
+    const copy = [...slides]
+    const [item] = copy.splice(i, 1)
+    copy.splice(i + 1, 0, item)
+    onChange(copy)
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {slides.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-4 text-center">
+          <p className="text-[10px] font-bold text-slate-400 leading-snug">
+            Aún no has agregado slides personalizados.
+            <br />
+            Por ahora se ven los slides predeterminados.
+          </p>
+        </div>
+      )}
+
+      {slides.map((s, i) => {
+        const theme = SLIDE_THEMES.find((t) => t.id === s.theme) ?? SLIDE_THEMES[0]
+        return (
+          <div
+            key={i}
+            className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-3 space-y-2"
+          >
+            {/* Preview mini del slide tal como lo verá el cliente */}
+            <div
+              className={`rounded-lg bg-gradient-to-br ${theme.gradient} text-white p-2 flex items-center gap-2`}
+            >
+              <Sparkles size={14} className="opacity-80 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-black leading-tight truncate">
+                  {s.title || "(sin título)"}
+                </p>
+                <p className="text-[9px] opacity-90 leading-tight truncate">
+                  {s.subtitle || "(sin subtítulo)"}
+                </p>
+              </div>
+            </div>
+
+            <TextField
+              label="Título"
+              value={s.title}
+              onChange={(v) => updateAt(i, { title: v })}
+              maxLength={80}
+            />
+            <TextField
+              label="Subtítulo"
+              value={s.subtitle}
+              onChange={(v) => updateAt(i, { subtitle: v })}
+              maxLength={140}
+            />
+
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">
+                Tema
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {SLIDE_THEMES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => updateAt(i, { theme: t.id })}
+                    className={`h-7 px-2.5 rounded-full text-[9px] font-black uppercase tracking-widest text-white bg-gradient-to-br ${t.gradient} ${
+                      s.theme === t.id
+                        ? "ring-2 ring-offset-1 ring-slate-700 dark:ring-white"
+                        : "opacity-60"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => moveUp(i)}
+                  disabled={i === 0}
+                  className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 disabled:opacity-30 flex items-center justify-center press"
+                  title="Subir"
+                >
+                  <GripVertical size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveDown(i)}
+                  disabled={i === slides.length - 1}
+                  className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 disabled:opacity-30 flex items-center justify-center press rotate-180"
+                  title="Bajar"
+                >
+                  <GripVertical size={12} />
+                </button>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                  #{i + 1}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeAt(i)}
+                className="h-7 px-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 text-[9px] font-black uppercase tracking-widest flex items-center gap-1 press"
+              >
+                <Trash2 size={11} /> Quitar
+              </button>
+            </div>
+          </div>
+        )
+      })}
+
+      {slides.length < MAX_SLIDES && (
+        <button
+          type="button"
+          onClick={add}
+          className="h-10 rounded-xl border-2 border-dashed border-primary/30 text-primary text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 press"
+        >
+          <Plus size={12} /> Agregar slide ({slides.length}/{MAX_SLIDES})
+        </button>
+      )}
+    </div>
   )
 }

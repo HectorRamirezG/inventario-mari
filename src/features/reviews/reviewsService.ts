@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase"
 import { notifyAdmins, notifyClient } from "../notifications/notificationsService"
 import { compressImage } from "../../lib/imageCompress"
+import { getBusinessRules } from "../settings/businessRulesService"
 
 /**
  * Reviews — reseñas con foto del cliente.
@@ -77,7 +78,14 @@ export interface CreateReviewInput {
 
 /** Crea una reseña. Empieza en `pending` para moderación. */
 export async function createReview(input: CreateReviewInput): Promise<Review> {
-  const payload = {
+  // Si modo directo o auto-approve está prendido, la reseña entra ya
+  // como `approved` y se ve de inmediato en la vista pública. La columna
+  // `status` tiene default 'pending' en BD; lo sobreescribimos solo
+  // cuando la regla aplica.
+  const rules = getBusinessRules()
+  const autoApprove = rules.direct_mode_enabled || rules.auto_approve_reviews
+
+  const payload: Record<string, any> = {
     product_id: input.product_id,
     variant_id: input.variant_id ?? null,
     customer_email: input.customer_email.trim().toLowerCase(),
@@ -86,23 +94,46 @@ export async function createReview(input: CreateReviewInput): Promise<Review> {
     comment: input.comment?.trim() || null,
     image_url: input.image_url ?? null,
   }
-  const { data, error } = await supabase
+  if (autoApprove) {
+    payload.status = "approved"
+  }
+  let { data, error } = await supabase
     .from("reviews")
     .insert(payload)
     .select()
     .single()
+  // Fallback: si RLS bloquea seteo directo de status, reintentamos sin él
+  if (error && autoApprove && /status|check constraint|permission denied/i.test(error.message)) {
+    delete payload.status
+    const retry = await supabase
+      .from("reviews")
+      .insert(payload)
+      .select()
+      .single()
+    data = retry.data
+    error = retry.error
+  }
   if (error) throw error
   const review = data as Review
 
   // Notifica a admins (best-effort) que llegó una reseña nueva
   await notifyAdmins({
     type: "review_created",
-    title: `Nueva reseña ${"⭐".repeat(payload.rating)}${"☆".repeat(5 - payload.rating)}`,
+    title: autoApprove
+      ? `Nueva reseña publicada ${"⭐".repeat(payload.rating)}${"☆".repeat(5 - payload.rating)}`
+      : `Nueva reseña ${"⭐".repeat(payload.rating)}${"☆".repeat(5 - payload.rating)}`,
     body: payload.comment
       ? `${payload.customer_name ?? "Cliente"}: "${payload.comment.slice(0, 120)}"`
-      : `${payload.customer_name ?? "Cliente"} dejó ${payload.rating}/5 estrellas. Revísala para publicarla.`,
+      : `${payload.customer_name ?? "Cliente"} dejó ${payload.rating}/5 estrellas. ${
+          autoApprove ? "Ya está publicada (modo directo)." : "Revísala para publicarla."
+        }`,
     link: "/admin",
-    metadata: { review_id: review.id, product_id: payload.product_id, rating: payload.rating },
+    metadata: {
+      review_id: review.id,
+      product_id: payload.product_id,
+      rating: payload.rating,
+      auto_approved: autoApprove,
+    },
   })
 
   return review

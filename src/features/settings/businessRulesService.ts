@@ -106,6 +106,109 @@ export interface BusinessRules {
   /** Reseñas con foto del cliente (dentro de cada producto, vista compacta).
    *  Pendiente de implementar. Toggle reservado. */
   reviews_enabled: boolean
+
+  /* ════════════════════════ MODO DIRECTO (sin fricción) ═══════════════════
+   * Cuando Mari quiere operar SIN moderar nada — todo entra automático.
+   * Útil para clientes confiables o eventos especiales. Cada hijo puede
+   * activarse individualmente; `direct_mode_enabled` es atajo macro que
+   * los enciende todos juntos. */
+
+  /** Macro: activa los 3 auto-approve juntos. */
+  direct_mode_enabled: boolean
+
+  /** Cuando el cliente sube un comprobante, queda APROBADO de inmediato
+   *  (sin esperar a Mari). El pago se aplica al balance al instante.
+   *  ⚠️ Riesgo: fraudes. Úsalo solo con clientes verificados. */
+  auto_approve_proofs: boolean
+
+  /** Las reseñas con foto del cliente se publican directo sin que Mari
+   *  apruebe. Si la regla `reviews_enabled` está apagada, esto no aplica. */
+  auto_approve_reviews: boolean
+
+  /** Las sugerencias / wishes del cliente entran como `accepted` directo
+   *  (no se quedan en `pending`). Útil cuando confías en tu audiencia. */
+  auto_accept_wishes: boolean
+
+  /** Cliente puede cancelar su propio apartado desde el ticket público sin
+   *  pedirle nada a Mari. Respeta `cancellation_grace_days` igual. */
+  client_can_self_cancel: boolean
+
+  /* ════════════════════════ APARIENCIA / TEMA ════════════════════════ */
+
+  /** Color de acento (CSS variable --color-primary). Cambia el tono de
+   *  botones, badges activos y elementos destacados de TODA la app. */
+  theme_accent: "pink" | "violet" | "rose" | "amber" | "emerald" | "sky" | "indigo"
+
+  /** Forzar dark mode a TODOS los usuarios. Anula la preferencia del SO
+   *  y el toggle individual. Útil para fechas especiales (Halloween). */
+  force_dark_mode: boolean
+
+  /** Modo festivo: pinta confetti en el header y un banner con el nombre
+   *  del evento. Activa banderines de colores y emoji junto al logo. */
+  holiday_mode_enabled: boolean
+  holiday_mode_name: string // "Navidad 2026", "Halloween", "Buen Fin"
+  holiday_mode_emoji: string // "🎄" "🎃" "💸"
+
+  /* ════════════════════════ EXPERIENCIA CLIENTE ════════════════════════ */
+
+  /** Mostrar al cliente el stock real del producto ("Solo quedan 3").
+   *  Genera urgencia y FOMO. Si OFF, solo se ve "Agotado" cuando es 0. */
+  show_stock_to_client: boolean
+
+  /** Mostrar contador "X personas viendo esto" en cards (psicológico).
+   *  Es un fake controlado server-side: muestra 2-8 al azar deterministica
+   *  por producto. NO hace tracking real. */
+  fake_viewers_enabled: boolean
+
+  /** Animación de confetti al concretar venta o aprobar comprobante.
+   *  Apágalo si el cliente prefiere experiencia sobria. */
+  confetti_on_purchase: boolean
+
+  /** Cliente DEBE iniciar sesión para ver precios del catálogo. Si
+   *  navega anónimo solo ve el producto y un CTA "Inicia sesión para
+   *  ver precio". Mata browsing casual pero captura emails. */
+  hide_prices_until_login: boolean
+
+  /** Requerir teléfono ANTES de cerrar la venta (no después). Si el
+   *  cliente no lo tiene en perfil, se le pide en el carrito. */
+  require_phone_to_buy: boolean
+
+  /* ════════════════════════ MENSAJES PERSONALIZADOS ════════════════════════ */
+
+  /** Sobreescribe los slides rotantes del hero. Si está vacío, usa el
+   *  set default hardcodeado. Cada slide tiene título + subtítulo + acento.
+   *  Mari edita esto desde el page de reglas. */
+  welcome_slides_enabled: boolean
+  welcome_slides: WelcomeSlide[]
+
+  /** Mensaje del banner superior anclado en la tienda. Se ve antes
+   *  del catálogo. Ideal para anuncios temporales tipo
+   *  "Cerrado por inventario el 25" o "Envío gratis hoy". */
+  pinned_banner_enabled: boolean
+  pinned_banner_message: string
+  pinned_banner_tone: "info" | "warn" | "success" | "promo"
+
+  /** Etiqueta extra para low-stock urgency. Default "Apúrate, solo quedan".
+   *  Mari puede cambiar a "¡Últimas piezas!" o "Antes de que se acaben". */
+  low_stock_label: string
+}
+
+/**
+ * Slide individual del hero de la tienda. Mari puede editar título,
+ * subtítulo y elegir un tema (define color/icono).
+ */
+export interface WelcomeSlide {
+  title: string
+  subtitle: string
+  /** Tema visual: define el gradiente y el icono que acompaña. */
+  theme:
+    | "promo"      // fuchsia → pink
+    | "mayoreo"    // amber → orange
+    | "ticket"     // emerald → teal
+    | "wishes"     // pink → purple
+    | "stories"    // orange → rose
+    | "reviews"    // amber → pink
+    | "bienvenida" // violet → fuchsia
 }
 
 export const DEFAULT_RULES: BusinessRules = {
@@ -160,6 +263,35 @@ export const DEFAULT_RULES: BusinessRules = {
   wishes_enabled: true,
   stories_enabled: false,
   reviews_enabled: false,
+
+  // Modo directo (sin moderación) — todos OFF por seguridad
+  direct_mode_enabled: false,
+  auto_approve_proofs: false,
+  auto_approve_reviews: false,
+  auto_accept_wishes: false,
+  client_can_self_cancel: false,
+
+  // Apariencia
+  theme_accent: "pink",
+  force_dark_mode: false,
+  holiday_mode_enabled: false,
+  holiday_mode_name: "",
+  holiday_mode_emoji: "🎉",
+
+  // Experiencia cliente
+  show_stock_to_client: false,
+  fake_viewers_enabled: false,
+  confetti_on_purchase: true,
+  hide_prices_until_login: false,
+  require_phone_to_buy: false,
+
+  // Mensajes personalizados
+  welcome_slides_enabled: false,
+  welcome_slides: [],
+  pinned_banner_enabled: false,
+  pinned_banner_message: "",
+  pinned_banner_tone: "info",
+  low_stock_label: "Apúrate, solo quedan",
 }
 
 let cache: BusinessRules | null = null
@@ -224,6 +356,84 @@ function merge(raw: any): BusinessRules {
     wishes_enabled: raw.wishes_enabled ?? DEFAULT_RULES.wishes_enabled,
     stories_enabled: raw.stories_enabled ?? DEFAULT_RULES.stories_enabled,
     reviews_enabled: raw.reviews_enabled ?? DEFAULT_RULES.reviews_enabled,
+
+    // Modo directo
+    direct_mode_enabled: !!raw.direct_mode_enabled,
+    auto_approve_proofs: !!raw.auto_approve_proofs,
+    auto_approve_reviews: !!raw.auto_approve_reviews,
+    auto_accept_wishes: !!raw.auto_accept_wishes,
+    client_can_self_cancel: !!raw.client_can_self_cancel,
+
+    // Apariencia — el accent solo acepta un set fijo, sino fallback al default
+    theme_accent: ((): BusinessRules["theme_accent"] => {
+      const ok = new Set([
+        "pink",
+        "violet",
+        "rose",
+        "amber",
+        "emerald",
+        "sky",
+        "indigo",
+      ])
+      const t = raw.theme_accent
+      return (ok.has(t) ? t : DEFAULT_RULES.theme_accent) as BusinessRules["theme_accent"]
+    })(),
+    force_dark_mode: !!raw.force_dark_mode,
+    holiday_mode_enabled: !!raw.holiday_mode_enabled,
+    holiday_mode_name:
+      typeof raw.holiday_mode_name === "string" ? raw.holiday_mode_name : "",
+    holiday_mode_emoji:
+      typeof raw.holiday_mode_emoji === "string" && raw.holiday_mode_emoji.trim()
+        ? raw.holiday_mode_emoji
+        : DEFAULT_RULES.holiday_mode_emoji,
+
+    // Experiencia cliente
+    show_stock_to_client: !!raw.show_stock_to_client,
+    fake_viewers_enabled: !!raw.fake_viewers_enabled,
+    confetti_on_purchase: raw.confetti_on_purchase ?? DEFAULT_RULES.confetti_on_purchase,
+    hide_prices_until_login: !!raw.hide_prices_until_login,
+    require_phone_to_buy: !!raw.require_phone_to_buy,
+
+    // Mensajes personalizados
+    welcome_slides_enabled: !!raw.welcome_slides_enabled,
+    welcome_slides: Array.isArray(raw.welcome_slides)
+      ? (raw.welcome_slides as any[])
+          .filter(
+            (s) =>
+              s &&
+              typeof s.title === "string" &&
+              typeof s.subtitle === "string",
+          )
+          .map((s) => ({
+            title: String(s.title).slice(0, 80),
+            subtitle: String(s.subtitle).slice(0, 140),
+            theme: [
+              "promo",
+              "mayoreo",
+              "ticket",
+              "wishes",
+              "stories",
+              "reviews",
+              "bienvenida",
+            ].includes(s.theme)
+              ? s.theme
+              : "bienvenida",
+          }))
+      : [],
+    pinned_banner_enabled: !!raw.pinned_banner_enabled,
+    pinned_banner_message:
+      typeof raw.pinned_banner_message === "string"
+        ? raw.pinned_banner_message
+        : "",
+    pinned_banner_tone: ["info", "warn", "success", "promo"].includes(
+      raw.pinned_banner_tone,
+    )
+      ? raw.pinned_banner_tone
+      : DEFAULT_RULES.pinned_banner_tone,
+    low_stock_label:
+      typeof raw.low_stock_label === "string" && raw.low_stock_label.trim()
+        ? raw.low_stock_label
+        : DEFAULT_RULES.low_stock_label,
   }
 }
 

@@ -6,6 +6,7 @@ import {
 } from "../notifications/notificationsService"
 import { formatMoney } from "../../lib/format"
 import { compressImage } from "../../lib/imageCompress"
+import { getBusinessRules } from "../settings/businessRulesService"
 
 export type ProofStatus = "pending" | "pending_verification" | "approved" | "rejected"
 
@@ -187,6 +188,25 @@ export async function uploadPaymentProof(input: {
     }
   } catch (e: any) {
     debug.warn("[proofs] notify falló:", e?.message)
+  }
+
+  // ═══ MODO DIRECTO — auto-aprobar el proof si la regla está activa ═══
+  // Solo se ejecuta cuando NO es efectivo (los efectivos requieren que
+  // Mari confirme físicamente el dinero). Si la aprobación tronara por
+  // RLS o por error de RPC, ignoramos: el proof queda como "pending" y
+  // el flujo legacy lo recupera (admin lo aprueba manual).
+  try {
+    const rules = getBusinessRules()
+    const canAutoApprove =
+      (rules.direct_mode_enabled || rules.auto_approve_proofs) &&
+      !isCash &&
+      proof.status !== "approved"
+    if (canAutoApprove) {
+      await approveProof(proof.id, Number(input.amount) || 0)
+      debug.log("[proofs] auto-aprobado por modo directo:", proof.id)
+    }
+  } catch (e: any) {
+    debug.warn("[proofs] auto-approve falló (sigue como pending):", e?.message)
   }
 
   return proof
