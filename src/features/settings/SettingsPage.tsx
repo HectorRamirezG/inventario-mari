@@ -53,6 +53,7 @@ import type { PricingConfig } from "../pricing/pricingTypes"
 import { resetAppData, type ResetReport, TABLE_LABEL } from "./resetAppService"
 import StorageUsageCard from "./StorageUsageCard"
 import AuditLogCard from "./AuditLogCard"
+import PerformanceCard from "./PerformanceCard"
 import { confirmAction } from "../../lib/confirm"
 import { useUserPrefs } from "../../lib/userPrefs"
 import Toggle from "../../components/ui/Toggle"
@@ -407,6 +408,9 @@ export default function SettingsPage() {
           <StorageUsageCard />
         </div>
       )}
+
+      {/* PERFORMANCE EN VIVO — solo admin (ve cómo va la app y la red) */}
+      {isAdmin && <PerformanceCard />}
 
       {/* AUDITORÍA — solo admin */}
       {isAdmin && <AuditLogCard />}

@@ -245,9 +245,9 @@ export default function ClientShopPage() {
 
   useEffect(() => {
     let alive = true
-    ;(async () => {
-      // OJO: no existe products_public / variants_public en la DB real.
-      // Leemos directo de products + variants (la policy `anon_all` lo permite).
+    // Carga catálogo desde products + variants. Se llama al montar y
+    // cada vez que un evento realtime indica cambios.
+    const loadCatalog = async () => {
       const { data: prods } = await supabase
         .from("products")
         .select("id,name,category,image_url,created_at")
@@ -275,9 +275,36 @@ export default function ClientShopPage() {
         }))
       )
       setLoading(false)
-    })()
+    }
+
+    loadCatalog()
+
+    // Realtime: cuando admin agrega/edita producto, variante o stock,
+    // recargamos el catálogo. Debouncing manual a 800ms para no spamear
+    // si llegan varios eventos seguidos (ej. update en lote).
+    let debounce: number | null = null
+    const triggerReload = () => {
+      if (debounce) window.clearTimeout(debounce)
+      debounce = window.setTimeout(loadCatalog, 800)
+    }
+    const channel = supabase
+      .channel("client-catalog")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        triggerReload,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "variants" },
+        triggerReload,
+      )
+      .subscribe()
+
     return () => {
       alive = false
+      if (debounce) window.clearTimeout(debounce)
+      supabase.removeChannel(channel)
     }
   }, [])
 
