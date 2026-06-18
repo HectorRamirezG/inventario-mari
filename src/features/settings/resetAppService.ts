@@ -4,21 +4,22 @@ import { supabase } from "../../lib/supabase"
  * Reset operativo para producción: borra TODO lo transaccional y de catálogo
  * sin tocar usuarios ni configuración general.
  *
- * QUÉ SE BORRA
- *   • products, variants, movements
- *   • sales, sale_items, payments, payment_proofs
- *   • support_tickets, notifications
- *   • pricing_operations (historial de la calculadora)
- *   • wishes (sugerencias / wishlist server-side)
- *   • stories (fotos del día)
- *   • reviews (reseñas con foto)
- *   • inventory_cycles, capital_injections, operating_expenses
+ * QUÉ SE BORRA (todo lo operativo del negocio)
+ *   • products, variants, movements                 (catálogo + stock)
+ *   • sales, sale_items, payments, payment_proofs   (ventas + pagos)
+ *   • delivery_notes                                (comandas de entrega)
+ *   • support_tickets, notifications                (soporte + buzón)
+ *   • pricing_operations                            (historial calculadora)
+ *   • wishes                                        (sugerencias cliente)
+ *   • stories                                       (fotos del día)
+ *   • reviews                                       (reseñas con foto)
+ *   • inventory_cycles, capital_injections, operating_expenses (ciclos)
  *   • Todos los archivos del bucket `product-images` EXCEPTO la carpeta
  *     `avatars/` (fotos de perfil)
  *
  * QUÉ SE PRESERVA
- *   • auth.users
- *   • user_profiles
+ *   • auth.users                  (cuentas de Mari y clientes)
+ *   • user_profiles               (datos del perfil y avatars)
  *   • app_settings, business_rules, bank_accounts, pricing_config
  *   • storage avatars/
  *
@@ -40,6 +41,7 @@ const TABLES_IN_ORDER = [
   "payment_proofs",
   "payments",
   "support_tickets",
+  "delivery_notes", // comandas — depende de sales (cascade igual)
   "sale_items",
   "sales",
   // Engagement / cliente
@@ -55,6 +57,30 @@ const TABLES_IN_ORDER = [
   "operating_expenses",
   "inventory_cycles",
 ] as const
+
+/**
+ * Etiquetas legibles para el reporte y la UI. Si una tabla no está
+ * mapeada, se usa el nombre raw.
+ */
+export const TABLE_LABEL: Record<string, string> = {
+  products: "Productos",
+  variants: "Variantes",
+  movements: "Movimientos de stock",
+  sales: "Ventas / apartados",
+  sale_items: "Items de venta",
+  payments: "Pagos registrados",
+  payment_proofs: "Comprobantes de pago",
+  delivery_notes: "Comandas de entrega",
+  notifications: "Notificaciones",
+  support_tickets: "Tickets de soporte",
+  pricing_operations: "Cálculos de precios",
+  wishes: "Sugerencias / wishlist",
+  stories: "Stories",
+  reviews: "Reseñas",
+  inventory_cycles: "Ciclos de inventario",
+  capital_injections: "Inyecciones de capital",
+  operating_expenses: "Gastos operativos",
+}
 
 async function deleteAllRows(
   table: string,

@@ -50,7 +50,7 @@ import {
   savePricingConfig,
 } from "../pricing/pricingConfigService"
 import type { PricingConfig } from "../pricing/pricingTypes"
-import { resetAppData, type ResetReport } from "./resetAppService"
+import { resetAppData, type ResetReport, TABLE_LABEL } from "./resetAppService"
 import { confirmAction } from "../../lib/confirm"
 import { useUserPrefs } from "../../lib/userPrefs"
 import Toggle from "../../components/ui/Toggle"
@@ -1043,14 +1043,15 @@ function DangerZoneSection() {
   async function handleReset() {
     if (!canRun) return
     const confirmed = await confirmAction({
-      title: "Última confirmación",
-      description: "Esto borra TODOS los productos, variantes, ventas, ciclos, fotos y movimientos. Los USUARIOS y la CONFIGURACIÓN se preservan. ¿Continuar?",
-      confirmLabel: "Sí, borrar todo",
+      title: "⚠️ Última confirmación — reinicio total",
+      description:
+        "Vas a BORRAR el catálogo completo, todas las ventas, apartados, comandas, comprobantes, reseñas, sugerencias, stories, tickets de soporte, ciclos y fotos. La app quedará VACÍA, como recién instalada.\n\nLos USUARIOS y la CONFIGURACIÓN se preservan.\n\nEsto NO se puede deshacer.",
+      confirmLabel: "Sí, reiniciar la app",
       tone: "danger",
     })
     if (!confirmed) return
     setBusy(true)
-    const tid = toast.loading("Reseteando datos operativos...")
+    const tid = toast.loading("Borrando todos los datos operativos...")
     try {
       const r = await resetAppData()
       setReport(r)
@@ -1059,16 +1060,34 @@ function DangerZoneSection() {
       if (hadErrors) {
         toast.error(
           `Reset parcial: ${totalRows} filas y ${r.storage_deleted} archivos eliminados, ${r.errors.length} errores. Revisa el reporte.`,
-          { id: tid, duration: 6000 }
+          { id: tid, duration: 6000 },
         )
-      } else {
-        toast.success(
-          `✓ Reseteado: ${totalRows} filas y ${r.storage_deleted} archivos eliminados.`,
-          { id: tid, duration: 5000 }
-        )
+        setConfirmText("")
+        setOpen(false)
+        return
       }
+
+      // Reset OK. Pregunta si quiere recargar para que el cliente y
+      // todos los listeners se reinicialicen con el estado limpio.
+      toast.success(
+        `✓ App reiniciada: ${totalRows} filas y ${r.storage_deleted} archivos eliminados.`,
+        { id: tid, duration: 4500 },
+      )
       setConfirmText("")
       setOpen(false)
+
+      const reload = await confirmAction({
+        title: "App reiniciada",
+        description:
+          "La app quedó como recién instalada. Te recomendamos recargar ahora para que todas las vistas reflejen el estado vacío. Si ya tienes la app abierta en otra pestaña o el cliente la tiene abierta, también deberían recargar.",
+        confirmLabel: "Recargar ahora",
+        cancelLabel: "Más tarde",
+        tone: "primary",
+      })
+      if (reload) {
+        // Limpia el reporte para que no quede colgado al recargar
+        setTimeout(() => window.location.reload(), 200)
+      }
     } catch (e: any) {
       toast.error(e?.message ?? "Falló el reset", { id: tid })
     } finally {
@@ -1091,19 +1110,24 @@ function DangerZoneSection() {
             Zona peligrosa
           </h3>
           <p className="text-[9px] font-bold text-rose-600/80 dark:text-rose-400/80">
-            Resetear datos operativos
+            Reiniciar la app (borrar todo lo operativo)
           </p>
         </div>
       </div>
 
       <div className="rounded-2xl bg-white dark:bg-slate-900/60 border border-rose-200/60 dark:border-rose-500/20 p-3 text-[11px] leading-snug text-slate-700 dark:text-slate-200 space-y-1.5">
-        <p className="font-bold">Al ejecutar el reset se borrarán:</p>
+        <p className="font-bold">
+          Reinicia la app a estado de instalación nueva. Se borra:
+        </p>
         <ul className="list-disc pl-4 space-y-0.5 text-slate-600 dark:text-slate-300">
-          <li>Productos, variantes y movimientos de stock</li>
-          <li>Ventas, items, pagos y comprobantes</li>
-          <li>Tickets de soporte y notificaciones</li>
+          <li>Catálogo completo (productos, variantes, fotos)</li>
+          <li>Movimientos e historial de stock</li>
+          <li>Ventas, apartados, items, pagos y comprobantes</li>
+          <li>Comandas de entrega activas e históricas</li>
+          <li>Notificaciones y tickets de soporte</li>
+          <li>Sugerencias, stories y reseñas del cliente</li>
           <li>Ciclos de inventario, inyecciones y gastos</li>
-          <li>Fotos del bucket (excepto avatars de usuarios)</li>
+          <li>Cálculos guardados de la calculadora</li>
         </ul>
         <p className="font-bold pt-1.5">NO se tocan:</p>
         <ul className="list-disc pl-4 space-y-0.5 text-emerald-700 dark:text-emerald-400">
@@ -1111,6 +1135,10 @@ function DangerZoneSection() {
           <li>Configuración de tienda, envíos, banco, reglas y precios</li>
           <li>Avatars de los usuarios</li>
         </ul>
+        <p className="font-bold pt-1.5 text-rose-700 dark:text-rose-300">
+          ⚠ Acción irreversible. Si alguien tiene la app abierta verá que
+          desaparecieron sus datos.
+        </p>
       </div>
 
       {!open ? (
@@ -1119,7 +1147,7 @@ function DangerZoneSection() {
           onClick={() => setOpen(true)}
           className="w-full h-11 rounded-xl bg-white dark:bg-slate-900/60 border-2 border-rose-300 dark:border-rose-500/40 text-rose-600 dark:text-rose-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 active:scale-[0.99] transition-all"
         >
-          <Trash2 size={12} /> Resetear datos operativos
+          <Trash2 size={12} /> Reiniciar la app (borrar todo)
         </button>
       ) : (
         <div className="space-y-2.5">
@@ -1176,12 +1204,14 @@ function DangerZoneSection() {
           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums">
             {Object.entries(report.tables).map(([k, v]) => (
               <div key={k} className="flex justify-between">
-                <span className="text-slate-500">{k}</span>
+                <span className="text-slate-500 truncate">
+                  {TABLE_LABEL[k] ?? k}
+                </span>
                 <span className="font-black">{v}</span>
               </div>
             ))}
             <div className="flex justify-between col-span-2 pt-1 mt-1 border-t border-slate-200 dark:border-slate-700">
-              <span className="text-slate-500">archivos de storage</span>
+              <span className="text-slate-500">Fotos de storage</span>
               <span className="font-black">{report.storage_deleted}</span>
             </div>
           </div>
