@@ -22,6 +22,7 @@ import {
   ScanLine,
   Heart,
   Star,
+  Share2,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -62,6 +63,7 @@ import WishesDrawer from "../wishes/WishesDrawer"
 import StoriesBar from "../stories/StoriesBar"
 import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
 import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
+import InstallAppBanner from "../../components/ui/InstallAppBanner"
 import ReviewsDrawer from "../reviews/ReviewsDrawer"
 
 // Estructura mínima del catálogo público
@@ -665,6 +667,8 @@ export default function ClientShopPage() {
         isLogged={isLogged}
       />
 
+      <InstallAppBanner />
+
       <StoriesBar enabled={bRules.stories_enabled} />
 
       {/* Productos vistos recientemente — solo se pinta si hay ≥2 items.
@@ -774,6 +778,23 @@ export default function ClientShopPage() {
             <Sparkles size={14} />
           </button>
         )}
+        <button
+          type="button"
+          onClick={async () => {
+            const { shareUrl } = await import("../../lib/share")
+            const r = await shareUrl({
+              title: "Beauty's Me",
+              text: "Mira el catálogo de Beauty's Me 💖",
+              url: window.location.origin + "/",
+            })
+            if (r === "copied") toast.success("Link copiado al portapapeles")
+          }}
+          aria-label="Compartir tienda"
+          title="Compartir tienda"
+          className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 active:scale-95"
+        >
+          <Share2 size={14} />
+        </button>
       </div>
 
       {/* Filtros: categoría + sort */}

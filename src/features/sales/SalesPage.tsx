@@ -36,6 +36,7 @@ import SmartLocationInput from "../../components/ui/SmartLocationInput";
 import PageHeader from "../../components/ui/PageHeader";
 import { formatMoney } from "../../lib/format";
 import { sound } from "../../lib/sound";
+import { useWakeLock } from "../../lib/useWakeLock";
 import { confirmAction } from "../../lib/confirm";
 import {
   useBusinessRules,
@@ -65,6 +66,9 @@ export default function SalesPage() {
   const [search, setSearch] = useState("");
   const [showCustomer, setShowCustomer] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+
+  // Pantalla siempre encendida mientras esté abierta la caja
+  useWakeLock(true);
 
   // Permite abrir el scanner desde otras partes (ej. CommandPalette)
   useEffect(() => {

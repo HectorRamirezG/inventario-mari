@@ -245,6 +245,23 @@ export default function BusinessRulesPage() {
         </RuleRow>
 
         <RuleRow
+          icon={Crown}
+          title="Auto-tag VIP por gasto mensual"
+          description="Si un cliente gasta más del umbral en 30 días, se le aplica precio mayoreo automático y badge VIP."
+          enabled={form.auto_vip_enabled}
+          onToggle={(v) => patch({ auto_vip_enabled: v })}
+        >
+          <NumberField
+            label="Umbral mensual"
+            value={form.auto_vip_monthly_threshold}
+            onChange={(v) => patch({ auto_vip_monthly_threshold: v })}
+            prefix="$"
+            min={500}
+            step={500}
+          />
+        </RuleRow>
+
+        <RuleRow
           icon={XCircle}
           title="Bloquear cancelación con pagos"
           description="Una vez recibido el primer pago, congela la posibilidad de cancelar pasadas N horas."

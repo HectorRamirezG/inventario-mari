@@ -52,6 +52,7 @@ import {
 import type { PricingConfig } from "../pricing/pricingTypes"
 import { resetAppData, type ResetReport, TABLE_LABEL } from "./resetAppService"
 import StorageUsageCard from "./StorageUsageCard"
+import AuditLogCard from "./AuditLogCard"
 import { confirmAction } from "../../lib/confirm"
 import { useUserPrefs } from "../../lib/userPrefs"
 import Toggle from "../../components/ui/Toggle"
@@ -406,6 +407,9 @@ export default function SettingsPage() {
           <StorageUsageCard />
         </div>
       )}
+
+      {/* AUDITORÍA — solo admin */}
+      {isAdmin && <AuditLogCard />}
 
       {/* ZONA PELIGROSA — solo admin */}
       {isAdmin && <DangerZoneSection />}

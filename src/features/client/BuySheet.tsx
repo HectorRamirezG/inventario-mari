@@ -14,6 +14,7 @@ import {
 
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"
+import ProductQA from "../../components/ui/ProductQA"
 import {
   detectCartTier,
   priceForTier,
@@ -400,6 +401,11 @@ export default function BuySheet({
                   )
                 })
               )}
+
+              {/* Q&A público del producto */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                <ProductQA productId={product.id} productName={product.name} />
+              </div>
             </div>
 
             {/* Footer: resumen + CTA único */}

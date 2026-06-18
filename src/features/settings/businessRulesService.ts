@@ -57,6 +57,12 @@ export interface BusinessRules {
   vip_extra_grace_enabled: boolean
   vip_extra_grace_days: number
 
+  /** Auto-tag VIP: si un cliente gasta más de N pesos en los últimos 30
+   *  días, se le aplica precio mayoreo automáticamente y se le pinta el
+   *  badge VIP. Si está apagada, VIP sólo se aplica via RFM legacy. */
+  auto_vip_enabled: boolean
+  auto_vip_monthly_threshold: number
+
   /** Descuento automático cuando el carrito supera N piezas o N pesos.
    *  Se aplica como sugerencia en SalesPage (el admin decide aplicarlo). */
   auto_discount_enabled: boolean
@@ -243,6 +249,8 @@ export const DEFAULT_RULES: BusinessRules = {
   block_oversell: true,
   vip_extra_grace_enabled: false,
   vip_extra_grace_days: 2,
+  auto_vip_enabled: false,
+  auto_vip_monthly_threshold: 3000,
   auto_discount_enabled: false,
   auto_discount_min_items: 10,
   auto_discount_percent: 5,
@@ -325,6 +333,9 @@ function merge(raw: any): BusinessRules {
     block_oversell: raw.block_oversell ?? DEFAULT_RULES.block_oversell,
     vip_extra_grace_enabled: !!raw.vip_extra_grace_enabled,
     vip_extra_grace_days: Number(raw.vip_extra_grace_days) || DEFAULT_RULES.vip_extra_grace_days,
+    auto_vip_enabled: !!raw.auto_vip_enabled,
+    auto_vip_monthly_threshold:
+      Number(raw.auto_vip_monthly_threshold) || DEFAULT_RULES.auto_vip_monthly_threshold,
     auto_discount_enabled: !!raw.auto_discount_enabled,
     auto_discount_min_items: Number(raw.auto_discount_min_items) || DEFAULT_RULES.auto_discount_min_items,
     auto_discount_percent: Number(raw.auto_discount_percent) || DEFAULT_RULES.auto_discount_percent,
