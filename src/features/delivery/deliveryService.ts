@@ -209,6 +209,97 @@ export async function deleteDeliveryNote(id: string): Promise<void> {
   if (error) throw error
 }
 
+/**
+ * Variante PÚBLICA del cambio de estatus: la usa el repartidor desde
+ * la página /comanda/:token SIN sesión. Pasa por la RPC
+ * `update_delivery_status_by_token` (SECURITY DEFINER) que valida el
+ * token y aplica reglas de transición.
+ *
+ * Cuando la RPC responde con datos del cliente/venta, disparamos las
+ * notifs en el frontend (con el helper centralizado que ya respeta
+ * RLS abierta para insert anon).
+ */
+export async function updateDeliveryStatusByToken(
+  token: string,
+  next: "picked_up" | "delivered",
+): Promise<void> {
+  const { data, error } = await supabase.rpc("update_delivery_status_by_token", {
+    p_token: token,
+    p_status: next,
+  })
+  if (error) throw error
+  const result = (data ?? {}) as {
+    ok?: boolean
+    new_status?: string
+    driver_name?: string | null
+    customer_email?: string | null
+    customer_name?: string | null
+    sale_id?: string | null
+    sale_token?: string | null
+  }
+  if (!result.ok) return
+
+  // Notif al CLIENTE (siempre, sirve para ambos estados)
+  if (result.customer_email) {
+    if (next === "picked_up") {
+      await notifyClient(result.customer_email, {
+        type: "delivery_picked_up",
+        title: "Tu pedido va en camino 🛵",
+        body: result.driver_name
+          ? `${result.driver_name} ya tiene tu pedido y va para allá.`
+          : "El repartidor ya tiene tu pedido y va para allá.",
+        link: result.sale_token ? `/ticket/${result.sale_token}` : null,
+        metadata: {
+          sale_id: result.sale_id,
+          driver: result.driver_name,
+          via: "driver_self_service",
+        },
+      })
+    } else {
+      await notifyClient(result.customer_email, {
+        type: "delivery_delivered",
+        title: "Tu pedido fue entregado 💖",
+        body: "Esperamos te encante. Cualquier cosa, escríbenos.",
+        link: result.sale_token ? `/ticket/${result.sale_token}` : null,
+        metadata: {
+          sale_id: result.sale_id,
+          via: "driver_self_service",
+        },
+      })
+    }
+  }
+
+  // Notif a ADMINS sólo cuando se ENTREGÓ (en camino lo asumen)
+  if (next === "delivered") {
+    await notifyAdmins({
+      type: "delivery_delivered",
+      title: `Entregada · ${result.customer_name ?? "Cliente"}`,
+      body: result.driver_name
+        ? `${result.driver_name} marcó la comanda como entregada.`
+        : "El repartidor marcó la comanda como entregada.",
+      link: result.sale_id ? `/apartados?sale=${result.sale_id}` : null,
+      metadata: {
+        sale_id: result.sale_id,
+        driver: result.driver_name,
+      },
+    })
+  } else {
+    // Cuando inicia el camino, avisamos a admins también (rápido)
+    await notifyAdmins({
+      type: "delivery_picked_up",
+      title: `En camino · ${result.customer_name ?? "Cliente"}`,
+      body: result.driver_name
+        ? `${result.driver_name} ya salió a entregar.`
+        : "El repartidor ya salió a entregar.",
+      link: result.sale_id ? `/apartados?sale=${result.sale_id}` : null,
+      metadata: {
+        sale_id: result.sale_id,
+        driver: result.driver_name,
+      },
+    })
+  }
+}
+
 /* ─────────── Pública (repartidor) ─────────── */
 
 export interface PublicDeliveryNote {

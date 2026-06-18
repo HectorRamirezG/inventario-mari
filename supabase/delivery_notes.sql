@@ -242,3 +242,95 @@ end;
 $$;
 
 grant execute on function public.get_delivery_note(text) to anon, authenticated;
+
+-- 5. UNICIDAD: una sola comanda ACTIVA por venta.
+-- Permitimos múltiples filas históricas pero solo UNA activa (draft, sent,
+-- picked_up). Las delivered/cancelled no cuentan, así puedes mandar una
+-- nueva comanda después de entregar/cancelar la anterior si fuera
+-- necesario. Si quieres permitir solo 1 NUNCA, quita el WHERE.
+do $$
+begin
+  -- Drop primero por si existía un indice viejo sin filtro
+  drop index if exists delivery_notes_one_active_per_sale;
+exception when others then null;
+end$$;
+
+create unique index if not exists delivery_notes_one_active_per_sale
+  on public.delivery_notes (sale_id)
+  where status in ('draft', 'sent', 'picked_up');
+
+-- 6. RPC pública para que el REPARTIDOR (sin login) cambie el status
+--    de la comanda usando su token.
+--    Valida que el token exista y solo permite transiciones válidas
+--    (no puede cancelar, no puede retroceder a draft).
+--    Devuelve JSONB con { ok, new_status, customer_email, customer_name,
+--    driver_name, sale_id } para que la app pueda disparar notifs.
+create or replace function public.update_delivery_status_by_token(
+  p_token text,
+  p_status text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_note record;
+  v_sale record;
+  v_now timestamptz := now();
+begin
+  -- Sólo aceptamos las transiciones que un repartidor puede hacer.
+  if p_status not in ('picked_up', 'delivered') then
+    raise exception 'Estado no permitido para repartidor: %', p_status;
+  end if;
+
+  select * into v_note
+  from public.delivery_notes
+  where public_token = p_token;
+  if not found then
+    raise exception 'Comanda no encontrada';
+  end if;
+
+  -- Reglas de transición:
+  --   * picked_up sólo desde draft/sent/picked_up (idempotente)
+  --   * delivered desde cualquiera que NO sea cancelled
+  if v_note.status = 'cancelled' then
+    raise exception 'La comanda está cancelada';
+  end if;
+  if v_note.status = 'delivered' and p_status = 'picked_up' then
+    raise exception 'La comanda ya fue entregada';
+  end if;
+
+  -- Aplicamos la actualización
+  update public.delivery_notes
+     set status = p_status,
+         picked_up_at = case
+           when p_status = 'picked_up' and picked_up_at is null then v_now
+           else picked_up_at
+         end,
+         delivered_at = case
+           when p_status = 'delivered' and delivered_at is null then v_now
+           else delivered_at
+         end
+   where id = v_note.id;
+
+  -- Trae datos del cliente y venta para que el caller dispare notifs
+  select s.customer_email, s.customer_name, s.public_token as sale_token
+    into v_sale
+  from public.sales s
+  where s.id = v_note.sale_id;
+
+  return jsonb_build_object(
+    'ok', true,
+    'new_status', p_status,
+    'driver_name', v_note.driver_name,
+    'customer_email', v_sale.customer_email,
+    'customer_name', v_sale.customer_name,
+    'sale_id', v_note.sale_id,
+    'sale_token', v_sale.sale_token
+  );
+end;
+$$;
+
+grant execute on function public.update_delivery_status_by_token(text, text)
+  to anon, authenticated;

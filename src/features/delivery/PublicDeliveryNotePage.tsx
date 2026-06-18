@@ -20,7 +20,7 @@ import toast from "react-hot-toast"
 
 import {
   getPublicDeliveryNote,
-  updateDeliveryStatus,
+  updateDeliveryStatusByToken,
   DELIVERY_STATUS_LABEL,
   type PublicDeliveryNote,
   type DeliveryStatus,
@@ -28,7 +28,6 @@ import {
 import { formatMoney, formatDateTime } from "../../lib/format"
 import CustomerInfoCard from "../../components/ui/CustomerInfoCard"
 import Skeleton from "../../components/ui/Skeleton"
-import { useAuth } from "../../lib/useAuth"
 
 const PAY_LABEL: Record<string, string> = {
   efectivo: "Efectivo",
@@ -45,7 +44,6 @@ const PAY_LABEL: Record<string, string> = {
  */
 export default function PublicDeliveryNotePage() {
   const { token } = useParams<{ token: string }>()
-  const { session } = useAuth()
   const [note, setNote] = useState<PublicDeliveryNote | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -78,22 +76,23 @@ export default function PublicDeliveryNotePage() {
     }
   }, [token])
 
-  async function handleMarkStatus(next: DeliveryStatus) {
-    if (!note) return
+  async function handleMarkStatus(next: "picked_up" | "delivered") {
+    if (!note || !token) return
     setUpdating(true)
     const tid = toast.loading("Actualizando...")
     try {
-      // El RPC retorna también un `id` virtual; pero `updateDeliveryStatus`
-      // requiere el id real. Tenemos `token`, así que hacemos una segunda
-      // query (es un caso raro y el repartidor sí está logueado al
-      // tocar este botón solo si Mari le abrió el link).
-      // Por simplicidad, lo dejamos como acción que requiere staff/admin
-      // — para v1 el repartidor solo VE la comanda. La actualización la
-      // hace Mari desde su panel.
-      await updateDeliveryStatus(note.sale.id, next)
-      toast.success("Listo", { id: tid })
+      // Llamada PÚBLICA via RPC con el token (no requiere login).
+      // El servidor valida el token y dispara las notifs al cliente
+      // y a los admins automáticamente.
+      await updateDeliveryStatusByToken(token, next)
+      // Actualiza localmente para que el chip y los botones se sincronicen
+      setNote((prev) => (prev ? { ...prev, status: next } : prev))
+      toast.success(
+        next === "delivered" ? "¡Entregado! Gracias 💖" : "Estatus actualizado",
+        { id: tid },
+      )
     } catch (e: any) {
-      toast.error(e?.message ?? "Solo el admin puede actualizar", { id: tid })
+      toast.error(e?.message ?? "No se pudo actualizar", { id: tid })
     } finally {
       setUpdating(false)
     }
@@ -339,8 +338,9 @@ export default function PublicDeliveryNotePage() {
           </motion.section>
         )}
 
-        {/* Acciones del repartidor (solo si está logueado como staff/admin) */}
-        {session && (
+        {/* Acciones del repartidor — funcionan SIN login con el token de la URL.
+            Una vez entregado, los botones se bloquean para evitar dobles clicks. */}
+        {note.status !== "delivered" && note.status !== "cancelled" && (
           <motion.section
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -350,7 +350,7 @@ export default function PublicDeliveryNotePage() {
             <button
               type="button"
               onClick={() => handleMarkStatus("picked_up")}
-              disabled={updating || note.status === "delivered"}
+              disabled={updating || note.status === "picked_up"}
               className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50"
             >
               {updating ? (
@@ -358,7 +358,7 @@ export default function PublicDeliveryNotePage() {
               ) : (
                 <ArrowRight size={12} />
               )}
-              Voy en camino
+              {note.status === "picked_up" ? "Ya en camino" : "Voy en camino"}
             </button>
             <button
               type="button"
@@ -367,8 +367,28 @@ export default function PublicDeliveryNotePage() {
               className="h-12 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50"
             >
               <CheckCircle2 size={12} />
-              Entregado
+              Marcar entregado
             </button>
+          </motion.section>
+        )}
+
+        {/* Si ya está entregada, mostramos un banner de confirmación */}
+        {note.status === "delivered" && (
+          <motion.section
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-300 dark:border-emerald-500/50 p-4 text-center"
+          >
+            <CheckCircle2
+              size={24}
+              className="text-emerald-600 dark:text-emerald-300 mx-auto mb-1"
+            />
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+              Entrega completada
+            </p>
+            <p className="text-[9px] font-bold text-emerald-700/70 dark:text-emerald-300/70 mt-0.5">
+              Gracias por tu trabajo
+            </p>
           </motion.section>
         )}
 

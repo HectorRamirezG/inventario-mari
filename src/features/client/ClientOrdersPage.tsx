@@ -46,40 +46,35 @@ export default function ClientOrdersPage() {
     if (!email) return
     let alive = true
     ;(async () => {
+      // Una sola query: trae las ventas + sus comandas embebidas
+      // (PostgREST hace el LEFT JOIN). Evita el segundo round-trip
+      // que hacíamos antes para resolver el delivery status.
       const { data } = await supabase
         .from("sales")
-        .select("id,total,paid,balance,status,is_layaway,created_at,public_token,payment_url")
+        .select(
+          "id,total,paid,balance,status,is_layaway,created_at,public_token,payment_url,delivery_notes(status,created_at)",
+        )
         .eq("customer_email", email)
         .order("created_at", { ascending: false })
         .limit(50)
       if (!alive) return
-      const list = (data as MyOrder[]) ?? []
-      setOrders(list)
-      setLoading(false)
-      // Carga delivery status de todas en batch
-      if (list.length > 0) {
-        try {
-          const { data: deliveries } = await supabase
-            .from("delivery_notes")
-            .select("sale_id,status,created_at")
-            .in(
-              "sale_id",
-              list.map((o) => o.id),
-            )
-            .order("created_at", { ascending: false })
-          if (!alive || !deliveries) return
-          const map: Record<string, string> = {}
-          for (const row of deliveries as Array<{
-            sale_id: string
-            status: string
-          }>) {
-            if (!map[row.sale_id]) map[row.sale_id] = row.status
-          }
-          setDeliveryBySale(map)
-        } catch {
-          /* tabla puede no existir aún */
+      const list = (data as any[]) ?? []
+      setOrders(list as MyOrder[])
+      // Indexa status de la comanda más reciente por sale_id (si existe)
+      const map: Record<string, string> = {}
+      for (const o of list) {
+        const notes: Array<{ status: string; created_at: string }> =
+          o.delivery_notes ?? []
+        if (notes.length > 0) {
+          // Ordena por created_at desc y toma la primera
+          const sorted = [...notes].sort((a, b) =>
+            b.created_at.localeCompare(a.created_at),
+          )
+          map[o.id] = sorted[0].status
         }
       }
+      setDeliveryBySale(map)
+      setLoading(false)
     })()
     return () => {
       alive = false

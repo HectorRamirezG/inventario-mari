@@ -150,6 +150,23 @@ export default function CreateDeliveryNoteModal({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!sale) return
+    // Defensa en profundidad: bloqueamos en el frontend si ya hay una
+    // comanda activa para esta venta. El SQL tiene también un unique
+    // index, así que aunque alguien hiciera la query directa fallaría.
+    const hasActive = existing.some(
+      (n) =>
+        n.status === "draft" ||
+        n.status === "sent" ||
+        n.status === "picked_up",
+    )
+    if (hasActive) {
+      toast.error(
+        "Ya hay una comanda activa para esta venta. Bórrala o márcala como entregada/cancelada para crear otra.",
+        { duration: 6000 },
+      )
+      setView("list")
+      return
+    }
     // Necesitamos al menos un dato útil para el repartidor: teléfono
     // suyo (para mandar WhatsApp) o dirección (la del cliente cuenta).
     const hasAnyAddress = !!(deliveryAddress.trim() || sale.customer_address)
@@ -292,7 +309,9 @@ export default function CreateDeliveryNoteModal({
                   <div className="min-w-0">
                     <h2 className="text-sm font-black uppercase tracking-tight">
                       {view === "list"
-                        ? `Comandas (${existing.length})`
+                        ? existing.length === 1
+                          ? "Comanda"
+                          : `Comandas (${existing.length})`
                         : view === "success"
                           ? "Comanda lista"
                           : existing.length > 0
@@ -344,16 +363,40 @@ export default function CreateDeliveryNoteModal({
                     </div>
                   )}
 
-                  {existing.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setView("form")}
-                      className="w-full h-12 rounded-2xl border-2 border-dashed border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 press"
-                    >
-                      <Plus size={14} />
-                      Crear otra comanda
-                    </button>
-                  )}
+                  {/* Regla: una sola comanda ACTIVA por venta. Si ya hay
+                      una activa (draft/sent/picked_up), el admin debe
+                      esperarla a entregar/cancelar o borrarla. Si todas
+                      están en estado final, puede crear una nueva. */}
+                  {existing.length > 0 && (() => {
+                    const hasActive = existing.some(
+                      (n) =>
+                        n.status === "draft" ||
+                        n.status === "sent" ||
+                        n.status === "picked_up",
+                    )
+                    if (hasActive) {
+                      return (
+                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-3 text-center">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
+                            Una sola comanda activa por venta
+                          </p>
+                          <p className="text-[10px] font-bold text-amber-700/80 dark:text-amber-300/80 mt-1 leading-snug">
+                            Espera a que se entregue o bórrala para crear una nueva.
+                          </p>
+                        </div>
+                      )
+                    }
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setView("form")}
+                        className="w-full h-12 rounded-2xl border-2 border-dashed border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-primary text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 press"
+                      >
+                        <Plus size={14} />
+                        Crear nueva comanda
+                      </button>
+                    )
+                  })()}
                 </div>
               )}
 
