@@ -8,6 +8,7 @@ import {
   useTransform,
 } from "framer-motion"
 import { Package, X, ChevronLeft, ChevronRight } from "lucide-react"
+import { imageMedium, imageLarge, imageAvatar } from "../../lib/imageTransform"
 
 interface Props {
   /** Lista ordenada de URLs. La primera es la portada. */
@@ -79,10 +80,11 @@ export default function ImageCarousel({
           style={{ aspectRatio: aspect }}
         >
           <img
-            src={valid[0]}
+            src={imageMedium(valid[0]) || valid[0]}
             alt={alt}
             className="w-full h-full object-cover"
             loading="lazy"
+            decoding="async"
             draggable={false}
           />
         </button>
@@ -123,7 +125,7 @@ export default function ImageCarousel({
         <AnimatePresence initial={false} mode="popLayout">
           <motion.img
             key={index}
-            src={valid[index]}
+            src={imageMedium(valid[index]) || valid[index]}
             alt={alt}
             className="absolute inset-0 w-full h-full object-cover cursor-pointer"
             initial={{ opacity: 0, scale: 1.04 }}
@@ -139,6 +141,7 @@ export default function ImageCarousel({
               else if (enableFullscreen) setFullscreen(true)
             }}
             loading="lazy"
+            decoding="async"
             draggable={false}
           />
         </AnimatePresence>
@@ -204,7 +207,7 @@ export default function ImageCarousel({
                   : "border-transparent opacity-60 hover:opacity-100"
               }`}
             >
-              <img src={u} alt="" className="w-full h-full object-cover" />
+              <img src={imageAvatar(u) || u} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
             </button>
           ))}
         </div>
@@ -403,7 +406,7 @@ function FullscreenViewer({
             <AnimatePresence mode="popLayout">
               <motion.img
                 key={index}
-                src={images[index]}
+                src={imageLarge(images[index]) || images[index]}
                 alt=""
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale }}

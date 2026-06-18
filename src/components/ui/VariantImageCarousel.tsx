@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import { Package, ChevronLeft, ChevronRight } from "lucide-react"
+import { imageMedium } from "../../lib/imageTransform"
 
 export interface CarouselVariant {
   id: string
@@ -90,9 +91,10 @@ export default function VariantImageCarousel({
       <AnimatePresence mode="wait">
         <motion.img
           key={`${active.id}-${safeIdx}`}
-          src={activeUrl}
+          src={imageMedium(activeUrl) || activeUrl}
           alt={active.name}
           loading="lazy"
+          decoding="async"
           draggable={false}
           initial={{ opacity: 0, scale: 1.04 }}
           animate={{ opacity: 1, scale: 1 }}

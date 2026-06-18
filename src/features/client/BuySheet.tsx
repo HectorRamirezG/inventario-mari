@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 
 import { formatMoney } from "../../lib/format"
+import { imageAvatar } from "../../lib/imageTransform"
 
 /* Estructura mínima reutilizable desde ClientShopPage */
 export interface BuySheetVariant {
@@ -209,9 +210,12 @@ export default function BuySheet({
                         <div className="w-14 h-14 rounded-xl bg-white dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-300 shrink-0">
                           {v.image_url ? (
                             <img
-                              src={v.image_url}
+                              src={imageAvatar(v.image_url) || v.image_url}
                               alt={v.variant_name}
                               loading="lazy"
+                              decoding="async"
+                              width={112}
+                              height={112}
                               className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
                             />
                           ) : (

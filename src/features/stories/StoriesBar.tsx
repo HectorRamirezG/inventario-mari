@@ -5,6 +5,7 @@ import { Sparkles, Plus } from "lucide-react"
 import { listActiveStories, type Story } from "./storiesService"
 import StoryViewer from "./StoryViewer"
 import Skeleton from "../../components/ui/Skeleton"
+import { imageAvatar } from "../../lib/imageTransform"
 
 interface Props {
   /** Solo visible si la regla `stories_enabled` está activa. */
@@ -102,9 +103,12 @@ export default function StoriesBar({ enabled, showAddCta, onAdd }: Props) {
             >
               <div className="w-full h-full rounded-full overflow-hidden bg-white dark:bg-slate-900 p-[2px]">
                 <img
-                  src={s.image_url}
+                  src={imageAvatar(s.image_url) || s.image_url}
                   alt={s.caption || ""}
                   loading="lazy"
+                  decoding="async"
+                  width={128}
+                  height={128}
                   className="w-full h-full rounded-full object-cover"
                 />
               </div>

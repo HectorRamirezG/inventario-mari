@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { avatarGradient, initialsFromName, cn } from "../../lib/utils"
+import { imageAvatar } from "../../lib/imageTransform"
 
 interface AvatarProps {
   name?: string | null
@@ -46,11 +47,14 @@ export default function Avatar({
     >
       {showImage ? (
         <img
-          src={src!}
+          src={imageAvatar(src!) || src!}
           alt={name || ""}
           className="w-full h-full object-cover"
           onError={() => setErrored(true)}
           loading="lazy"
+          width={size}
+          height={size}
+          decoding="async"
         />
       ) : (
         <span className="leading-none tracking-tight">{initials}</span>

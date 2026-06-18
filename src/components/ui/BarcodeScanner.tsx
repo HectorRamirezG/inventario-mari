@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState } from "react"
-import { Html5Qrcode } from "html5-qrcode"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, ScanLine, CameraOff } from "lucide-react"
 import { createPortal } from "react-dom"
+
+/**
+ * Dynamic import del SDK pesado (~120kb gz). Sólo se descarga la
+ * primera vez que el admin/cliente abre el scanner. No bloquea el
+ * bundle inicial.
+ */
+type Html5QrcodeType = import("html5-qrcode").Html5Qrcode
+async function loadHtml5Qrcode(): Promise<{
+  new (id: string, cfg?: any): Html5QrcodeType
+}> {
+  const mod = await import("html5-qrcode")
+  return mod.Html5Qrcode as any
+}
 
 interface Props {
   open: boolean
@@ -21,7 +33,7 @@ interface Props {
  */
 export default function BarcodeScanner({ open, onClose, onScan }: Props) {
   const containerId = "barcode-scanner-region"
-  const scannerRef = useRef<Html5Qrcode | null>(null)
+  const scannerRef = useRef<Html5QrcodeType | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastScan, setLastScan] = useState<string | null>(null)
 
@@ -36,11 +48,13 @@ export default function BarcodeScanner({ open, onClose, onScan }: Props) {
     }
 
     let cancelled = false
-    let scanner: Html5Qrcode | null = null
+    let scanner: Html5QrcodeType | null = null
 
     // Pequeño delay para asegurar que el DOM ya tiene el contenedor
     const t = setTimeout(async () => {
       try {
+        const Html5Qrcode = await loadHtml5Qrcode()
+        if (cancelled) return
         scanner = new Html5Qrcode(containerId, { verbose: false })
         scannerRef.current = scanner
 
