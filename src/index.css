@@ -945,11 +945,14 @@ html[data-motion="high"] *::after {
     padding-top: max(0.25rem, env(safe-area-inset-top));
   }
 
-  /* Scroll suave + inercia en iOS + scrollbar fina */
+  /* Scroll suave + inercia iOS + capa GPU dedicada para evitar tearing
+     y parpadeo del contenido durante el momentum scroll en mobile. */
   .scroll-container-ios {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
     scroll-behavior: smooth;
+    transform: translateZ(0);
+    will-change: scroll-position;
   }
 
   /* Scrollbar minimalista para listas dentro de tarjetas */

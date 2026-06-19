@@ -15,6 +15,7 @@ import { confirmAction } from "../../lib/confirm"
 import { promptDialog } from "../../lib/prompt"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
+import { useDebouncedValue } from "../../lib/useDebouncedValue"
 import type { Sale } from "../../types/database"
 
 export type ApartadosFilter = "pending" | "paid" | "all"
@@ -89,6 +90,7 @@ export function useApartados() {
   const [filter, setFilter] = useState<ApartadosFilter>("all")
   const [onlyLayaway, setOnlyLayaway] = useState(false)
   const [search, setSearch] = useState("")
+  const debouncedSearch = useDebouncedValue(search, 300)
 
   const queryKey = apartadosQueryKey(filter, onlyLayaway)
   const { data, isLoading, refetch } = useQuery<ApartadosBundle>({
@@ -180,10 +182,10 @@ export function useApartados() {
   )
 
   const filtered = useMemo(() => {
-    const q = search.trim()
+    const q = debouncedSearch.trim()
     const list = !q ? sales : fuse.search(q).map((r) => r.item)
     return [...list].sort((a, b) => lastActivityFor(b) - lastActivityFor(a))
-  }, [sales, search, lastActivityFor, fuse])
+  }, [sales, debouncedSearch, lastActivityFor, fuse])
 
   const totals = useMemo(() => {
     return filtered.reduce(

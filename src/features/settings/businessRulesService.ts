@@ -488,6 +488,15 @@ async function load(): Promise<BusinessRules> {
   return cache!
 }
 
+function applyIfChanged(next: BusinessRules): boolean {
+  const before = cache ? JSON.stringify(cache) : ""
+  const after = JSON.stringify(next)
+  if (before === after) return false
+  cache = next
+  listeners.forEach((l) => l(cache!))
+  return true
+}
+
 export async function saveBusinessRules(rules: BusinessRules): Promise<void> {
   const { error } = await supabase
     .from("app_settings")
@@ -496,8 +505,7 @@ export async function saveBusinessRules(rules: BusinessRules): Promise<void> {
       { onConflict: "key" }
     )
   if (error) throw error
-  cache = { ...rules }
-  listeners.forEach((l) => l(cache!))
+  applyIfChanged({ ...rules })
 }
 
 export function useBusinessRules(): BusinessRules {
@@ -509,7 +517,10 @@ export function useBusinessRules(): BusinessRules {
     } else {
       setVal(cache)
     }
-    const l = (r: BusinessRules) => alive && setVal(r)
+    const l = (r: BusinessRules) => {
+      if (!alive) return
+      setVal((prev) => (JSON.stringify(prev) === JSON.stringify(r) ? prev : r))
+    }
     listeners.add(l)
     return () => {
       alive = false

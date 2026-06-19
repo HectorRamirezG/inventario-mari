@@ -92,7 +92,8 @@ export function useSidebarCounts(): SidebarCounts {
     setCounts((prev) => {
       const next: SidebarCounts = { ...ZERO }
       for (const [k, v] of results) next[k] = v
-      return { ...prev, ...next }
+      const merged = { ...prev, ...next }
+      return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged
     })
   }, [session, isStaff, rules.wishes_enabled, rules.reviews_enabled, rules.stock_alert_threshold])
 
