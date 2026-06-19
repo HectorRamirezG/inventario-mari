@@ -43,6 +43,7 @@ const SalesPage = lazy(() => import("./features/sales/SalesPage"))
 const ApartadosPage = lazy(() => import("./features/apartados/ApartadosPage"))
 const SettingsPage = lazy(() => import("./features/settings/SettingsPage"))
 const BusinessRulesPage = lazy(() => import("./features/settings/BusinessRulesPage"))
+const UsersPage = lazy(() => import("./features/users/UsersPage"))
 const ClientOrdersPage = lazy(() => import("./features/client/ClientOrdersPage"))
 const MyReportsPage = lazy(() => import("./features/client/MyReportsPage"))
 const MyWishesPage = lazy(() => import("./features/wishes/MyWishesPage"))
@@ -80,6 +81,7 @@ import { useMyAvatar } from "./lib/useMyAvatar"
 import { useSidebarCounts } from "./lib/useSidebarCounts"
 import { preloadBusinessRules, useBusinessRules } from "./features/settings/businessRulesService"
 import { applyAccent, applyForceDark } from "./lib/applyTheme"
+import { useVisitorTracking } from "./lib/useVisitorTracking"
 import { applyMotionLevel } from "./lib/applyMotion"
 import { useUserPrefs, isDarkScheduleNow } from "./lib/userPrefs"
 
@@ -159,6 +161,7 @@ export default function App() {
       <InstallPrompt />
       <PwaUpdatePrompt />
       <ShortcutsCheatsheetMount />
+      <VisitorTrackingMount />
       <Routes>
         {/* Públicas (sin login) */}
         <Route path="/ticket/:token" element={<PublicTicketPage />} />
@@ -233,6 +236,13 @@ function ThemeMount() {
 function ShortcutsCheatsheetMount() {
   const { open, setOpen } = useShortcutsCheatsheet()
   return <ShortcutsCheatsheet open={open} onClose={() => setOpen(false)} />
+}
+
+/** Trackea visita anónima/logueada en BD para que Mari vea quién entra.
+ *  Best-effort: si la RPC no existe, silencia. */
+function VisitorTrackingMount() {
+  useVisitorTracking()
+  return null
 }
 
 /* ============================================================== */
@@ -517,6 +527,7 @@ function AdminShell() {
           w: "sugerencias", // w de "wishes"
           r: "resenias",
           y: "ciclos", // y de "cycles"
+          u: "usuarios", // u de "usuarios"
           a: "ajustes",
         }
         const target = map[e.key.toLowerCase()]
@@ -1116,6 +1127,7 @@ function AdminShell() {
                     {section === "resenias" && <ReviewsAdminPage />}
                     {section === "ciclos" && isAdmin && <CyclesPage />}
                     {section === "calculadora" && isAdmin && <PricingPage />}
+                    {section === "usuarios" && isAdmin && <UsersPage />}
                     {section === "reglas" && isAdmin && <BusinessRulesPage />}
                     {section === "ajustes" && <SettingsPage />}
                   </Suspense>

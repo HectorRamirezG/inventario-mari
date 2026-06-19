@@ -26,7 +26,7 @@ const META: Record<RfmTier, { label: string; icon: LucideIcon; classes: string }
   regular: {
     label: "Regular",
     icon: Heart,
-    classes: "bg-gradient-to-br from-fuchsia-50 to-pink-100 text-pink-700 border-pink-200",
+    classes: "bg-primary/10 text-primary border-primary/20",
   },
   dormant: {
     label: "Dormido",

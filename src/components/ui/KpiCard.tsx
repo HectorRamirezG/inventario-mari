@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { TrendingUp, TrendingDown, Minus } from "lucide-react"
 import Sparkline from "./Sparkline"
 
@@ -33,6 +33,18 @@ const SPARK_COLOR: Record<KpiTone, string> = {
   warn: "#f59e0b",
 }
 
+/** Resuelve el color del sparkline. Para `primary` lee la CSS var
+ *  --color-primary en runtime para que cambie con el tema elegido. */
+function resolveSparkColor(tone: KpiTone): string {
+  if (tone === "primary" && typeof document !== "undefined") {
+    const v = getComputedStyle(document.documentElement)
+      .getPropertyValue("--color-primary")
+      .trim()
+    if (v) return v
+  }
+  return SPARK_COLOR[tone]
+}
+
 /**
  * Tarjeta de métrica (KPI). Tono semántico opcional.
  * Todas las KPI de la app deben usar este componente.
@@ -51,7 +63,7 @@ export default function KpiCard({
   delta,
   icon,
 }: KpiCardProps) {
-  const sparkColor = SPARK_COLOR[tone]
+  const sparkColor = resolveSparkColor(tone)
   const showDelta = typeof delta === "number" && Number.isFinite(delta)
   const deltaTrend = showDelta ? (delta! > 0.5 ? "up" : delta! < -0.5 ? "down" : "flat") : null
   const deltaCls =
@@ -60,8 +72,27 @@ export default function KpiCard({
     "text-slate-400 dark:text-slate-500"
   const DeltaIcon = deltaTrend === "up" ? TrendingUp : deltaTrend === "down" ? TrendingDown : Minus
 
+  // Pulse cuando cambia el valor — feedback visual en realtime sin
+  // necesidad de toast. Solo dispara tras el primer render para no
+  // flashear en el mount inicial.
+  const prev = useRef<unknown>(value)
+  const [pulse, setPulse] = useState(false)
+  useEffect(() => {
+    if (prev.current === value) return
+    const isFirst = prev.current === undefined
+    prev.current = value
+    if (isFirst) return
+    setPulse(true)
+    const id = window.setTimeout(() => setPulse(false), 900)
+    return () => window.clearTimeout(id)
+  }, [value])
+
   return (
-    <div className={`kpi-card ${TONE_CLASS[tone]} relative overflow-hidden group`}>
+    <div
+      className={`kpi-card ${TONE_CLASS[tone]} relative overflow-hidden group transition-shadow ${
+        pulse ? "ring-2 ring-primary/40 shadow-bloom" : ""
+      }`}
+    >
       <div className="relative z-10">
         <p className="text-[7px] font-black uppercase tracking-widest opacity-70 flex items-center gap-1">
           {icon && <span className="opacity-80">{icon}</span>}

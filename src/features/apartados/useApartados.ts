@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
+import Fuse from "fuse.js";
 import {
   addPayment,
   cancelSale,
@@ -202,21 +203,34 @@ export function useApartados() {
     [latestProofAt]
   );
 
+  // Fuse index — fuzzy search tolerante a typos en nombre/teléfono/folio/notas.
+  // Re-creado solo cuando cambia la lista de sales.
+  const fuse = useMemo(
+    () =>
+      new Fuse(sales, {
+        keys: [
+          { name: "customer_name", weight: 0.5 },
+          { name: "customer_phone", weight: 0.2 },
+          { name: "id", weight: 0.15 },
+          { name: "notes", weight: 0.15 },
+        ],
+        threshold: 0.35,
+        minMatchCharLength: 2,
+        ignoreLocation: true,
+      }),
+    [sales]
+  );
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     const list = !q
       ? sales
-      : sales.filter(
-          (s) =>
-            (s.customer_name ?? "").toLowerCase().includes(q) ||
-            (s.customer_phone ?? "").toLowerCase().includes(q) ||
-            (s.notes ?? "").toLowerCase().includes(q)
-        );
+      : fuse.search(q).map((r) => r.item);
     // Sort descendente por última actividad (tarjeta más fresca al inicio)
     return [...list].sort(
       (a, b) => lastActivityFor(b) - lastActivityFor(a)
     );
-  }, [sales, search, lastActivityFor]);
+  }, [sales, search, lastActivityFor, fuse]);
 
   const totals = useMemo(() => {
     return filtered.reduce(

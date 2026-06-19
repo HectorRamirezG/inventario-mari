@@ -839,10 +839,10 @@ html[data-motion="high"] *::after {
     filter: blur(40px);
   }
   .deco-orb-pink {
-    background: radial-gradient(circle, rgba(230, 0, 126, 0.18), transparent 70%);
+    background: radial-gradient(circle, color-mix(in srgb, var(--brand-from) 18%, transparent), transparent 70%);
   }
   .deco-orb-violet {
-    background: radial-gradient(circle, rgba(168, 85, 247, 0.18), transparent 70%);
+    background: radial-gradient(circle, color-mix(in srgb, var(--brand-to) 18%, transparent), transparent 70%);
   }
   .deco-orb-amber {
     background: radial-gradient(circle, rgba(245, 158, 11, 0.18), transparent 70%);

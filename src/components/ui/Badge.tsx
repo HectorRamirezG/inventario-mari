@@ -13,7 +13,7 @@ const badge = tv({
       bad: "bg-rose-50 text-rose-600 border-rose-100/50",
       info: "bg-sky-50 text-sky-600 border-sky-100/50",
       neutral: "bg-slate-50 text-slate-500 border-slate-200/50",
-      primary: "bg-pink-50 text-primary border-pink-100/50"
+      primary: "bg-primary/10 text-primary border-primary/20"
     },
     size: {
       sm: "px-2.5 py-1 text-[9px]",
@@ -33,7 +33,7 @@ const dotColors: Record<string, string> = {
   bad: "bg-rose-500 shadow-[0_0_8px_#f43f5e]",
   info: "bg-sky-500 shadow-[0_0_8px_#0ea5e9]",
   neutral: "bg-slate-400 shadow-none",
-  primary: "bg-primary shadow-[0_0_8px_#e6007e]"
+  primary: "bg-primary shadow-[0_0_8px_var(--color-primary)]"
 }
 
 interface BadgeProps extends VariantProps<typeof badge> {

@@ -26,6 +26,7 @@ import {
   Heart,
   Camera,
   Star,
+  Users,
 } from "lucide-react"
 
 import type { BusinessRules } from "../features/settings/businessRulesService"
@@ -41,6 +42,7 @@ export type AdminSection =
   | "sugerencias"
   | "stories"
   | "resenias"
+  | "usuarios"
   | "reglas"
   | "ajustes"
 
@@ -161,6 +163,15 @@ export const ADMIN_SECTIONS: AdminSectionEntry[] = [
     adminOnly: true,
     accent: "linear-gradient(135deg,#f97316,#eab308)",
     hint: "Aplicar precios a variantes",
+  },
+  {
+    id: "usuarios",
+    label: "Usuarios",
+    caption: "Registrados y visitantes anónimos",
+    icon: Users,
+    adminOnly: true,
+    accent: "linear-gradient(135deg,#0ea5e9,#6366f1)",
+    hint: "Ver clientes y visitantes",
   },
   {
     id: "reglas",

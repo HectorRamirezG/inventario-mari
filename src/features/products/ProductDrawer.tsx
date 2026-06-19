@@ -24,6 +24,7 @@ import Badge from "../../components/ui/Badge"
 import { supabase } from "../../lib/supabase"
 import { debug } from "../../lib/debug"
 import { formatMoney } from "../../lib/format"
+import { useSubmitShortcut } from "../../lib/useSubmitShortcut"
 import { suggestedPrices, money } from "../pricing/suggest"
 import { getPricingConfig } from "../pricing/pricingConfigService"
 import {
@@ -200,6 +201,11 @@ export default function ProductDrawer({
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onClose])
+
+  // Ctrl/Cmd + Enter dispara guardar — solo en modo create/edit (no stock).
+  useSubmitShortcut(() => {
+    if (mode === "create" || mode === "edit") handleSaveProduct()
+  }, open && mode !== "stock")
 
   // ──────────── Precios sugeridos (referencia) ────────────
   const sug = useMemo(() => {
