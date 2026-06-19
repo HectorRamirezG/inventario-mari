@@ -72,6 +72,29 @@ export default function DayCloseView({ onClose }: { onClose: () => void }) {
         </button>
       </div>
 
+      {/* Mini-guía: explica para qué sirve el Cierre del día y qué hacer
+          con él. Es la pantalla menos auto-explicativa de la app, así que
+          conviene aclarar de un vistazo: NO bloquea nada (sigues operando
+          normal), es un RESUMEN imprimible para tu archivo o WhatsApp. */}
+      <div className="mb-4 rounded-2xl bg-gradient-to-br from-amber-50 to-pink-50 dark:from-amber-500/10 dark:to-pink-500/10 border border-amber-100 dark:border-amber-500/25 p-3 flex items-start gap-2.5 print:hidden">
+        <span className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 flex items-center justify-center shrink-0 text-[13px]">
+          ☀️
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+            ¿Qué es el Cierre del día?
+          </p>
+          <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 leading-snug mt-0.5">
+            Es un <span className="font-black">reporte resumen</span> de lo
+            que pasó hoy: cuánto vendiste, cuánto cobraste, cuánto
+            queda por cobrar, qué métodos de pago se usaron y el ticket
+            promedio. Sirve para imprimirlo o mandarlo por WhatsApp como
+            "corte diario". <span className="font-black text-amber-700 dark:text-amber-300">No bloquea nada</span>: puedes
+            seguir cobrando y registrando ventas después de generarlo.
+          </p>
+        </div>
+      </div>
+
       {/* Encabezado del reporte */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}

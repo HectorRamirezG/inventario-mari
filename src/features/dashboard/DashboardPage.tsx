@@ -142,9 +142,9 @@ export default function DashboardPage() {
           <button
             onClick={() => setDayCloseOpen(true)}
             className="h-10 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom active:scale-95 transition-transform"
-            title="Cierre del día"
+            title="Reporte resumen del día (imprimible). No bloquea ventas, solo genera el corte."
           >
-            <Sun size={12} /> Cierre
+            <Sun size={12} /> Cierre del día
           </button>
           <button
             onClick={refresh}
@@ -153,6 +153,36 @@ export default function DashboardPage() {
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           </button>
+        </div>
+      </div>
+
+      {/* Mini-guía para que Mari (o staff nuevo) entienda de un vistazo
+          qué es esta pantalla. Sigue el mismo patrón visual que el
+          banner de Reglas para mantener consistencia en toda la app. */}
+      <div className="rounded-2xl bg-gradient-to-br from-primary/8 to-violet-500/8 dark:from-primary/15 dark:to-violet-500/15 border border-primary/15 dark:border-primary/25 p-3 flex items-start gap-2.5">
+        <span className="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0 text-[10px] font-black">
+          ?
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+            ¿Qué veo aquí?
+          </p>
+          <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 leading-snug mt-0.5">
+            Tus números del periodo seleccionado:{" "}
+            <span className="font-black">Ingresos</span> (lo vendido),{" "}
+            <span className="font-black">Costo</span> (lo que invertiste en
+            mercancía),{" "}
+            <span className="font-black text-emerald-700 dark:text-emerald-300">
+              Ganancia
+            </span>{" "}
+            (lo que de verdad te quedó) y{" "}
+            <span className="font-black text-amber-700 dark:text-amber-300">
+              Por cobrar
+            </span>{" "}
+            (apartados pendientes). Toca{" "}
+            <span className="font-black">Cierre del día</span> para generar el
+            corte imprimible de hoy.
+          </p>
         </div>
       </div>
 

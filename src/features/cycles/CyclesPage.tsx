@@ -90,6 +90,43 @@ export default function CyclesPage() {
         </div>
       </div>
 
+      {/* Mini-guía para explicar el concepto de "ciclo de inventario".
+          Es la pantalla más técnica del admin y muchas personas no
+          conocen el término. La explico con palabras simples + un
+          ejemplo concreto para que tenga sentido inmediato. */}
+      <div className="rounded-2xl bg-gradient-to-br from-violet-500/8 to-primary/8 dark:from-violet-500/15 dark:to-primary/15 border border-violet-500/15 dark:border-violet-500/25 p-3 flex items-start gap-2.5">
+        <span className="w-7 h-7 rounded-lg bg-violet-500/15 text-violet-700 dark:text-violet-300 flex items-center justify-center shrink-0 text-[13px]">
+          🎯
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+            ¿Qué es un ciclo?
+          </p>
+          <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 leading-snug mt-0.5">
+            Un{" "}
+            <span className="font-black">ciclo</span> es un periodo (típicamente
+            un mes) donde llevas la cuenta de cuánto invertiste en mercancía y
+            cuándo recuperas ese dinero.
+            <br />
+            <span className="font-black text-violet-700 dark:text-violet-300">
+              Break-even
+            </span>{" "}
+            = punto donde lo cobrado ya cubrió toda tu inversión + gastos. A
+            partir de ahí, lo que entra es{" "}
+            <span className="font-black text-emerald-700 dark:text-emerald-300">
+              ganancia libre
+            </span>
+            .
+            <br />
+            <span className="italic text-slate-500">
+              Ejemplo: Invertiste $5,000 en lote y gastaste $1,000 en envíos →
+              tu meta del ciclo es $6,000. Cuando llegues, todo lo siguiente es
+              ganancia neta.
+            </span>
+          </p>
+        </div>
+      </div>
+
       {/* HERO: ciclo activo */}
       {state.active && state.snapshot ? (
         <ActiveCycleHero
@@ -381,6 +418,7 @@ function ActiveCycleHero({
             whileTap={{ scale: 0.95 }}
             onClick={onInject}
             className="flex-1 min-w-[120px] h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+            title="Registrar dinero NUEVO que metiste al negocio (lote nuevo, préstamo, ahorro propio). Suma a la meta del ciclo."
           >
             <ArrowDownCircle size={13} /> Inyectar capital
           </motion.button>
@@ -388,6 +426,7 @@ function ActiveCycleHero({
             whileTap={{ scale: 0.95 }}
             onClick={onExpense}
             className="flex-1 min-w-[120px] h-11 rounded-2xl bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+            title="Registrar un gasto del negocio (envíos, gasolina, packaging, publicidad). Suma a lo que debes recuperar antes de tener ganancia libre."
           >
             <Receipt size={13} /> Gasto operativo
           </motion.button>
@@ -396,6 +435,7 @@ function ActiveCycleHero({
             onClick={onClose}
             className="flex-1 min-w-[120px] h-11 rounded-2xl text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom"
             style={{ background: "linear-gradient(135deg,#0f172a,#1e293b)" }}
+            title="Termina el ciclo actual y archiva los números. Útil al fin de mes para empezar el siguiente desde cero. NO borra las ventas."
           >
             <StopCircle size={13} /> Cerrar ciclo
           </motion.button>
