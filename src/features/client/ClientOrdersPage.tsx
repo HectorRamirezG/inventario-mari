@@ -45,7 +45,7 @@ export default function ClientOrdersPage() {
   useEffect(() => {
     if (!email) return
     let alive = true
-    ;(async () => {
+    const loadOrders = async () => {
       // Una sola query: trae las ventas + sus comandas embebidas
       // (PostgREST hace el LEFT JOIN). Evita el segundo round-trip
       // que hacíamos antes para resolver el delivery status.
@@ -75,9 +75,37 @@ export default function ClientOrdersPage() {
       }
       setDeliveryBySale(map)
       setLoading(false)
-    })()
+    }
+    loadOrders()
+    // Realtime: cuando el admin cambia el status de un pedido, se cobra,
+    // o se actualiza la comanda, refrescamos en vivo. Debounce 500ms.
+    let debounceId: ReturnType<typeof setTimeout> | undefined
+    const schedule = () => {
+      if (debounceId) clearTimeout(debounceId)
+      debounceId = setTimeout(loadOrders, 500)
+    }
+    const channel = supabase
+      .channel(`my-orders-${email}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "sales",
+          filter: `customer_email=eq.${email}`,
+        },
+        schedule,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "delivery_notes" },
+        schedule,
+      )
+      .subscribe()
     return () => {
       alive = false
+      if (debounceId) clearTimeout(debounceId)
+      supabase.removeChannel(channel)
     }
   }, [email])
 

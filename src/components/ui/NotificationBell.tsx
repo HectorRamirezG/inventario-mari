@@ -184,6 +184,114 @@ function actionLabel(type: string): string | null {
 }
 
 /**
+ * Fallback de destino según tipo de notif cuando `n.link` viene vacío
+ * o cuando preferimos saltar directo a una sección admin/cliente.
+ *
+ * Retorna:
+ *   - `{ kind: "admin", section }` → dispara `mari:navigate`
+ *   - `{ kind: "route", path }`    → react-router navigate()
+ *   - `{ kind: "event", name, detail? }` → window.dispatchEvent
+ *   - `null` → no hay acción conocida (sigue siendo clickeable pero
+ *      solo marca como leído)
+ */
+type ResolvedTarget =
+  | { kind: "admin"; section: string }
+  | { kind: "route"; path: string }
+  | { kind: "event"; name: string; detail?: any }
+
+function resolveTarget(
+  n: { type: string; metadata?: any; link?: string | null },
+  isAdmin: boolean,
+): ResolvedTarget | null {
+  // 1) Proofs siempre abren el drawer (admin)
+  if (
+    isAdmin &&
+    (n.type === "payment_proof" || n.type === "payment_proof_uploaded")
+  ) {
+    const proofId = n.metadata?.proof_id as string | undefined
+    if (proofId)
+      return { kind: "event", name: "mari:open-proof", detail: { proofId } }
+  }
+
+  // 2) Si trae link explícito y parece url/section, úsalo (parser después).
+  //    Lo manejamos en handleClick para no duplicar.
+
+  // 3) Fallback por tipo
+  if (isAdmin) {
+    switch (n.type) {
+      // Ventas / pagos / entregas → caja o pendientes según haya saldo
+      case "payment_added":
+      case "sale_paid":
+      case "sale_cancelled":
+      case "price_adjusted":
+      case "payment_proof_rejected":
+      case "proof_rejected":
+      case "payment_approved":
+      case "payment_rejected":
+      case "delivery_picked_up":
+      case "delivery_delivered":
+      case "delivery_not_opened":
+        return { kind: "admin", section: "pendientes" }
+      case "new_layaway":
+      case "layaway_due_soon":
+      case "layaway_stale":
+      case "layaway_extension":
+      case "abandoned_cart":
+      case "payment_proof_reminder":
+        return { kind: "admin", section: "pendientes" }
+      case "support_ticket":
+      case "support_resolved":
+        return { kind: "admin", section: "soporte" }
+      case "wish_created":
+      case "wish_status":
+      case "wish_available":
+        return { kind: "admin", section: "sugerencias" }
+      case "review_created":
+      case "review_published":
+        return { kind: "admin", section: "resenias" }
+      case "stock_low":
+      case "stock_back":
+        return { kind: "admin", section: "catalogo" }
+      case "daily_goal":
+        return { kind: "admin", section: "hoy" }
+      case "new_customer":
+        return { kind: "admin", section: "usuarios" }
+      case "birthday":
+        return { kind: "admin", section: "usuarios" }
+    }
+  } else {
+    // Cliente
+    switch (n.type) {
+      case "payment_added":
+      case "sale_paid":
+      case "sale_cancelled":
+      case "price_adjusted":
+      case "payment_approved":
+      case "payment_rejected":
+      case "proof_rejected":
+      case "payment_proof_rejected":
+      case "delivery_picked_up":
+      case "delivery_delivered":
+      case "new_layaway":
+      case "layaway_extension":
+      case "payment_proof_reminder":
+        return { kind: "route", path: "/mis-pedidos" }
+      case "support_ticket":
+      case "support_resolved":
+        return { kind: "route", path: "/mis-reportes" }
+      case "wish_created":
+      case "wish_status":
+      case "wish_available":
+        return { kind: "route", path: "/mis-deseos" }
+      case "stock_back":
+        return { kind: "route", path: "/" }
+    }
+  }
+
+  return null
+}
+
+/**
  * Campana global de notificaciones. Renderiza un botón con badge y
  * abre un dropdown portal. Funciona en móvil (full-width) y desktop.
  */
@@ -285,35 +393,48 @@ export default function NotificationBell({
     if (!n.read_at) await markAsRead(n.id)
     setOpen(false)
 
-    // Acciones especiales: en lugar de navegar, abre el drawer apropiado
-    if (
-      n.type === "payment_proof_uploaded" ||
-      n.type === "payment_proof"
-    ) {
-      const proofId = n.metadata?.proof_id as string | undefined
-      if (proofId) {
-        window.dispatchEvent(
-          new CustomEvent("mari:open-proof", { detail: { proofId } })
-        )
-        return
-      }
-    }
-
+    // 1) Si trae link explícito, intentamos parsearlo primero.
     if (n.link) {
       if (/^https?:\/\//i.test(n.link)) {
         window.open(n.link, "_blank")
         return
       }
-      // Para enlaces tipo /admin?proof=xxx → parsear y abrir drawer
-      const url = new URL(n.link, window.location.origin)
-      const proof = url.searchParams.get("proof")
-      if (proof) {
-        window.dispatchEvent(
-          new CustomEvent("mari:open-proof", { detail: { proofId: proof } })
-        )
+      try {
+        const url = new URL(n.link, window.location.origin)
+        const proof = url.searchParams.get("proof")
+        if (proof) {
+          window.dispatchEvent(
+            new CustomEvent("mari:open-proof", { detail: { proofId: proof } })
+          )
+          return
+        }
+        // Si trae ?section=xxx, navegar a esa sección del admin
+        const adminSection = url.searchParams.get("section")
+        if (adminSection) {
+          window.dispatchEvent(
+            new CustomEvent("mari:navigate", { detail: { tab: adminSection } })
+          )
+          return
+        }
+        navigate(n.link)
         return
+      } catch {
+        // Si no parsea, sigue al fallback por tipo
       }
-      navigate(n.link)
+    }
+
+    // 2) Fallback por tipo de notificación
+    const target = resolveTarget(n, isAdmin)
+    if (!target) return
+
+    if (target.kind === "admin") {
+      window.dispatchEvent(
+        new CustomEvent("mari:navigate", { detail: { tab: target.section } })
+      )
+    } else if (target.kind === "route") {
+      navigate(target.path)
+    } else if (target.kind === "event") {
+      window.dispatchEvent(new CustomEvent(target.name, { detail: target.detail }))
     }
   }
 
@@ -535,7 +656,16 @@ export default function NotificationBell({
                     return (
                       <div
                         key={n.id}
-                        className={`relative flex gap-2 px-2.5 py-1.5 transition-colors ${
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleClick(n)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault()
+                            handleClick(n)
+                          }
+                        }}
+                        className={`relative flex gap-2 px-2.5 py-1.5 transition-colors cursor-pointer ${
                           unreadItem
                             ? "bg-primary/5 dark:bg-primary/10"
                             : `${rowBg} hover:bg-slate-50 dark:hover:bg-slate-800/40`
@@ -580,7 +710,10 @@ export default function NotificationBell({
                               <div className="flex items-center gap-1 mt-1">
                                 <button
                                   type="button"
-                                  onClick={() => handleClick(n)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleClick(n)
+                                  }}
                                   className="flex-1 h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-sky-500 hover:bg-sky-600 text-white shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1"
                                   title="Ver el comprobante"
                                 >
@@ -589,7 +722,10 @@ export default function NotificationBell({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleInlineApprove(n)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleInlineApprove(n)
+                                  }}
                                   disabled={inlineApproveBusy || inlineRejectBusy}
                                   className="h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
                                   title="Aprobar sin ver"
@@ -602,7 +738,10 @@ export default function NotificationBell({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleInlineReject(n)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleInlineReject(n)
+                                  }}
                                   disabled={inlineApproveBusy || inlineRejectBusy}
                                   className="h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-rose-500 hover:bg-rose-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
                                   title="Rechazar"
@@ -641,7 +780,10 @@ export default function NotificationBell({
                               {cta && !isProof && (
                                 <button
                                   type="button"
-                                  onClick={() => handleClick(n)}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleClick(n)
+                                  }}
                                   className="text-[9px] font-black uppercase tracking-widest text-white px-2 py-0.5 rounded-full shadow-bloom active:scale-95 transition-transform"
                                   style={{
                                     background:
@@ -657,7 +799,10 @@ export default function NotificationBell({
                         <div className="flex flex-col items-center gap-0.5 self-start opacity-60 hover:opacity-100 transition-opacity">
                           {n.read_at && (
                             <button
-                              onClick={() => markAsUnread(n.id)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                markAsUnread(n.id)
+                              }}
                               className="w-5 h-5 rounded-md flex items-center justify-center text-slate-400 hover:bg-primary/10 hover:text-primary"
                               title="Marcar como no leída"
                               aria-label="Marcar como no leída"
@@ -666,7 +811,10 @@ export default function NotificationBell({
                             </button>
                           )}
                           <button
-                            onClick={() => removeNotification(n.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeNotification(n.id)
+                            }}
                             className="w-5 h-5 rounded-md flex items-center justify-center text-slate-300 hover:bg-rose-50 hover:text-rose-500"
                             title="Quitar"
                             aria-label="Quitar notificación"

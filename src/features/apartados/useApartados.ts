@@ -181,6 +181,30 @@ export function useApartados() {
     };
   }, [sales, refresh, refreshProofs, refreshDelivery]);
 
+  // Realtime adicional: escucha INSERT/UPDATE de cualquier sale para
+  // que cuando entre una venta nueva (o cambie status) aparezca en la
+  // lista sin esperar al pull-refresh. Independiente del listener
+  // anterior (que filtra por sale_id, lo cual excluye INSERT nuevos).
+  useEffect(() => {
+    let debounceId: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+      if (debounceId) clearTimeout(debounceId);
+      debounceId = setTimeout(refresh, 500);
+    };
+    const channel = supabase
+      .channel("apartados-sales-feed")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "sales" },
+        schedule,
+      )
+      .subscribe();
+    return () => {
+      if (debounceId) clearTimeout(debounceId);
+      supabase.removeChannel(channel);
+    };
+  }, [refresh]);
+
   /**
    * Última actividad de una venta = max(created_at, último pago, último
    * comprobante). Se usa para ordenar el tablero. Como `sales` no tiene

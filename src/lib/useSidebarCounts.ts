@@ -22,6 +22,8 @@ export interface SidebarCounts {
   sugerencias: number
   /** Reviews esperando aprobación admin */
   resenias: number
+  /** Variantes con stock <= 3 (bajo stock) */
+  catalogo: number
 }
 
 const ZERO: SidebarCounts = {
@@ -29,6 +31,7 @@ const ZERO: SidebarCounts = {
   soporte: 0,
   sugerencias: 0,
   resenias: 0,
+  catalogo: 0,
 }
 
 async function countOrZero(
@@ -70,6 +73,8 @@ export function useSidebarCounts(): SidebarCounts {
         .then((n) => ["pendientes", n] as const),
       countOrZero("support_tickets", (q) => q.eq("status", "open"))
         .then((n) => ["soporte", n] as const),
+      countOrZero("variants", (q) => q.lte("stock", 3).eq("is_active", true))
+        .then((n) => ["catalogo", n] as const),
     ]
     if (rules.wishes_enabled) {
       tasks.push(
@@ -106,6 +111,50 @@ export function useSidebarCounts(): SidebarCounts {
         intervalId = undefined
       }
     }
+    // Realtime: nos suscribimos a las tablas que afectan los badges para
+    // refrescar al instante sin esperar 60s. Cada tabla emite un evento
+    // por INSERT/UPDATE/DELETE y reactivamos `refresh` con un debounce
+    // pequeño para no spamear si llegan varios cambios a la vez.
+    let debounceId: ReturnType<typeof setTimeout> | undefined
+    const scheduleRefresh = () => {
+      if (debounceId) clearTimeout(debounceId)
+      debounceId = setTimeout(refresh, 400)
+    }
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    if (session && isStaff) {
+      channel = supabase
+        .channel(`sidebar-counts-${session.user.id}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "sales" },
+          scheduleRefresh,
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "support_tickets" },
+          scheduleRefresh,
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "variants" },
+          scheduleRefresh,
+        )
+      if (rules.wishes_enabled) {
+        channel = channel.on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "wishes" },
+          scheduleRefresh,
+        )
+      }
+      if (rules.reviews_enabled) {
+        channel = channel.on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "reviews" },
+          scheduleRefresh,
+        )
+      }
+      channel.subscribe()
+    }
     if (typeof document !== "undefined") {
       if (document.visibilityState === "visible") startInterval()
       const handleVis = () => {
@@ -129,12 +178,18 @@ export function useSidebarCounts(): SidebarCounts {
       evNames.forEach((n) => window.addEventListener(n, handler))
       return () => {
         stopInterval()
+        if (debounceId) clearTimeout(debounceId)
+        if (channel) supabase.removeChannel(channel)
         document.removeEventListener("visibilitychange", handleVis)
         evNames.forEach((n) => window.removeEventListener(n, handler))
       }
     }
-    return () => stopInterval()
-  }, [refresh])
+    return () => {
+      stopInterval()
+      if (debounceId) clearTimeout(debounceId)
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [refresh, session, isStaff, rules.wishes_enabled, rules.reviews_enabled])
 
   return counts
 }

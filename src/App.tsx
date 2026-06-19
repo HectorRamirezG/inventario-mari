@@ -786,6 +786,7 @@ function AdminShell() {
                 if (m.id === "soporte") return sidebarCounts.soporte
                 if (m.id === "sugerencias") return sidebarCounts.sugerencias
                 if (m.id === "resenias") return sidebarCounts.resenias
+                if (m.id === "catalogo") return sidebarCounts.catalogo
                 return 0
               })()
               const showBadge = liveCount > 0

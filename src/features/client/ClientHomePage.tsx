@@ -107,8 +107,30 @@ export default function ClientHomePage() {
       setLoading(false)
     }
     loadCatalog()
+    // Realtime: refrescar cuando admin cambie productos/variantes.
+    // Debounce 800ms para no recargar por cada update individual.
+    let debounceId: ReturnType<typeof setTimeout> | undefined
+    const schedule = () => {
+      if (debounceId) clearTimeout(debounceId)
+      debounceId = setTimeout(loadCatalog, 800)
+    }
+    const channel = supabase
+      .channel("home-catalog")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products" },
+        schedule,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "variants" },
+        schedule,
+      )
+      .subscribe()
     return () => {
       alive = false
+      if (debounceId) clearTimeout(debounceId)
+      supabase.removeChannel(channel)
     }
   }, [])
 
