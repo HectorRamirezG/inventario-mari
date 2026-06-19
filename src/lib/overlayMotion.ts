@@ -5,8 +5,11 @@ import type { Transition } from "framer-motion"
 // desacelera de forma orgánica. Da sensación de fluidez en mobile.
 export const OVERLAY_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1]
 
+// Backdrop y panel comparten la MISMA duración para que la salida sea
+// simultánea. Si difieren, el backdrop desaparece antes y se ve el
+// panel deslizándose sobre la pantalla sin oscurecido (parpadeo al cerrar).
 export const OVERLAY_BACKDROP_TRANSITION: Transition = {
-  duration: 0.28,
+  duration: 0.38,
   ease: "easeOut",
 }
 

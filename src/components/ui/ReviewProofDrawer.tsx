@@ -216,15 +216,15 @@ export default function ReviewProofDrawer({
   return createPortal(
     <AnimatePresence>
       {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={OVERLAY_BACKDROP_TRANSITION}
+        <div
           className="fixed inset-0 z-[240] flex items-end md:items-center justify-center"
           style={{ isolation: "isolate" }}
         >
           <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={OVERLAY_BACKDROP_TRANSITION}
             className="absolute inset-0 bg-slate-950/75 z-0"
             onClick={() => !saving && onClose()}
             aria-hidden
@@ -517,7 +517,7 @@ export default function ReviewProofDrawer({
               </motion.div>
             )}
           </motion.div>
-        </motion.div>
+        </div>
       )}
     </AnimatePresence>,
     document.body

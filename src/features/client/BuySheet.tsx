@@ -251,15 +251,15 @@ export default function BuySheet({
   return createPortal(
     <AnimatePresence>
       {open && product && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={OVERLAY_BACKDROP_TRANSITION}
+        <div
           className="fixed inset-0 z-[180] flex items-end justify-center"
           style={{ isolation: "isolate" }}
         >
-          <div
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={OVERLAY_BACKDROP_TRANSITION}
             className="absolute inset-0 bg-slate-950/70 z-0"
             onClick={onClose}
             aria-hidden
@@ -508,7 +508,7 @@ export default function BuySheet({
               </button>
             </div>
           </motion.div>
-        </motion.div>
+        </div>
       )}
     </AnimatePresence>,
     document.body

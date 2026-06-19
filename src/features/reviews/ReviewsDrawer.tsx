@@ -190,11 +190,8 @@ export default function ReviewsDrawer({
   return createPortal(
     <AnimatePresence>
       {open && (
-        <motion.div
+        <div
           key="reviews-drawer-root"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
           className="fixed inset-0 z-[160] flex items-end justify-center"
           style={{ isolation: "isolate" }}
         >
@@ -396,7 +393,7 @@ export default function ReviewsDrawer({
               )}
             </div>
           </motion.div>
-        </motion.div>
+        </div>
       )}
     </AnimatePresence>,
     document.body,

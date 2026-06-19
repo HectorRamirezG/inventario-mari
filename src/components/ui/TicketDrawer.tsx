@@ -176,15 +176,15 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
     <>
       <AnimatePresence>
         {open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={OVERLAY_BACKDROP_TRANSITION}
+          <div
             className="fixed inset-0 z-[200] flex items-end justify-center"
             style={{ isolation: "isolate" }}
           >
             <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={OVERLAY_BACKDROP_TRANSITION}
               className="absolute inset-0 bg-slate-950/70 z-0"
               onClick={onClose}
               aria-hidden
@@ -379,7 +379,7 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
                 </>
               )}
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

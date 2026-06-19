@@ -84,15 +84,15 @@ export default function OverlayShell({
   return createPortal(
     <AnimatePresence>
       {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={OVERLAY_BACKDROP_TRANSITION}
+        <div
           className={clsx("fixed inset-0 flex", POSITION[variant])}
           style={{ zIndex, isolation: "isolate" }}
         >
-          <div
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={OVERLAY_BACKDROP_TRANSITION}
             className={clsx(
               "absolute inset-0 bg-slate-950/70 z-0",
               backdropClassName,
@@ -111,7 +111,7 @@ export default function OverlayShell({
           >
             {children}
           </motion.div>
-        </motion.div>
+        </div>
       )}
     </AnimatePresence>,
     document.body,

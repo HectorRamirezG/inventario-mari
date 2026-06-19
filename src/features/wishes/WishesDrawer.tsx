@@ -187,11 +187,8 @@ export default function WishesDrawer({
   return createPortal(
     <AnimatePresence>
       {open && (
-        <motion.div
+        <div
           key="wish-drawer-root"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
           className="fixed inset-0 z-[60] flex items-end justify-center"
           style={{ isolation: "isolate" }}
         >
@@ -199,6 +196,7 @@ export default function WishesDrawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={OVERLAY_BACKDROP_TRANSITION}
             onClick={() => !submitting && onClose()}
             className="absolute inset-0 bg-slate-900/65 z-0"
           />
@@ -439,7 +437,7 @@ export default function WishesDrawer({
               </p>
             </div>
           </motion.form>
-        </motion.div>
+        </div>
       )}
     </AnimatePresence>,
     document.body,
