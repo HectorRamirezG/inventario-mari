@@ -18,7 +18,7 @@ import { supabase } from "../../lib/supabase"
 import {
   onRealtimeEvent,
   onRealtimeStatus,
-} from "../../lib/realtimeHub"
+} from "../../lib/supabaseMultiplex"
 
 export interface PerfSnapshot {
   /** Heap JS usado en MB. null si Memory API no disponible. */

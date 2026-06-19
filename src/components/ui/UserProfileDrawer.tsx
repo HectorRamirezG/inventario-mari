@@ -31,6 +31,11 @@ import Skeleton from "./Skeleton"
 import RfmBadge from "./RfmBadge"
 import { fetchMyShoppingStats, type MyShoppingStats } from "../../features/profile/myShoppingStatsService"
 import { formatMoney } from "../../lib/format"
+import {
+  OVERLAY_BACKDROP_TRANSITION,
+  OVERLAY_PANEL_STYLE,
+  OVERLAY_PANEL_TRANSITION,
+} from "../../lib/overlayMotion"
 
 interface Props {
   open: boolean
@@ -168,23 +173,26 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={OVERLAY_BACKDROP_TRANSITION}
           className="fixed inset-0 z-[220] flex items-end justify-center"
         >
           <motion.div
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/70"
             onClick={onClose}
+            aria-hidden
           />
 
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 30, stiffness: 280 }}
+            transition={OVERLAY_PANEL_TRANSITION}
             drag="y"
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.4 }}
             onDragEnd={onDragEnd}
             className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[92vh] flex flex-col touch-pan-y"
+            style={OVERLAY_PANEL_STYLE}
           >
             {/* Handle */}
             <div className="flex justify-center pt-2 pb-1 shrink-0 cursor-grab active:cursor-grabbing">

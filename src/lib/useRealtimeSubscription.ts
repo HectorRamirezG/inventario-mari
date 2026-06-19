@@ -1,9 +1,12 @@
 import { useEffect, useRef } from "react"
+
 import {
-  subscribeRealtime,
-  type RealtimeEvent,
+  REALTIME_EVENT,
+  startSupabaseMultiplex,
   type RealtimeTable,
-} from "./realtimeHub"
+} from "./supabaseMultiplex"
+
+export type RealtimeEvent = "INSERT" | "UPDATE" | "DELETE" | "*"
 
 export interface UseRealtimeSubscriptionOptions {
   event?: RealtimeEvent
@@ -11,8 +14,8 @@ export interface UseRealtimeSubscriptionOptions {
   enabled?: boolean
 }
 
-// Hook reactivo sobre el hub realtime multiplex. Mantiene callback y
-// match en refs para que la suscripción NO se re-cree en cada render.
+// Consume el bus CustomEvent que emite supabaseMultiplex. Mantiene
+// cb/match en refs para que la suscripción nunca se re-cree por render.
 export function useRealtimeSubscription(
   table: RealtimeTable,
   cb: (payload: any) => void,
@@ -20,7 +23,7 @@ export function useRealtimeSubscription(
 ) {
   const cbRef = useRef(cb)
   const matchRef = useRef(opts.match)
-  const event = opts.event ?? "*"
+  const eventTypeRef = useRef<RealtimeEvent>(opts.event ?? "*")
   const enabled = opts.enabled !== false
 
   useEffect(() => {
@@ -29,15 +32,24 @@ export function useRealtimeSubscription(
   useEffect(() => {
     matchRef.current = opts.match
   })
+  useEffect(() => {
+    eventTypeRef.current = opts.event ?? "*"
+  })
 
   useEffect(() => {
-    if (!enabled) return
-    const off = subscribeRealtime({
-      table,
-      event,
-      match: (row) => (matchRef.current ? matchRef.current(row) : true),
-      cb: (payload) => cbRef.current(payload),
-    })
-    return off
-  }, [table, event, enabled])
+    if (!enabled || typeof window === "undefined") return
+    startSupabaseMultiplex()
+    const handler = (e: Event) => {
+      const payload = (e as CustomEvent).detail
+      const evType = (payload?.eventType ?? "*") as RealtimeEvent
+      const wantedEv = eventTypeRef.current
+      if (wantedEv !== "*" && evType !== "*" && wantedEv !== evType) return
+      const row = payload?.new ?? payload?.old
+      if (matchRef.current && !matchRef.current(row)) return
+      cbRef.current(payload)
+    }
+    const name = REALTIME_EVENT(table)
+    window.addEventListener(name, handler)
+    return () => window.removeEventListener(name, handler)
+  }, [table, enabled])
 }

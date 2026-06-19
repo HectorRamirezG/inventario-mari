@@ -18,6 +18,11 @@ import toast from "react-hot-toast"
 import { supabase } from "../../lib/supabase"
 import { sound } from "../../lib/sound"
 import { formatMoney } from "../../lib/format"
+import {
+  OVERLAY_BACKDROP_TRANSITION,
+  OVERLAY_PANEL_STYLE,
+  OVERLAY_PANEL_TRANSITION,
+} from "../../lib/overlayMotion"
 import type { Sale, SaleItem } from "../../types/database"
 import { previewCascade, toCascadeLine, type CascadeLine } from "./saleCascade"
 import { getPricingConfig } from "../pricing/pricingConfigService"
@@ -353,19 +358,22 @@ export default function EditSaleAdjustModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={OVERLAY_BACKDROP_TRANSITION}
           className="fixed inset-0 z-[230] flex items-end md:items-center justify-center"
         >
           <motion.div
             className="absolute inset-0 bg-slate-950/70"
             onClick={() => !saving && onClose()}
+            aria-hidden
           />
 
           <motion.div
-            initial={{ y: "100%", scale: 0.96, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={{ y: "100%", scale: 0.96, opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            initial={{ y: "100%", opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
+            transition={OVERLAY_PANEL_TRANSITION}
             className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] md:rounded-3xl shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[92vh] flex flex-col"
+            style={OVERLAY_PANEL_STYLE}
           >
             <div className="flex justify-center pt-2 pb-1 md:hidden">
               <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />

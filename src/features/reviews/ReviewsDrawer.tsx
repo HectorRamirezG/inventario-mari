@@ -25,6 +25,11 @@ import ReviewStars from "./ReviewStars"
 import { useAuth } from "../../lib/useAuth"
 import Skeleton from "../../components/ui/Skeleton"
 import Avatar from "../../components/ui/Avatar"
+import {
+  OVERLAY_BACKDROP_TRANSITION,
+  OVERLAY_PANEL_STYLE,
+  OVERLAY_PANEL_TRANSITION,
+} from "../../lib/overlayMotion"
 
 interface Props {
   open: boolean
@@ -196,6 +201,7 @@ export default function ReviewsDrawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={OVERLAY_BACKDROP_TRANSITION}
             onClick={() => !submitting && onClose()}
             className="absolute inset-0 bg-slate-900/65"
           />
@@ -204,8 +210,9 @@ export default function ReviewsDrawer({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            transition={OVERLAY_PANEL_TRANSITION}
             className="relative w-full max-w-lg max-h-[88vh] flex flex-col bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl"
+            style={OVERLAY_PANEL_STYLE}
           >
             {/* Handle */}
             <div className="shrink-0 pt-2 pb-1 flex justify-center">

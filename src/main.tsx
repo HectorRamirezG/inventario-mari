@@ -5,6 +5,9 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App.tsx'
 import { queryClient } from './lib/queryClient'
+import { startSupabaseMultiplex } from './lib/supabaseMultiplex'
+
+startSupabaseMultiplex()
 
 // --- One-shot cleanup del SW/caches viejos -----------------------------
 // Hubo un deploy con URL de Supabase incorrecta hardcoded; el SW de esa

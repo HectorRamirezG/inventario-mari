@@ -16,6 +16,10 @@ import toast from "react-hot-toast"
 import { createWish, uploadWishImage } from "./wishesService"
 import { useAuth } from "../../lib/useAuth"
 import { fetchMyProfile, updateMyProfile } from "../profile/profileService"
+import {
+  OVERLAY_PANEL_STYLE,
+  OVERLAY_PANEL_TRANSITION,
+} from "../../lib/overlayMotion"
 
 interface Props {
   open: boolean
@@ -205,8 +209,9 @@ export default function WishesDrawer({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            transition={OVERLAY_PANEL_TRANSITION}
             className="relative w-full max-w-lg max-h-[88vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl"
+            style={OVERLAY_PANEL_STYLE}
           >
             {/* Handle */}
             <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 pt-2 pb-1 flex justify-center">
@@ -217,12 +222,7 @@ export default function WishesDrawer({
               {/* Header */}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2.5 min-w-0">
-                  <div
-                    className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-bloom shrink-0"
-                    style={{
-                      background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
-                    }}
-                  >
+                  <div className="bg-brand w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-bloom shrink-0">
                     <Sparkles size={18} />
                   </div>
                   <div className="min-w-0">
