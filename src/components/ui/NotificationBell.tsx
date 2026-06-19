@@ -29,6 +29,7 @@ import {
   Heart,
   Loader2,
   RotateCcw,
+  Eye,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -570,34 +571,47 @@ export default function NotificationBell({
                                 </p>
                               </div>
                             )}
-                            {/* Acciones inline para comprobantes (admin) */}
+                            {/* Acciones inline para comprobantes (admin).
+                                "Ver foto" abre el drawer del comprobante para
+                                que Mari pueda ver la imagen antes de decidir.
+                                Aprobar/Rechazar siguen disponibles para flujo
+                                rápido sin abrir el visor. */}
                             {isProof && (
                               <div className="flex items-center gap-1 mt-1">
                                 <button
                                   type="button"
+                                  onClick={() => handleClick(n)}
+                                  className="flex-1 h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-sky-500 hover:bg-sky-600 text-white shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1"
+                                  title="Ver el comprobante"
+                                >
+                                  <Eye size={11} />
+                                  Ver foto
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => handleInlineApprove(n)}
                                   disabled={inlineApproveBusy || inlineRejectBusy}
-                                  className="flex-1 h-6 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
+                                  className="h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
+                                  title="Aprobar sin ver"
                                 >
                                   {inlineApproveBusy ? (
                                     <Loader2 size={10} className="animate-spin" />
                                   ) : (
-                                    <CheckCircle2 size={10} />
+                                    <CheckCircle2 size={11} />
                                   )}
-                                  Aprobar
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleInlineReject(n)}
                                   disabled={inlineApproveBusy || inlineRejectBusy}
-                                  className="flex-1 h-6 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-rose-500 hover:bg-rose-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
+                                  className="h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-rose-500 hover:bg-rose-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
+                                  title="Rechazar"
                                 >
                                   {inlineRejectBusy ? (
                                     <Loader2 size={10} className="animate-spin" />
                                   ) : (
-                                    <XCircle size={10} />
+                                    <XCircle size={11} />
                                   )}
-                                  Rechazar
                                 </button>
                               </div>
                             )}

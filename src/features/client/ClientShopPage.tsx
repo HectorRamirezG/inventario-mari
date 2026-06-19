@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useDeferredValue, memo } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Fuse from "fuse.js"
 import {
@@ -39,7 +39,6 @@ import ProductLightbox, { type LightboxSlide } from "../../components/ui/Product
 import Skeleton from "../../components/ui/Skeleton"
 import BarcodeScanner from "../../components/ui/BarcodeScanner"
 import WishlistHeart from "../../components/ui/WishlistHeart"
-import ClientHero from "../../components/ui/ClientHero"
 import OnboardingTour from "../../components/ui/OnboardingTour"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import CategoryIcon, { getCategoryVisual } from "../../components/ui/CategoryIcon"
@@ -60,10 +59,6 @@ import {
 import { getBusinessRules, useBusinessRules, isWithinBusinessHours } from "../settings/businessRulesService"
 import { notifyAdmins } from "../notifications/notificationsService"
 import WishesDrawer from "../wishes/WishesDrawer"
-import StoriesBar from "../stories/StoriesBar"
-import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
-import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
-import InstallAppBanner from "../../components/ui/InstallAppBanner"
 import ReviewsDrawer from "../reviews/ReviewsDrawer"
 
 // Estructura mínima del catálogo público
@@ -140,6 +135,7 @@ function saveGuest(g: GuestInfo) {
  */
 export default function ClientShopPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { email: authEmail, fullName: authName, session, user } = useAuth()
   const isLogged = !!session
   const thresholds = useTierThresholds()
@@ -307,6 +303,24 @@ export default function ClientShopPage() {
       supabase.removeChannel(channel)
     }
   }, [])
+
+  // Si llegamos con `?p=PRODUCT_ID` (típicamente desde la HomePage),
+  // abrimos el BuySheet en cuanto el catálogo esté cargado. Después
+  // limpiamos el query param para no re-abrir al refrescar.
+  useEffect(() => {
+    const requestedId = searchParams.get("p")
+    if (!requestedId || products.length === 0) return
+    const match = products.find((p) => p.id === requestedId)
+    if (match) {
+      setBuySheetPreselectedVariant(match.variants[0]?.id ?? null)
+      setBuySheetProduct(match)
+    }
+    // Limpiar el param (preservando los demás que pudieran venir).
+    const next = new URLSearchParams(searchParams)
+    next.delete("p")
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, searchParams])
 
   const categories = useMemo(() => {
     const set = new Set<string>()
@@ -689,34 +703,10 @@ export default function ClientShopPage() {
 
   return (
     <div className="pb-24">
-      <ClientHero
-        customerName={guest.name || authName}
-        isLogged={isLogged}
-      />
-
-      <InstallAppBanner />
-
-      <StoriesBar enabled={bRules.stories_enabled} />
-
-      {/* Productos vistos recientemente — solo se pinta si hay ≥2 items.
-          El click abre el BuySheet del producto correspondiente.       */}
-      <RecentlyViewedRow
-        onOpen={(productId) => {
-          const p = products.find((x) => x.id === productId)
-          if (p) {
-            setBuySheetPreselectedVariant(p.variants[0]?.id ?? null)
-            setBuySheetProduct(p)
-          }
-        }}
-      />
-
-      <ProductOfTheDay
-        products={products}
-        onOpen={(p) => {
-          setBuySheetPreselectedVariant(p.variants[0]?.id ?? null)
-          setBuySheetProduct(p as any)
-        }}
-      />
+      {/* NOTA: Hero, Banner instalación, Stories, RecentlyViewedRow y
+          ProductOfTheDay se MOVIERON a `ClientHomePage` (ruta /inicio)
+          para alivianar la tienda. Aquí solo dejamos: aviso "cerrado",
+          carrito abandonado, buscador, filtros, ordenamiento y grid. */}
 
       {!shopOpen && (
         <motion.div

@@ -6,12 +6,51 @@ import { debug } from "./debug"
 // bundle inicial es mucho más liviano (abre la app rapidísimo y solo
 // paga el peso cuando va a generar un comprobante).
 async function loadHtml2Canvas() {
-  const mod = await import("html2canvas")
-  return mod.default
+  try {
+    const mod: any = await import("html2canvas")
+    // Vite a veces envuelve módulos CJS como { default: { default: fn } }.
+    // Probamos las rutas más comunes y caemos a `mod` si es la función.
+    const fn =
+      (typeof mod === "function" && mod) ||
+      (typeof mod.default === "function" && mod.default) ||
+      (mod.default && typeof mod.default.default === "function" && mod.default.default)
+    if (typeof fn !== "function") {
+      throw new Error(
+        "html2canvas no exporta una función. Reinstala dependencias."
+      )
+    }
+    return fn
+  } catch (e: any) {
+    // En producción debug.error es noop, por eso usamos console directo
+    // — generar imagen/PDF es un flujo de usuario crítico que merece
+    // un error visible si el chunk dynamic import falla.
+    console.error("[shareImage] No se pudo cargar html2canvas:", e)
+    throw new Error(
+      "No se pudo cargar el generador de imagen. Revisa tu conexión."
+    )
+  }
 }
 async function loadJsPdf() {
-  const mod = await import("jspdf")
-  return mod.default ?? (mod as any).jsPDF
+  try {
+    const mod: any = await import("jspdf")
+    // jsPDF v2 exporta tanto `default` (clase) como nombre `jsPDF`.
+    // Algunas builds de Vite agregan otro nivel de wrap.
+    const Ctor =
+      (typeof mod === "function" && mod) ||
+      (typeof mod.default === "function" && mod.default) ||
+      (typeof mod.jsPDF === "function" && mod.jsPDF) ||
+      (mod.default && typeof mod.default.jsPDF === "function" && mod.default.jsPDF) ||
+      (mod.default && typeof mod.default.default === "function" && mod.default.default)
+    if (typeof Ctor !== "function") {
+      throw new Error("jsPDF no exporta un constructor.")
+    }
+    return Ctor
+  } catch (e: any) {
+    console.error("[shareImage] No se pudo cargar jsPDF:", e)
+    throw new Error(
+      "No se pudo cargar el generador de PDF. Revisa tu conexión."
+    )
+  }
 }
 
 /**
@@ -193,6 +232,7 @@ export async function shareTicketImage(opts: {
     downloadBlob(blob, filename)
     toast.success("Imagen descargada", { id: tid })
   } catch (e: any) {
+    console.error("[shareTicketImage] FALLO:", e)
     debug.error("[shareTicketImage]", e)
     toast.error(e?.message ?? "Error generando imagen", { id: tid })
   }
@@ -245,6 +285,7 @@ export async function shareTicketPdf(opts: {
     pdf.save(filename)
     toast.success("PDF descargado", { id: tid })
   } catch (e: any) {
+    console.error("[shareTicketPdf] FALLO:", e)
     debug.error("[shareTicketPdf]", e)
     toast.error(e?.message ?? "Error generando PDF", { id: tid })
   }

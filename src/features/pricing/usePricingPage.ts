@@ -164,12 +164,27 @@ export function usePricingPage() {
           );
         }
 
-        const priceUpdate = {
-          price: priceMen,
-          price_menudeo: priceMen,
-          price_medio: priceMed,
-          price_mayoreo: priceMay,
-        };
+        // Construir update SOLO con columnas que tengan precio > 0.
+        // Si el costo es 0 y el usuario sólo puso un precio manual en una
+        // categoría (ej. menudeo), las otras tendrían 0 y borraríamos los
+        // precios previos en la BD. Para evitarlo, omitimos los 0.
+        const priceUpdate: Record<string, number> = {};
+        if (priceMen > 0) {
+          priceUpdate.price = priceMen;
+          priceUpdate.price_menudeo = priceMen;
+        }
+        if (priceMed > 0) {
+          priceUpdate.price_medio = priceMed;
+        }
+        if (priceMay > 0) {
+          priceUpdate.price_mayoreo = priceMay;
+        }
+
+        if (Object.keys(priceUpdate).length === 0) {
+          throw new Error(
+            `${r.product?.name}: ningún precio quedó > 0`
+          );
+        }
 
         // Determinar qué variantes actualizar
         const targetVariantIds: string[] = r.variantId
@@ -180,20 +195,30 @@ export function usePricingPage() {
 
         if (targetVariantIds.length === 0) {
           throw new Error(
-            `"${r.product?.name}" no tiene variantes para aplicar precios`
+            `"${r.product?.name}" no tiene variantes para aplicar precios. ` +
+              `Crea una variante primero desde Inventario.`
           );
         }
 
-        const { error: vError } = await supabase
+        const { data: updatedRows, error: vError } = await supabase
           .from("variants")
           .update(priceUpdate)
-          .in("id", targetVariantIds);
+          .in("id", targetVariantIds)
+          .select("id");
 
         if (vError) {
           throw new Error(`Error actualizando variantes: ${vError.message}`);
         }
 
-        variantsUpdated += targetVariantIds.length;
+        // Si Supabase reportó 0 filas afectadas, lo más probable es RLS.
+        if (!updatedRows || updatedRows.length === 0) {
+          throw new Error(
+            `0 variantes actualizadas para "${r.product?.name}". ` +
+              `Revisa permisos (RLS) o que las variantes existan.`
+          );
+        }
+
+        variantsUpdated += updatedRows.length;
 
         // Historial — una fila por aplicación
         const { error: histError } = await supabase
@@ -221,8 +246,8 @@ export function usePricingPage() {
           ]);
 
         if (histError) {
-          debug.error(histError);
-          throw new Error(`Error guardando historial: ${histError.message}`);
+          // El historial es secundario: si falla NO revertimos los precios.
+          debug.error("[pricing] historial falló (no crítico):", histError);
         }
       }
 

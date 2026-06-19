@@ -29,6 +29,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Search,
+  Home,
 } from "lucide-react"
 
 import InventoryPage from "./features/inventory/InventoryPage"
@@ -37,6 +38,7 @@ import PublicTicketPage from "./features/public/PublicTicketPage"
 import PublicDeliveryNotePage from "./features/delivery/PublicDeliveryNotePage"
 import ClientShopPage from "./features/client/ClientShopPage"
 
+const ClientHomePage = lazy(() => import("./features/client/ClientHomePage"))
 const PricingPage = lazy(() => import("./features/pricing/PricingPage"))
 const DashboardPage = lazy(() => import("./features/dashboard/DashboardPage"))
 const SalesPage = lazy(() => import("./features/sales/SalesPage"))
@@ -1271,6 +1273,7 @@ function DockButton({
 /* ============================================================== */
 
 const SHOP_TABS = [
+  { to: "/inicio", label: "Inicio", icon: Home, requiresAuth: false },
   { to: "/", label: "Tienda", icon: Store, requiresAuth: false },
   { to: "/mis-pedidos", label: "Pedidos", icon: ReceiptIcon, requiresAuth: true },
   { to: "/mis-deseos", label: "Deseos", icon: Heart, requiresAuth: true },
@@ -1358,6 +1361,7 @@ function ShopShell() {
             <Suspense fallback={<FullScreenSpinner />}>
               <Routes>
                 <Route path="/" element={<ClientShopPage />} />
+                <Route path="/inicio" element={<ClientHomePage />} />
                 <Route
                   path="/mis-pedidos"
                   element={

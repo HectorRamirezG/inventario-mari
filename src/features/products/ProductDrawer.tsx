@@ -375,6 +375,7 @@ export default function ProductDrawer({
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5 scroll-container-ios">
               {tab === "general" && (
                 <GeneralTab
+                  product={product}
                   name={name}
                   setName={setName}
                   category={category}
@@ -385,6 +386,7 @@ export default function ProductDrawer({
                   setMinStock={setMinStock}
                   knownCategories={knownCategories}
                   sug={sug}
+                  onSaved={onSaved}
                 />
               )}
 
@@ -434,6 +436,7 @@ export default function ProductDrawer({
 
 /* ════════════════════════ TAB 1: GENERAL ════════════════════════ */
 function GeneralTab({
+  product,
   name,
   setName,
   category,
@@ -444,7 +447,9 @@ function GeneralTab({
   setMinStock,
   knownCategories,
   sug,
+  onSaved,
 }: {
+  product?: Product
   name: string
   setName: (v: string) => void
   category: string
@@ -455,19 +460,66 @@ function GeneralTab({
   setMinStock: (v: number | "") => void
   knownCategories?: string[]
   sug: { men: number; med: number; may: number } | null
+  onSaved?: () => void
 }) {
+  // Estado local para galería del producto (cuando no hay variantes aún).
+  // Las fotos se sincronizan al backend mediante `updateProduct`.
+  // Sólo se guarda la PRIMERA en `image_url` (columna real). Si en el futuro
+  // se agrega `image_urls` a products, la galería se podrá conservar entera.
+  const productImage = product?.image_url ?? null
+  const localImages = productImage ? [productImage] : []
+  const hasVariants = (product?.variants?.length ?? 0) > 0
+
+  async function handleProductImageChange(urls: string[]) {
+    if (!product) return
+    // Guarda sólo la primera (image_url single). Si urls está vacío, null.
+    const next = urls[0] ?? null
+    try {
+      await updateProduct(product.id, { image_url: next })
+      toast.success(next ? "Foto guardada ✨" : "Foto eliminada")
+      onSaved?.()
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo guardar la foto")
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Banner explicativo: las fotos viven por variante. */}
       <div className="rounded-2xl bg-pink-50/60 dark:bg-pink-500/10 border border-pink-100 dark:border-pink-500/20 p-3 flex items-start gap-2 text-pink-700 dark:text-pink-300">
         <Sparkles size={14} className="shrink-0 mt-0.5" />
         <p className="text-[11px] font-bold leading-snug">
-          Las fotos viven en cada{" "}
-          <span className="font-black">variante</span> (hasta 6 c/u). En la
-          tienda el cliente verá por defecto la primera foto de la primera
-          variante.
+          {hasVariants ? (
+            <>
+              Las fotos viven en cada{" "}
+              <span className="font-black">variante</span> (hasta 6 c/u). En la
+              tienda el cliente verá por defecto la primera foto de la primera
+              variante.
+            </>
+          ) : (
+            <>
+              Este producto aún{" "}
+              <span className="font-black">no tiene variantes</span>. Puedes
+              subir una foto aquí como portada del producto, o crear su primera
+              variante para subir hasta 6 fotos.
+            </>
+          )}
         </p>
       </div>
+
+      {/* Uploader de foto del producto: sólo cuando NO hay variantes */}
+      {product && !hasVariants && (
+        <div className="space-y-1.5">
+          <Label>Foto del producto</Label>
+          <MultiImageUploader
+            value={localImages}
+            onChange={handleProductImageChange}
+            folder={`products/${product.id}`}
+            label="Subir foto"
+            max={1}
+          />
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <Label>Nombre</Label>
@@ -712,6 +764,7 @@ function VariantsTab({
           >
             <NewVariantForm
               productId={product.id}
+              productName={product.name}
               onDone={() => {
                 setShowNew(false)
                 onSaved()
@@ -752,10 +805,12 @@ function VariantsTab({
 /* ──────────── Sub-bloque: formulario inline NUEVA variante ──────────── */
 function NewVariantForm({
   productId,
+  productName,
   onDone,
   onCancel,
 }: {
   productId: string
+  productName: string
   onDone: () => void
   onCancel: () => void
 }) {
@@ -827,14 +882,26 @@ function NewVariantForm({
       <p className="text-[10px] font-black uppercase tracking-widest text-primary">
         Nueva variante
       </p>
-      <input
-        type="text"
-        value={vName}
-        onChange={(e) => setVName(e.target.value)}
-        placeholder="Ej. Tono Canela 03"
-        className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-primary"
-        autoFocus
-      />
+      <div className="relative">
+        <input
+          type="text"
+          value={vName}
+          onChange={(e) => setVName(e.target.value)}
+          placeholder="Ej. Tono Canela 03"
+          className="w-full h-10 pl-3 pr-24 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-primary"
+          autoFocus
+        />
+        {productName && vName.trim() !== productName.trim() && (
+          <button
+            type="button"
+            onClick={() => setVName(productName)}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-primary/10 hover:bg-primary/20 text-primary active:scale-95 transition-all"
+            title="Usar el nombre del producto"
+          >
+            Usar nombre
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <input
           type="text"
