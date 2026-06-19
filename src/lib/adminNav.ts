@@ -13,21 +13,19 @@
  */
 
 import type { LucideIcon } from "lucide-react"
-import {
-  Calendar,
-  Package,
-  ShoppingCart,
-  Bookmark,
-  LifeBuoy,
-  TrendingUp,
-  Tag,
-  ScrollText,
-  Settings as SettingsIcon,
-  Heart,
-  Camera,
-  Star,
-  Users,
-} from "lucide-react"
+import Calendar from "lucide-react/dist/esm/icons/calendar"
+import Package from "lucide-react/dist/esm/icons/package"
+import ShoppingCart from "lucide-react/dist/esm/icons/shopping-cart"
+import Bookmark from "lucide-react/dist/esm/icons/bookmark"
+import LifeBuoy from "lucide-react/dist/esm/icons/life-buoy"
+import TrendingUp from "lucide-react/dist/esm/icons/trending-up"
+import Tag from "lucide-react/dist/esm/icons/tag"
+import ScrollText from "lucide-react/dist/esm/icons/scroll-text"
+import SettingsIcon from "lucide-react/dist/esm/icons/settings"
+import Heart from "lucide-react/dist/esm/icons/heart"
+import Camera from "lucide-react/dist/esm/icons/camera"
+import Star from "lucide-react/dist/esm/icons/star"
+import Users from "lucide-react/dist/esm/icons/users"
 
 import type { BusinessRules } from "../features/settings/businessRulesService"
 

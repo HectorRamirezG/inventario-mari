@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence, PanInfo } from "framer-motion"
-import {
-  X,
-  Plus,
-  Minus,
-  ShoppingBag,
-  Package,
-  Sparkles,
-  AlertTriangle,
-  Target,
-} from "lucide-react"
+
+import X from "lucide-react/dist/esm/icons/x"
+import Plus from "lucide-react/dist/esm/icons/plus"
+import Minus from "lucide-react/dist/esm/icons/minus"
+import ShoppingBag from "lucide-react/dist/esm/icons/shopping-bag"
+import Package from "lucide-react/dist/esm/icons/package"
+import Sparkles from "lucide-react/dist/esm/icons/sparkles"
+import AlertTriangle from "lucide-react/dist/esm/icons/alert-triangle"
+import Target from "lucide-react/dist/esm/icons/target"
 
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"

@@ -102,14 +102,39 @@ function resolveColor(value: string): string {
   }
 }
 
-/** Walks el clon aplicando estilos resueltos. Solo toca color props. */
+/** Walks un nodo resolviendo cualquier color en color spaces que
+ *  html2canvas no entiende. Mutación inline-style sólo sobre el subárbol
+ *  que pasamos — nunca el :root del documento. */
 function resolveOklchColors(root: HTMLElement) {
-  // 1) Override CSS variables del :root del DOCUMENTO REAL que contengan
-  //    oklch — Tailwind v4 define `--color-*` con oklch() y html2canvas
-  //    no las puede resolver. Las pisamos en el clon con el equivalente rgb.
-  //    Se aplican como inline style en el <html> clonado vía root.style,
-  //    pero como root es nuestro nodo capturado y NO el <html>, usamos
-  //    document.documentElement como referencia y aplicamos al `root` clon.
+  const all = root.querySelectorAll<HTMLElement>("*")
+  const nodes: HTMLElement[] = [root, ...Array.from(all)]
+  for (const el of nodes) {
+    const cs = window.getComputedStyle(el)
+    for (const prop of COLOR_PROPS) {
+      const computed = cs.getPropertyValue(prop)
+      if (!computed) continue
+      if (!/oklch|oklab|color\(/i.test(computed)) continue
+      const resolved = resolveColor(computed)
+      if (resolved && resolved !== computed) {
+        el.style.setProperty(prop, resolved)
+      }
+    }
+    const bgImage = cs.getPropertyValue("background-image")
+    if (bgImage && /oklch|oklab|color\(/i.test(bgImage)) {
+      const replaced = bgImage.replace(
+        /(oklch|oklab|color)\([^)]*\)/gi,
+        (m) => resolveColor(m),
+      )
+      el.style.setProperty("background-image", replaced)
+    }
+  }
+}
+
+/** Extrae las CSS variables del :root del documento resolviendo cualquier
+ *  oklch/oklab a rgb. Devuelve pares nombre/valor listos para inyectar
+ *  como inline style en un sandbox aislado. */
+function extractRootTokens(): Record<string, string> {
+  const tokens: Record<string, string> = {}
   try {
     const rootStyles = window.getComputedStyle(document.documentElement)
     const sheets = document.styleSheets
@@ -119,7 +144,6 @@ function resolveOklchColors(root: HTMLElement) {
       try {
         rules = sheets[i].cssRules
       } catch {
-        // cross-origin stylesheet: skip
         continue
       }
       if (!rules) continue
@@ -133,79 +157,70 @@ function resolveOklchColors(root: HTMLElement) {
       }
     }
     for (const name of varNames) {
-      const v = rootStyles.getPropertyValue(name).trim()
-      if (!v) continue
-      if (!/oklch|oklab|color\(/i.test(v)) continue
-      const resolved = resolveColor(v)
-      if (resolved && resolved !== v) {
-        root.style.setProperty(name, resolved)
-      }
+      const raw = rootStyles.getPropertyValue(name).trim()
+      if (!raw) continue
+      tokens[name] = /oklch|oklab|color\(/i.test(raw)
+        ? resolveColor(raw)
+        : raw
     }
   } catch (e) {
-    debug.warn("[shareImage] css vars walk failed", e)
+    debug.warn("[shareImage] extractRootTokens failed", e)
   }
-
-  // 2) Walk del subárbol con override por elemento de color props +
-  //    background-image (gradientes oklch).
-  const all = root.querySelectorAll<HTMLElement>("*")
-  const nodes: HTMLElement[] = [root, ...Array.from(all)]
-  for (const el of nodes) {
-    const cs = window.getComputedStyle(el)
-    for (const prop of COLOR_PROPS) {
-      const computed = cs.getPropertyValue(prop)
-      if (!computed) continue
-      // Solo necesitamos reescribir si el valor original o el computado
-      // contiene oklch/oklab (computed values en navegadores modernos suelen
-      // preservar el color space original).
-      if (!/oklch|oklab|color\(/i.test(computed)) continue
-      const resolved = resolveColor(computed)
-      if (resolved && resolved !== computed) {
-        el.style.setProperty(prop, resolved)
-      }
-    }
-    // Gradient backgrounds (background-image) también pueden traer oklch
-    const bgImage = cs.getPropertyValue("background-image")
-    if (bgImage && /oklch|oklab|color\(/i.test(bgImage)) {
-      const replaced = bgImage.replace(
-        /(oklch|oklab|color)\([^)]*\)/gi,
-        (m) => resolveColor(m)
-      )
-      el.style.setProperty("background-image", replaced)
-    }
-  }
+  return tokens
 }
 
-/**
- * Captura un nodo del DOM como canvas usando html2canvas con el
- * workaround de OKLCH (Tailwind v4 paleta nueva). html2canvas v1 no
- * entiende `oklch()`, así que en `onclone` reemplazamos los valores
- * computados por su equivalente `rgb()` resuelto por el browser.
- *
- * NOTA: la dep html-to-image fue evaluada y descartada porque no estaba
- * instalada en algunos entornos y rompía el flujo de PDF/imagen. Si en el
- * futuro quieres reactivarla, agrégala al package.json + lockfile y
- * envuélvela en un try { dynamic import } catch { fallback a html2canvas }.
- */
+/** Crea un contenedor desacoplado del árbol visual donde insertamos el
+ *  clon del nodo objetivo. El sandbox vive offscreen, aislado, con los
+ *  tokens del tema inyectados inline para que html2canvas resuelva
+ *  gradientes y colores sin depender del :root del documento. */
+function mountCaptureSandbox(source: HTMLElement): {
+  sandbox: HTMLDivElement
+  clone: HTMLElement
+} {
+  const rect = source.getBoundingClientRect()
+  const width = Math.max(1, Math.round(rect.width))
+  const sandbox = document.createElement("div")
+  sandbox.setAttribute("data-mari-capture", "1")
+  sandbox.style.position = "fixed"
+  sandbox.style.top = "0"
+  sandbox.style.left = "-100000px"
+  sandbox.style.width = `${width}px`
+  sandbox.style.pointerEvents = "none"
+  sandbox.style.zIndex = "-1"
+  sandbox.style.background = "#ffffff"
+  sandbox.style.isolation = "isolate"
+  const tokens = extractRootTokens()
+  for (const [name, value] of Object.entries(tokens)) {
+    sandbox.style.setProperty(name, value)
+  }
+  const clone = source.cloneNode(true) as HTMLElement
+  sandbox.appendChild(clone)
+  document.body.appendChild(sandbox)
+  return { sandbox, clone }
+}
+
+/** Captura un nodo del DOM como canvas usando html2canvas en un sandbox
+ *  aislado. Resuelve oklch/oklab solo dentro del sandbox para no
+ *  interferir con el render real de la app. */
 async function nodeToCanvas(
   node: HTMLElement,
   scale = 2,
 ): Promise<HTMLCanvasElement> {
   const html2canvas = await loadHtml2Canvas()
-  return html2canvas(node, {
-    scale,
-    backgroundColor: "#ffffff",
-    useCORS: true,
-    allowTaint: true, // ← si una img no resuelve CORS, no truena
-    imageTimeout: 8000, // ← evita "se queda cargando para siempre"
-    logging: false,
-    onclone: (_doc: Document, clonedRoot: HTMLElement) => {
-      try {
-        resolveOklchColors(clonedRoot)
-      } catch (e) {
-        debug.warn("[shareImage] resolveOklchColors failed", e)
-      }
-    },
-  })
+  const { sandbox, clone } = mountCaptureSandbox(node)
+  try {
+    resolveOklchColors(clone)
+    return await html2canvas(clone, {
+      scale,
+      backgroundColor: "#ffffff",
+      useCORS: true,
+      allowTaint: true,
+      imageTimeout: 8000,
+      logging: false,
+    })
+  } finally {
+    sandbox.remove()
+  }
 }
 
 /** Convierte un data URL PNG en un <canvas> listo para `toBlob()` / jsPDF.
