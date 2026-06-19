@@ -299,6 +299,26 @@ function FullScreenSpinner() {
   )
 }
 
+/**
+ * Loader liviano para Suspense de secciones internas (admin / cliente).
+ * NO ocupa toda la pantalla — solo pinta una barra de progreso arriba
+ * y mantiene el shell visible debajo. Evita el "flash blanco" que
+ * causaba `FullScreenSpinner` entre cada cambio de sección.
+ *
+ * Se usa cuando ya estamos dentro del shell autenticado y solo cambia
+ * el módulo (Dashboard → Caja → etc).
+ */
+function InlineSectionLoader() {
+  return (
+    <motion.div
+      initial={{ width: "0%", opacity: 0.85 }}
+      animate={{ width: ["0%", "65%", "88%"] }}
+      transition={{ duration: 1.6, ease: "easeOut", times: [0, 0.4, 1] }}
+      className="fixed top-0 left-0 h-[2px] bg-gradient-to-r from-primary via-fuchsia-500 to-violet-500 z-[9999] rounded-r-full shadow-[0_0_8px_rgba(230,0,126,0.35)]"
+    />
+  )
+}
+
 /* ============================================================== */
 /* ADMIN SHELL (rail desktop + dock móvil)                          */
 /* ============================================================== */
@@ -1109,17 +1129,22 @@ function AdminShell() {
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios bg-slate-50/30 dark:bg-slate-950/50 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0"
         >
           <div className="w-full max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-6">
-            <AnimatePresence mode="wait" custom={slideDir}>
+            {/* mode="popLayout" para que la nueva sección empiece a entrar
+                en cuanto se monta, sin esperar a que la anterior termine de
+                salir. Esto elimina el "flash blanco" que se veía al cambiar
+                de módulo. La animación es minimal: solo fade + un pequeño
+                desplazamiento de 8px en el eje X según la dirección. */}
+            <AnimatePresence mode="popLayout" initial={false} custom={slideDir}>
               <motion.div
                 key={section}
                 custom={slideDir}
-                initial={{ opacity: 0, x: slideDir * 20 }}
+                initial={{ opacity: 0, x: slideDir * 8 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: slideDir * -20 }}
-                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
               >
                 <ErrorBoundary scope={`admin:${section}`}>
-                  <Suspense fallback={<FullScreenSpinner />}>
+                  <Suspense fallback={<InlineSectionLoader />}>
                     {section === "hoy" && <DashboardPage />}
                     {section === "catalogo" && <InventoryPage />}
                     {section === "caja" && <SalesPage />}
@@ -1359,7 +1384,7 @@ function ShopShell() {
       >
         <div className="max-w-3xl mx-auto px-4 py-4">
           <ErrorBoundary scope="shop">
-            <Suspense fallback={<FullScreenSpinner />}>
+            <Suspense fallback={<InlineSectionLoader />}>
               <Routes>
                 <Route path="/" element={<ClientShopPage />} />
                 <Route path="/inicio" element={<ClientHomePage />} />

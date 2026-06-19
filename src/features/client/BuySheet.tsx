@@ -58,6 +58,13 @@ interface Props {
   baseCartQty?: number
   /** Umbrales del tier configurados por Mari. */
   thresholds?: { medio_min_qty: number; mayoreo_min_qty: number }
+  /**
+   * Si `true` (default), bloquear agregar al carrito variantes con
+   * stock=0. Si `false`, permite pre-orden: el cliente puede comprar
+   * sin existencia y verá una etiqueta clara "Pre-orden — entrega luego".
+   * Controlado por la regla `block_oversell` de business_rules.
+   */
+  blockOversell?: boolean
   onClose: () => void
   /** Recibe el batch completo: solo variantes con qty > 0 */
   onConfirm: (lines: { variantId: string; qty: number }[]) => void
@@ -74,6 +81,7 @@ export default function BuySheet({
   initialQty,
   baseCartQty = 0,
   thresholds,
+  blockOversell = true,
   onClose,
   onConfirm,
 }: Props) {
@@ -324,8 +332,20 @@ export default function BuySheet({
               ) : (
                 product.variants.map((v) => {
                   const q = qty[v.id] ?? 0
-                  const out = v.stock <= 0
-                  const atMax = !out && q >= v.stock
+                  const outOfStock = v.stock <= 0
+                  // Si la tienda permite pre-orden (regla block_oversell=false),
+                  // el botón + sigue activo aunque stock=0 con un tope holgado
+                  // (5 piezas para no abrir la puerta a abusos). El cliente
+                  // recibe un aviso visual de "Pre-orden".
+                  const PREORDER_CAP = 5
+                  const allowPreorder = !blockOversell && outOfStock
+                  const effectiveStock = allowPreorder
+                    ? PREORDER_CAP
+                    : v.stock
+                  // `out` controla el bloqueo duro de +/-. Solo bloquea cuando
+                  // está agotado Y NO se permite pre-orden.
+                  const out = outOfStock && !allowPreorder
+                  const atMax = !out && q >= effectiveStock
                   const menudeoPrice = v.price_menudeo ?? v.price
                   const effective = effectivePrice(v)
                   const hasDiscount =
@@ -372,6 +392,10 @@ export default function BuySheet({
                             <p className="text-[9px] font-black uppercase text-rose-500">
                               Agotado
                             </p>
+                          ) : allowPreorder ? (
+                            <p className="text-[9px] font-black uppercase text-violet-600 dark:text-violet-400">
+                              📦 Pre-orden · entrega luego
+                            </p>
                           ) : v.stock <= 3 ? (
                             <p className="text-[9px] font-bold text-amber-600 uppercase">
                               ¡Últimas {v.stock}!
@@ -385,7 +409,7 @@ export default function BuySheet({
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
-                            onClick={() => change(v.id, -1, v.stock)}
+                            onClick={() => change(v.id, -1, effectiveStock)}
                             disabled={q === 0 || out}
                             aria-label="Restar"
                             className="w-9 h-9 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-sm border border-slate-200 dark:border-slate-600 disabled:opacity-40 active:scale-90 transition-transform"
@@ -403,8 +427,8 @@ export default function BuySheet({
                           </motion.span>
                           <button
                             type="button"
-                            onClick={() => change(v.id, 1, v.stock)}
-                            disabled={out || q >= v.stock}
+                            onClick={() => change(v.id, 1, effectiveStock)}
+                            disabled={out || q >= effectiveStock}
                             aria-label="Sumar"
                             className="w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom disabled:opacity-30 active:scale-90 transition-transform"
                             style={{
@@ -428,8 +452,9 @@ export default function BuySheet({
                             <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-black">
                               <AlertTriangle size={11} className="shrink-0" />
                               <span>
-                                Ya llevas las {v.stock} piezas disponibles de
-                                este tono. {v.stock <= 3 ? "¡Aprovéchalas! ✨" : ""}
+                                {allowPreorder
+                                  ? `Máximo ${PREORDER_CAP} en pre-orden. Pregúntanos por mayoreo.`
+                                  : `Ya llevas las ${v.stock} piezas disponibles de este tono. ${v.stock <= 3 ? "¡Aprovéchalas! ✨" : ""}`}
                               </span>
                             </div>
                           </motion.div>

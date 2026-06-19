@@ -481,7 +481,6 @@ export default function BusinessRulesPage() {
           title="Bloquear venta sin stock"
           description="Si una variante está en 0, el cliente no puede agregarla al carrito. Si lo apagas, permite pre-orden (vende sin tener físicamente la pieza)."
           affects="cliente"
-          todo
           enabled={form.block_oversell}
           onToggle={(v) => patch({ block_oversell: v })}
         />
@@ -705,7 +704,6 @@ export default function BusinessRulesPage() {
           title="Mostrar 'X personas viendo esto'"
           description="En cada producto aparece un contador pequeño de ‘gente viéndolo’. Es psicológico (no es tracking real, son números estables entre 2 y 8). Sirve para generar prueba social."
           affects="cliente"
-          todo
           enabled={form.fake_viewers_enabled}
           onToggle={(v) => patch({ fake_viewers_enabled: v })}
         />

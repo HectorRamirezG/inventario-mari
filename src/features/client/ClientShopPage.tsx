@@ -22,6 +22,7 @@ import {
   Heart,
   Star,
   Share2,
+  Eye,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -1333,6 +1334,7 @@ export default function ClientShopPage() {
           if (buySheetProduct) addBatchToCart(buySheetProduct, lines)
           setBuySheetPreselectedVariant(null)
         }}
+        blockOversell={bRules.block_oversell}
       />
 
       {/* Lightbox fullscreen: se abre al tocar la imagen de una card */}
@@ -1703,6 +1705,14 @@ const ProductCardClient = memo(function ProductCardClientImpl({
             )}
           </div>
         )}
+        {/* Contador de viewers fake — psicológico para crear prueba social.
+            Solo aparece si la regla está activa. La cantidad es
+            determinística por product.id (siempre el mismo número para
+            el mismo producto, entre 2 y 8), por eso no es tracking real
+            y no necesita backend. */}
+        {rules.fake_viewers_enabled && (
+          <FakeViewersBadge productId={product.id} />
+        )}
         {onToggleFavorite && (
           <div className="absolute top-2 right-2 z-10">
             <WishlistHeart active={isFavorite} onClick={onToggleFavorite} />
@@ -1811,6 +1821,33 @@ const ProductCardClient = memo(function ProductCardClientImpl({
     </motion.div>
   )
 })
+
+/**
+ * Mini-chip "X personas viendo esto ahora" — prueba social light.
+ *
+ * NO hace tracking real (eso requeriría WebSocket por producto y
+ * complejidad enorme). En vez, calcula un número estable entre 2 y 8
+ * con un hash determinístico del productId. El mismo producto siempre
+ * muestra el mismo número durante la sesión, así no parpadea cada
+ * renderize ni se ve "fake". El admin puede apagar este chip desde
+ * Reglas → Experiencia → "Mostrar 'X personas viendo esto'".
+ */
+function FakeViewersBadge({ productId }: { productId: string }) {
+  // Hash trivial del id → número entre 2 y 8. Determinístico.
+  const n = (() => {
+    let h = 0
+    for (let i = 0; i < productId.length; i++) {
+      h = (h * 31 + productId.charCodeAt(i)) & 0xffffffff
+    }
+    return 2 + (Math.abs(h) % 7) // 2..8
+  })()
+  return (
+    <div className="absolute bottom-2 right-2 z-10 px-1.5 py-0.5 rounded-full bg-black/55 backdrop-blur text-white text-[8px] font-black tabular-nums flex items-center gap-1 pointer-events-none">
+      <Eye size={9} strokeWidth={2.5} />
+      {n}
+    </div>
+  )
+}
 
 /* ──────── Banner motivacional dentro del carrito ──────── */
 function CartTierBanner({
