@@ -22,6 +22,13 @@ import {
   TIER_LABEL,
 } from "../sales/salesTier"
 import type { PricingTier } from "../pricing/pricingTypes"
+import {
+  OVERLAY_BACKDROP_TRANSITION,
+  OVERLAY_INNER_TRANSITION,
+  OVERLAY_PANEL_STYLE,
+  OVERLAY_PANEL_TRANSITION,
+} from "../../lib/overlayMotion"
+import { useDeferredMount } from "../../lib/useDeferredMount"
 
 /* Estructura mínima reutilizable desde ClientShopPage */
 export interface BuySheetVariant {
@@ -236,6 +243,10 @@ export default function BuySheet({
     onConfirm(lines)
   }
 
+  // Contenido secundario (Q&A) se monta tras la animación de entrada
+  // para no competir por el hilo principal en los primeros frames.
+  const showSecondary = useDeferredMount(open)
+
   if (typeof document === "undefined") return null
 
   return createPortal(
@@ -245,34 +256,21 @@ export default function BuySheet({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.18, ease: "easeOut" }}
+          transition={OVERLAY_BACKDROP_TRANSITION}
           className="fixed inset-0 z-[180] flex items-end justify-center"
         >
-          {/* Backdrop — sin blur.
-              backdrop-blur causa parpadeos visibles al cerrar/abrir el sheet
-              porque el browser repinta TODO lo que está detrás cada frame
-              mientras la animación de opacidad corre. Usamos un fondo más
-              oscuro para conservar la jerarquía visual sin el costo del
-              blur (que ya estaba causando el "flash" reportado). */}
-          <motion.div
+          <div
             className="absolute inset-0 bg-slate-950/70"
             onClick={onClose}
+            aria-hidden
           />
-
-          {/* Sheet — el drag para cerrar vive SOLO en el handle (ver más
-              abajo), no en el sheet completo. Antes atrapaba scrolls
-              internos y aceleraba el parpadeo cuando se cancelaba un drag.
-              Animación: tween corto en lugar de spring para que no haya
-              "rebote" visible que en algunos celulares se interpretaba
-              como parpadeo. translate3d fuerza una capa GPU sin los
-              efectos secundarios de `will-change` en algunos browsers. */}
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            transition={OVERLAY_PANEL_TRANSITION}
             className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[88vh] flex flex-col"
-            style={{ transform: "translate3d(0,0,0)" }}
+            style={OVERLAY_PANEL_STYLE}
           >
             {/* Handle drag — único elemento arrastrable para cerrar. */}
             <motion.div
@@ -293,6 +291,9 @@ export default function BuySheet({
                     <img
                       src={product.image_url}
                       alt=""
+                      width={96}
+                      height={96}
+                      decoding="async"
                       className="w-full h-full object-cover"
                     />
                   ) : (
@@ -356,9 +357,8 @@ export default function BuySheet({
                   const hasDiscount =
                     projectedTier !== "menudeo" && effective < menudeoPrice
                   return (
-                    <motion.div
+                    <div
                       key={v.id}
-                      layout
                       className={`flex flex-col gap-1.5 p-2.5 rounded-2xl border transition-colors ${
                         q > 0
                           ? "bg-primary/5 border-primary/30"
@@ -421,59 +421,46 @@ export default function BuySheet({
                           >
                             <Minus size={14} />
                           </button>
-                          <motion.span
-                            key={q}
-                            initial={{ scale: 0.6, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ type: "spring", stiffness: 380, damping: 20 }}
-                            className="w-7 text-center text-sm font-black tabular-nums"
-                          >
+                          <span className="w-7 text-center text-sm font-black tabular-nums">
                             {q}
-                          </motion.span>
+                          </span>
                           <button
                             type="button"
                             onClick={() => change(v.id, 1, effectiveStock)}
                             disabled={out || q >= effectiveStock}
                             aria-label="Sumar"
-                            className="w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom disabled:opacity-30 active:scale-90 transition-transform"
-                            style={{
-                              background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
-                            }}
+                            className="bg-brand w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom disabled:opacity-30 active:scale-90 transition-transform"
                           >
                             <Plus size={14} strokeWidth={3} />
                           </button>
                         </div>
                       </div>
-                      {/* Cápsula explicativa cuando ya llegó al tope */}
-                      <AnimatePresence>
-                        {atMax && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -4, height: 0 }}
-                            animate={{ opacity: 1, y: 0, height: "auto" }}
-                            exit={{ opacity: 0, y: -4, height: 0 }}
-                            transition={{ type: "spring", stiffness: 320, damping: 22 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-black">
-                              <AlertTriangle size={11} className="shrink-0" />
-                              <span>
-                                {allowPreorder
-                                  ? `Máximo ${PREORDER_CAP} en pre-orden. Pregúntanos por mayoreo.`
-                                  : `Ya llevas las ${v.stock} piezas disponibles de este tono. ${v.stock <= 3 ? "¡Aprovéchalas! ✨" : ""}`}
-                              </span>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
+                      {atMax && (
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-black">
+                          <AlertTriangle size={11} className="shrink-0" />
+                          <span>
+                            {allowPreorder
+                              ? `Máximo ${PREORDER_CAP} en pre-orden. Pregúntanos por mayoreo.`
+                              : `Ya llevas las ${v.stock} piezas disponibles de este tono.${v.stock <= 3 ? " Aprovéchalas." : ""}`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   )
                 })
               )}
 
-              {/* Q&A público del producto */}
-              <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                <ProductQA productId={product.id} productName={product.name} />
-              </div>
+              {/* Q&A público del producto — diferido para no competir con la animación. */}
+              {showSecondary && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={OVERLAY_INNER_TRANSITION}
+                  className="pt-4 border-t border-slate-100 dark:border-slate-800"
+                >
+                  <ProductQA productId={product.id} productName={product.name} />
+                </motion.div>
+              )}
             </div>
 
             {/* Footer: resumen + CTA único */}
@@ -513,10 +500,7 @@ export default function BuySheet({
                 type="button"
                 onClick={confirm}
                 disabled={totalUnits === 0}
-                className="w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-40 active:scale-[0.98] transition-transform"
-                style={{
-                  background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
-                }}
+                className="bg-brand w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-40 active:scale-[0.98] transition-transform"
               >
                 <ShoppingBag size={16} />
                 Agregar al carrito
