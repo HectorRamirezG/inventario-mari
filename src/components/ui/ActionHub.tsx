@@ -65,7 +65,7 @@ export default function ActionHub({ open, onClose, actions }: Props) {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 320 }}
-            className="absolute left-0 right-0 bottom-0 max-h-[88vh] flex flex-col bg-white dark:bg-slate-900 border-t border-white/40 dark:border-slate-700/40 rounded-t-[2rem] pb-safe shadow-[0_-25px_60px_-15px_rgba(0,0,0,0.3)]""
+            className="absolute left-0 right-0 bottom-0 max-h-[88vh] flex flex-col bg-white dark:bg-slate-900 border-t border-white/40 dark:border-slate-700/40 rounded-t-[2rem] pb-safe shadow-[0_-25px_60px_-15px_rgba(0,0,0,0.3)]"
           >
             <motion.div
               drag="y"
