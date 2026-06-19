@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useMemo, useDeferredValue, memo } from "react"
+import { useCallback, useEffect, useRef, useState, useMemo, useDeferredValue, memo, lazy, Suspense } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Fuse from "fuse.js"
@@ -44,7 +44,7 @@ import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import CategoryIcon, { getCategoryVisual } from "../../components/ui/CategoryIcon"
 import AbandonedCartBanner from "../../components/ui/AbandonedCartBanner"
 import { useCartPersist, clearPersistedCart, type PersistedCartLine } from "../../lib/useCartPersist"
-import BuySheet, { type BuySheetProduct } from "./BuySheet"
+import type { BuySheetProduct } from "./BuySheet"
 import SupportModal from "../support/SupportModal"
 import {
   useTierThresholds,
@@ -62,6 +62,13 @@ import WishesDrawer from "../wishes/WishesDrawer"
 import ReviewsDrawer from "../reviews/ReviewsDrawer"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
+import { preloadOnIdle } from "../../lib/preloadOnIdle"
+
+// Loader único del BuySheet — se reutiliza para el lazy() y para el
+// preload-on-hover/idle desde los botones "+" de cada tarjeta.
+const loadBuySheet = () => import("./BuySheet")
+const BuySheet = lazy(loadBuySheet)
+const preloadBuySheet = () => preloadOnIdle(loadBuySheet)
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -294,13 +301,14 @@ export default function ClientShopPage() {
   // limpiamos el query param para no re-abrir al refrescar.
   useEffect(() => {
     const requestedId = searchParams.get("p")
-    if (!requestedId || products.length === 0) return
+    if (!requestedId) return
+    preloadBuySheet()
+    if (products.length === 0) return
     const match = products.find((p) => p.id === requestedId)
     if (match) {
       setBuySheetPreselectedVariant(match.variants[0]?.id ?? null)
       setBuySheetProduct(match)
     }
-    // Limpiar el param (preservando los demás que pudieran venir).
     const next = new URLSearchParams(searchParams)
     next.delete("p")
     setSearchParams(next, { replace: true })
@@ -1266,61 +1274,61 @@ export default function ClientShopPage() {
         )}
       </AnimatePresence>
 
-      {/* Bottom Sheet de compra: se abre al tocar el "+" de una card */}
-      <BuySheet
-        open={!!buySheetProduct}
-        product={
-          buySheetProduct
-            ? ({
-                id: buySheetProduct.id,
-                name: buySheetProduct.name,
-                category: buySheetProduct.category,
-                image_url: buySheetProduct.image_url,
-                variants: buySheetProduct.variants.map((v) => ({
-                  id: v.id,
-                  product_id: v.product_id,
-                  variant_name: v.variant_name,
-                  stock: v.stock,
-                  price: priceOf(v),
-                  image_url:
-                    (v.image_urls && v.image_urls[0]) ??
-                    v.image_url ??
-                    buySheetProduct.image_url,
-                })),
-              } as BuySheetProduct)
-            : null
-        }
-        initialQty={
-          buySheetProduct
-            ? (() => {
-                // 1) Pre-llenar con lo que ya esté en el carrito
-                const fromCart = Object.fromEntries(
-                  cart
-                    .filter((c) => c.product_id === buySheetProduct.id)
-                    .map((c) => [c.variant_id, c.qty])
-                )
-                // 2) Si hay variante preseleccionada (clic en chip o lightbox)
-                //    y no estaba en el carrito, arrancar con 1
-                if (
-                  buySheetPreselectedVariant &&
-                  fromCart[buySheetPreselectedVariant] === undefined
-                ) {
-                  fromCart[buySheetPreselectedVariant] = 1
-                }
-                return fromCart
-              })()
-            : undefined
-        }
-        onClose={() => {
-          setBuySheetProduct(null)
-          setBuySheetPreselectedVariant(null)
-        }}
-        onConfirm={(lines) => {
-          if (buySheetProduct) addBatchToCart(buySheetProduct, lines)
-          setBuySheetPreselectedVariant(null)
-        }}
-        blockOversell={bRules.block_oversell}
-      />
+      {/* Bottom Sheet de compra: se abre al tocar el "+" de una card.
+          Lazy + Suspense para diferir el chunk hasta el primer hover/tap. */}
+      <Suspense fallback={null}>
+        <BuySheet
+          open={!!buySheetProduct}
+          product={
+            buySheetProduct
+              ? ({
+                  id: buySheetProduct.id,
+                  name: buySheetProduct.name,
+                  category: buySheetProduct.category,
+                  image_url: buySheetProduct.image_url,
+                  variants: buySheetProduct.variants.map((v) => ({
+                    id: v.id,
+                    product_id: v.product_id,
+                    variant_name: v.variant_name,
+                    stock: v.stock,
+                    price: priceOf(v),
+                    image_url:
+                      (v.image_urls && v.image_urls[0]) ??
+                      v.image_url ??
+                      buySheetProduct.image_url,
+                  })),
+                } as BuySheetProduct)
+              : null
+          }
+          initialQty={
+            buySheetProduct
+              ? (() => {
+                  const fromCart = Object.fromEntries(
+                    cart
+                      .filter((c) => c.product_id === buySheetProduct.id)
+                      .map((c) => [c.variant_id, c.qty])
+                  )
+                  if (
+                    buySheetPreselectedVariant &&
+                    fromCart[buySheetPreselectedVariant] === undefined
+                  ) {
+                    fromCart[buySheetPreselectedVariant] = 1
+                  }
+                  return fromCart
+                })()
+              : undefined
+          }
+          onClose={() => {
+            setBuySheetProduct(null)
+            setBuySheetPreselectedVariant(null)
+          }}
+          onConfirm={(lines) => {
+            if (buySheetProduct) addBatchToCart(buySheetProduct, lines)
+            setBuySheetPreselectedVariant(null)
+          }}
+          blockOversell={bRules.block_oversell}
+        />
+      </Suspense>
 
       {/* Lightbox fullscreen: se abre al tocar la imagen de una card */}
       <ProductLightbox
@@ -1640,6 +1648,8 @@ const ProductCardClient = memo(function ProductCardClientImpl({
             </span>
             <button
               onClick={() => variant && onOpenBuy(variant.id)}
+              onPointerEnter={preloadBuySheet}
+              onTouchStart={preloadBuySheet}
               className="bg-brand w-8 h-8 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform shrink-0"
               aria-label="Elegir tonos"
             >
@@ -1794,6 +1804,8 @@ const ProductCardClient = memo(function ProductCardClientImpl({
               e.stopPropagation()
               if (variant) onOpenBuy(variant.id)
             }}
+            onPointerEnter={preloadBuySheet}
+            onTouchStart={preloadBuySheet}
             className={`bg-brand ${
               isFocus ? "w-11 h-11" : "w-9 h-9"
             } shrink-0 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform`}
