@@ -290,8 +290,12 @@ export default function SalesPage() {
             </div>
           </div>
 
-          {/* Lista responsiva */}
-          <div className="h-[260px] md:h-[320px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+          {/* Lista responsiva.
+              En desktop: altura fija con scroll interno.
+              En móvil: sin altura ni overflow para no atrapar el scroll
+              vertical de la página (problema clásico de nested scroll en
+              touch que impide bajar el contenido siguiente). */}
+          <div className="md:h-[320px] md:overflow-y-auto space-y-2 md:pr-1 custom-scrollbar">
             {filteredProducts.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-300">
                 <Package size={28} />
@@ -483,8 +487,11 @@ export default function SalesPage() {
             </motion.div>
           )}
 
-          {/* LISTA DEL CARRITO */}
-          <div className="space-y-2 mb-4 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar">
+          {/* LISTA DEL CARRITO.
+              Mismo motivo: en móvil quitamos el scroll interno para que
+              el toque pueda bajar la página completa hasta el botón
+              "Confirmar venta". */}
+          <div className="space-y-2 mb-4 md:max-h-[260px] md:overflow-y-auto md:pr-1 custom-scrollbar">
             <AnimatePresence mode="popLayout">
               {state.cart.length === 0 ? (
                 <motion.div
