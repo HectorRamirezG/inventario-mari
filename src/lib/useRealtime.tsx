@@ -1,10 +1,10 @@
 import { useEffect } from "react"
 import toast from "react-hot-toast"
-import { supabase } from "./supabase"
 import { sound } from "./sound"
 import { isStaffOrAdmin, useAuth } from "./useAuth"
 import { formatMoney } from "./format"
 import { isDocumentVisible } from "./useDocumentVisible"
+import { useRealtimeSubscription } from "./useRealtimeSubscription"
 
 /**
  * Suscripción global a eventos de Supabase realtime. Solo admin/staff
@@ -14,104 +14,86 @@ import { isDocumentVisible } from "./useDocumentVisible"
  *  - INSERT en `sales` con `is_layaway=true`  → nuevo apartado
  *  - UPDATE en `sales` con `status=paid`      → pago completado
  *
- * Reproduce un sonido suave + toast con CTA para abrir el item.
- *
- * Para que esto funcione la tabla `sales` debe estar en la publicación
- * realtime (`alter publication supabase_realtime add table sales`),
- * ya incluido en la migración 0008.
+ * Hooks usan el hub multiplex compartido — no abren canal propio.
  */
 export function useRealtimeNotifications() {
   const { role, session } = useAuth()
   const enabled = !!session && isStaffOrAdmin(role)
 
-  useEffect(() => {
-    if (!enabled) return
+  useRealtimeSubscription(
+    "sales",
+    (payload) => {
+      const row: any = payload.new
+      if (!row) return
+      const inBg = !isDocumentVisible()
+      const isLayaway = row.is_layaway === true
+      const customer = row.customer_name ?? "Cliente nuevo"
+      const total = Number(row.total) || 0
+      const fmt = formatMoney(total)
 
-    const channel = supabase
-      .channel("mari-sales-feed")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "sales" },
-        (payload) => {
-          const row: any = payload.new
-          if (!row) return
+      if (isLayaway) {
+        window.dispatchEvent(new CustomEvent("mari:apartado-new"))
+        if (inBg) return
+        sound.play("notify")
+        toast(
+          (t) => (
+            <div className="flex items-center gap-3">
+              <span className="text-lg">🛍️</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-black uppercase tracking-widest text-amber-600">
+                  Nuevo apartado
+                </p>
+                <p className="text-sm font-bold truncate">{customer}</p>
+                <p className="text-[10px] text-slate-500">{fmt}</p>
+              </div>
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id)
+                  window.dispatchEvent(
+                    new CustomEvent("app:navigate", {
+                      detail: { tab: "apartados" },
+                    }),
+                  )
+                }}
+                className="text-[10px] font-black uppercase tracking-widest text-primary px-3 py-1.5 bg-primary/10 rounded-full"
+              >
+                Ver
+              </button>
+            </div>
+          ),
+          { duration: 7000 },
+        )
+      } else {
+        if (inBg) return
+        sound.play("success")
+        toast.success(`Venta nueva · ${customer} · ${fmt}`, {
+          duration: 4000,
+        })
+      }
+    },
+    { event: "INSERT", enabled },
+  )
 
-          // Si el tab está en background, dispatch el evento para que
-          // la UI lo procese al volver, pero NO mostramos toast ni sonido
-          // para no espantar al usuario al desbloquear el cel.
-          const inBg = !isDocumentVisible()
+  useRealtimeSubscription(
+    "sales",
+    (payload) => {
+      const before: any = payload.old
+      const after: any = payload.new
+      if (!before || !after) return
+      if (before.status !== "paid" && after.status === "paid") {
+        if (!isDocumentVisible()) return
+        sound.play("success")
+        toast.success(
+          `Apartado pagado · ${after.customer_name ?? "Cliente"}`,
+          { duration: 4500 },
+        )
+      }
+    },
+    { event: "UPDATE", enabled },
+  )
 
-          // Toast distinto si fue apartado vs venta normal
-          const isLayaway = row.is_layaway === true
-          const customer = row.customer_name ?? "Cliente nuevo"
-          const total = Number(row.total) || 0
-          const fmt = formatMoney(total)
-
-          if (isLayaway) {
-            window.dispatchEvent(new CustomEvent("mari:apartado-new"))
-            if (inBg) return
-            sound.play("notify")
-            toast(
-              (t) => (
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">🛍️</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-black uppercase tracking-widest text-amber-600">
-                      Nuevo apartado
-                    </p>
-                    <p className="text-sm font-bold truncate">{customer}</p>
-                    <p className="text-[10px] text-slate-500">{fmt}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      toast.dismiss(t.id)
-                      window.dispatchEvent(
-                        new CustomEvent("app:navigate", {
-                          detail: { tab: "apartados" },
-                        })
-                      )
-                    }}
-                    className="text-[10px] font-black uppercase tracking-widest text-primary px-3 py-1.5 bg-primary/10 rounded-full"
-                  >
-                    Ver
-                  </button>
-                </div>
-              ),
-              { duration: 7000 }
-            )
-          } else {
-            if (inBg) return
-            sound.play("success")
-            toast.success(`Venta nueva · ${customer} · ${fmt}`, {
-              duration: 4000,
-            })
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "sales" },
-        (payload) => {
-          const before: any = payload.old
-          const after: any = payload.new
-          if (!before || !after) return
-          // Solo notifica si el status PASÓ a paid (no si ya estaba)
-          if (before.status !== "paid" && after.status === "paid") {
-            if (!isDocumentVisible()) return
-            sound.play("success")
-            toast.success(
-              `Apartado pagado · ${after.customer_name ?? "Cliente"}`,
-              { duration: 4500 }
-            )
-          }
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [enabled])
+  // Hook anchor para retrocompat de `useEffect` upstream que asumían un effect.
+  useEffect(() => undefined, [enabled])
 }
 
 /**
@@ -120,8 +102,7 @@ export function useRealtimeNotifications() {
  * dibuja el shell.
  */
 export function useApartadoBadge() {
-  // Implementación intencionalmente delegada: el shell maneja su propio
-  // estado local escuchando el evento dispatched por `useRealtimeNotifications`.
   return null
 }
+
 

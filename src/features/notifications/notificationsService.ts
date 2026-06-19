@@ -9,6 +9,7 @@ import {
   type NotifCategory,
 } from "../../lib/notifPrefs"
 import { isDocumentVisible } from "../../lib/useDocumentVisible"
+import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 
 export type NotifType =
   // ───── Originales
@@ -223,77 +224,46 @@ export function useNotifications(opts: {
       return
     }
     refresh()
+  }, [enabled, refresh])
 
-    // Filtro de realtime: SOLO notifs de mi rol (admin o client).
-    // El email también se valida en RLS del lado servidor.
-    const channel = supabase
-      .channel(`mari-notifications-${scope}-${email}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `recipient_role=eq.${scope}`,
-        },
-        (payload) => {
-          const n = payload.new as AppNotification
-          // Defensa client-side adicional: si por algún motivo viene
-          // una notif que no es para mí, la ignoramos.
-          if (n.recipient_role !== scope) return
-          if (n.recipient_email && n.recipient_email !== email) return
-          setItems((prev) => [n, ...prev].slice(0, 50))
-          // Cuando el tab está en background, no reproducimos sonido
-          // (lo verán al volver). Pero SÍ disparamos la notif del SO
-          // porque ese es justo su propósito.
-          if (isDocumentVisible()) {
-            playForType(n.type)
-          }
-          // Push local del navegador (si el permiso está concedido).
-          // Esto funciona aunque la app esté en background dentro del
-          // mismo tab — pero no si la app está cerrada (eso lo cubre
-          // Web Push del SW).
-          triggerLocalNotification({
-            title: n.title,
-            body: n.body,
-            tag: n.id,
-          })
-          opts.onNew?.(n)
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `recipient_role=eq.${scope}`,
-        },
-        (payload) => {
-          const n = payload.new as AppNotification
-          setItems((prev) => prev.map((x) => (x.id === n.id ? n : x)))
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "notifications",
-          filter: `recipient_role=eq.${scope}`,
-        },
-        (payload) => {
-          const id = (payload.old as any)?.id
-          if (id) setItems((prev) => prev.filter((x) => x.id !== id))
-        }
-      )
-      .subscribe()
+  // Filtros client-side equivalentes a `recipient_role=eq.${scope}` y
+  // por email del lado servidor (RLS) — todo despachado por el hub.
+  const scopeMatch = useCallback(
+    (row: any) =>
+      row?.recipient_role === scope &&
+      (!row?.recipient_email || row.recipient_email === email),
+    [scope, email],
+  )
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, email, scope])
+  useRealtimeSubscription(
+    "notifications",
+    (payload) => {
+      const n = payload.new as AppNotification
+      setItems((prev) => [n, ...prev].slice(0, 50))
+      if (isDocumentVisible()) playForType(n.type)
+      triggerLocalNotification({ title: n.title, body: n.body, tag: n.id })
+      opts.onNew?.(n)
+    },
+    { event: "INSERT", match: scopeMatch, enabled },
+  )
+
+  useRealtimeSubscription(
+    "notifications",
+    (payload) => {
+      const n = payload.new as AppNotification
+      setItems((prev) => prev.map((x) => (x.id === n.id ? n : x)))
+    },
+    { event: "UPDATE", match: scopeMatch, enabled },
+  )
+
+  useRealtimeSubscription(
+    "notifications",
+    (payload) => {
+      const id = (payload.old as any)?.id
+      if (id) setItems((prev) => prev.filter((x) => x.id !== id))
+    },
+    { event: "DELETE", match: scopeMatch, enabled },
+  )
 
   const unread = items.filter((n) => !n.read_at).length
 

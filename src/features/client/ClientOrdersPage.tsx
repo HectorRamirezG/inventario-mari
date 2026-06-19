@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { Clock, CheckCircle2, ArrowRight, LifeBuoy, Lock, ShoppingBag, Wallet, XCircle } from "lucide-react"
 import toast from "react-hot-toast"
@@ -6,6 +6,8 @@ import toast from "react-hot-toast"
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDate, shortId } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
+import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
+import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import TicketDrawer from "../../components/ui/TicketDrawer"
 import PaymentCenterDrawer from "../../components/ui/PaymentCenterDrawer"
 import Skeleton from "../../components/ui/Skeleton"
@@ -44,73 +46,55 @@ export default function ClientOrdersPage() {
   /** sale_id -> status de su comanda más reciente (si existe). */
   const [deliveryBySale, setDeliveryBySale] = useState<Record<string, string>>({})
   const rules = useBusinessRules()
+  const aliveRef = useRef(true)
+
+  const loadOrders = useCallback(async () => {
+    if (!email) return
+    const { data } = await supabase
+      .from("sales")
+      .select(
+        "id,total,paid,balance,status,is_layaway,created_at,public_token,payment_url,delivery_notes(status,created_at)",
+      )
+      .eq("customer_email", email)
+      .order("created_at", { ascending: false })
+      .limit(50)
+    if (!aliveRef.current) return
+    const list = (data as any[]) ?? []
+    setOrders(list as MyOrder[])
+    const map: Record<string, string> = {}
+    for (const o of list) {
+      const notes: Array<{ status: string; created_at: string }> =
+        o.delivery_notes ?? []
+      if (notes.length > 0) {
+        const sorted = [...notes].sort((a, b) =>
+          b.created_at.localeCompare(a.created_at),
+        )
+        map[o.id] = sorted[0].status
+      }
+    }
+    setDeliveryBySale(map)
+    setLoading(false)
+  }, [email])
 
   useEffect(() => {
     if (!email) return
-    let alive = true
-    const loadOrders = async () => {
-      // Una sola query: trae las ventas + sus comandas embebidas
-      // (PostgREST hace el LEFT JOIN). Evita el segundo round-trip
-      // que hacíamos antes para resolver el delivery status.
-      const { data } = await supabase
-        .from("sales")
-        .select(
-          "id,total,paid,balance,status,is_layaway,created_at,public_token,payment_url,delivery_notes(status,created_at)",
-        )
-        .eq("customer_email", email)
-        .order("created_at", { ascending: false })
-        .limit(50)
-      if (!alive) return
-      const list = (data as any[]) ?? []
-      setOrders(list as MyOrder[])
-      // Indexa status de la comanda más reciente por sale_id (si existe)
-      const map: Record<string, string> = {}
-      for (const o of list) {
-        const notes: Array<{ status: string; created_at: string }> =
-          o.delivery_notes ?? []
-        if (notes.length > 0) {
-          // Ordena por created_at desc y toma la primera
-          const sorted = [...notes].sort((a, b) =>
-            b.created_at.localeCompare(a.created_at),
-          )
-          map[o.id] = sorted[0].status
-        }
-      }
-      setDeliveryBySale(map)
-      setLoading(false)
-    }
+    aliveRef.current = true
     loadOrders()
-    // Realtime: cuando el admin cambia el status de un pedido, se cobra,
-    // o se actualiza la comanda, refrescamos en vivo. Debounce 500ms.
-    let debounceId: ReturnType<typeof setTimeout> | undefined
-    const schedule = () => {
-      if (debounceId) clearTimeout(debounceId)
-      debounceId = setTimeout(loadOrders, 500)
-    }
-    const channel = supabase
-      .channel(`my-orders-${email}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "sales",
-          filter: `customer_email=eq.${email}`,
-        },
-        schedule,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "delivery_notes" },
-        schedule,
-      )
-      .subscribe()
     return () => {
-      alive = false
-      if (debounceId) clearTimeout(debounceId)
-      supabase.removeChannel(channel)
+      aliveRef.current = false
     }
-  }, [email])
+  }, [email, loadOrders])
+
+  // Realtime via hub multiplex. Filtramos por customer_email del lado
+  // cliente para evitar abrir un canal con filtro por usuario.
+  const scheduleOrdersReload = useDebouncedCallback(() => loadOrders(), 500)
+  useRealtimeSubscription("sales", scheduleOrdersReload, {
+    enabled: !!email,
+    match: (row) => row?.customer_email === email,
+  })
+  useRealtimeSubscription("delivery_notes", scheduleOrdersReload, {
+    enabled: !!email,
+  })
 
   if (loading) {
     return (

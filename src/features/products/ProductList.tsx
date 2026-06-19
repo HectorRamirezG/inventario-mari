@@ -11,7 +11,8 @@ import Skeleton from "../../components/ui/Skeleton"
 import PageHeader from "../../components/ui/PageHeader"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import { debug } from "../../lib/debug"
-import { supabase } from "../../lib/supabase"
+import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
+import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 
 const container = {
   hidden: { opacity: 0 },
@@ -62,36 +63,13 @@ export default function ProductList() {
 
   useEffect(() => {
     refresh()
-    // Realtime: si cambia algún producto, variante o movimiento de stock
-    // refrescamos automáticamente. Debounce 600ms para colapsar ráfagas.
-    let debounceId: ReturnType<typeof setTimeout> | undefined
-    const schedule = () => {
-      if (debounceId) clearTimeout(debounceId)
-      debounceId = setTimeout(refresh, 600)
-    }
-    const channel = supabase
-      .channel("admin-products-feed")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "products" },
-        schedule,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "variants" },
-        schedule,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "stock_movements" },
-        schedule,
-      )
-      .subscribe()
-    return () => {
-      if (debounceId) clearTimeout(debounceId)
-      supabase.removeChannel(channel)
-    }
   }, [])
+
+  // Realtime: el hub multiplex despacha los eventos al callback debounced.
+  const scheduleRefresh = useDebouncedCallback(() => refresh(), 600)
+  useRealtimeSubscription("products", scheduleRefresh)
+  useRealtimeSubscription("variants", scheduleRefresh)
+  useRealtimeSubscription("stock_movements", scheduleRefresh)
 
   // Permite abrir el drawer "Nuevo producto" desde el Action Hub global
   useEffect(() => {

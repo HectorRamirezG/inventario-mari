@@ -4,6 +4,8 @@ import { supabase } from "./supabase"
 import { useAuth } from "./useAuth"
 import { useBusinessRules } from "../features/settings/businessRulesService"
 import { debug } from "./debug"
+import { useRealtimeSubscription } from "./useRealtimeSubscription"
+import { useDebouncedCallback } from "./useDebouncedCallback"
 
 /**
  * Contadores globales que pinta el sidebar como badges sobre cada item.
@@ -43,7 +45,6 @@ async function countOrZero(
     if (filter) q = filter(q)
     const { count, error } = await q
     if (error) {
-      // Tabla inexistente o RLS bloqueando: 0 silencioso
       if (/does not exist|404|not found|PGRST/i.test(error.message)) return 0
       return 0
     }
@@ -65,13 +66,7 @@ export function useSidebarCounts(): SidebarCounts {
       setCounts(ZERO)
       return
     }
-    // Umbral para considerar "stock bajo" lo controla Mari desde Reglas
-    // (`stock_alert_threshold`). Antes estaba hardcoded en 3 piezas, lo
-    // cual no respetaba la configuración real de la tienda.
     const lowStockLimit = rules.stock_alert_threshold ?? 3
-    // Lanzamos en paralelo. Cada query trae a lo sumo el HEAD (count),
-    // no transfiere filas, así que es barato. Gateamos por reglas para
-    // no pegarle a tablas que el admin desactivó.
     const tasks: Promise<[keyof SidebarCounts, number]>[] = [
       countOrZero("sales", (q) => q.eq("status", "pending"))
         .then((n) => ["pendientes", n] as const),
@@ -97,14 +92,26 @@ export function useSidebarCounts(): SidebarCounts {
     setCounts((prev) => {
       const next: SidebarCounts = { ...ZERO }
       for (const [k, v] of results) next[k] = v
-      // Preserva claves que NO se consultaron (regla apagada)
       return { ...prev, ...next }
     })
   }, [session, isStaff, rules.wishes_enabled, rules.reviews_enabled, rules.stock_alert_threshold])
 
+  // Realtime: el hub multiplex despacha eventos a estas tablas y
+  // colapsamos las ráfagas en una sola query de conteo cada 400ms.
+  const scheduleRefresh = useDebouncedCallback(() => refresh(), 400)
+  const enabled = !!session && isStaff
+  useRealtimeSubscription("sales", scheduleRefresh, { enabled })
+  useRealtimeSubscription("support_tickets", scheduleRefresh, { enabled })
+  useRealtimeSubscription("variants", scheduleRefresh, { enabled })
+  useRealtimeSubscription("wishes", scheduleRefresh, {
+    enabled: enabled && rules.wishes_enabled,
+  })
+  useRealtimeSubscription("reviews", scheduleRefresh, {
+    enabled: enabled && rules.reviews_enabled,
+  })
+
   useEffect(() => {
     refresh()
-    // Refresh cada 60s mientras la pestaña esté visible.
     let intervalId: ReturnType<typeof setInterval> | undefined
     const startInterval = () => {
       if (intervalId) return
@@ -116,85 +123,32 @@ export function useSidebarCounts(): SidebarCounts {
         intervalId = undefined
       }
     }
-    // Realtime: nos suscribimos a las tablas que afectan los badges para
-    // refrescar al instante sin esperar 60s. Cada tabla emite un evento
-    // por INSERT/UPDATE/DELETE y reactivamos `refresh` con un debounce
-    // pequeño para no spamear si llegan varios cambios a la vez.
-    let debounceId: ReturnType<typeof setTimeout> | undefined
-    const scheduleRefresh = () => {
-      if (debounceId) clearTimeout(debounceId)
-      debounceId = setTimeout(refresh, 400)
-    }
-    let channel: ReturnType<typeof supabase.channel> | null = null
-    if (session && isStaff) {
-      channel = supabase
-        .channel(`sidebar-counts-${session.user.id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "sales" },
-          scheduleRefresh,
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "support_tickets" },
-          scheduleRefresh,
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "variants" },
-          scheduleRefresh,
-        )
-      if (rules.wishes_enabled) {
-        channel = channel.on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "wishes" },
-          scheduleRefresh,
-        )
-      }
-      if (rules.reviews_enabled) {
-        channel = channel.on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "reviews" },
-          scheduleRefresh,
-        )
-      }
-      channel.subscribe()
-    }
-    if (typeof document !== "undefined") {
-      if (document.visibilityState === "visible") startInterval()
-      const handleVis = () => {
-        if (document.visibilityState === "visible") {
-          refresh()
-          startInterval()
-        } else {
-          stopInterval()
-        }
-      }
-      document.addEventListener("visibilitychange", handleVis)
-      // Eventos broadcast: cuando algo cambia en la app, refrescamos.
-      const evNames = [
-        "mari:apartado-refresh",
-        "mari:apartado-new",
-        "mari:proof-status",
-        "mari:support-refresh",
-        "mari:reviews-refresh",
-      ]
-      const handler = () => refresh()
-      evNames.forEach((n) => window.addEventListener(n, handler))
-      return () => {
+    if (typeof document === "undefined") return
+    if (document.visibilityState === "visible") startInterval()
+    const handleVis = () => {
+      if (document.visibilityState === "visible") {
+        refresh()
+        startInterval()
+      } else {
         stopInterval()
-        if (debounceId) clearTimeout(debounceId)
-        if (channel) supabase.removeChannel(channel)
-        document.removeEventListener("visibilitychange", handleVis)
-        evNames.forEach((n) => window.removeEventListener(n, handler))
       }
     }
+    document.addEventListener("visibilitychange", handleVis)
+    const evNames = [
+      "mari:apartado-refresh",
+      "mari:apartado-new",
+      "mari:proof-status",
+      "mari:support-refresh",
+      "mari:reviews-refresh",
+    ]
+    const handler = () => refresh()
+    evNames.forEach((n) => window.addEventListener(n, handler))
     return () => {
       stopInterval()
-      if (debounceId) clearTimeout(debounceId)
-      if (channel) supabase.removeChannel(channel)
+      document.removeEventListener("visibilitychange", handleVis)
+      evNames.forEach((n) => window.removeEventListener(n, handler))
     }
-  }, [refresh, session, isStaff, rules.wishes_enabled, rules.reviews_enabled])
+  }, [refresh])
 
   return counts
 }

@@ -18,7 +18,7 @@
  *     suele ser chico y se cachea en memoria.
  */
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Sparkles,
@@ -33,6 +33,8 @@ import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../lib/useAuth"
 import { useBusinessRules } from "../settings/businessRulesService"
 import { useNotifications } from "../notifications/notificationsService"
+import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
+import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 
 import ClientHero from "../../components/ui/ClientHero"
 import InstallAppBanner from "../../components/ui/InstallAppBanner"
@@ -73,66 +75,52 @@ export default function ClientHomePage() {
   const [products, setProducts] = useState<PublicProduct[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let alive = true
-    const loadCatalog = async () => {
-      const { data: prods } = await supabase
-        .from("products")
-        .select("id,name,category,image_url,created_at")
-        .eq("is_active", true)
-        .order("name")
-      const { data: vars } = await supabase
-        .from("variants")
-        .select(
-          "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls"
-        )
-        .eq("is_active", true)
-      if (!alive) return
-      const byProduct: Record<string, PublicVariant[]> = {}
-      ;(vars ?? []).forEach((v: any) => {
-        if (!byProduct[v.product_id]) byProduct[v.product_id] = []
-        byProduct[v.product_id].push({
-          ...v,
-          image_url: v.image_url ?? null,
-          image_urls: v.image_urls ?? null,
-        } as PublicVariant)
-      })
-      setProducts(
-        (prods ?? []).map((p: any) => ({
-          ...(p as Omit<PublicProduct, "variants">),
-          image_url: p.image_url ?? null,
-          variants: byProduct[p.id] ?? [],
-        }))
+  const aliveRef = useRef(true)
+
+  const loadCatalog = useCallback(async () => {
+    const { data: prods } = await supabase
+      .from("products")
+      .select("id,name,category,image_url,created_at")
+      .eq("is_active", true)
+      .order("name")
+    const { data: vars } = await supabase
+      .from("variants")
+      .select(
+        "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls",
       )
-      setLoading(false)
-    }
-    loadCatalog()
-    // Realtime: refrescar cuando admin cambie productos/variantes.
-    // Debounce 800ms para no recargar por cada update individual.
-    let debounceId: ReturnType<typeof setTimeout> | undefined
-    const schedule = () => {
-      if (debounceId) clearTimeout(debounceId)
-      debounceId = setTimeout(loadCatalog, 800)
-    }
-    const channel = supabase
-      .channel("home-catalog")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "products" },
-        schedule,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "variants" },
-        schedule,
-      )
-      .subscribe()
-    return () => {
-      alive = false
-      if (debounceId) clearTimeout(debounceId)
-      supabase.removeChannel(channel)
-    }
+      .eq("is_active", true)
+    if (!aliveRef.current) return
+    const byProduct: Record<string, PublicVariant[]> = {}
+    ;(vars ?? []).forEach((v: any) => {
+      if (!byProduct[v.product_id]) byProduct[v.product_id] = []
+      byProduct[v.product_id].push({
+        ...v,
+        image_url: v.image_url ?? null,
+        image_urls: v.image_urls ?? null,
+      } as PublicVariant)
+    })
+    setProducts(
+      (prods ?? []).map((p: any) => ({
+        ...(p as Omit<PublicProduct, "variants">),
+        image_url: p.image_url ?? null,
+        variants: byProduct[p.id] ?? [],
+      })),
+    )
+    setLoading(false)
   }, [])
+
+  useEffect(() => {
+    aliveRef.current = true
+    loadCatalog()
+    return () => {
+      aliveRef.current = false
+    }
+  }, [loadCatalog])
+
+  // Realtime: el hub multiplex despacha eventos al loader debounced.
+  const scheduleCatalogReload = useDebouncedCallback(() => loadCatalog(), 800)
+  useRealtimeSubscription("products", scheduleCatalogReload)
+  useRealtimeSubscription("variants", scheduleCatalogReload)
 
   // Redirige a la tienda con el producto seleccionado para abrir el BuySheet.
   const openProduct = (productId: string) => {

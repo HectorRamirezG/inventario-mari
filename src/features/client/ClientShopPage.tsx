@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useDeferredValue, memo } from "react"
+import { useCallback, useEffect, useRef, useState, useMemo, useDeferredValue, memo } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Fuse from "fuse.js"
@@ -60,6 +60,8 @@ import { getBusinessRules, useBusinessRules, isWithinBusinessHours } from "../se
 import { notifyAdmins } from "../notifications/notificationsService"
 import WishesDrawer from "../wishes/WishesDrawer"
 import ReviewsDrawer from "../reviews/ReviewsDrawer"
+import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
+import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -227,6 +229,7 @@ export default function ClientShopPage() {
   const [scannerOpen, setScannerOpen] = useState(false)
   const [onlyWishlist, setOnlyWishlist] = useState(false)
   const wishlist = useWishlist()
+  const catalogReloadRef = useRef<(() => void) | null>(null)
 
   // Si el usuario está logueado, prellena con sus datos
   useEffect(() => {
@@ -241,8 +244,6 @@ export default function ClientShopPage() {
 
   useEffect(() => {
     let alive = true
-    // Carga catálogo desde products + variants. Se llama al montar y
-    // cada vez que un evento realtime indica cambios.
     const loadCatalog = async () => {
       const { data: prods } = await supabase
         .from("products")
@@ -272,37 +273,21 @@ export default function ClientShopPage() {
       )
       setLoading(false)
     }
-
+    catalogReloadRef.current = loadCatalog
     loadCatalog()
-
-    // Realtime: cuando admin agrega/edita producto, variante o stock,
-    // recargamos el catálogo. Debouncing manual a 800ms para no spamear
-    // si llegan varios eventos seguidos (ej. update en lote).
-    let debounce: number | null = null
-    const triggerReload = () => {
-      if (debounce) window.clearTimeout(debounce)
-      debounce = window.setTimeout(loadCatalog, 800)
-    }
-    const channel = supabase
-      .channel("client-catalog")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "products" },
-        triggerReload,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "variants" },
-        triggerReload,
-      )
-      .subscribe()
-
     return () => {
       alive = false
-      if (debounce) window.clearTimeout(debounce)
-      supabase.removeChannel(channel)
+      catalogReloadRef.current = null
     }
   }, [])
+
+  // Realtime via hub multiplex: el callback debounced delega en el
+  // loader vivo registrado en el ref.
+  const triggerCatalogReload = useDebouncedCallback(() => {
+    catalogReloadRef.current?.()
+  }, 800)
+  useRealtimeSubscription("products", triggerCatalogReload)
+  useRealtimeSubscription("variants", triggerCatalogReload)
 
   // Si llegamos con `?p=PRODUCT_ID` (típicamente desde la HomePage),
   // abrimos el BuySheet en cuanto el catálogo esté cargado. Después

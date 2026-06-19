@@ -15,6 +15,10 @@
  */
 
 import { supabase } from "../../lib/supabase"
+import {
+  onRealtimeEvent,
+  onRealtimeStatus,
+} from "../../lib/realtimeHub"
 
 export interface PerfSnapshot {
   /** Heap JS usado en MB. null si Memory API no disponible. */
@@ -72,6 +76,8 @@ class PerfMonitor {
   private fpsTimer: number | null = null
   private bootTime = Date.now()
   private realtimeChannel: any = null
+  private unsubStatus: (() => void) | null = null
+  private unsubEvent: (() => void) | null = null
 
   start() {
     if (typeof window === "undefined") return
@@ -93,6 +99,10 @@ class PerfMonitor {
         supabase.removeChannel(this.realtimeChannel)
       } catch {}
     }
+    this.unsubStatus?.()
+    this.unsubEvent?.()
+    this.unsubStatus = null
+    this.unsubEvent = null
   }
 
   subscribe(fn: (s: PerfSnapshot) => void) {
@@ -211,21 +221,11 @@ class PerfMonitor {
 
   private observeRealtime() {
     try {
-      const ch = supabase.channel("perf-monitor")
-      this.realtimeChannel = ch
-      ch.on("system", {} as any, () => {
-        this.update({ lastRealtimeEventAt: Date.now() - this.bootTime })
+      this.unsubStatus = onRealtimeStatus((status) => {
+        this.update({ realtimeStatus: status })
       })
-      ch.subscribe((status: string) => {
-        const map: Record<string, PerfSnapshot["realtimeStatus"]> = {
-          SUBSCRIBED: "joined",
-          CHANNEL_ERROR: "error",
-          TIMED_OUT: "error",
-          CLOSED: "closed",
-        }
-        this.update({
-          realtimeStatus: map[status] ?? "joining",
-        })
+      this.unsubEvent = onRealtimeEvent((ts) => {
+        this.update({ lastRealtimeEventAt: ts - this.bootTime })
       })
     } catch {
       this.update({ realtimeStatus: "error" })

@@ -32,6 +32,8 @@ export type RealtimeTable =
   | "notifications"
   | "stories"
 
+export type RealtimeStatus = "joining" | "joined" | "closed" | "error" | "unknown"
+
 export interface RealtimeListener {
   table: RealtimeTable
   event: RealtimeEvent
@@ -44,7 +46,36 @@ const tableRefCount = new Map<RealtimeTable, number>()
 let channel: RealtimeChannel | null = null
 let rebuildTimer: ReturnType<typeof setTimeout> | null = null
 
+let currentStatus: RealtimeStatus = "unknown"
+let lastEventAt: number | null = null
+const statusListeners = new Set<(s: RealtimeStatus) => void>()
+const eventListeners = new Set<(ts: number) => void>()
+
+function emitStatus(s: RealtimeStatus) {
+  if (currentStatus === s) return
+  currentStatus = s
+  for (const l of statusListeners) {
+    try {
+      l(s)
+    } catch {
+      /* swallow */
+    }
+  }
+}
+
+function emitEvent() {
+  lastEventAt = Date.now()
+  for (const l of eventListeners) {
+    try {
+      l(lastEventAt)
+    } catch {
+      /* swallow */
+    }
+  }
+}
+
 function dispatch(table: RealtimeTable, payload: any) {
+  emitEvent()
   const evType = payload?.eventType as RealtimeEvent | undefined
   const row = payload?.new ?? payload?.old
   for (const l of listeners.values()) {
@@ -65,7 +96,11 @@ function rebuild() {
     supabase.removeChannel(channel)
     channel = null
   }
-  if (tableRefCount.size === 0) return
+  if (tableRefCount.size === 0) {
+    emitStatus("closed")
+    return
+  }
+  emitStatus("joining")
   const ch = supabase.channel("mari-realtime-hub")
   for (const t of tableRefCount.keys()) {
     ch.on(
@@ -74,7 +109,15 @@ function rebuild() {
       (payload) => dispatch(t, payload),
     )
   }
-  ch.subscribe()
+  ch.subscribe((status: string) => {
+    const map: Record<string, RealtimeStatus> = {
+      SUBSCRIBED: "joined",
+      CHANNEL_ERROR: "error",
+      TIMED_OUT: "error",
+      CLOSED: "closed",
+    }
+    emitStatus(map[status] ?? "joining")
+  })
   channel = ch
 }
 
@@ -102,10 +145,35 @@ export function subscribeRealtime(l: RealtimeListener): () => void {
   }
 }
 
+export function onRealtimeStatus(cb: (s: RealtimeStatus) => void): () => void {
+  statusListeners.add(cb)
+  cb(currentStatus)
+  return () => {
+    statusListeners.delete(cb)
+  }
+}
+
+export function onRealtimeEvent(cb: (ts: number) => void): () => void {
+  eventListeners.add(cb)
+  return () => {
+    eventListeners.delete(cb)
+  }
+}
+
+export function getRealtimeStatus(): RealtimeStatus {
+  return currentStatus
+}
+
+export function getLastRealtimeEventAt(): number | null {
+  return lastEventAt
+}
+
 export function realtimeHubStats() {
   return {
     listeners: listeners.size,
     tables: Array.from(tableRefCount.keys()),
     connected: !!channel,
+    status: currentStatus,
+    lastEventAt,
   }
 }
