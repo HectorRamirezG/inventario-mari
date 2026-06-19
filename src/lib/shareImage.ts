@@ -133,27 +133,89 @@ function resolveOklchColors(root: HTMLElement) {
 }
 
 /**
- * Captura un nodo del DOM como canvas. Si alguna imagen externa falla
- * por CORS, html2canvas se cuelga; por eso usamos `imageTimeout` y
- * `allowTaint: true` como red de seguridad para no quedarnos esperando
- * para siempre.
+ * Captura un nodo del DOM como canvas.
+ *
+ * Estrategia:
+ *  1) Intentamos primero `html-to-image` (lib moderna, ~50kb gz):
+ *     - Usa `<foreignObject>` de SVG nativo → respeta CSS moderno
+ *       (gradientes nuevos, oklch, filters, box-shadows, emojis).
+ *     - El "preview" se ve casi idéntico al DOM real.
+ *  2) Si falla (CORS de imágenes, browser muy viejo, etc.), caemos a
+ *     `html2canvas` que repinta pixel-por-pixel con nuestro workaround
+ *     de oklch. Sirve como red de seguridad.
+ *
+ * Ambos están detrás de `import()` dinámico para no inflar el bundle
+ * inicial — solo se cargan cuando el usuario pide imagen/PDF.
  */
-async function nodeToCanvas(node: HTMLElement, scale = 2): Promise<HTMLCanvasElement> {
+async function nodeToCanvas(
+  node: HTMLElement,
+  scale = 2,
+): Promise<HTMLCanvasElement> {
+  // ── Intento #1: html-to-image (moderno, mejor calidad visual) ──
+  try {
+    const htmlToImage: any = await import("html-to-image")
+    const dataUrl: string = await htmlToImage.toPng(node, {
+      pixelRatio: scale,
+      cacheBust: true,
+      backgroundColor: "#ffffff",
+      // Ignora errores de imagen individual (CORS, 404, etc.) en vez
+      // de cancelar todo el render. Devuelve el resto OK.
+      skipFonts: false,
+      filter: (n: HTMLElement) => {
+        // Saltar nodos marcados como `data-no-capture` por si en el
+        // futuro queremos esconder ciertos controles del preview.
+        if (n.dataset && n.dataset.noCapture === "true") return false
+        return true
+      },
+    })
+    // Convertimos el dataURL a <canvas> para mantener compatibilidad
+    // con el resto del pipeline (Web Share API + jsPDF esperan canvas/blob).
+    return await dataUrlToCanvas(dataUrl)
+  } catch (eModern: any) {
+    console.warn(
+      "[shareImage] html-to-image falló, caigo a html2canvas:",
+      eModern?.message,
+    )
+  }
+
+  // ── Intento #2: html2canvas (legacy, con workaround de oklch) ──
   const html2canvas = await loadHtml2Canvas()
   return html2canvas(node, {
     scale,
     backgroundColor: "#ffffff",
     useCORS: true,
-    allowTaint: true,    // ← si una img no resuelve CORS, no truena
-    imageTimeout: 8000,  // ← evita "se queda cargando para siempre"
+    allowTaint: true, // ← si una img no resuelve CORS, no truena
+    imageTimeout: 8000, // ← evita "se queda cargando para siempre"
     logging: false,
-    onclone: (_doc, clonedRoot) => {
+    onclone: (_doc: Document, clonedRoot: HTMLElement) => {
       try {
-        resolveOklchColors(clonedRoot as HTMLElement)
+        resolveOklchColors(clonedRoot)
       } catch (e) {
         debug.warn("[shareImage] resolveOklchColors failed", e)
       }
     },
+  })
+}
+
+/** Convierte un data URL PNG en un <canvas> listo para `toBlob()` / jsPDF. */
+async function dataUrlToCanvas(dataUrl: string): Promise<HTMLCanvasElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    img.onload = () => {
+      const canvas = document.createElement("canvas")
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        reject(new Error("No se pudo crear contexto 2D"))
+        return
+      }
+      ctx.drawImage(img, 0, 0)
+      resolve(canvas)
+    }
+    img.onerror = () => reject(new Error("No se pudo cargar la imagen capturada"))
+    img.src = dataUrl
   })
 }
 
