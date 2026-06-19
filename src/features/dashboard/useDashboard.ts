@@ -9,27 +9,30 @@ export function useDashboard(periodDays = 30) {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
 
-  async function refresh() {
-    setLoading(true)
+  // `silent` = true cuando el refresh viene del realtime/intervalo,
+  // así no mostramos el skeleton ni rebobinamos el scroll. Solo
+  // actualizamos los datos en su lugar.
+  async function refresh(silent = false) {
+    if (!silent) setLoading(true)
     try {
       const data = await getDashboardStats(periodDays)
       setStats(data)
     } catch (error) {
       debug.error("Error en dashboard:", error)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
     refresh()
     // Realtime: cuando entre/cambie una venta o un pago, refrescamos
-    // los KPIs sin esperar a que el admin recargue la página.
-    // Debounce de 600ms para no spamear si llegan varios eventos.
+    // los KPIs en SILENCIO (sin skeleton) para no perder la posición
+    // de scroll del admin. Debounce de 600ms para colapsar ráfagas.
     let debounceId: ReturnType<typeof setTimeout> | undefined
     const schedule = () => {
       if (debounceId) clearTimeout(debounceId)
-      debounceId = setTimeout(refresh, 600)
+      debounceId = setTimeout(() => refresh(true), 600)
     }
     const channel = supabase
       .channel(`dashboard-${periodDays}`)

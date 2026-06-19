@@ -81,7 +81,10 @@ export default function TrendChart({ data, periodLabel }: TrendChartProps) {
         <Legend />
       </div>
 
-      <div className="h-[240px]">
+      {/* `touch-action: pan-y` evita que Recharts atrape el gesto vertical
+          y bloquee el scroll de la página cuando Mari pasa el dedo sobre
+          el chart en móvil. El tooltip sigue funcionando con tap. */}
+      <div className="h-[240px]" style={{ touchAction: "pan-y" }}>
         {data.length === 0 ? (
           <EmptyChart />
         ) : (

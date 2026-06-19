@@ -121,12 +121,45 @@ export default function BusinessRulesPage() {
         }
       />
 
+      {/* Mini-guía para que Mari sepa cómo leer la página:
+          - Chip verde "Activo" / gris "Pausado" indica si la regla está
+            funcionando ahora mismo.
+          - Chip de color indica a quién le afecta (cliente, admin, etc.).
+          - Cuando hay valores extra (días, monto, %), se despliegan al
+            prender el toggle. */}
+      <div className="mb-4 rounded-2xl bg-gradient-to-br from-primary/8 to-violet-500/8 dark:from-primary/15 dark:to-violet-500/15 border border-primary/15 dark:border-primary/25 p-3 flex items-start gap-2.5">
+        <span className="w-7 h-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0 text-[10px] font-black">
+          ?
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-black text-slate-800 dark:text-slate-100 leading-tight">
+            ¿Cómo leer esta página?
+          </p>
+          <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 leading-snug mt-0.5">
+            Cada regla tiene un chip{" "}
+            <span className="px-1 py-0 rounded bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase">
+              Activo
+            </span>{" "}
+            o{" "}
+            <span className="px-1 py-0 rounded bg-slate-200 text-slate-500 text-[9px] font-black uppercase">
+              Pausado
+            </span>{" "}
+            según el switch. El chip de color de al lado indica a quién afecta
+            (cliente, admin, tienda online). Toca el switch para prender/apagar
+            y, si la regla tiene parámetros (días, monto, %), aparecerán
+            debajo.
+          </p>
+        </div>
+      </div>
+
       {/* LOGÍSTICA Y RECLAMACIONES */}
       <Section icon={<Truck size={14} />} title="Logística y reclamaciones" subtitle="Tracking obligatorio, ventana de quejas">
         <RuleRow
           icon={Clock}
           title="Ventana de reclamación"
-          description="Bloquea el botón de reportar daño N horas después del pago/entrega."
+          description="El cliente puede reportar un producto dañado solo durante las primeras N horas después de recibirlo. Pasado ese tiempo, el botón se bloquea."
+          affects="cliente"
+          example="Ej: con 48h, después de 2 días ya no puede reclamar."
           enabled={form.claim_window_enabled}
           onToggle={(v) => patch({ claim_window_enabled: v })}
         >
@@ -143,7 +176,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Truck}
           title="Tracking obligatorio en foráneo"
-          description="No deja cambiar el estatus a 'Enviado' / 'Entregado' sin guía de paquetería."
+          description="Para pedidos foráneos, debes capturar la guía de paquetería antes de marcar como ‘Enviado’ o ‘Entregado’. Evita que cierres pedidos sin tener el rastreo."
+          affects="admin"
           enabled={form.force_tracking_foraneo}
           onToggle={(v) => patch({ force_tracking_foraneo: v })}
         />
@@ -154,7 +188,9 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Wallet}
           title="Ventas de alto valor"
-          description="Pide confirmación extra del admin para ventas que superen el monto."
+          description="Cuando una venta pasa del monto que pongas, te pide doble confirmación antes de cerrarla. Útil para evitar cobros erróneos enormes."
+          affects="admin"
+          example="Ej: con $5,000, una venta de $6,200 te pedirá ‘¿Seguro?’."
           enabled={form.high_value_enabled}
           onToggle={(v) => patch({ high_value_enabled: v })}
         >
@@ -172,7 +208,9 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Wallet}
           title="Apartado con anticipo mínimo"
-          description="Exige que el anticipo sea al menos un % del total del apartado."
+          description="No se puede crear un apartado si el primer abono es menor al porcentaje que defines del total. Así evitas apartados ‘fantasma’."
+          affects="admin"
+          example="Ej: con 20%, un apartado de $1,000 necesita al menos $200 de anticipo."
           enabled={form.min_layaway_enabled}
           onToggle={(v) => patch({ min_layaway_enabled: v })}
         >
@@ -189,7 +227,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={AlertCircle}
           title="Alerta diaria de saldo pendiente"
-          description="Avisa al admin en Dashboard cuando 'por cobrar' del día supere el umbral."
+          description="Aparece un aviso en el Dashboard cuando lo que te deben hoy supera el umbral. Así no se te van apartados sin cobrar."
+          affects="admin"
           enabled={form.daily_pending_alert_enabled}
           onToggle={(v) => patch({ daily_pending_alert_enabled: v })}
         >
@@ -210,7 +249,9 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Clock}
           title="Período de gracia para cancelar"
-          description="Pasados estos días desde el apartado, ya no se puede cancelar."
+          description="El admin puede cancelar un apartado dentro de los primeros N días. Pasado ese plazo, el botón se bloquea (no se borra dinero ya cobrado)."
+          affects="admin"
+          example="Ej: con 7 días, un apartado del 1° ya no se cancela el día 9."
           enabled={form.cancellation_grace_enabled}
           onToggle={(v) => patch({ cancellation_grace_enabled: v })}
         >
@@ -227,7 +268,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Crown}
           title="Gracia extra para clientes VIP"
-          description="Suma días al período de gracia para clientes con tier RFM = VIP."
+          description="A los clientes con badge VIP (los que más te compran) les das días adicionales para cancelar respecto al período normal."
+          affects="cliente"
           enabled={form.vip_extra_grace_enabled}
           onToggle={(v) => patch({ vip_extra_grace_enabled: v })}
         >
@@ -247,7 +289,9 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Crown}
           title="Auto-tag VIP por gasto mensual"
-          description="Si un cliente gasta más del umbral en 30 días, se le aplica precio mayoreo automático y badge VIP."
+          description="Si un cliente gasta más del umbral en los últimos 30 días, se le marca como VIP automáticamente y le aparecen precios de mayoreo."
+          affects="cliente"
+          example="Ej: con $3,000/mes, un cliente que gastó $3,500 ya ve precios VIP."
           enabled={form.auto_vip_enabled}
           onToggle={(v) => patch({ auto_vip_enabled: v })}
         >
@@ -264,7 +308,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={XCircle}
           title="Bloquear cancelación con pagos"
-          description="Una vez recibido el primer pago, congela la posibilidad de cancelar pasadas N horas."
+          description="Una vez que el cliente abonó algo, no puedes cancelar pasadas N horas desde ese primer pago. Te obliga a contactarlo en lugar de borrar el apartado."
+          affects="admin"
           enabled={form.no_cancel_after_payment_enabled}
           onToggle={(v) => patch({ no_cancel_after_payment_enabled: v })}
         >
@@ -281,7 +326,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Ban}
           title="Sin devoluciones en efectivo"
-          description="Las cancelaciones se reconvierten en nota de crédito interna, nunca dinero en efectivo."
+          description="Si necesitas regresar dinero, lo conviertes en nota de crédito (saldo a favor para una compra futura) en vez de regresar efectivo. Protege tu caja."
+          affects="todos"
           enabled={form.no_refund}
           onToggle={(v) => patch({ no_refund: v })}
         />
@@ -289,7 +335,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={CalendarClock}
           title="Auto-cancelar apartados sin abono"
-          description="Cancela automáticamente los apartados sin un solo pago después de N días."
+          description="Si un apartado se queda sin un solo pago durante más de N días, se cancela solo y libera el stock para que otros clientes puedan comprarlo."
+          affects="admin"
           enabled={form.auto_cancel_idle_enabled}
           onToggle={(v) => patch({ auto_cancel_idle_enabled: v })}
         >
@@ -310,7 +357,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={PartyPopper}
           title="Descuento automático por volumen"
-          description="Sugiere descuento al admin cuando el carrito alcanza X piezas."
+          description="Cuando un cliente arma un carrito grande, la app te sugiere un descuento. Tú decides aplicarlo o no en el momento de cerrar la venta."
+          affects="admin"
           enabled={form.auto_discount_enabled}
           onToggle={(v) => patch({ auto_discount_enabled: v })}
         >
@@ -340,7 +388,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={MessageSquare}
           title="Mensaje personalizado en ticket"
-          description="Aparece debajo de los productos en el ticket del cliente (promo, agradecimiento, redes sociales)."
+          description="Aparece debajo de los productos en el ticket que recibe el cliente. Útil para agradecer, anunciar promos o pedir que te sigan en redes."
+          affects="cliente"
           enabled={form.custom_ticket_message_enabled}
           onToggle={(v) => patch({ custom_ticket_message_enabled: v })}
         >
@@ -360,7 +409,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Sun}
           title="Horario de la tienda online"
-          description="Bloquea el carrito del cliente fuera del horario. El admin sigue trabajando siempre."
+          description="Fuera de este horario, el cliente no puede agregar al carrito (ve un mensaje ‘vuelve mañana’). Tú sigues trabajando normal desde Admin."
+          affects="tienda"
           enabled={form.business_hours_enabled}
           onToggle={(v) => patch({ business_hours_enabled: v })}
         >
@@ -385,7 +435,9 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Bookmark}
           title="Tope de apartados por cliente"
-          description="Si un cliente ya tiene N apartados pendientes, no podrá crear otro hasta liquidar."
+          description="Si un cliente ya tiene varios apartados sin liquidar, no podrá hacer más hasta que pague o cierre alguno. Evita que se acumulen apartados de un mismo comprador."
+          affects="cliente"
+          example="Ej: con tope 3, su 4° apartado queda bloqueado."
           enabled={form.max_layaways_enabled}
           onToggle={(v) => patch({ max_layaways_enabled: v })}
         >
@@ -401,7 +453,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Layers}
           title="Alerta automática de stock bajo"
-          description="Notifica al admin cuando una variante baja del umbral configurado."
+          description="Cuando una variante baja del umbral, te llega una notificación para que reabastezcas antes de quedarte sin existencias."
+          affects="admin"
           enabled={form.stock_alert_enabled}
           onToggle={(v) => patch({ stock_alert_enabled: v })}
         >
@@ -418,7 +471,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={PackageX}
           title="Bloquear venta sin stock"
-          description="Cuando el stock = 0, NO permite agregar al carrito. Apagado = permite pre-orden."
+          description="Si una variante está en 0, el cliente no puede agregarla al carrito. Si lo apagas, permite pre-orden (vende sin tener físicamente la pieza)."
+          affects="cliente"
           enabled={form.block_oversell}
           onToggle={(v) => patch({ block_oversell: v })}
         />
@@ -426,7 +480,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Lock}
           title="Bloquear edición tras cerrar ciclo"
-          description="Después de cerrar el ciclo de inventario del mes, los pedidos viejos no se pueden modificar."
+          description="Cuando cierras el ciclo del mes (en Módulo Ciclos), los pedidos de ese mes quedan congelados: no se pueden editar precios, cantidades ni borrar. Garantiza que las cifras del corte no se alteren después."
+          affects="admin"
           enabled={form.lock_edit_when_cycle_closed}
           onToggle={(v) => patch({ lock_edit_when_cycle_closed: v })}
         />
@@ -441,7 +496,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Heart}
           title="Mis deseos / Sugerencias"
-          description="El cliente puede pedir productos (con foto, talla, modelo) que quiere que tengas. Aparece como FAB en la tienda y pestaña en el dock."
+          description="El cliente puede mandarte una lista de cosas que quisiera ver en la tienda (con foto, talla, link, etc.). Aparece como pestaña en su nav y un botón flotante."
+          affects="cliente"
           enabled={form.wishes_enabled}
           onToggle={(v) => patch({ wishes_enabled: v })}
         />
@@ -449,7 +505,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Camera}
           title="Stories del día"
-          description="sube 3-5 fotos diarias estilo Instagram dentro de la tienda. El cliente las ve al abrir. (Pendiente de implementar)"
+          description="Subes fotos cortas (estilo Instagram) que el cliente ve al abrir la tienda. Se borran solas en 24h. Bueno para mostrar recién llegados o promos del día."
+          affects="tienda"
           enabled={form.stories_enabled}
           onToggle={(v) => patch({ stories_enabled: v })}
         />
@@ -457,7 +514,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Star}
           title="Reseñas con foto"
-          description="Los clientes suben reseñas con foto del producto. aprueba antes de publicar. Vista compacta dentro de cada producto. (Pendiente de implementar)"
+          description="Los clientes dejan reseñas con foto del producto recibido. Tú las apruebas antes de que aparezcan públicas (a menos que actives auto-aprobar abajo)."
+          affects="todos"
           enabled={form.reviews_enabled}
           onToggle={(v) => patch({ reviews_enabled: v })}
         />
@@ -472,7 +530,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Zap}
           title="Activar modo directo (macro)"
-          description="Atajo que prende los 3 auto-aprueba juntos: comprobantes, reseñas y sugerencias. Se desactiva apagando aquí o cada uno por separado."
+          description="Atajo: prende los 3 auto-aprueba de un golpe (comprobantes + reseñas + sugerencias). Lo apagas y vuelves a moderar todo manual."
+          affects="todos"
           enabled={form.direct_mode_enabled}
           onToggle={(v) =>
             patch({
@@ -495,7 +554,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={ThumbsUp}
           title="Auto-aprobar reseñas con foto"
-          description="Las reseñas que suben los clientes se publican directo sin que apruebes. Si tienes reseñas desactivadas en módulos, esto no aplica."
+          description="Las reseñas que dejan los clientes se publican directo sin que las revises. Si tienes ‘Reseñas con foto’ apagada arriba, esto no aplica."
+          affects="tienda"
           enabled={form.auto_approve_reviews}
           onToggle={(v) => patch({ auto_approve_reviews: v })}
         />
@@ -503,7 +563,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Heart}
           title="Auto-aceptar sugerencias / wishes"
-          description="Las peticiones del cliente entran como aceptadas, no como pendientes. Útil si confías en tu audiencia y quieres mostrarles que cuentas con lo que piden."
+          description="Las cosas que el cliente te pide entran como aceptadas en lugar de pendientes. Sirve cuando quieres mostrarles rápido que tomas en cuenta su sugerencia."
+          affects="cliente"
           enabled={form.auto_accept_wishes}
           onToggle={(v) => patch({ auto_accept_wishes: v })}
         />
@@ -511,7 +572,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={UserMinus}
           title="Cliente puede cancelar su apartado"
-          description="Desde el ticket público, el cliente cancela su pedido sin pedirte permiso (respeta la ventana de gracia que configuraste arriba)."
+          description="Desde su ticket público, el cliente puede cancelar su apartado sin pedirte permiso. Igual respeta el período de gracia que configuraste arriba."
+          affects="cliente"
           enabled={form.client_can_self_cancel}
           onToggle={(v) => patch({ client_can_self_cancel: v })}
         />
@@ -574,7 +636,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Moon}
           title="Forzar modo oscuro"
-          description="Aplica tema oscuro a TODOS los usuarios sin importar su preferencia. Útil para fechas como Halloween o lanzamientos nocturnos."
+          description="La app aparece en oscuro para todos sin importar lo que cada uno tenga elegido. Ideal para fechas como Halloween, Black Friday o lanzamientos nocturnos."
+          affects="todos"
           enabled={form.force_dark_mode}
           onToggle={(v) => patch({ force_dark_mode: v })}
         />
@@ -582,7 +645,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Sparkles}
           title="Modo festivo"
-          description="Pinta confetti en el header de la tienda y muestra el nombre del evento (Navidad, Buen Fin, etc) junto al logo."
+          description="Aparecen confettis en el header de la tienda + el nombre del evento al lado del logo. Para Navidad, Buen Fin, San Valentín, etc."
+          affects="tienda"
           enabled={form.holiday_mode_enabled}
           onToggle={(v) => patch({ holiday_mode_enabled: v })}
         >
@@ -612,7 +676,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Eye}
           title="Mostrar stock al cliente"
-          description="Pinta 'Solo quedan 3' en cada producto. Genera urgencia y FOMO. Si lo apagas, solo se muestra 'Agotado' cuando llega a 0."
+          description="El cliente ve ‘Solo quedan 3’ en cada producto y crea urgencia para comprar ya. Si lo apagas, sólo verá ‘Agotado’ cuando llegue a cero."
+          affects="cliente"
           enabled={form.show_stock_to_client}
           onToggle={(v) => patch({ show_stock_to_client: v })}
         >
@@ -628,7 +693,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Users}
           title="Mostrar 'X personas viendo esto'"
-          description="Contador psicológico en cada card (un fake controlado entre 2-8 por producto, determinístico). Genera prueba social. No hace tracking real."
+          description="En cada producto aparece un contador pequeño de ‘gente viéndolo’. Es psicológico (no es tracking real, son números estables entre 2 y 8). Sirve para generar prueba social."
+          affects="cliente"
           enabled={form.fake_viewers_enabled}
           onToggle={(v) => patch({ fake_viewers_enabled: v })}
         />
@@ -636,7 +702,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={PartyPopper}
           title="Confetti al comprar"
-          description="Animación de celebración al cerrar venta o aprobar comprobante. Apágalo si prefieres experiencia más sobria."
+          description="Animación de celebración al cerrar una venta o aprobar un comprobante. Apágalo si prefieres una experiencia más seria."
+          affects="todos"
           enabled={form.confetti_on_purchase}
           onToggle={(v) => patch({ confetti_on_purchase: v })}
         />
@@ -644,7 +711,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={EyeOff}
           title="Ocultar precios sin sesión"
-          description="El cliente debe iniciar sesión para ver precios del catálogo. Mata el browsing casual pero captura emails. Útil para mayoreo / B2B."
+          description="Los visitantes no ven precios hasta que inician sesión. Sirve para B2B o mayoreo. ⚠️ Reduce el ‘browsing casual’ pero captura emails."
+          affects="tienda"
           enabled={form.hide_prices_until_login}
           onToggle={(v) => patch({ hide_prices_until_login: v })}
         />
@@ -652,7 +720,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Phone}
           title="Pedir teléfono antes de comprar"
-          description="Si el cliente no tiene teléfono en su perfil, se lo solicita en el carrito antes de cerrar la venta (en lugar de pedirlo después)."
+          description="Si el cliente no tiene teléfono en su perfil, se lo pide en el carrito justo antes de cerrar la venta. Así siempre tienes cómo contactarlo para la entrega."
+          affects="cliente"
           enabled={form.require_phone_to_buy}
           onToggle={(v) => patch({ require_phone_to_buy: v })}
         />
@@ -667,7 +736,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={MessageSquare}
           title="Mensaje personalizado en ticket"
-          description="Aparece debajo de los productos en el ticket del cliente. Ideal para agradecimientos, instrucciones especiales o promos."
+          description="Aparece debajo de los productos en el ticket que recibe el cliente. Ideal para agradecimientos, instrucciones o promos."
+          affects="cliente"
           enabled={form.custom_ticket_message_enabled}
           onToggle={(v) => patch({ custom_ticket_message_enabled: v })}
         >
@@ -683,7 +753,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={ImagePlus}
           title="Banner anclado en la tienda"
-          description="Aviso superior visible para todos. Ideal para anuncios temporales: 'Cerrado por inventario el 25', 'Envío gratis hoy'."
+          description="Aparece una franja arriba de la tienda visible para todos. Útil para avisos rápidos: ‘Cerrado por inventario el 25’, ‘Hoy envío gratis’, etc."
+          affects="tienda"
           enabled={form.pinned_banner_enabled}
           onToggle={(v) => patch({ pinned_banner_enabled: v })}
         >
@@ -725,7 +796,8 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Tag}
           title="Personalizar slides de bienvenida"
-          description="Edita los mensajes rotantes que ve el cliente al abrir la tienda. Si lo apagas, se usan los slides predeterminados de Beauty's Me."
+          description="Los mensajes rotantes que el cliente ve al abrir la tienda. Si lo apagas, se usan los slides predeterminados de Beauty’s Me."
+          affects="tienda"
           enabled={form.welcome_slides_enabled}
           onToggle={(v) => patch({ welcome_slides_enabled: v })}
         >
@@ -813,6 +885,8 @@ function RuleRow({
   enabled,
   onToggle,
   children,
+  affects,
+  example,
 }: {
   icon: typeof ScrollText
   title: string
@@ -820,7 +894,39 @@ function RuleRow({
   enabled: boolean
   onToggle: (v: boolean) => void
   children?: React.ReactNode
+  /** Quién ve / sufre el cambio: cliente, admin, tienda online, etc. */
+  affects?: "cliente" | "admin" | "tienda" | "todos"
+  /** Mini-frase opcional con un ejemplo concreto del resultado. */
+  example?: string
 }) {
+  // Mapeo de "afecta a" → color + label visual
+  const AFFECTS_META: Record<
+    NonNullable<typeof affects>,
+    { label: string; cls: string }
+  > = {
+    cliente: {
+      label: "Cliente",
+      cls:
+        "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+    },
+    admin: {
+      label: "Admin",
+      cls:
+        "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+    },
+    tienda: {
+      label: "Tienda online",
+      cls:
+        "bg-pink-100 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300",
+    },
+    todos: {
+      label: "Todos",
+      cls:
+        "bg-slate-200 text-slate-700 dark:bg-slate-700/60 dark:text-slate-200",
+    },
+  }
+  const affectsMeta = affects ? AFFECTS_META[affects] : null
+
   return (
     <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3 hover:border-primary/30 dark:hover:border-primary/40 transition-colors">
       <div className="flex items-start gap-3">
@@ -828,12 +934,38 @@ function RuleRow({
           <Icon size={14} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 leading-tight">
-            {title}
-          </p>
-          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 leading-tight">
+              {title}
+            </p>
+            {/* Chip de estado vivo: el admin sabe de un vistazo si está
+                actuando o no, sin tener que leer todo el toggle. */}
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest leading-none ${
+                enabled
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                  : "bg-slate-200 text-slate-500 dark:bg-slate-700/60 dark:text-slate-400"
+              }`}
+            >
+              {enabled ? "Activo" : "Pausado"}
+            </span>
+            {affectsMeta && (
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest leading-none ${affectsMeta.cls}`}
+                title={`Afecta a: ${affectsMeta.label}`}
+              >
+                {affectsMeta.label}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-1">
             {description}
           </p>
+          {example && (
+            <p className="text-[10px] font-bold text-primary/80 dark:text-primary/90 leading-snug mt-1 italic">
+              {example}
+            </p>
+          )}
         </div>
         <Toggle checked={enabled} onChange={onToggle} label={title} />
       </div>
