@@ -286,7 +286,7 @@ export default function CreateDeliveryNoteModal({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", stiffness: 280, damping: 30 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className="relative w-full max-w-md max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl md:rounded-3xl shadow-2xl"
           >
             {/* Handle */}

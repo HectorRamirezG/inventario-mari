@@ -245,6 +245,7 @@ export default function BuySheet({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
           className="fixed inset-0 z-[180] flex items-end justify-center"
         >
           {/* Backdrop — sin blur.
@@ -260,14 +261,18 @@ export default function BuySheet({
 
           {/* Sheet — el drag para cerrar vive SOLO en el handle (ver más
               abajo), no en el sheet completo. Antes atrapaba scrolls
-              internos y aceleraba el parpadeo cuando se cancelaba un drag. */}
+              internos y aceleraba el parpadeo cuando se cancelaba un drag.
+              Animación: tween corto en lugar de spring para que no haya
+              "rebote" visible que en algunos celulares se interpretaba
+              como parpadeo. translate3d fuerza una capa GPU sin los
+              efectos secundarios de `will-change` en algunos browsers. */}
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 30, stiffness: 280 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[88vh] flex flex-col"
-            style={{ willChange: "transform" }}
+            style={{ transform: "translate3d(0,0,0)" }}
           >
             {/* Handle drag — único elemento arrastrable para cerrar. */}
             <motion.div

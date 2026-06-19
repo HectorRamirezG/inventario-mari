@@ -114,7 +114,7 @@ function PromptDialog({
             initial={{ opacity: 0, y: 40, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 320, damping: 28 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             className="relative w-full sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-[0_20px_60px_rgba(0,0,0,0.25)] p-6 space-y-4"
           >
             <button

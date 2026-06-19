@@ -83,12 +83,15 @@ export default function TrendChart({ data, periodLabel }: TrendChartProps) {
 
       {/* `touch-action: pan-y` evita que Recharts atrape el gesto vertical
           y bloquee el scroll de la página cuando Mari pasa el dedo sobre
-          el chart en móvil. El tooltip sigue funcionando con tap. */}
-      <div className="h-[240px]" style={{ touchAction: "pan-y" }}>
+          el chart en móvil. El tooltip sigue funcionando con tap.
+          `minWidth={0}` en el ResponsiveContainer evita el warning de
+          Recharts cuando el chart se monta dentro de una transición
+          (AnimatePresence) y aún no tiene tamaño calculado. */}
+      <div className="h-[240px] w-full min-w-0" style={{ touchAction: "pan-y" }}>
         {data.length === 0 ? (
           <EmptyChart />
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
             <AreaChart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 4 }}>
               <defs>
                 <linearGradient id="grad-revenue" x1="0" y1="0" x2="0" y2="1">

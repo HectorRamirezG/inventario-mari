@@ -364,7 +364,7 @@ export default function EditSaleAdjustModal({
             initial={{ y: "100%", scale: 0.96, opacity: 0 }}
             animate={{ y: 0, scale: 1, opacity: 1 }}
             exit={{ y: "100%", scale: 0.96, opacity: 0 }}
-            transition={{ type: "spring", damping: 30, stiffness: 280 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] md:rounded-3xl shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[92vh] flex flex-col"
           >
             <div className="flex justify-center pt-2 pb-1 md:hidden">

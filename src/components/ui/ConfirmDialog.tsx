@@ -60,7 +60,7 @@ export default function ConfirmDialog({
             initial={{ opacity: 0, y: 40, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 300, damping: 26 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             className={clsx(
               "relative w-full sm:max-w-sm",
               "rounded-t-[2rem] sm:rounded-[2rem]",

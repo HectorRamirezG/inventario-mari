@@ -75,37 +75,52 @@ export async function listProductsWithoutImage(limit = 50): Promise<InsightProdu
 export async function getRestockHints(limit = 8): Promise<InsightRestockHint[]> {
   const since = new Date()
   since.setDate(since.getDate() - 30)
-  const { data: items } = await supabase
+  // Antes hacíamos `sale_items.select(... variants(...,products(...)))`, que
+  // depende de las FK declaradas en BD. Si la relación no está definida
+  // exactamente como PostgREST espera, la query truena con 400 (lo que
+  // hacía que el insights panel se rompiera silenciosamente). Hacemos
+  // dos queries simples y ensamblamos en JS — siempre funciona.
+  const { data: items, error: itemsErr } = await supabase
     .from("sale_items")
-    .select("variant_id,qty,created_at,variants(stock,variant_name,products(name))")
+    .select("variant_id,qty")
     .gte("created_at", since.toISOString())
     .limit(2000)
-  if (!items) return []
-  const agg = new Map<string, { qty: number; stock: number; pname: string; vname: string | null }>()
+  if (itemsErr || !items) return []
+
+  // Suma cantidad vendida por variante en el periodo.
+  const qtyByVariant = new Map<string, number>()
   for (const it of items as any[]) {
-    const k = it.variant_id
-    if (!k || !it.variants) continue
-    const cur = agg.get(k) ?? {
-      qty: 0,
-      stock: Number(it.variants.stock) || 0,
-      pname: it.variants.products?.name ?? "Producto",
-      vname: it.variants.variant_name ?? null,
-    }
-    cur.qty += Number(it.qty) || 0
-    agg.set(k, cur)
+    if (!it.variant_id) continue
+    qtyByVariant.set(
+      it.variant_id,
+      (qtyByVariant.get(it.variant_id) ?? 0) + (Number(it.qty) || 0),
+    )
   }
+  if (qtyByVariant.size === 0) return []
+
+  // Trae las variantes con su producto (esta relación SÍ está bien
+  // declarada — ya la usamos en otros sitios sin problemas).
+  const ids = Array.from(qtyByVariant.keys())
+  const { data: vars } = await supabase
+    .from("variants")
+    .select("id,stock,variant_name,products(name)")
+    .in("id", ids)
+  if (!vars) return []
+
   const out: InsightRestockHint[] = []
-  for (const [variant_id, v] of agg.entries()) {
-    if (v.qty < 3) continue
-    const dailyRate = v.qty / 30
-    const daysLeft = dailyRate > 0 ? Math.round(v.stock / dailyRate) : 999
+  for (const v of vars as any[]) {
+    const qty = qtyByVariant.get(v.id) ?? 0
+    if (qty < 3) continue
+    const stock = Number(v.stock) || 0
+    const dailyRate = qty / 30
+    const daysLeft = dailyRate > 0 ? Math.round(stock / dailyRate) : 999
     if (daysLeft > 14) continue
     out.push({
-      variant_id,
-      product_name: v.pname,
-      variant_name: v.vname,
-      stock: v.stock,
-      sold_30d: v.qty,
+      variant_id: v.id,
+      product_name: v.products?.name ?? "Producto",
+      variant_name: v.variant_name ?? null,
+      stock,
+      sold_30d: qty,
       days_left: daysLeft,
     })
   }

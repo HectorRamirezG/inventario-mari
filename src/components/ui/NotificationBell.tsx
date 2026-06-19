@@ -416,6 +416,30 @@ export default function NotificationBell({
           )
           return
         }
+        // ⚠️ IMPORTANTE: el admin shell NO usa react-router para sus
+        // secciones (usa state `section` + evento `mari:navigate`). Si
+        // el link es del admin (empieza con /admin) y SOY admin,
+        // resolvemos por tipo de notif para no caer en el catch-all
+        // del client shell que tira a `/` (la tienda).
+        const isAdminLink = url.pathname === "/admin" || url.pathname.startsWith("/admin/")
+        if (isAdminLink && isAdmin) {
+          const target = resolveTarget(n, true)
+          if (target?.kind === "admin") {
+            window.dispatchEvent(
+              new CustomEvent("mari:navigate", { detail: { tab: target.section } })
+            )
+            return
+          }
+          if (target?.kind === "event") {
+            window.dispatchEvent(new CustomEvent(target.name, { detail: target.detail }))
+            return
+          }
+          // Fallback admin: dashboard
+          window.dispatchEvent(
+            new CustomEvent("mari:navigate", { detail: { tab: "hoy" } })
+          )
+          return
+        }
         navigate(n.link)
         return
       } catch {
