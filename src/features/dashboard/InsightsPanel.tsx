@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
+import { useQueries, useQueryClient } from "@tanstack/react-query"
 import {
   Brain,
   ImageOff,
@@ -38,58 +38,57 @@ import {
 } from "./insightsService"
 import { formatMoney } from "../../lib/format"
 import { useBusinessRules } from "../settings/businessRulesService"
+import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
+import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 
 const DOW = ["D", "L", "M", "X", "J", "V", "S"]
 
 export default function InsightsPanel() {
   const rules = useBusinessRules()
-  const [loading, setLoading] = useState(true)
-  const [missing, setMissing] = useState<InsightProductMissingImage[]>([])
-  const [restock, setRestock] = useState<InsightRestockHint[]>([])
-  const [inactive, setInactive] = useState<InsightInactiveClient[]>([])
-  const [hours, setHours] = useState<InsightPeakHour[]>([])
-  const [heatmap, setHeatmap] = useState<InsightHeatmapCell[]>([])
-  const [week, setWeek] = useState<InsightWeekDelta | null>(null)
-  const [forecast, setForecast] = useState<InsightForecast | null>(null)
-  const [clv, setClv] = useState<InsightVip[]>([])
-  const [abc, setAbc] = useState<InsightAbcRow[]>([])
+  const queryClient = useQueryClient()
+  const monthlyGoal = rules.daily_sales_goal_enabled
+    ? rules.daily_sales_goal_amount * 30
+    : undefined
 
-  async function load() {
-    setLoading(true)
-    try {
-      const [a, b, c, d, e, f, g, h, i] = await Promise.all([
-        listProductsWithoutImage(20),
-        getRestockHints(6),
-        getInactiveClients(60, 6),
-        getPeakHours(30),
-        getHeatmap(30),
-        getWeekDelta(),
-        getMonthForecast(
-          rules.daily_sales_goal_enabled
-            ? rules.daily_sales_goal_amount * 30
-            : undefined,
-        ),
-        getCLV(5),
-        getAbcAnalysis(),
-      ])
-      setMissing(a)
-      setRestock(b)
-      setInactive(c)
-      setHours(d)
-      setHeatmap(e)
-      setWeek(f)
-      setForecast(g)
-      setClv(h)
-      setAbc(i)
-    } finally {
-      setLoading(false)
-    }
+  const queries = useQueries({
+    queries: [
+      { queryKey: ["insights", "missing"], queryFn: () => listProductsWithoutImage(20), staleTime: 60_000 },
+      { queryKey: ["insights", "restock"], queryFn: () => getRestockHints(6), staleTime: 60_000 },
+      { queryKey: ["insights", "inactive"], queryFn: () => getInactiveClients(60, 6), staleTime: 5 * 60_000 },
+      { queryKey: ["insights", "hours"], queryFn: () => getPeakHours(30), staleTime: 5 * 60_000 },
+      { queryKey: ["insights", "heatmap"], queryFn: () => getHeatmap(30), staleTime: 5 * 60_000 },
+      { queryKey: ["insights", "week"], queryFn: () => getWeekDelta(), staleTime: 60_000 },
+      { queryKey: ["insights", "forecast", monthlyGoal ?? null], queryFn: () => getMonthForecast(monthlyGoal), staleTime: 60_000 },
+      { queryKey: ["insights", "clv"], queryFn: () => getCLV(5), staleTime: 5 * 60_000 },
+      { queryKey: ["insights", "abc"], queryFn: () => getAbcAnalysis(), staleTime: 5 * 60_000 },
+    ],
+  })
+
+  const [missingQ, restockQ, inactiveQ, hoursQ, heatmapQ, weekQ, forecastQ, clvQ, abcQ] = queries
+  const missing: InsightProductMissingImage[] = missingQ.data ?? []
+  const restock: InsightRestockHint[] = restockQ.data ?? []
+  const inactive: InsightInactiveClient[] = inactiveQ.data ?? []
+  const hours: InsightPeakHour[] = hoursQ.data ?? []
+  const heatmap: InsightHeatmapCell[] = heatmapQ.data ?? []
+  const week: InsightWeekDelta | null = weekQ.data ?? null
+  const forecast: InsightForecast | null = forecastQ.data ?? null
+  const clv: InsightVip[] = clvQ.data ?? []
+  const abc: InsightAbcRow[] = abcQ.data ?? []
+
+  const loading = queries.some((q) => q.isLoading)
+
+  const load = () => {
+    queryClient.invalidateQueries({ queryKey: ["insights"] })
   }
 
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Refresh inteligente: invalida en cambios de venta/pago/producto.
+  const invalidate = useDebouncedCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["insights"] })
+  }, 800)
+  useRealtimeSubscription("sales", invalidate)
+  useRealtimeSubscription("payments", invalidate)
+  useRealtimeSubscription("products", invalidate)
+  useRealtimeSubscription("variants", invalidate)
 
   const peakTop = [...hours].sort((a, b) => b.count - a.count).slice(0, 3)
   const maxHeat = Math.max(1, ...heatmap.map((c) => c.count))
