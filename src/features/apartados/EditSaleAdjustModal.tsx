@@ -360,9 +360,10 @@ export default function EditSaleAdjustModal({
           exit={{ opacity: 0 }}
           transition={OVERLAY_BACKDROP_TRANSITION}
           className="fixed inset-0 z-[230] flex items-end md:items-center justify-center"
+          style={{ isolation: "isolate" }}
         >
           <motion.div
-            className="absolute inset-0 bg-slate-950/70"
+            className="absolute inset-0 bg-slate-950/70 z-0"
             onClick={() => !saving && onClose()}
             aria-hidden
           />
@@ -372,7 +373,7 @@ export default function EditSaleAdjustModal({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
             transition={OVERLAY_PANEL_TRANSITION}
-            className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] md:rounded-3xl shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[92vh] flex flex-col"
+            className="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] md:rounded-3xl shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[92vh] flex flex-col"
             style={OVERLAY_PANEL_STYLE}
           >
             <div className="flex justify-center pt-2 pb-1 md:hidden">

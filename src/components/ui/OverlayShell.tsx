@@ -90,11 +90,11 @@ export default function OverlayShell({
           exit={{ opacity: 0 }}
           transition={OVERLAY_BACKDROP_TRANSITION}
           className={clsx("fixed inset-0 flex", POSITION[variant])}
-          style={{ zIndex }}
+          style={{ zIndex, isolation: "isolate" }}
         >
           <div
             className={clsx(
-              "absolute inset-0 bg-slate-950/70",
+              "absolute inset-0 bg-slate-950/70 z-0",
               backdropClassName,
             )}
             onClick={closeOnBackdrop ? onClose : undefined}
@@ -106,7 +106,7 @@ export default function OverlayShell({
             exit={ENTER[variant]}
             transition={OVERLAY_PANEL_TRANSITION}
             onAnimationComplete={onAnimationComplete}
-            className={clsx("relative", panelClassName)}
+            className={clsx("relative z-10", panelClassName)}
             style={{ ...OVERLAY_PANEL_STYLE, ...panelStyle }}
           >
             {children}

@@ -196,6 +196,7 @@ export default function ReviewsDrawer({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[160] flex items-end justify-center"
+          style={{ isolation: "isolate" }}
         >
           <motion.div
             initial={{ opacity: 0 }}
@@ -203,7 +204,7 @@ export default function ReviewsDrawer({
             exit={{ opacity: 0 }}
             transition={OVERLAY_BACKDROP_TRANSITION}
             onClick={() => !submitting && onClose()}
-            className="absolute inset-0 bg-slate-900/65"
+            className="absolute inset-0 bg-slate-900/65 z-0"
           />
 
           <motion.div
@@ -211,7 +212,7 @@ export default function ReviewsDrawer({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={OVERLAY_PANEL_TRANSITION}
-            className="relative w-full max-w-lg max-h-[88vh] flex flex-col bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl"
+            className="relative z-10 w-full max-w-lg max-h-[88vh] flex flex-col bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl"
             style={OVERLAY_PANEL_STYLE}
           >
             {/* Handle */}

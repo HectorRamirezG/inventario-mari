@@ -257,9 +257,10 @@ export default function BuySheet({
           exit={{ opacity: 0 }}
           transition={OVERLAY_BACKDROP_TRANSITION}
           className="fixed inset-0 z-[180] flex items-end justify-center"
+          style={{ isolation: "isolate" }}
         >
           <div
-            className="absolute inset-0 bg-slate-950/70"
+            className="absolute inset-0 bg-slate-950/70 z-0"
             onClick={onClose}
             aria-hidden
           />
@@ -268,7 +269,7 @@ export default function BuySheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={OVERLAY_PANEL_TRANSITION}
-            className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[88vh] flex flex-col"
+            className="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[88vh] flex flex-col"
             style={OVERLAY_PANEL_STYLE}
           >
             {/* Handle drag — único elemento arrastrable para cerrar. */}

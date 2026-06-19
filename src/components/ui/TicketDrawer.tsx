@@ -182,9 +182,10 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
             exit={{ opacity: 0 }}
             transition={OVERLAY_BACKDROP_TRANSITION}
             className="fixed inset-0 z-[200] flex items-end justify-center"
+            style={{ isolation: "isolate" }}
           >
             <motion.div
-              className="absolute inset-0 bg-slate-950/70"
+              className="absolute inset-0 bg-slate-950/70 z-0"
               onClick={onClose}
               aria-hidden
             />
@@ -198,7 +199,7 @@ export default function TicketDrawer({ open, token, onClose }: Props) {
               dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={{ top: 0, bottom: 0.4 }}
               onDragEnd={onDragEnd}
-              className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[92vh] flex flex-col touch-pan-y"
+              className="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[92vh] flex flex-col touch-pan-y"
               style={OVERLAY_PANEL_STYLE}
             >
               {/* Handle drag */}

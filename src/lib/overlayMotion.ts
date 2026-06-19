@@ -23,15 +23,16 @@ export const OVERLAY_INNER_TRANSITION: Transition = {
   ease: OVERLAY_EASE,
 }
 
-// will-change activo en la capa GPU permite a iOS/Android prereservar la
-// memoria de la textura y mantener los 60fps durante toda la animación.
-// translate3d garantiza la promoción de capa en navegadores que ignoran
-// will-change. backface-visibility evita micro-jitter en bordes.
+// willChange prereserva la capa GPU. NO aplicamos transform inline:
+// pisaría el transform animado por Framer Motion y causaría el flash
+// del panel apareciendo en posición final durante el primer paint
+// antes de la animación. isolation crea un stacking context propio
+// para evitar que el panel quede "detrás" del backdrop por un frame.
 export const OVERLAY_PANEL_STYLE: CSSProperties = {
-  transform: "translate3d(0,0,0)",
   willChange: "transform, opacity",
   WebkitBackfaceVisibility: "hidden",
   backfaceVisibility: "hidden",
+  isolation: "isolate",
 }
 
 // Tiempo a esperar antes de montar contenido secundario (Q&A, charts).

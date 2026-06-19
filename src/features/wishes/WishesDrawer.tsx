@@ -193,24 +193,23 @@ export default function WishesDrawer({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[60] flex items-end justify-center"
+          style={{ isolation: "isolate" }}
         >
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => !submitting && onClose()}
-            className="absolute inset-0 bg-slate-900/65"
+            className="absolute inset-0 bg-slate-900/65 z-0"
           />
 
-          {/* Sheet */}
           <motion.form
             onSubmit={handleSubmit}
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={OVERLAY_PANEL_TRANSITION}
-            className="relative w-full max-w-lg max-h-[88vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl"
+            className="relative z-10 w-full max-w-lg max-h-[88vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl"
             style={OVERLAY_PANEL_STYLE}
           >
             {/* Handle */}
