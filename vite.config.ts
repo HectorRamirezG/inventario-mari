@@ -118,6 +118,7 @@ export default defineConfig({
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-motion': ['framer-motion'],
           'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-query': ['@tanstack/react-query'],
           'vendor-icons': ['lucide-react'],
           'vendor-fuse': ['fuse.js'],
           'vendor-confetti': ['canvas-confetti'],

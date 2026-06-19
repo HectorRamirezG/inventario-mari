@@ -1,8 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { LazyMotion, domAnimation } from 'framer-motion'
+import { QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App.tsx'
+import { queryClient } from './lib/queryClient'
 
 // --- One-shot cleanup del SW/caches viejos -----------------------------
 // Hubo un deploy con URL de Supabase incorrecta hardcoded; el SW de esa
@@ -39,8 +41,10 @@ createRoot(document.getElementById('root')!).render(
         directamente. Para usar `m.*` (variante optimizada) habría que
         migrar todos los componentes; por ahora preferimos el ahorro
         moderado sin refactor masivo. */}
-    <LazyMotion features={domAnimation} strict={false}>
-      <App />
-    </LazyMotion>
+    <QueryClientProvider client={queryClient}>
+      <LazyMotion features={domAnimation} strict={false}>
+        <App />
+      </LazyMotion>
+    </QueryClientProvider>
   </StrictMode>,
 )
