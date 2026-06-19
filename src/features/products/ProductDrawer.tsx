@@ -235,6 +235,33 @@ export default function ProductDrawer({
           min_stock: minStock === "" ? 0 : Number(minStock),
           // image_url se omite: las fotos viven solo por variante.
         })
+        // 🎯 Auto-crear una variante por defecto con el MISMO nombre del
+        // producto. Así el producto nace "completo": sellable y con espacio
+        // para subir foto (las fotos viven por variante). El admin puede
+        // renombrarla o agregar más variantes después. Calculamos precios
+        // sugeridos con la config actual de márgenes.
+        try {
+          const c = Number(cost)
+          let priceFields: Partial<Variant> = {}
+          if (c > 0 && pricingCfg) {
+            const sug = suggestedPrices(c, pricingCfg)
+            priceFields = {
+              price: Math.round(sug.men * 100) / 100,
+              price_menudeo: Math.round(sug.men * 100) / 100,
+              price_medio: Math.round(sug.med * 100) / 100,
+              price_mayoreo: Math.round(sug.may * 100) / 100,
+            }
+          }
+          await createVariant({
+            product_id: created.id,
+            variant_name: name.trim(),
+            ...priceFields,
+          })
+        } catch (e: any) {
+          // No bloqueamos la creación del producto si la variante por defecto
+          // falla: el admin puede crearla a mano. Solo lo registramos.
+          debug.warn("[ProductDrawer] auto-default variant failed", e)
+        }
         toast.success("Producto creado ✨")
         // Borrador ya no aplica: el producto se creó
         try { localStorage.removeItem(DRAFT_KEY) } catch {}
@@ -814,7 +841,10 @@ function NewVariantForm({
   onDone: () => void
   onCancel: () => void
 }) {
-  const [vName, setVName] = useState("")
+  // Prellenamos con el nombre del producto. En 90 % de los casos Mari
+  // crea una sola variante por producto, así puede solo dar Enter.
+  // Si va a crear más, edita la propuesta o usa "Reusar nombre producto".
+  const [vName, setVName] = useState(productName ?? "")
   const [sku, setSku] = useState("")
   const [stock, setStock] = useState<number | "">("")
   const [saving, setSaving] = useState(false)

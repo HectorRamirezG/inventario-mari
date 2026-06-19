@@ -189,12 +189,12 @@ function PriceRow({
   const cost = Number(r.totalOperatingCost) || 0;
   const sug = r.suggestedPrices ?? { menudeo: 0, medio: 0, mayoreo: 0 };
 
-  const newMenudeo =
-    Number(r.overrideMenudeo) > 0 ? Number(r.overrideMenudeo) : sug.menudeo;
-  const newMedio =
-    Number(r.overrideMedio) > 0 ? Number(r.overrideMedio) : sug.medio;
-  const newMayoreo =
-    Number(r.overrideMayoreo) > 0 ? Number(r.overrideMayoreo) : sug.mayoreo;
+  // Usa los precios FINALES ya calculados en el hook (con parseAmount
+  // que tolera coma decimal). Antes este componente hacía Number(string)
+  // por su cuenta y "10,50" se convertía en NaN → caía al sugerido.
+  const newMenudeo = Number(r.finalMenudeo) || sug.menudeo;
+  const newMedio = Number(r.finalMedio) || sug.medio;
+  const newMayoreo = Number(r.finalMayoreo) || sug.mayoreo;
 
   const refVariant = variant ?? variants[0] ?? null;
   const currMen = Number(refVariant?.price_menudeo) || 0;

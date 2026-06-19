@@ -3,6 +3,31 @@ import { supabase } from "../../lib/supabase";
 import { toast } from "react-hot-toast";
 import { debug } from "../../lib/debug";
 
+/**
+ * Convierte un valor tipo string/number a número tolerante a:
+ *  - separador decimal coma (locale es): "10,50" → 10.50
+ *  - espacios y separadores de miles: "1 200,50" → 1200.50
+ *  - cualquier carácter no numérico residual.
+ * En iPhone/Android español los teclados a veces escriben "," como
+ * separador decimal y `Number("10,50")` devuelve `NaN`, lo cual hacía
+ * que los precios manuales se quedaran en 0 y la calculadora los
+ * ignorara al guardar. Esto evita ese bug silencioso.
+ */
+function parseAmount(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+  // Elimina espacios (incl. no-breaking) y símbolos comunes
+  s = s.replace(/[\s\u00a0$]/g, "");
+  // Si hay coma sin punto → la coma es decimal
+  if (s.includes(",") && !s.includes(".")) s = s.replace(",", ".");
+  // Si hay ambos, asumimos coma=miles y punto=decimal → quita comas
+  else if (s.includes(",") && s.includes(".")) s = s.replace(/,/g, "");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function usePricingPage() {
   const [products, setProducts] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -64,7 +89,7 @@ export function usePricingPage() {
       );
 
       const globalExtra = Number(cfg?.costo_extra || 0);
-      const manualExtra = Number(r.manualExtraCost || 0);
+      const manualExtra = parseAmount(r.manualExtraCost);
 
       const totalOperatingCost =
         costBase + globalExtra + manualExtra;
@@ -81,19 +106,15 @@ export function usePricingPage() {
         mayoreo: Math.round(totalOperatingCost * (1 + m_mayoreo) * 100) / 100,
       };
 
-      // Precios FINALES = override manual si existe, si no el sugerido
-      const finalMenudeo =
-        Number(r.overrideMenudeo) > 0
-          ? Number(r.overrideMenudeo)
-          : suggestedPrices.menudeo;
-      const finalMedio =
-        Number(r.overrideMedio) > 0
-          ? Number(r.overrideMedio)
-          : suggestedPrices.medio;
-      const finalMayoreo =
-        Number(r.overrideMayoreo) > 0
-          ? Number(r.overrideMayoreo)
-          : suggestedPrices.mayoreo;
+      // Precios FINALES = override manual si existe, si no el sugerido.
+      // Usamos parseAmount para tolerar coma decimal del teclado español
+      // (antes Number("10,50") devolvía NaN y el override se perdía).
+      const ovMen = parseAmount(r.overrideMenudeo);
+      const ovMed = parseAmount(r.overrideMedio);
+      const ovMay = parseAmount(r.overrideMayoreo);
+      const finalMenudeo = ovMen > 0 ? ovMen : suggestedPrices.menudeo;
+      const finalMedio = ovMed > 0 ? ovMed : suggestedPrices.medio;
+      const finalMayoreo = ovMay > 0 ? ovMay : suggestedPrices.mayoreo;
 
       const profit = finalMenudeo - totalOperatingCost;
       const realMarginPercent =
@@ -232,7 +253,7 @@ export function usePricingPage() {
                 r.variant?.variant_name ||
                 (r.variantId ? "Variante" : "Todas las variantes"),
               quantity: targetVariantIds.length,
-              extra_cost: Number(r.manualExtraCost) || 0,
+              extra_cost: parseAmount(r.manualExtraCost),
               cost_unit: Number(r.totalOperatingCost) || 0,
               cost_final: Number(r.totalOperatingCost) || 0,
               price_menudeo: priceMen,

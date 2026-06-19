@@ -104,6 +104,49 @@ function resolveColor(value: string): string {
 
 /** Walks el clon aplicando estilos resueltos. Solo toca color props. */
 function resolveOklchColors(root: HTMLElement) {
+  // 1) Override CSS variables del :root del DOCUMENTO REAL que contengan
+  //    oklch — Tailwind v4 define `--color-*` con oklch() y html2canvas
+  //    no las puede resolver. Las pisamos en el clon con el equivalente rgb.
+  //    Se aplican como inline style en el <html> clonado vía root.style,
+  //    pero como root es nuestro nodo capturado y NO el <html>, usamos
+  //    document.documentElement como referencia y aplicamos al `root` clon.
+  try {
+    const rootStyles = window.getComputedStyle(document.documentElement)
+    const sheets = document.styleSheets
+    const varNames = new Set<string>()
+    for (let i = 0; i < sheets.length; i++) {
+      let rules: CSSRuleList | null = null
+      try {
+        rules = sheets[i].cssRules
+      } catch {
+        // cross-origin stylesheet: skip
+        continue
+      }
+      if (!rules) continue
+      for (let j = 0; j < rules.length; j++) {
+        const r = rules[j] as CSSStyleRule
+        if (!r || !r.style) continue
+        for (let k = 0; k < r.style.length; k++) {
+          const name = r.style[k]
+          if (name && name.startsWith("--")) varNames.add(name)
+        }
+      }
+    }
+    for (const name of varNames) {
+      const v = rootStyles.getPropertyValue(name).trim()
+      if (!v) continue
+      if (!/oklch|oklab|color\(/i.test(v)) continue
+      const resolved = resolveColor(v)
+      if (resolved && resolved !== v) {
+        root.style.setProperty(name, resolved)
+      }
+    }
+  } catch (e) {
+    debug.warn("[shareImage] css vars walk failed", e)
+  }
+
+  // 2) Walk del subárbol con override por elemento de color props +
+  //    background-image (gradientes oklch).
   const all = root.querySelectorAll<HTMLElement>("*")
   const nodes: HTMLElement[] = [root, ...Array.from(all)]
   for (const el of nodes) {
@@ -133,52 +176,20 @@ function resolveOklchColors(root: HTMLElement) {
 }
 
 /**
- * Captura un nodo del DOM como canvas.
+ * Captura un nodo del DOM como canvas usando html2canvas con el
+ * workaround de OKLCH (Tailwind v4 paleta nueva). html2canvas v1 no
+ * entiende `oklch()`, así que en `onclone` reemplazamos los valores
+ * computados por su equivalente `rgb()` resuelto por el browser.
  *
- * Estrategia:
- *  1) Intentamos primero `html-to-image` (lib moderna, ~50kb gz):
- *     - Usa `<foreignObject>` de SVG nativo → respeta CSS moderno
- *       (gradientes nuevos, oklch, filters, box-shadows, emojis).
- *     - El "preview" se ve casi idéntico al DOM real.
- *  2) Si falla (CORS de imágenes, browser muy viejo, etc.), caemos a
- *     `html2canvas` que repinta pixel-por-pixel con nuestro workaround
- *     de oklch. Sirve como red de seguridad.
- *
- * Ambos están detrás de `import()` dinámico para no inflar el bundle
- * inicial — solo se cargan cuando el usuario pide imagen/PDF.
+ * NOTA: la dep html-to-image fue evaluada y descartada porque no estaba
+ * instalada en algunos entornos y rompía el flujo de PDF/imagen. Si en el
+ * futuro quieres reactivarla, agrégala al package.json + lockfile y
+ * envuélvela en un try { dynamic import } catch { fallback a html2canvas }.
  */
 async function nodeToCanvas(
   node: HTMLElement,
   scale = 2,
 ): Promise<HTMLCanvasElement> {
-  // ── Intento #1: html-to-image (moderno, mejor calidad visual) ──
-  try {
-    const htmlToImage: any = await import("html-to-image")
-    const dataUrl: string = await htmlToImage.toPng(node, {
-      pixelRatio: scale,
-      cacheBust: true,
-      backgroundColor: "#ffffff",
-      // Ignora errores de imagen individual (CORS, 404, etc.) en vez
-      // de cancelar todo el render. Devuelve el resto OK.
-      skipFonts: false,
-      filter: (n: HTMLElement) => {
-        // Saltar nodos marcados como `data-no-capture` por si en el
-        // futuro queremos esconder ciertos controles del preview.
-        if (n.dataset && n.dataset.noCapture === "true") return false
-        return true
-      },
-    })
-    // Convertimos el dataURL a <canvas> para mantener compatibilidad
-    // con el resto del pipeline (Web Share API + jsPDF esperan canvas/blob).
-    return await dataUrlToCanvas(dataUrl)
-  } catch (eModern: any) {
-    console.warn(
-      "[shareImage] html-to-image falló, caigo a html2canvas:",
-      eModern?.message,
-    )
-  }
-
-  // ── Intento #2: html2canvas (legacy, con workaround de oklch) ──
   const html2canvas = await loadHtml2Canvas()
   return html2canvas(node, {
     scale,
@@ -197,7 +208,10 @@ async function nodeToCanvas(
   })
 }
 
-/** Convierte un data URL PNG en un <canvas> listo para `toBlob()` / jsPDF. */
+/** Convierte un data URL PNG en un <canvas> listo para `toBlob()` / jsPDF.
+ *  Helper retenido por si en el futuro re-introducimos html-to-image u otra
+ *  lib que devuelva dataURL en vez de canvas. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function dataUrlToCanvas(dataUrl: string): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()

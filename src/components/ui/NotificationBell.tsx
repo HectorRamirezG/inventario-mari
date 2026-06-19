@@ -725,58 +725,28 @@ export default function NotificationBell({
                                 </p>
                               </div>
                             )}
-                            {/* Acciones inline para comprobantes (admin).
-                                "Ver foto" abre el drawer del comprobante para
-                                que Mari pueda ver la imagen antes de decidir.
-                                Aprobar/Rechazar siguen disponibles para flujo
-                                rápido sin abrir el visor. */}
+                            {/* CTA principal para comprobantes (admin):
+                                un único botón grande "Revisar comprobante"
+                                que abre el drawer con la foto + datos del
+                                pedido. Las acciones Aprobar/Rechazar viven
+                                DENTRO de ese drawer, donde Mari puede ver
+                                primero la imagen antes de decidir.
+                                Antes había botones inline de aprobar/rechazar
+                                que confundían (parecían "pre-aprobar") y
+                                tapaban la opción de abrir la vista. */}
                             {isProof && (
-                              <div className="flex items-center gap-1 mt-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleClick(n)
-                                  }}
-                                  className="flex-1 h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-sky-500 hover:bg-sky-600 text-white shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1"
-                                  title="Ver el comprobante"
-                                >
-                                  <Eye size={11} />
-                                  Ver foto
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleInlineApprove(n)
-                                  }}
-                                  disabled={inlineApproveBusy || inlineRejectBusy}
-                                  className="h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
-                                  title="Aprobar sin ver"
-                                >
-                                  {inlineApproveBusy ? (
-                                    <Loader2 size={10} className="animate-spin" />
-                                  ) : (
-                                    <CheckCircle2 size={11} />
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleInlineReject(n)
-                                  }}
-                                  disabled={inlineApproveBusy || inlineRejectBusy}
-                                  className="h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-rose-500 hover:bg-rose-600 text-white shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-1"
-                                  title="Rechazar"
-                                >
-                                  {inlineRejectBusy ? (
-                                    <Loader2 size={10} className="animate-spin" />
-                                  ) : (
-                                    <XCircle size={11} />
-                                  )}
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleClick(n)
+                                }}
+                                className="w-full h-8 mt-1 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                                title="Abrir el comprobante para revisarlo"
+                              >
+                                <Eye size={12} />
+                                Revisar comprobante
+                              </button>
                             )}
                             {/* Estado final cuando ya se procesó */}
                             {proofAlreadyHandled && (
