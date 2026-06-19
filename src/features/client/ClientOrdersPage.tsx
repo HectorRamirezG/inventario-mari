@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
-import { Clock, CheckCircle2, ArrowRight, LifeBuoy, Lock, ShoppingBag, Wallet } from "lucide-react"
+import { Clock, CheckCircle2, ArrowRight, LifeBuoy, Lock, ShoppingBag, Wallet, XCircle } from "lucide-react"
 import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
@@ -12,9 +12,12 @@ import Skeleton from "../../components/ui/Skeleton"
 import SupportModal from "../support/SupportModal"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import DeliveryStatusChip from "../../components/ui/DeliveryStatusChip"
+import { cancelSale } from "../apartados/apartadosService"
+import { promptDialog } from "../../lib/prompt"
 import {
   useBusinessRules,
   canClaim,
+  canCancelSale,
   formatRemaining,
 } from "../settings/businessRulesService"
 
@@ -301,6 +304,45 @@ export default function ClientOrdersPage() {
                   )
                 })()}
               </div>
+
+              {/* Botón cancelar — solo si la regla `client_can_self_cancel`
+                  está activa Y la venta sigue dentro de la ventana de gracia
+                  (canCancelSale). El botón es chico, separado de Ayuda /
+                  Ver ticket para no presionarse por accidente. */}
+              {rules.client_can_self_cancel &&
+                (() => {
+                  const cancel = canCancelSale(rules, o as any)
+                  if (!cancel.allowed) return null
+                  return (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const reason = await promptDialog({
+                          title: "Cancelar este pedido",
+                          description:
+                            "Cuéntanos por qué cancelas. Si abonaste algo, te contactaremos para devolverlo.",
+                          placeholder: "Ej. Me equivoqué de tono, ya no lo necesito…",
+                          confirmLabel: "Sí, cancelar pedido",
+                          multiline: true,
+                        })
+                        if (reason === null) return
+                        try {
+                          await cancelSale(o.id, reason || null)
+                          toast.success("Pedido cancelado. Te contactaremos pronto.")
+                        } catch (e: any) {
+                          toast.error(
+                            e?.message ??
+                              "No se pudo cancelar. Contacta a la tienda por soporte."
+                          )
+                        }
+                      }}
+                      className="self-end h-8 px-3 rounded-xl bg-transparent text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                    >
+                      <XCircle size={11} />
+                      Cancelar pedido
+                    </button>
+                  )
+                })()}
             </div>
           </motion.div>
         )

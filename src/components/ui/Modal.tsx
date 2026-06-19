@@ -19,7 +19,7 @@ export default function Modal({
   onClose,
   size = "md"
 }: ModalProps) {
-  
+
   const sizes = {
     sm: "max-w-md",
     md: "max-w-lg",
@@ -54,7 +54,7 @@ export default function Modal({
       {open && (
         /* Z-INDEX ALTO: z-[100] asegura que esté por encima de navbars y botones */
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-          
+
           {/* BACKDROP: Más oscuro y con más blur para aislar el contenido de atrás */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -67,11 +67,11 @@ export default function Modal({
           {/* CONTENEDOR DEL MODAL */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 40 }}
-            animate={{ 
-              opacity: 1, 
-              scale: 1, 
+            animate={{
+              opacity: 1,
+              scale: 1,
               y: 0,
-              transition: { type: "spring", damping: 25, stiffness: 300 } 
+              transition: { type: "spring", damping: 25, stiffness: 300 }
             }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className={clsx(
