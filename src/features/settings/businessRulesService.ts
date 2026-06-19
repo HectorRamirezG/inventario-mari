@@ -197,6 +197,19 @@ export interface BusinessRules {
   /** Etiqueta extra para low-stock urgency. Default "Apúrate, solo quedan".
    *  Mari puede cambiar a "¡Últimas piezas!" o "Antes de que se acaben". */
   low_stock_label: string
+
+  /* ════════════════════════ BADGES AUTOMÁTICOS ════════════════════════ */
+
+  /** Cuántos días debe tener un producto (desde `created_at`) para
+   *  considerarse "NUEVO" y mostrar el chip rosa "Nuevo" en su card.
+   *  Pasado ese plazo el badge desaparece solo. Default 7. */
+  new_badge_days: number
+
+  /** Umbral mínimo de descuento (vs precio menudeo) para que aparezca
+   *  el chip "OFERTA" + el porcentaje al lado del precio. Si pones 5,
+   *  cualquier producto con descuento < 5% no muestra nada (evita ruido
+   *  de descuentos diminutos). Default 5. */
+  offer_min_discount_pct: number
 }
 
 /**
@@ -300,6 +313,8 @@ export const DEFAULT_RULES: BusinessRules = {
   pinned_banner_message: "",
   pinned_banner_tone: "info",
   low_stock_label: "Apúrate, solo quedan",
+  new_badge_days: 7,
+  offer_min_discount_pct: 5,
 }
 
 let cache: BusinessRules | null = null
@@ -445,6 +460,15 @@ function merge(raw: any): BusinessRules {
       typeof raw.low_stock_label === "string" && raw.low_stock_label.trim()
         ? raw.low_stock_label
         : DEFAULT_RULES.low_stock_label,
+    new_badge_days:
+      Number.isFinite(Number(raw.new_badge_days)) && Number(raw.new_badge_days) > 0
+        ? Math.min(365, Math.floor(Number(raw.new_badge_days)))
+        : DEFAULT_RULES.new_badge_days,
+    offer_min_discount_pct:
+      Number.isFinite(Number(raw.offer_min_discount_pct)) &&
+      Number(raw.offer_min_discount_pct) >= 0
+        ? Math.min(99, Math.floor(Number(raw.offer_min_discount_pct)))
+        : DEFAULT_RULES.offer_min_discount_pct,
   }
 }
 

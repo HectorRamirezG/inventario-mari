@@ -65,6 +65,10 @@ export function useSidebarCounts(): SidebarCounts {
       setCounts(ZERO)
       return
     }
+    // Umbral para considerar "stock bajo" lo controla Mari desde Reglas
+    // (`stock_alert_threshold`). Antes estaba hardcoded en 3 piezas, lo
+    // cual no respetaba la configuración real de la tienda.
+    const lowStockLimit = rules.stock_alert_threshold ?? 3
     // Lanzamos en paralelo. Cada query trae a lo sumo el HEAD (count),
     // no transfiere filas, así que es barato. Gateamos por reglas para
     // no pegarle a tablas que el admin desactivó.
@@ -73,8 +77,9 @@ export function useSidebarCounts(): SidebarCounts {
         .then((n) => ["pendientes", n] as const),
       countOrZero("support_tickets", (q) => q.eq("status", "open"))
         .then((n) => ["soporte", n] as const),
-      countOrZero("variants", (q) => q.lte("stock", 3).eq("is_active", true))
-        .then((n) => ["catalogo", n] as const),
+      countOrZero("variants", (q) =>
+        q.lte("stock", lowStockLimit).eq("is_active", true),
+      ).then((n) => ["catalogo", n] as const),
     ]
     if (rules.wishes_enabled) {
       tasks.push(
@@ -95,7 +100,7 @@ export function useSidebarCounts(): SidebarCounts {
       // Preserva claves que NO se consultaron (regla apagada)
       return { ...prev, ...next }
     })
-  }, [session, isStaff, rules.wishes_enabled, rules.reviews_enabled])
+  }, [session, isStaff, rules.wishes_enabled, rules.reviews_enabled, rules.stock_alert_threshold])
 
   useEffect(() => {
     refresh()

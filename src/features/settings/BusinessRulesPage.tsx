@@ -738,6 +738,52 @@ export default function BusinessRulesPage() {
           enabled={form.require_phone_to_buy}
           onToggle={(v) => patch({ require_phone_to_buy: v })}
         />
+
+        {/* Configuración de etiquetas automáticas (NUEVO, OFERTA).
+            Antes estaban hardcoded en el código (7 días para Nuevo,
+            5% mínimo para Oferta). Ahora Mari puede ajustarlas desde
+            aquí sin que un dev tenga que tocar nada. */}
+        <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 shrink-0">
+              <Sparkles size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 leading-tight">
+                Etiquetas automáticas en cards
+              </p>
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+                Cuánto tiempo se muestra el chip rosa “NUEVO” en un
+                producto y qué tan grande tiene que ser el descuento para
+                que aparezca el chip “OFERTA”.
+              </p>
+            </div>
+          </div>
+          <div className="pl-12 space-y-2">
+            <NumberField
+              label="Días que un producto es ‘Nuevo’"
+              value={form.new_badge_days}
+              onChange={(v) => patch({ new_badge_days: v })}
+              suffix="d"
+              min={1}
+              max={90}
+            />
+            <Hint>
+              Después de {form.new_badge_days} día{form.new_badge_days === 1 ? "" : "s"} desde que lo creas, el chip desaparece solo.
+            </Hint>
+            <NumberField
+              label="Descuento mínimo para etiqueta ‘OFERTA’"
+              value={form.offer_min_discount_pct}
+              onChange={(v) => patch({ offer_min_discount_pct: v })}
+              suffix="%"
+              min={0}
+              max={50}
+            />
+            <Hint>
+              Si un producto tiene menos de {form.offer_min_discount_pct}% de descuento, no se etiqueta como oferta (evita ruido de descuentos diminutos).
+            </Hint>
+          </div>
+        </div>
       </Section>
 
       {/* ════════════ MENSAJES PERSONALIZADOS ════════════ */}

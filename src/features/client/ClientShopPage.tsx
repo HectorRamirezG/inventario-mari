@@ -1500,15 +1500,18 @@ const ProductCardClient = memo(function ProductCardClientImpl({
 
   const out = variant.stock <= 0
 
-  // Badges automáticos: NUEVO (producto creado en últimos 7 días) y
-  // OFERTA (price_medio < price_menudeo). El % de descuento se calcula
-  // contra el precio_menudeo (el de referencia más alto).
-  const NEW_DAYS_WINDOW = 7
+  // Badges automáticos: NUEVO (producto creado dentro de la ventana
+  // configurada) y OFERTA (price_medio < price_menudeo). El % de
+  // descuento se calcula contra el precio_menudeo (el de referencia
+  // más alto). Ambos umbrales viven en business_rules para que Mari
+  // los ajuste desde Reglas sin tocar código.
+  const newDaysWindow = rules.new_badge_days || 7
+  const offerMinPct = rules.offer_min_discount_pct ?? 5
   const isNew = (() => {
     if (!product.created_at) return false
     const created = Date.parse(product.created_at)
     if (!created) return false
-    return Date.now() - created < NEW_DAYS_WINDOW * 24 * 3600 * 1000
+    return Date.now() - created < newDaysWindow * 24 * 3600 * 1000
   })()
   const discountPct = (() => {
     const m = Number(variant?.price_menudeo) || 0
@@ -1518,7 +1521,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
     }
     return 0
   })()
-  const onOffer = discountPct >= 5
+  const onOffer = discountPct >= offerMinPct
 
   // Slices para VariantImageCarousel. REGLA CRÍTICA:
   // toda variante DEBE existir en este array, aunque no tenga fotos propias,

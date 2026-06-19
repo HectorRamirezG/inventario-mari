@@ -188,6 +188,33 @@ export default function BuySheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qty, product, projectedTier])
 
+  /**
+   * Ahorro EXTRA que el cliente desbloquearía si lograra subir al
+   * siguiente tier (medio→mayoreo, o menudeo→medio). Se calcula
+   * sobre el carrito ACTUAL (qty del sheet) — la idea es decirle:
+   * "si lograras subir, sobre lo que ya tienes encarrito ahorrarías $X
+   * adicional". Si ya está en mayoreo o no hay próximo tier, es 0.
+   */
+  const potentialSavings = useMemo(() => {
+    if (!product || !nextStep) return 0
+    return product.variants.reduce((acc, v) => {
+      const q = qty[v.id] ?? 0
+      if (q === 0) return acc
+      const currentEff = effectivePrice(v)
+      const nextPriceRaw = priceForTier(
+        {
+          price_menudeo: v.price_menudeo ?? v.price,
+          price_medio: v.price_medio ?? null,
+          price_mayoreo: v.price_mayoreo ?? null,
+        },
+        nextStep.tier,
+      )
+      const diff = Math.max(0, currentEff - nextPriceRaw)
+      return acc + q * diff
+    }, 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qty, product, nextStep, projectedTier])
+
   function onDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.y > 120 || info.velocity.y > 600) onClose()
   }
@@ -285,6 +312,7 @@ export default function BuySheet({
                   tier={projectedTier}
                   next={nextStep}
                   savings={projectedSavings}
+                  potentialNextSavings={potentialSavings}
                 />
               )}
 
@@ -475,21 +503,29 @@ export default function BuySheet({
 
 /**
  * Banner de tier proyectado que ve el cliente arriba del listado.
- * Tres estados:
- *   - mayoreo (verde): "¡Mayoreo activo!"
- *   - medio (sky):     "Precio medio mayoreo activo. Lleva N más para mayoreo"
- *   - menudeo (amber): "Lleva N piezas más para bajar a medio mayoreo"
+ * Estados:
+ *   - mayoreo (verde): el cliente ya está al mejor precio. Muestra
+ *     cuánto está ahorrando vs menudeo.
+ *   - medio (sky/azul cielo): mejor precio que menudeo activado.
+ *     Muestra ahorro actual + cuánto MÁS ahorraría si llega a mayoreo.
+ *   - menudeo (amber): aún no desbloquea descuento por volumen. Muestra
+ *     cuánto ahorraría si llega al próximo tier (medio).
  *
- * El copy usa siempre "medio mayoreo" para evitar confusión con "Medio".
+ * Copy en lenguaje simple: "Llevas X · Ahorras $Y · Lleva N más y ahorras
+ * $Z extra". El objetivo es que el cliente sepa de un vistazo qué precio
+ * está pagando y cuánto le conviene sumar más piezas.
  */
 function TierBanner({
   tier,
   next,
   savings,
+  potentialNextSavings,
 }: {
   tier: PricingTier
   next: { tier: PricingTier; missing: number } | null
   savings: number
+  /** Ahorro adicional si lograra el próximo tier (vs precio actual). */
+  potentialNextSavings: number
 }) {
   if (tier === "mayoreo") {
     return (
@@ -497,11 +533,13 @@ function TierBanner({
         <Sparkles size={14} className="text-emerald-600 shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
-            ¡Precio mayoreo activo!
+            ¡Precio mayoreo activo! 🎉
           </p>
           {savings > 0 && (
             <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mt-0.5">
-              Ahorras {formatMoney(savings)} vs. menudeo
+              Llevándote esta cantidad ahorras{" "}
+              <span className="font-black">{formatMoney(savings)}</span> en
+              total.
             </p>
           )}
         </div>
@@ -514,34 +552,59 @@ function TierBanner({
         <Sparkles size={14} className="text-sky-600 shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300">
-            Precio medio mayoreo activo
+            ¡Medio mayoreo activo!
           </p>
           {savings > 0 && (
             <p className="text-[10px] font-bold text-sky-700 dark:text-sky-300 mt-0.5">
-              Ahorras {formatMoney(savings)} vs. menudeo
+              Ya ahorras <span className="font-black">{formatMoney(savings)}</span>{" "}
+              vs el precio normal.
             </p>
           )}
           {next && next.missing > 0 && (
-            <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 mt-1">
-              🎯 Lleva {next.missing} {next.missing === 1 ? "pieza" : "piezas"} más para mayoreo
+            <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 mt-1 flex items-center gap-1">
+              🎯 Lleva {next.missing} {next.missing === 1 ? "pieza" : "piezas"} más
+              {potentialNextSavings > 0 && (
+                <>
+                  {" "}
+                  y ahorras{" "}
+                  <span className="font-black">
+                    {formatMoney(potentialNextSavings)}
+                  </span>{" "}
+                  extra.
+                </>
+              )}
             </p>
           )}
         </div>
       </div>
     )
   }
-  // menudeo
+  // menudeo: aún no hay descuento. Mostramos lo que ahorraría al subir.
   if (!next) return null
   return (
     <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 p-3 flex items-start gap-2">
       <Target size={14} className="text-amber-600 shrink-0 mt-0.5" />
       <div className="flex-1 min-w-0">
         <p className="text-[11px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
-          Lleva {next.missing} {next.missing === 1 ? "pieza" : "piezas"} más
+          ¡Compra más, paga menos!
         </p>
         <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 mt-0.5">
-          Y desbloqueas precio {TIER_LABEL[next.tier].toLowerCase()}.
+          Lleva {next.missing} {next.missing === 1 ? "pieza" : "piezas"} más y
+          desbloqueas precio{" "}
+          <span className="font-black uppercase">
+            {TIER_LABEL[next.tier].toLowerCase()}
+          </span>
+          .
         </p>
+        {potentialNextSavings > 0 && (
+          <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 mt-1">
+            🎯 Te ahorrarías{" "}
+            <span className="font-black">
+              {formatMoney(potentialNextSavings)}
+            </span>{" "}
+            sobre lo que ya elegiste.
+          </p>
+        )}
       </div>
     </div>
   )
