@@ -148,8 +148,6 @@ export default function ClientHomePage() {
 
       <InstallAppBanner />
 
-      <StoriesBar enabled={bRules.stories_enabled} />
-
       {/* Productos vistos recientemente */}
       <RecentlyViewedRow
         onOpen={openProduct}
@@ -189,6 +187,11 @@ export default function ClientHomePage() {
         </div>
         <Sparkles size={18} className="shrink-0 opacity-80" />
       </button>
+
+      {/* Stories al final: solo aparece si hay historias activas (StoriesBar
+          retorna null cuando está vacía). Lo ponemos abajo para que no
+          deje un hueco entre banners cuando no hay nada que mostrar. */}
+      <StoriesBar enabled={bRules.stories_enabled} />
 
       {/* Sección Mensajes (solo si logueado) */}
       {isLogged && <MyMessagesSection />}

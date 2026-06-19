@@ -75,6 +75,14 @@
 
   body {
     @apply min-h-screen w-full antialiased overflow-x-hidden;
+    /* Lock horizontal definitivo en móvil: ningún elemento debe
+       provocar scroll a los lados. Si algo se desborda (badge largo,
+       imagen ancha, etc.) prefiero recortarlo a que la pantalla se
+       arrastre. Esto NO afecta scrollers internos (carrusel, tabs) que
+       tengan su propio overflow controlado. */
+    overscroll-behavior-x: none;
+    overflow-x: clip;
+    max-width: 100vw;
     /* Fondo neutro muy ligero — el mesh saturado mataba el contraste
        de las tarjetas blancas. Mantenemos sutil tinte rosa solo
        en una esquina para conservar identidad. */
@@ -84,6 +92,13 @@
     color: var(--color-slate-900);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    /* Bloquear scroll horizontal a nivel HTML también (algunos browsers
+       móviles arrastran html aunque body esté clip). */
+    overflow-x: clip;
+    overscroll-behavior-x: none;
   }
 
   @media (prefers-color-scheme: dark) {

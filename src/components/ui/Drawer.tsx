@@ -80,7 +80,7 @@ export default function Drawer({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-slate-950/40 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/65"
           />
 
           {/* DRAWER */}

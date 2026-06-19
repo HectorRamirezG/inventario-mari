@@ -19,7 +19,6 @@ import {
   Maximize2,
   LayoutGrid,
   List,
-  ScanLine,
   Heart,
   Star,
   Share2,
@@ -754,15 +753,12 @@ export default function ClientShopPage() {
             <X size={11} />
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => setScannerOpen(true)}
-          aria-label="Escanear código"
-          title="Escanear código del producto"
-          className="w-9 h-9 rounded-xl bg-primary text-white flex items-center justify-center shadow-sm active:scale-95 shrink-0"
-        >
-          <ScanLine size={14} />
-        </button>
+        {/* NOTA: Mari pidió simplificar el header — quitamos el botón de
+            escanear código de barras y el atajo de "Pídelo a Beauty's Me"
+            para que solo queden Favoritos (corazón) y Compartir tienda.
+            El scanner sigue accesible desde el módulo admin / paleta y
+            las sugerencias (wishes) siguen disponibles en la pestaña
+            "Deseos" del dock del cliente. */}
         {wishlist.count > 0 && (
           <button
             type="button"
@@ -778,20 +774,6 @@ export default function ClientShopPage() {
             <span className="absolute -top-1 -right-1 text-[8px] font-black tabular-nums bg-white text-rose-600 rounded-full px-1 min-w-[14px] h-[14px] flex items-center justify-center border border-rose-300">
               {wishlist.count}
             </span>
-          </button>
-        )}
-        {/* Pídelo a Beauty's Me — antes era FAB flotante en la izquierda,
-            ahora vive aquí integrado al header para no chocar con el FAB
-            de WhatsApp ni con el de carrito. Solo si wishes_enabled. */}
-        {bRules.wishes_enabled && (
-          <button
-            type="button"
-            onClick={() => setOpenWishes(true)}
-            aria-label="Pídelo a Beauty's Me"
-            title="Pídenos algo que no encuentras"
-            className="bg-brand w-9 h-9 rounded-xl text-white flex items-center justify-center shadow-sm shrink-0 active:scale-95"
-          >
-            <Sparkles size={14} />
           </button>
         )}
         <button

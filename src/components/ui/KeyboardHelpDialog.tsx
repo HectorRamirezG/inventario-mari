@@ -88,7 +88,7 @@ export default function KeyboardHelpDialog({
             type="button"
             aria-label="Cerrar"
             onClick={onClose}
-            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-950/65"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 10 }}

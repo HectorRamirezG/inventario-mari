@@ -425,7 +425,7 @@ export default function CommandPalette({ open, onClose }: Props) {
         >
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-900/65"
             onClick={onClose}
           />
 

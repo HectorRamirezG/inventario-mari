@@ -123,7 +123,7 @@ export default function SupportModal({
           className="fixed inset-0 z-[210] flex items-end sm:items-center justify-center"
         >
           <motion.div
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/70"
             onClick={() => !submitting && onClose()}
           />
 

@@ -432,7 +432,7 @@ function TicketDrawer({
           className="fixed inset-0 z-[200] flex justify-end"
         >
           <motion.div
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/70"
             onClick={onClose}
           />
           <motion.div

@@ -80,7 +80,7 @@ export default function ShortcutsCheatsheet({ open, onClose }: Props) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/70"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 12 }}

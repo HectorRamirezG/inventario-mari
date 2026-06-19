@@ -278,7 +278,7 @@ export default function CreateDeliveryNoteModal({
           className="fixed inset-0 z-[170] flex items-end md:items-center justify-center"
         >
           <div
-            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-900/70"
             onClick={() => !submitting && onClose()}
           />
 

@@ -475,7 +475,7 @@ function CreateStoryModal({
         className="fixed inset-0 z-[150] flex items-end md:items-center justify-center"
       >
         <div
-          className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+          className="absolute inset-0 bg-slate-900/65"
           onClick={() => !busy && onClose()}
         />
 

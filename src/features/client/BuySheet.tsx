@@ -212,28 +212,38 @@ export default function BuySheet({
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[180] flex items-end justify-center"
         >
-          {/* Backdrop */}
+          {/* Backdrop — sin blur.
+              backdrop-blur causa parpadeos visibles al cerrar/abrir el sheet
+              porque el browser repinta TODO lo que está detrás cada frame
+              mientras la animación de opacidad corre. Usamos un fondo más
+              oscuro para conservar la jerarquía visual sin el costo del
+              blur (que ya estaba causando el "flash" reportado). */}
           <motion.div
-            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/70"
             onClick={onClose}
           />
 
-          {/* Sheet */}
+          {/* Sheet — el drag para cerrar vive SOLO en el handle (ver más
+              abajo), no en el sheet completo. Antes atrapaba scrolls
+              internos y aceleraba el parpadeo cuando se cancelaba un drag. */}
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 280 }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.4 }}
-            onDragEnd={onDragEnd}
-            className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[88vh] flex flex-col touch-pan-y"
+            className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[88vh] flex flex-col"
+            style={{ willChange: "transform" }}
           >
-            {/* Handle drag */}
-            <div className="flex justify-center pt-2 pb-1 cursor-grab active:cursor-grabbing shrink-0">
+            {/* Handle drag — único elemento arrastrable para cerrar. */}
+            <motion.div
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.4 }}
+              onDragEnd={onDragEnd}
+              className="flex justify-center pt-2 pb-1 cursor-grab active:cursor-grabbing shrink-0 touch-none"
+            >
               <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
-            </div>
+            </motion.div>
 
             {/* Header */}
             <div className="flex items-start justify-between px-5 pb-3 shrink-0">

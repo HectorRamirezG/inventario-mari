@@ -218,7 +218,7 @@ export default function ReviewProofDrawer({
           className="fixed inset-0 z-[240] flex items-end md:items-center justify-center"
         >
           <motion.div
-            className="absolute inset-0 bg-slate-950/70 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-950/75"
             onClick={() => !saving && onClose()}
           />
 

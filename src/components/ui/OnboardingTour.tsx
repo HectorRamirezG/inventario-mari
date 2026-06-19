@@ -119,7 +119,7 @@ export default function OnboardingTour() {
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[260] flex items-center justify-center p-5"
         >
-          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-md" onClick={close} />
+          <div className="absolute inset-0 bg-slate-950/80" onClick={close} />
 
           <motion.div
             initial={{ scale: 0.96, y: 20, opacity: 0 }}

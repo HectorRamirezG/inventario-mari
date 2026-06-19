@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import { Package, ChevronLeft, ChevronRight } from "lucide-react"
 import { imageMedium } from "../../lib/imageTransform"
@@ -73,6 +73,27 @@ export default function VariantImageCarousel({
     setIdx((i) => (i + delta + totalInActive) % totalInActive)
   }
 
+  // Swipe horizontal en móvil (umbral 40px). Si el swipe vertical es mayor
+  // dejamos pasar el gesto para que la página pueda hacer scroll normal.
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0]
+    touchStart.current = { x: t.clientX, y: t.clientY }
+  }
+  function onTouchEnd(e: React.TouchEvent) {
+    const start = touchStart.current
+    touchStart.current = null
+    if (!start) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    // Si el movimiento fue más vertical que horizontal, no es swipe de fotos
+    if (Math.abs(dy) > Math.abs(dx)) return
+    if (Math.abs(dx) < 40) return
+    if (dx > 0) go(-1)
+    else go(1)
+  }
+
   // Estado vacío
   if (!active || images.length === 0) {
     return (
@@ -92,7 +113,9 @@ export default function VariantImageCarousel({
   return (
     <div
       className={`relative w-full overflow-hidden bg-slate-100 dark:bg-slate-800 select-none ${className}`}
-      style={{ aspectRatio: aspect }}
+      style={{ aspectRatio: aspect, touchAction: hasMany ? "pan-y" : undefined }}
+      onTouchStart={hasMany ? onTouchStart : undefined}
+      onTouchEnd={hasMany ? onTouchEnd : undefined}
     >
       <AnimatePresence mode="wait">
         <motion.img
@@ -145,7 +168,9 @@ export default function VariantImageCarousel({
         </span>
       )}
 
-      {/* Flechas laterales */}
+      {/* Flechas laterales — solo en desktop. En móvil el cliente desliza
+          con el dedo (handlers de swipe arriba) para no tener que apuntar
+          a botones chicos. */}
       {hasMany && (
         <>
           <button
@@ -155,7 +180,7 @@ export default function VariantImageCarousel({
               e.stopPropagation()
               go(-1)
             }}
-            className="absolute left-1.5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/65 dark:bg-slate-900/65 backdrop-blur text-slate-700 dark:text-slate-100 flex items-center justify-center shadow active:scale-90 transition-transform"
+            className="hidden md:flex absolute left-1.5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/65 dark:bg-slate-900/65 backdrop-blur text-slate-700 dark:text-slate-100 items-center justify-center shadow active:scale-90 transition-transform"
           >
             <ChevronLeft size={14} />
           </button>
@@ -166,7 +191,7 @@ export default function VariantImageCarousel({
               e.stopPropagation()
               go(1)
             }}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/65 dark:bg-slate-900/65 backdrop-blur text-slate-700 dark:text-slate-100 flex items-center justify-center shadow active:scale-90 transition-transform"
+            className="hidden md:flex absolute right-1.5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white/65 dark:bg-slate-900/65 backdrop-blur text-slate-700 dark:text-slate-100 items-center justify-center shadow active:scale-90 transition-transform"
           >
             <ChevronRight size={14} />
           </button>
