@@ -23,7 +23,7 @@ import KpiCard from "../../components/ui/KpiCard"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import Skeleton from "../../components/ui/Skeleton"
 import VipBadge from "../../components/ui/VipBadge"
-import { formatDateTime, formatMoney } from "../../lib/format"
+import { formatMoney } from "../../lib/format"
 import { isVipCustomer } from "../../lib/vipStatus"
 import { useBusinessRules } from "../settings/businessRulesService"
 import {
