@@ -138,6 +138,13 @@ export default function ClientHomePage() {
         isLogged={isLogged}
       />
 
+      {/* CLIENTE LOGUEADO: info personal ARRIBA del catalogo (Mari pidio
+          "cosas importantes arriba"). Mensajes / saldos / premios viven
+          aqui porque son lo primero que el cliente quiere ver al entrar. */}
+      {isLogged && <MyMessagesSection />}
+      {isLogged && <MySavingsSection />}
+      {isLogged && bRules.loyalty_enabled && <MyLoyaltyCard />}
+
       {/* Productos vistos recientemente */}
       <RecentlyViewedRow
         onOpen={openProduct}
@@ -183,16 +190,8 @@ export default function ClientHomePage() {
           deje un hueco entre banners cuando no hay nada que mostrar. */}
       <StoriesBar enabled={bRules.stories_enabled} />
 
-      {/* Sección Mensajes (solo si logueado) */}
-      {isLogged && <MyMessagesSection />}
-
-      {/* Sección Mis ahorros (solo si logueado) */}
-      {isLogged && <MySavingsSection />}
-
-      {/* Sección Mis Premios (solo si la regla está activa y hay sesión) */}
-      {isLogged && bRules.loyalty_enabled && <MyLoyaltyCard />}
-
-      {/* Sección Mis Reseñas (solo si reviews_enabled) */}
+      {/* Sección Mis Reseñas (solo si reviews_enabled). Va al final porque
+          es accion post-compra (no engagement diario). */}
       {isLogged && bRules.reviews_enabled && <MyReviewsCard />}
     </div>
   )

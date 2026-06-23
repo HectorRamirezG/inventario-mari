@@ -19,6 +19,7 @@ import { useAuth } from "../../lib/useAuth"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import PaymentCenterDrawer from "../../components/ui/PaymentCenterDrawer"
+import PageHeader from "../../components/ui/PageHeader"
 import Skeleton from "../../components/ui/Skeleton"
 import SupportModal from "../support/SupportModal"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
@@ -381,25 +382,27 @@ export default function ClientOrdersPage() {
 
   return (
     <div className="space-y-3 pb-24">
-      {/* Encabezado limpio: solo título + subtítulo discreto. */}
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-black tracking-tight">Mis pedidos</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Tu historial de apartados y compras
-          </p>
-        </div>
-        {/* Mini-acceso a ayuda en el header (en lugar del FAB flotante). */}
-        <button
-          type="button"
-          onClick={() => setOpenHelp(true)}
-          aria-label="Centro de ayuda"
-          title="¿Necesitas ayuda?"
-          className="shrink-0 w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center transition-colors press"
-        >
-          <LifeBuoy size={14} />
-        </button>
-      </div>
+      <PageHeader
+        icon={ShoppingBag}
+        iconTone="primary"
+        title="Mis pedidos"
+        subtitle={
+          orders.length === 0
+            ? "Tu historial de apartados y compras"
+            : `${orders.length} ${orders.length === 1 ? "pedido" : "pedidos"} en tu historial`
+        }
+        right={
+          <button
+            type="button"
+            onClick={() => setOpenHelp(true)}
+            aria-label="Centro de ayuda"
+            title="¿Necesitas ayuda?"
+            className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center transition-colors press"
+          >
+            <LifeBuoy size={14} />
+          </button>
+        }
+      />
 
       {/* Filtros tab — solo si tiene más de 1 pedido. */}
       {orders.length > 1 && (

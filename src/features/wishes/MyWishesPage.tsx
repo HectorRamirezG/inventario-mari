@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-  Sparkles,
   Plus,
   RefreshCw,
   Calendar,
@@ -20,6 +19,7 @@ import {
 } from "./wishesService"
 import WishesDrawer from "./WishesDrawer"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
+import PageHeader from "../../components/ui/PageHeader"
 import { WishCardSkeleton } from "../../components/ui/Skeletons"
 
 const fmtDate = (iso: string) =>
@@ -63,33 +63,35 @@ export default function MyWishesPage() {
 
   return (
     <div className="flex flex-col gap-4 pb-44">
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-black uppercase tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
-            <Sparkles size={14} className="text-primary" /> Mis deseos
-          </h2>
-          <p className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-            {items.length} {items.length === 1 ? "petición" : "peticiones"}
-            {pendingCount > 0 && ` · ${pendingCount} esperando respuesta`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={load}
-            aria-label="Refrescar"
-            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-primary flex items-center justify-center press"
-          >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-          </button>
-          <button
-            onClick={() => setDrawerOpen(true)}
-            className="h-10 px-4 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom press-hard"
-          >
-            <Plus size={13} /> Nuevo
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={Heart}
+        iconTone="rose"
+        title="Mis deseos"
+        subtitle={
+          items.length === 0
+            ? "Pídele a Beauty's Me lo que aún no tiene"
+            : `${items.length} ${items.length === 1 ? "petición" : "peticiones"}${
+                pendingCount > 0 ? ` · ${pendingCount} en espera` : ""
+              }`
+        }
+        right={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={load}
+              aria-label="Refrescar"
+              className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-primary flex items-center justify-center press"
+            >
+              <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+            </button>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="h-9 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom press-hard"
+            >
+              <Plus size={12} /> Nuevo
+            </button>
+          </div>
+        }
+      />
 
       {/* Banner si hay disponibles */}
       {readyCount > 0 && (
