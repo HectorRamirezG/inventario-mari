@@ -3,6 +3,7 @@ import type { Sale } from "../../types/database";
 import { debug } from "../../lib/debug";
 import { notifyClient } from "../notifications/notificationsService";
 import { formatMoney } from "../../lib/format";
+import { getBusinessRules } from "../settings/businessRulesService";
 
 /**
  * Lista las ventas/apartados con sus items y pagos asociados.
@@ -186,11 +187,11 @@ export async function addPayment(
  * automáticamente al pasar a status='cancelled'.
  */
 export async function cancelSale(saleId: string, reason?: string | null) {
-  // Leemos primero el email del cliente para poder notificarle
-  // después del cancel.
+  // Leemos primero email + montos del cliente para poder notificarle
+  // después del cancel y para evaluar si convertir el abono en puntos.
   const { data: prev } = await supabase
     .from("sales")
-    .select("customer_email,customer_name,public_token")
+    .select("customer_email,customer_name,public_token,paid,total")
     .eq("id", saleId)
     .maybeSingle();
 
@@ -208,17 +209,92 @@ export async function cancelSale(saleId: string, reason?: string | null) {
     .eq("id", saleId);
   if (error) throw new Error(error.message);
 
-  if (prev && (prev as any).customer_email) {
+  // Cruce con Programa de Premios: si la regla "Sin devoluciones en
+  // efectivo" está activa Y el cliente había abonado, convertimos
+  // su pago en puntos (peso_por_punto define la equivalencia). El
+  // cliente recibe una nota de crédito en forma de saldo loyalty.
+  const customerEmail = (prev as any)?.customer_email as string | undefined;
+  const paid = Number((prev as any)?.paid) || 0;
+  let pointsAwarded = 0;
+  try {
+    const rules = getBusinessRules();
+    if (
+      rules.no_refund &&
+      rules.loyalty_enabled &&
+      customerEmail &&
+      paid > 0 &&
+      rules.loyalty_peso_por_punto > 0
+    ) {
+      pointsAwarded = Math.floor(paid / rules.loyalty_peso_por_punto);
+      if (pointsAwarded > 0) {
+        // Insertamos el evento + actualizamos el balance manualmente
+        // (no usamos award_loyalty_points porque ese lee la regla de la
+        // tabla y aquí el valor es dinámico = monto/peso_por_punto).
+        const { error: evErr } = await supabase
+          .from("loyalty_events")
+          .insert({
+            customer_email: customerEmail.toLowerCase(),
+            action_key: "refund_credit",
+            delta: pointsAwarded,
+            note: `Crédito por cancelación · ${formatMoney(paid)}`,
+            ref_table: "sales",
+            ref_id: saleId,
+          });
+        if (evErr) {
+          debug.warn("[apartados] loyalty_events insert:", evErr.message);
+          pointsAwarded = 0;
+        } else {
+          // Upsert balance: si existe, sumamos; si no, lo creamos.
+          const { data: bal } = await supabase
+            .from("loyalty_balance")
+            .select("points,lifetime_earned")
+            .eq("customer_email", customerEmail.toLowerCase())
+            .maybeSingle();
+          if (bal) {
+            await supabase
+              .from("loyalty_balance")
+              .update({
+                points: (Number((bal as any).points) || 0) + pointsAwarded,
+                lifetime_earned:
+                  (Number((bal as any).lifetime_earned) || 0) + pointsAwarded,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("customer_email", customerEmail.toLowerCase());
+          } else {
+            await supabase.from("loyalty_balance").insert({
+              customer_email: customerEmail.toLowerCase(),
+              points: pointsAwarded,
+              lifetime_earned: pointsAwarded,
+            });
+          }
+        }
+      }
+    }
+  } catch (e: any) {
+    debug.warn("[apartados] convert refund to points failed:", e?.message);
+  }
+
+  if (prev && customerEmail) {
     const reasonTxt = reason && reason.trim() ? `\n\nMotivo: ${reason.trim()}` : "";
-    await notifyClient((prev as any).customer_email, {
-      type: "sale_cancelled",
-      title: "Tu pedido fue cancelado",
-      body:
-        `canceló este pedido. Si tenías un abono pagado, te contactaremos para devolverlo.${reasonTxt}`,
+    const body =
+      pointsAwarded > 0
+        ? `Tu abono de ${formatMoney(paid)} se convirtió en ${pointsAwarded} puntos para tu próxima compra.${reasonTxt}`
+        : `canceló este pedido. Si tenías un abono pagado, te contactaremos para devolverlo.${reasonTxt}`;
+    await notifyClient(customerEmail, {
+      type: pointsAwarded > 0 ? "payment_added" : "sale_cancelled",
+      title:
+        pointsAwarded > 0
+          ? `Tu pago se convirtió en ${pointsAwarded} puntos`
+          : "Tu pedido fue cancelado",
+      body,
       link: (prev as any).public_token
         ? `/ticket/${(prev as any).public_token}`
         : null,
-      metadata: { sale_id: saleId, reason: reason ?? null },
+      metadata: {
+        sale_id: saleId,
+        reason: reason ?? null,
+        refund_to_points: pointsAwarded,
+      },
     });
   }
 }

@@ -697,6 +697,7 @@ function AdminShell() {
         caption: s.caption,
         icon: s.icon,
         accent: s.accent,
+        kind: "nav" as const,
         onClick: () => {
           setSection(s.id)
           if (s.id === "pendientes") setApartadoBadge(0)
@@ -1163,7 +1164,12 @@ function AdminShell() {
             En móvil el dock fijo (h-12) + safe-area + FAB sobresale ~28px
             ocupa ~110-120px del viewport. El padding-bottom calculado
             garantiza que el último elemento siempre quede visible al
-            scrollear, sin que lo tape el dock. */}
+            scrollear, sin que lo tape el dock.
+
+            FIX scroll bloqueado en mobile admin: overscroll-y-auto en
+            lugar de overscroll-contain (contain a veces atrapa el gesto
+            cuando hay banners stickys + FAB en cadena). touch-action:
+            pan-y se asegura nativamente que el dedo pueda scrollear. */}
         <PullToRefresh
           onRefresh={() => {
             // Cada página decide qué hacer escuchando este evento.
@@ -1174,7 +1180,8 @@ function AdminShell() {
             window.dispatchEvent(new CustomEvent("mari:apartado-refresh"))
             return new Promise((r) => setTimeout(r, 600))
           }}
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios bg-slate-50/30 dark:bg-slate-950/50 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-y-auto scroll-container-ios bg-slate-50/30 dark:bg-slate-950/50 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-0"
+          style={{ touchAction: "pan-y" }}
         >
           <div className="w-full max-w-6xl mx-auto px-4 md:px-6 py-4 md:py-6">
             {/* mode="popLayout" para que la nueva sección empiece a entrar
@@ -1462,7 +1469,8 @@ function ShopShell() {
           window.dispatchEvent(new CustomEvent("mari:pull-refresh", { detail: { section: "shop" } }))
           return new Promise((r) => setTimeout(r, 600))
         }}
-        className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-container-ios pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-y-auto scroll-container-ios pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-0"
+        style={{ touchAction: "pan-y" }}
       >
         <div className="max-w-3xl mx-auto px-4 py-4">
           <ErrorBoundary scope="shop">

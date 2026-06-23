@@ -11,6 +11,8 @@ interface Props {
   /** Desactivar (ej. cuando hay un drawer abierto). */
   disabled?: boolean
   className?: string
+  /** Estilos inline opcionales (merge con `position: relative`). */
+  style?: React.CSSProperties
 }
 
 /**
@@ -29,6 +31,7 @@ export default function PullToRefresh({
   threshold = 70,
   disabled,
   className,
+  style,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [pulling, setPulling] = useState(0)
@@ -99,7 +102,11 @@ export default function PullToRefresh({
   const showIndicator = pulling > 0 || refreshing
 
   return (
-    <div ref={containerRef} className={className} style={{ position: "relative" }}>
+    <div
+      ref={containerRef}
+      className={className}
+      style={{ position: "relative", ...style }}
+    >
       {/* Indicador absoluto al tope */}
       <AnimatePresence>
         {showIndicator && (

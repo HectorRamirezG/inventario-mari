@@ -193,11 +193,13 @@
     background: linear-gradient(135deg, var(--brand-from), var(--brand-to));
   }
 
-  /* KPI card — métrica con tono semántico */
+  /* KPI card — métrica con tono semántico. Diseño compacto: padding
+     reducido y sin lift para que 3 cards en grid-cols-3 se vean limpias
+     y proporcionadas en celular. */
   .kpi-card {
-    @apply rounded-2xl p-3 border shadow-sm
-           transition-all duration-200
-           hover:shadow-md hover:-translate-y-0.5;
+    @apply rounded-xl px-3 py-2 border shadow-sm
+           transition-shadow duration-200
+           hover:shadow-md;
   }
   .kpi-card-tone-default { @apply bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 text-slate-900 dark:text-slate-100; }
   .kpi-card-tone-primary { @apply bg-primary/5 dark:bg-primary/15 border-primary/20 text-primary; }

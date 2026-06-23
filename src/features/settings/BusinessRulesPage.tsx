@@ -333,9 +333,9 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Ban}
           title="Sin devoluciones en efectivo"
-          description="Si necesitas regresar dinero, lo conviertes en nota de crédito (saldo a favor para una compra futura) en vez de regresar efectivo. Protege tu caja."
+          description="Si necesitas regresar dinero, lo conviertes en puntos (nota de crédito en el programa de premios) en vez de regresar efectivo. Protege tu caja."
+          example="Cliente cancela y había abonado $100 · se le otorgan 100 puntos canjeables en su próxima compra. Requiere Programa de Premios activado."
           affects="todos"
-          todo
           enabled={form.no_refund}
           onToggle={(v) => patch({ no_refund: v })}
         />
