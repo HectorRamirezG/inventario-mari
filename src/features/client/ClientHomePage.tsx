@@ -25,7 +25,6 @@ import {
   PiggyBank,
   MessageSquare,
   Bell,
-  ShoppingBag,
   ChevronRight,
 } from "lucide-react"
 import { motion } from "framer-motion"
@@ -43,13 +42,6 @@ import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
 import ReviewStoriesBar from "../../components/ui/ReviewStoriesBar"
 import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
 import Skeleton from "../../components/ui/Skeleton"
-import { useMyLoyaltyBalance } from "../loyalty/loyaltyService"
-import MyReviewsDrawer from "../reviews/MyReviewsDrawer"
-import {
-  listMyReviews,
-  countMyProductsToReview,
-  type Review,
-} from "../reviews/reviewsService"
 
 interface PublicVariant {
   id: string
@@ -142,12 +134,11 @@ export default function ClientHomePage() {
         isLogged={isLogged}
       />
 
-      {/* CLIENTE LOGUEADO: info personal ARRIBA del catalogo (Mari pidio
-          "cosas importantes arriba"). Mensajes / saldos / premios viven
-          aqui porque son lo primero que el cliente quiere ver al entrar. */}
+      {/* CLIENTE LOGUEADO: info personal ARRIBA. Mensajes + saldos.
+          Premios y Reseñas FUERON QUITADOS de aqui (Mari: 'lo que ya
+          hay atajo en el +, quitalo'). Ya viven en el ActionHub Mi cuenta. */}
       {isLogged && <MyMessagesSection />}
       {isLogged && <MySavingsSection />}
-      {isLogged && bRules.loyalty_enabled && <MyLoyaltyCard />}
 
       {/* Stories de resenias — marketing organico. Banda horizontal con
           las mejores resenias con foto, estilo Instagram stories. Click
@@ -155,9 +146,7 @@ export default function ClientHomePage() {
       <ReviewStoriesBar />
 
       {/* Productos vistos recientemente */}
-      <RecentlyViewedRow
-        onOpen={openProduct}
-      />
+      <RecentlyViewedRow onOpen={openProduct} />
 
       {/* Producto del día */}
       {loading ? (
@@ -171,37 +160,17 @@ export default function ClientHomePage() {
         />
       )}
 
-      {/* Atajo a tienda */}
-      <button
-        onClick={() => navigate("/")}
-        className="w-full my-3 rounded-3xl p-4 text-white shadow-bloom active:scale-[0.99] transition-all flex items-center gap-3"
-        style={{
-          background:
-            "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
-        }}
-      >
-        <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
-          <ShoppingBag size={20} strokeWidth={2.5} />
-        </div>
-        <div className="flex-1 text-left min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-widest opacity-90">
-            Ir al catálogo
-          </p>
-          <p className="text-sm font-black leading-tight mt-0.5">
-            Explorar todos los productos
-          </p>
-        </div>
-        <Sparkles size={18} className="shrink-0 opacity-80" />
-      </button>
+      {/* Boton 'Ir al catalogo' QUITADO: Mari ya tiene el tab Tienda en
+          el dock y un chip Tienda en el + Mi cuenta. Saturaba sin
+          agregar valor nuevo. */}
 
-      {/* Stories al final: solo aparece si hay historias activas (StoriesBar
-          retorna null cuando está vacía). Lo ponemos abajo para que no
-          deje un hueco entre banners cuando no hay nada que mostrar. */}
+      {/* Stories al final: solo aparece si hay historias activas
+          (StoriesBar retorna null cuando está vacía). */}
       <StoriesBar enabled={bRules.stories_enabled} />
 
-      {/* Sección Mis Reseñas (solo si reviews_enabled). Va al final porque
-          es accion post-compra (no engagement diario). */}
-      {isLogged && bRules.reviews_enabled && <MyReviewsCard />}
+      {/* MyReviewsCard tambien QUITADO: Mari pide no repetir. La accion
+          de calificar productos vive en el ActionHub (+) > Mi cuenta >
+          Mis resenas con badge de pendientes. */}
     </div>
   )
 }
@@ -383,167 +352,5 @@ function MySavingsSection() {
         </div>
       </div>
     </section>
-  )
-}
-
-/**
- * Card "Mis premios" para el cliente: muestra balance y NAVEGA a la
- * pagina dedicada /mis-premios (donde vive el escaparate completo
- * con logros + progreso VIP + historial). Antes abria un drawer.
- */
-function MyLoyaltyCard() {
-  const { balance, loading } = useMyLoyaltyBalance()
-  const bRules = useBusinessRules()
-  const navigate = useNavigate()
-
-  // No mostrar nada si está cargando o si nunca ha ganado puntos: la
-  // experiencia de "0 puntos en seco" es desmotivante. Mejor invitamos
-  // a ganar el primero con un CTA sutil.
-  const points = balance?.points ?? 0
-  const moneyValue = points * (bRules.loyalty_peso_por_punto || 1)
-
-  if (loading) return null
-
-  return (
-    <button
-      type="button"
-      onClick={() => navigate("/mis-premios")}
-      className="w-full mt-4 group press relative overflow-hidden rounded-3xl p-4 text-left text-white shadow-bloom"
-      style={{
-        background:
-          "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
-      }}
-      aria-label="Ver mis premios"
-    >
-      <span className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-white/15 blur-xl" />
-      <div className="relative flex items-center gap-3">
-        <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl shrink-0">
-          🏆
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-widest opacity-80">
-            Mis premios
-          </p>
-          <p className="text-2xl font-black tabular-nums leading-tight">
-            {points} <span className="text-xs opacity-80">pts</span>
-          </p>
-          <p className="text-[10px] font-bold opacity-90 mt-0.5">
-            {points > 0
-              ? `≈ $${moneyValue.toFixed(2)} en tu próxima compra`
-              : "Aún no tienes puntos. ¡Empieza ya!"}
-          </p>
-        </div>
-        <span className="text-[10px] font-black opacity-90 group-hover:translate-x-0.5 transition-transform">
-          Ver →
-        </span>
-      </div>
-    </button>
-  )
-}
-
-/**
- * Card "Mis reseñas": muestra cuántas reseñas ha dejado el cliente y
- * abre el drawer con el historial completo + estado de moderación.
- */
-function MyReviewsCard() {
-  const { email, session } = useAuth()
-  const bRules = useBusinessRules()
-  const [count, setCount] = useState(0)
-  const [hasPending, setHasPending] = useState(false)
-  const [pendingToReview, setPendingToReview] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(false)
-  /** Tab inicial del drawer: si hay productos pendientes, abrimos
-   *  directo en 'pendientes' (accion). Si no hay y tiene historial,
-   *  abrimos en 'hechas'. */
-  const initialTab = pendingToReview > 0 ? "pendientes" : "hechas"
-
-  useEffect(() => {
-    if (!session || !email) {
-      setLoading(false)
-      return
-    }
-    let alive = true
-    Promise.all([
-      listMyReviews(email).catch(() => [] as Review[]),
-      countMyProductsToReview(email, {
-        onPaidEnabled: bRules.reviews_on_paid_enabled,
-      }).catch(() => 0),
-    ])
-      .then(([list, pending]) => {
-        if (!alive) return
-        setCount(list.length)
-        setHasPending(list.some((r) => r.status === "pending"))
-        setPendingToReview(pending)
-      })
-      .finally(() => alive && setLoading(false))
-    return () => {
-      alive = false
-    }
-  }, [email, session, bRules.reviews_on_paid_enabled])
-
-  if (loading) return null
-
-  // Si no tiene historial NI pendientes, no mostramos la card (vacia
-  // no agrega valor en Home; cuando compre algo aparecera).
-  if (count === 0 && pendingToReview === 0) return null
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="w-full mt-4 group press relative overflow-hidden rounded-3xl p-4 text-left bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 border border-amber-200/60 dark:border-amber-500/30"
-        aria-label="Mis reseñas"
-      >
-        <div className="flex items-center gap-3">
-          <div className="relative w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-2xl shrink-0">
-            ⭐
-            {pendingToReview > 0 && (
-              <span
-                aria-hidden
-                className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm tabular-nums ring-2 ring-amber-50 dark:ring-amber-500/20"
-              >
-                {pendingToReview > 99 ? "99+" : pendingToReview}
-              </span>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700/80 dark:text-amber-300/80">
-              Mis reseñas
-            </p>
-            {pendingToReview > 0 ? (
-              <p className="text-lg font-black tabular-nums leading-tight text-slate-900 dark:text-slate-100">
-                {pendingToReview} por reseñar
-              </p>
-            ) : (
-              <p className="text-lg font-black tabular-nums leading-tight text-slate-900 dark:text-slate-100">
-                {count} {count === 1 ? "reseña" : "reseñas"}
-                {hasPending && (
-                  <span className="ml-2 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">
-                    En revisión
-                  </span>
-                )}
-              </p>
-            )}
-            <p className="text-[10px] font-bold opacity-80 mt-0.5 text-slate-600 dark:text-slate-300">
-              {pendingToReview > 0
-                ? "Califica y suma puntos a tu programa de premios"
-                : count > 0
-                ? "Toca para ver tu historial de opiniones"
-                : "Comparte tu opinión y gana puntos"}
-            </p>
-          </div>
-          <span className="text-[10px] font-black opacity-70 group-hover:translate-x-0.5 transition-transform text-amber-700 dark:text-amber-300">
-            Ver →
-          </span>
-        </div>
-      </button>
-      <MyReviewsDrawer
-        open={open}
-        initialTab={initialTab}
-        onClose={() => setOpen(false)}
-      />
-    </>
   )
 }
