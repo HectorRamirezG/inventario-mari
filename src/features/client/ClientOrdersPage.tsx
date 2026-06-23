@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import {
   Clock,
   CheckCircle2,
@@ -29,10 +29,8 @@ import SmartOrderActions from "../../components/ui/SmartOrderActions"
 import QuickDeliveryActions, {
   type DeliveryTimePref,
 } from "../../components/ui/QuickDeliveryActions"
-import OrdersStatsHeader, {
-  type MiniOrder,
-} from "../../components/ui/OrdersStatsHeader"
 import OrderHelpCenter from "../../components/ui/OrderHelpCenter"
+import ClientTicketDrawer from "../../components/ui/ClientTicketDrawer"
 import TabBar from "../../components/ui/TabBar"
 import { cancelSale } from "../apartados/apartadosService"
 import { promptDialog } from "../../lib/prompt"
@@ -81,6 +79,8 @@ export default function ClientOrdersPage() {
   const [supportSaleId, setSupportSaleId] = useState<string | null>(null)
   const [openHelp, setOpenHelp] = useState(false)
   const [filter, setFilter] = useState<OrderFilter>("active")
+  /** Token (o id) del pedido cuyo ticket se abre como drawer in-place. */
+  const [ticketToken, setTicketToken] = useState<string | null>(null)
   /** sale_id -> comanda más reciente (completa). */
   const [deliveryBySale, setDeliveryBySale] = useState<Record<string, MyDelivery>>({})
   /** sale_id -> si el bloque QuickDeliveryActions está abierto inline. */
@@ -259,20 +259,6 @@ export default function ClientOrdersPage() {
     return null
   }, [orders, rules])
 
-  /** Mini-orders para el header de stats (sin necesidad de delivery). */
-  const miniOrders: MiniOrder[] = useMemo(
-    () =>
-      orders.map((o) => ({
-        id: o.id,
-        total: o.total,
-        paid: o.paid,
-        balance: o.balance,
-        status: o.status,
-        created_at: o.created_at,
-      })),
-    [orders],
-  )
-
   /** Para invitar a reordenar: cliente puede repetir compra de un pedido
    *  ya entregado o pagado completamente. Reordena via reusing
    *  sales:prefill-cart pero en el cliente (BuySheet). Simple: navega
@@ -323,11 +309,25 @@ export default function ClientOrdersPage() {
 
   return (
     <div className="space-y-3 pb-24">
-      {/* Header personalizado con stats del cliente. */}
-      <OrdersStatsHeader
-        customerFirstName={(fullName ?? email ?? "").split(" ")[0] ?? null}
-        orders={miniOrders}
-      />
+      {/* Encabezado limpio: solo título + subtítulo discreto. */}
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-black tracking-tight">Mis pedidos</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Tu historial de apartados y compras
+          </p>
+        </div>
+        {/* Mini-acceso a ayuda en el header (en lugar del FAB flotante). */}
+        <button
+          type="button"
+          onClick={() => setOpenHelp(true)}
+          aria-label="Centro de ayuda"
+          title="¿Necesitas ayuda?"
+          className="shrink-0 w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center transition-colors press"
+        >
+          <LifeBuoy size={14} />
+        </button>
+      </div>
 
       {/* Filtros tab — solo si tiene más de 1 pedido. */}
       {orders.length > 1 && (
@@ -486,7 +486,7 @@ export default function ClientOrdersPage() {
                 delivery={delivery}
                 canSupport={claim.allowed}
                 onPay={() => setPaymentOrder(o)}
-                onViewTicket={() => navigate(`/ticket/${o.public_token ?? o.id}`)}
+                onViewTicket={() => setTicketToken(o.public_token ?? o.id)}
                 onSupport={() => {
                   setSupportSaleId(o.id)
                   setOpenSupport(true)
@@ -579,25 +579,9 @@ export default function ClientOrdersPage() {
         onClose={() => setPaymentOrder(null)}
       />
 
-      {/* FAB de ayuda — solo se muestra si hay AL MENOS un pedido todavía
-          activo (no entregado/cancelado). Si no, escondido para no ofrecer
-          una ruta a soporte que tirará "fuera de ventana". El centro de
-          ayuda en sí siempre tiene FAQ + WhatsApp directo como fallback. */}
-      {counts.active > 0 && (
-        <motion.button
-          type="button"
-          onClick={() => setOpenHelp(true)}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.4 }}
-          whileTap={{ scale: 0.9 }}
-          aria-label="Centro de ayuda"
-          title="¿Necesitas ayuda?"
-          className="fixed bottom-16 left-4 z-40 w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-primary shadow-[0_10px_30px_-10px_rgba(15,23,42,0.25)] flex items-center justify-center hover:scale-105 transition-transform"
-        >
-          <LifeBuoy size={18} />
-        </motion.button>
-      )}
+      {/* FAB flotante eliminado — el botón de ayuda vive en el header
+          de la página (icono LifeBuoy junto al título). Mucho menos
+          intrusivo y siempre disponible. */}
 
       <OrderHelpCenter
         open={openHelp}
@@ -614,6 +598,14 @@ export default function ClientOrdersPage() {
         saleId={supportSaleId}
         customerName={fullName ?? email ?? null}
         onClose={() => setOpenSupport(false)}
+      />
+
+      {/* Ticket in-place: drawer bottom-sheet sin perder /mis-pedidos.
+          Reusa get_public_ticket + componentes del TicketDrawer público. */}
+      <ClientTicketDrawer
+        open={!!ticketToken}
+        token={ticketToken}
+        onClose={() => setTicketToken(null)}
       />
     </div>
   )

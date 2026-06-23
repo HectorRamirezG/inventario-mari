@@ -22,6 +22,7 @@ import {
   Star,
   Share2,
   Eye,
+  MessageCircle,
 } from "lucide-react"
 import toast from "react-hot-toast"
 import { toastWithAction } from "../../lib/toastAction"
@@ -1190,7 +1191,7 @@ export default function ClientShopPage() {
             className="fixed inset-0 z-[160]"
           >
             <div
-              className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
               onClick={() => setOpenCart(false)}
             />
             <motion.div
@@ -1198,96 +1199,137 @@ export default function ClientShopPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 28 }}
-              className="absolute left-0 right-0 bottom-0 bg-white dark:bg-slate-900 rounded-t-3xl pb-safe max-h-[85vh] flex flex-col"
+              className="absolute left-0 right-0 bottom-0 bg-white dark:bg-slate-900 rounded-t-[2rem] pb-safe max-h-[88vh] flex flex-col shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.45)]"
             >
-              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800">
-                <h3 className="text-base font-black">Tu carrito</h3>
+              {/* Handle drag visual */}
+              <div className="flex justify-center pt-2 pb-1 shrink-0">
+                <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
+              </div>
+
+              {/* Header limpio: título + cantidad de piezas + cerrar */}
+              <div className="flex items-center justify-between px-5 pb-3 shrink-0">
+                <div className="min-w-0">
+                  <h3 className="text-lg font-black tracking-tight">Tu carrito</h3>
+                  <p className="text-[10px] font-bold text-slate-500 mt-0.5">
+                    {totalQty} {totalQty === 1 ? "pieza" : "piezas"} ·{" "}
+                    {repricedCart.length}{" "}
+                    {repricedCart.length === 1 ? "producto" : "productos"}
+                  </p>
+                </div>
                 <button
                   onClick={() => setOpenCart(false)}
-                  className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center"
+                  aria-label="Cerrar carrito"
+                  className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 press"
                 >
                   <X size={14} />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
-                {/* Banner motivacional de tier */}
-                <CartTierBanner
-                  totalQty={totalQty}
-                  cartTier={cartTier}
-                  thresholds={thresholds}
-                  savings={savingsVsMenudeo}
-                />
-                {repricedCart.map((c) => (
-                  <div
-                    key={c.variant_id}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-300">
-                      {c.image_url ? (
-                        <img
-                          src={c.image_url}
-                          alt=""
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <Package size={18} />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold truncate">
-                        {c.product_name}
-                      </p>
-                      <p className="text-[10px] text-slate-500 truncate">
-                        {c.variant_name}
-                      </p>
-                      <p className="text-xs font-black text-primary">
-                        {formatMoney(c.unit_price)}
-                        {cartTier !== "menudeo" && (
-                          <span className="ml-1 text-[8px] text-emerald-600 uppercase tracking-widest">
-                            {cartTier}
-                          </span>
+
+              {/* Lista de items: imagen + datos + qty stepper + subtotal */}
+              <div className="flex-1 overflow-y-auto px-4 pb-3 space-y-2 scroll-container-ios">
+                {/* Banner tier (solo si hay items y tiene sentido) */}
+                {totalQty > 0 && (
+                  <CartTierBanner
+                    totalQty={totalQty}
+                    cartTier={cartTier}
+                    thresholds={thresholds}
+                    savings={savingsVsMenudeo}
+                  />
+                )}
+
+                {repricedCart.map((c) => {
+                  const lineTotal = c.qty * c.unit_price
+                  return (
+                    <div
+                      key={c.variant_id}
+                      className="flex items-stretch gap-3 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700"
+                    >
+                      {/* Imagen */}
+                      <div className="w-14 h-14 rounded-xl bg-white dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 self-center">
+                        {c.image_url ? (
+                          <img
+                            src={c.image_url}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Package size={20} />
                         )}
-                      </p>
+                      </div>
+
+                      {/* Datos + qty stepper */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between gap-1">
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-black leading-tight truncate">
+                            {c.product_name}
+                          </p>
+                          {c.variant_name && (
+                            <p className="text-[10px] font-bold text-slate-500 truncate">
+                              {c.variant_name}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[10px] text-slate-500 tabular-nums">
+                            {formatMoney(c.unit_price)} c/u
+                          </p>
+                          {/* Stepper compacto */}
+                          <div className="flex items-center gap-1 bg-white dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600 px-1 py-0.5">
+                            <button
+                              onClick={() => changeQty(c.variant_id, -1)}
+                              aria-label="Disminuir"
+                              className="w-6 h-6 rounded-full text-slate-500 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-600"
+                            >
+                              <Minus size={11} />
+                            </button>
+                            <span className="text-xs font-black w-5 text-center tabular-nums">
+                              {c.qty}
+                            </span>
+                            <button
+                              onClick={() => changeQty(c.variant_id, 1)}
+                              aria-label="Aumentar"
+                              className="w-6 h-6 rounded-full text-primary flex items-center justify-center hover:bg-primary/10"
+                            >
+                              <Plus size={11} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Subtotal por línea (alineado a la derecha) */}
+                      <div className="flex flex-col items-end justify-between text-right shrink-0">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+                          Subtotal
+                        </span>
+                        <span className="text-sm font-black tabular-nums text-primary">
+                          {formatMoney(lineTotal)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => changeQty(c.variant_id, -1)}
-                        className="w-7 h-7 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center"
-                      >
-                        <Minus size={12} />
-                      </button>
-                      <span className="text-sm font-black w-5 text-center">
-                        {c.qty}
-                      </span>
-                      <button
-                        onClick={() => changeQty(c.variant_id, 1)}
-                        className="bg-brand w-7 h-7 rounded-full text-white flex items-center justify-center"
-                      >
-                        <Plus size={12} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
-              <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+
+              {/* Footer sticky: envío + desglose + CTAs */}
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 space-y-3 shrink-0 bg-white dark:bg-slate-900">
                 {/* Switch envío foráneo */}
                 <button
                   type="button"
                   onClick={() => setIsForeign((v) => !v)}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border transition-all active:scale-[0.99] ${
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all active:scale-[0.99] ${
                     isForeign
                       ? "border-amber-300 bg-amber-50 dark:bg-amber-500/10"
-                      : "border-slate-200 bg-slate-50 dark:bg-slate-800"
+                      : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                   }`}
                 >
-                  <div className="text-left min-w-0">
+                  <div className="text-left min-w-0 flex-1">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
-                      📦 Envío foráneo
+                      Envío foráneo
                     </p>
                     <p className="text-[9px] text-slate-500 truncate">
                       {isForeign
                         ? shippingCalc.free
-                          ? "¡Te toca gratis! 🎉"
+                          ? "Te toca gratis"
                           : `Cargo: ${formatMoney(shippingCalc.amount)}`
                         : "Fuera de CDMX / EdoMex"}
                     </p>
@@ -1305,7 +1347,7 @@ export default function ClientShopPage() {
                   </span>
                 </button>
 
-                {/* Desglose */}
+                {/* Desglose: subtotal, envío, ahorro tier, total */}
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between text-slate-500">
                     <span>Subtotal</span>
@@ -1323,15 +1365,26 @@ export default function ClientShopPage() {
                       >
                         {shippingCalc.amount > 0
                           ? formatMoney(shippingCalc.amount)
-                          : "¡Gratis! 🎉"}
+                          : "Gratis"}
                       </span>
                     </div>
                   )}
-                  <div className="flex items-center justify-between text-base pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <span className="font-bold text-slate-600 dark:text-slate-300">
+                  {savingsVsMenudeo > 0 && (
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold">
+                      <span className="flex items-center gap-1">
+                        <Sparkles size={11} />
+                        Ahorro {cartTier === "mayoreo" ? "mayoreo" : "medio"}
+                      </span>
+                      <span className="tabular-nums">
+                        -{formatMoney(savingsVsMenudeo)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-end justify-between pt-2 mt-1 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">
                       Total
                     </span>
-                    <span className="font-black text-xl">
+                    <span className="font-black text-2xl text-primary tabular-nums leading-none">
                       {formatMoney(totalAmt)}
                     </span>
                   </div>
@@ -1340,24 +1393,22 @@ export default function ClientShopPage() {
                 <button
                   onClick={startCheckout}
                   disabled={submitting}
-                  className="bg-brand w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
+                  className="bg-brand w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50 press-hard"
                 >
                   <Receipt size={16} />
-                  Apartar y generar ticket
+                  Apartar ahora
                   <ArrowRight size={14} />
                 </button>
 
                 {/* Compartir carrito por WhatsApp — útil cuando el cliente
-                    quiere mostrarle el carrito a alguien (pareja, mamá) antes
-                    de pagar. Genera un mensaje con productos + total y abre
-                    el share nativo (o copia el texto si no hay Web Share). */}
+                    quiere mostrar su carrito a otra persona antes de apartar. */}
                 <button
                   type="button"
                   onClick={async () => {
                     const { shareText } = await import("../../lib/share")
                     const lines = repricedCart.map(
                       (c) =>
-                        `• ${c.qty}× ${c.product_name}${c.variant_name ? ` (${c.variant_name})` : ""} — ${formatMoney(c.qty * c.unit_price)}`,
+                        `- ${c.qty}x ${c.product_name}${c.variant_name ? ` (${c.variant_name})` : ""} = ${formatMoney(c.qty * c.unit_price)}`,
                     )
                     const tierLabel =
                       cartTier === "menudeo"
@@ -1366,11 +1417,11 @@ export default function ClientShopPage() {
                         ? "Precio medio mayoreo"
                         : "Precio mayoreo"
                     const text = [
-                      `🛍️ Mi carrito en Beauty's Me`,
+                      `Mi carrito en Beauty's Me`,
                       ``,
                       ...lines,
                       ``,
-                      `💖 ${tierLabel}`,
+                      `${tierLabel}`,
                       `Total: ${formatMoney(totalAmt)}`,
                       ``,
                       `Ver catálogo: ${window.location.origin}/`,
@@ -1380,16 +1431,17 @@ export default function ClientShopPage() {
                       text,
                     })
                     if (r === "copied") {
-                      toast.success("Carrito copiado al portapapeles 💖")
+                      toast.success("Carrito copiado al portapapeles")
                     }
                   }}
-                  className="w-full h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-500/20"
+                  className="w-full h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 press"
                 >
-                  💬 Compartir carrito
+                  <MessageCircle size={11} />
+                  Compartir carrito
                 </button>
 
                 <p className="text-[10px] text-center text-slate-400 dark:text-slate-500">
-                  Recibiremos tu apartado y te contactaremos por WhatsApp.
+                  Te contactaremos por WhatsApp para coordinar pago y entrega.
                 </p>
               </div>
             </motion.div>
