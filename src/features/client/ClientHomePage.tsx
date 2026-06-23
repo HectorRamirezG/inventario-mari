@@ -199,7 +199,14 @@ function MyMessagesSection() {
 
   if (items.length === 0) {
     return (
-      <section className="my-3 rounded-3xl bg-gradient-to-br from-pink-50 via-white to-purple-50 dark:from-pink-500/10 dark:via-slate-900 dark:to-purple-500/10 border border-pink-100 dark:border-pink-500/20 p-4 text-center">
+      <section
+        className="my-3 rounded-3xl border p-4 text-center"
+        style={{
+          background:
+            "linear-gradient(135deg, color-mix(in srgb, var(--brand-from) 8%, white), color-mix(in srgb, var(--brand-to) 8%, white))",
+          borderColor: "color-mix(in srgb, var(--brand-from) 20%, transparent)",
+        }}
+      >
         <MessageSquare className="mx-auto mb-1 text-primary/60" size={20} />
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
           Sin mensajes nuevos
@@ -234,7 +241,7 @@ function MyMessagesSection() {
             className={`rounded-2xl p-3 border ${
               n.read_at
                 ? "bg-white dark:bg-slate-800/60 border-slate-100 dark:border-slate-700"
-                : "bg-pink-50 dark:bg-pink-500/10 border-pink-100 dark:border-pink-500/30"
+                : "bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/30"
             }`}
           >
             <p className="text-[11px] font-black leading-tight">{n.title}</p>

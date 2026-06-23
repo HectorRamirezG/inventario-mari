@@ -1904,93 +1904,88 @@ const ProductCardClient = memo(function ProductCardClientImpl({
         )}
       </motion.div>
       <div className={isFocus ? "p-4" : "p-3"}>
-        <p
-          className={`font-black truncate ${isFocus ? "text-base" : "text-xs"}`}
-          title={product.name}
-        >
-          {product.name}
-        </p>
+        {/* Nombre + chip de reseñas inline (sin línea extra). El chip
+            es discreto pero clickeable: estrella amarilla + "(reseñas)". */}
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <p
+            className={`font-black truncate flex-1 min-w-0 ${
+              isFocus ? "text-base" : "text-xs"
+            }`}
+            title={product.name}
+          >
+            {product.name}
+          </p>
+          {onOpenReviews && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onOpenReviews()
+              }}
+              className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[9px] font-black press"
+              aria-label="Ver reseñas"
+              title="Ver reseñas"
+            >
+              <Star size={9} className="fill-amber-400 text-amber-400" />
+            </button>
+          )}
+        </div>
+
+        {/* Variantes (compactas: 3 visibles + "+N" en grid, 8 en focus) */}
         {product.variants.length > 1 && (
-          <div className="flex flex-wrap gap-1 my-1">
-            {product.variants.slice(0, isFocus ? 8 : 4).map((v) => (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {product.variants.slice(0, isFocus ? 8 : 3).map((v) => (
               <button
                 key={v.id}
                 type="button"
                 onClick={(e) => {
-                  // Solo cambia la imagen activa; NO abre nada.
                   e.stopPropagation()
                   setSelected(v.id)
                 }}
-                className={`px-2 py-0.5 rounded-full ${
-                  isFocus ? "text-[10px]" : "text-[9px]"
-                } font-bold transition-colors ${
+                className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-colors max-w-[80px] truncate ${
                   v.id === selected
-                    ? "bg-primary text-white"
-                    : "bg-slate-100 dark:bg-slate-700 text-slate-500"
+                    ? "bg-primary text-white shadow-sm"
+                    : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-200"
                 }`}
               >
                 {v.variant_name}
               </button>
             ))}
-            {product.variants.length > (isFocus ? 8 : 4) && (
-              <span className="px-1.5 py-0.5 text-[9px] font-bold text-slate-400">
-                +{product.variants.length - (isFocus ? 8 : 4)}
+            {product.variants.length > (isFocus ? 8 : 3) && (
+              <span className="px-1.5 py-0.5 text-[9px] font-bold text-slate-400 self-center">
+                +{product.variants.length - (isFocus ? 8 : 3)}
               </span>
             )}
           </div>
         )}
-        {/* Pista de tier (mayoreo) */}
-        <TierHint variant={variant} />
 
-        {/* Botón discreto "Reseñas" (solo si la regla está activa) */}
-        {onOpenReviews && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onOpenReviews()
-            }}
-            className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:text-primary transition-colors mt-1 press"
-            aria-label="Ver reseñas"
-          >
-            <Star size={10} className="fill-amber-400 text-amber-400" />
-            <span>Reseñas</span>
-          </button>
-        )}
-
-        <div className="flex items-center justify-between gap-2 mt-1">
+        {/* Fila PRINCIPAL: precio grande + stock/CTA */}
+        <div className="flex items-end justify-between gap-2">
           <div className="min-w-0 flex-1">
             <span
-              className={`block font-black text-primary leading-tight ${
-                isFocus ? "text-lg" : "text-sm"
+              className={`block font-black text-primary leading-none tabular-nums ${
+                isFocus ? "text-2xl" : "text-base"
               }`}
             >
               {formatMoney(price)}
             </span>
-            {/* Indicador de stock inline (antes era pill flotante sobre la
-                imagen, ahora vive junto al precio para que la foto quede
-                limpia y la urgencia se vea junto al CTA).
-                - "Agotado" se muestra SIEMPRE (no podemos engañar al cliente
-                  con un agotado real).
-                - El "Solo quedan X" depende de la regla `show_stock_to_client`
-                  o del umbral default (≤3) si la regla está apagada. La etiqueta
-                  usa `low_stock_label` configurable desde Reglas. */}
+            {/* Stock urgente inline DEBAJO del precio. Solo si aplica. */}
             {out ? (
-              <span className="inline-block text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 mt-0.5">
+              <span className="inline-block text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 mt-1">
                 Agotado
               </span>
             ) : (rules.show_stock_to_client && variant.stock <= 10) ||
               variant.stock <= 3 ? (
               <span
-                className={`inline-block text-[9px] font-black uppercase tracking-widest mt-0.5 ${
+                className={`inline-block text-[9px] font-black uppercase tracking-widest mt-1 ${
                   variant.stock === 1
                     ? "text-rose-600 dark:text-rose-400 animate-pulse"
                     : "text-amber-600 dark:text-amber-400"
                 }`}
               >
                 {variant.stock === 1
-                  ? "¡ÚLTIMA PIEZA!"
-                  : `${rules.low_stock_label || "Apúrate, solo quedan"} ${variant.stock} piezas`}
+                  ? "¡ÚLTIMA!"
+                  : `Solo ${variant.stock}`}
               </span>
             ) : null}
           </div>
@@ -2002,14 +1997,18 @@ const ProductCardClient = memo(function ProductCardClientImpl({
             }}
             onPointerEnter={preloadBuySheet}
             onTouchStart={preloadBuySheet}
+            disabled={out}
             className={`bg-brand ${
               isFocus ? "w-11 h-11" : "w-9 h-9"
-            } shrink-0 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform`}
-            aria-label="Agregar al carrito"
+            } shrink-0 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none`}
+            aria-label={out ? "Producto agotado" : "Agregar al carrito"}
           >
             <Plus size={14} strokeWidth={3} />
           </button>
         </div>
+
+        {/* Banda inferior compacta con TIER HINT (solo si hay mayoreo real) */}
+        <CompactTierHint variant={variant} />
       </div>
     </motion.div>
       </div>
@@ -2142,5 +2141,26 @@ function TierHint({ variant }: { variant: PublicVariant }) {
     <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 truncate mb-0.5">
       Lleva {thresholds.mayoreo_min_qty}+ y pagas {formatMoney(mayoreo)} c/u
     </p>
+  )
+}
+
+/* ──────── Pista de tier COMPACTA: solo aparece si hay mayoreo real.
+   Diseño: chip lineal abajo del precio, no compite con el CTA. */
+function CompactTierHint({ variant }: { variant: PublicVariant }) {
+  const thresholds = useTierThresholds()
+  const menudeo = variant.price_menudeo ?? variant.price ?? 0
+  const mayoreo = variant.price_mayoreo
+  if (!mayoreo || mayoreo >= menudeo) return null
+  const savings = menudeo - mayoreo
+  return (
+    <div className="mt-2 -mx-1 px-2 py-1 rounded-lg bg-emerald-50/70 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 flex items-center gap-1">
+      <span className="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
+      <p className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 truncate flex-1">
+        {thresholds.mayoreo_min_qty}+ a {formatMoney(mayoreo)}
+      </p>
+      <span className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
+        -{formatMoney(savings)}
+      </span>
+    </div>
   )
 }
