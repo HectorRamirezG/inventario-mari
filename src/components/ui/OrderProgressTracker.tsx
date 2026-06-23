@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion"
-import { CheckCircle2, Package, Truck, MapPin, Clock } from "lucide-react"
+import { CheckCircle2, Package, Truck, MapPin } from "lucide-react"
 
 import { formatMoney, formatRelative } from "../../lib/format"
 import { memo, useEffect, useRef, useState } from "react"
@@ -236,51 +236,14 @@ function DeliveryStepperBlock({
             </motion.a>
           )}
 
-          {isInRoute && !lastPosFresh && (
-            <motion.div
-              key="no-pos"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50/60 dark:bg-sky-500/10 px-3 py-2 text-[10px] font-bold text-sky-700 dark:text-sky-300 flex items-center gap-1.5"
-            >
-              <Truck size={11} />
-              {delivery.driver_name
-                ? `${delivery.driver_name} salió con tu pedido`
-                : "Tu pedido está en camino"}
-              {delivery.picked_up_at && (
-                <span className="ml-auto opacity-75">
-                  {formatRelative(delivery.picked_up_at)}
-                </span>
-              )}
-            </motion.div>
-          )}
-
-          {isDelivered && delivery.delivered_at && (
-            <motion.div
-              key="done"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/10 px-3 py-2 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5"
-            >
-              <CheckCircle2 size={11} />
-              Entregado · {formatRelative(delivery.delivered_at)}
-            </motion.div>
-          )}
-
-          {activeStep === 0 && (
-            <motion.div
-              key="prep"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/10 px-3 py-2 text-[10px] font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5"
-            >
-              <Clock size={11} />
-              Preparando tu pedido para envío
-            </motion.div>
-          )}
+          {/* SUB-BANNERS REMOVIDOS — duplicaban informacion del
+              OrderStatusBanner superior ('En camino · con Jovi',
+              'Entregado · hace X', 'Preparando tu pedido'). Mari pidio
+              no repetir. Solo dejamos el mapa LIVE arriba que SI agrega
+              info nueva (ubicacion en tiempo real). */}
+          {isInRoute && !lastPosFresh && null}
+          {isDelivered && delivery.delivered_at && null}
+          {activeStep === 0 && null}
         </AnimatePresence>
       )}
     </div>

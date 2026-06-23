@@ -523,11 +523,11 @@ export default function ClientOrdersPage() {
                 : undefined
             }
           >
-            {/* STATUS BANNER prominente estilo Amazon/ML: hero del pedido.
-                Comunica el estado en grande con el contexto temporal
-                ("Entregado el martes 24" / "En camino con Pedro" /
-                "Esperando envio" / "Debes $X"). Sustituye el chip
-                pequenio que antes estaba arriba a la derecha. */}
+            {/* HERO del estatus + meta del pedido en 2 lineas claras:
+                1. Banner del status (contextual completo).
+                2. Linea minima: TOTAL prominente a la izquierda + folio
+                   sutil a la derecha. Fecha sale como caption en su
+                   propia linea para no truncarse en mobile. */}
             <OrderStatusBanner
               paid={paid}
               balance={balance}
@@ -536,13 +536,9 @@ export default function ClientOrdersPage() {
               createdAt={o.created_at}
             />
 
-            {/* SUBTITLE sutil: folio + fecha. Tipografia minima, no compite. */}
-            <div className="flex items-center justify-between gap-2 mt-3 mb-3">
-              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500 font-black truncate">
-                Pedido #{shortId(o.id)} · {formatDate(o.created_at)}
-              </p>
+            <div className="flex items-baseline justify-between gap-3 mt-3">
               <span
-                className={`text-[15px] font-black tabular-nums shrink-0 ${
+                className={`text-[20px] font-black tabular-nums leading-none ${
                   paid
                     ? "text-emerald-600 dark:text-emerald-400"
                     : "text-slate-900 dark:text-slate-100"
@@ -550,7 +546,13 @@ export default function ClientOrdersPage() {
               >
                 {formatMoney(o.total)}
               </span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tabular-nums shrink-0">
+                #{shortId(o.id)}
+              </span>
             </div>
+            <p className="text-[9px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500 font-black mt-1 mb-3">
+              {formatDate(o.created_at)}
+            </p>
 
             {/* TRACKER dinámico: barra pago / stepper delivery / mini-mapa */}
             <OrderProgressTracker
