@@ -33,6 +33,7 @@ import {
 import { useBusinessRules } from "../settings/businessRulesService"
 import PageHeader from "../../components/ui/PageHeader"
 import KpiCard from "../../components/ui/KpiCard"
+import TabBar, { type TabItem } from "../../components/ui/TabBar"
 import Avatar from "../../components/ui/Avatar"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import { WishCardSkeleton } from "../../components/ui/Skeletons"
@@ -306,30 +307,36 @@ export default function WishAdminPage() {
         />
       </div>
 
-      {/* Filtros por status */}
-      <div className="flex p-1 bg-slate-100 dark:bg-slate-800/60 rounded-2xl gap-1 border border-slate-200/60 dark:border-slate-700/60 mb-4 overflow-x-auto">
-        <FilterChip
-          active={filter === "pending"}
-          onClick={() => setFilter("pending")}
-          label="Pendientes"
-          count={stats.pending}
-        />
-        <FilterChip
-          active={filter === "reviewing"}
-          onClick={() => setFilter("reviewing")}
-          label="Análisis"
-          count={stats.reviewing}
-        />
-        <FilterChip
-          active={filter === "available"}
-          onClick={() => setFilter("available")}
-          label="Listos"
-          count={stats.available}
-        />
-        <FilterChip
-          active={filter === "all"}
-          onClick={() => setFilter("all")}
-          label="Todos"
+      {/* Filtros por status — TabBar unificado (igual al resto de la app). */}
+      <div className="mb-4">
+        <TabBar<FilterStatus>
+          tabs={[
+            {
+              id: "pending",
+              label: "Pendientes",
+              badge: stats.pending,
+              badgeTone: "warn",
+            } as TabItem<FilterStatus>,
+            {
+              id: "reviewing",
+              label: "Análisis",
+              badge: stats.reviewing,
+              badgeTone: "primary",
+            } as TabItem<FilterStatus>,
+            {
+              id: "available",
+              label: "Listos",
+              badge: stats.available,
+              badgeTone: "success",
+            } as TabItem<FilterStatus>,
+            {
+              id: "all",
+              label: "Todos",
+            } as TabItem<FilterStatus>,
+          ]}
+          active={filter}
+          onChange={setFilter}
+          layoutId="wishes-admin-tab"
         />
       </div>
 
@@ -559,42 +566,6 @@ export default function WishAdminPage() {
         )}
       </div>
     </div>
-  )
-}
-
-function FilterChip({
-  active,
-  onClick,
-  label,
-  count,
-}: {
-  active: boolean
-  onClick: () => void
-  label: string
-  count?: number
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`h-9 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 ${
-        active
-          ? "bg-white dark:bg-slate-900 text-primary shadow-sm"
-          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-      }`}
-    >
-      {label}
-      {count !== undefined && count > 0 && (
-        <span
-          className={`text-[8px] font-black px-1.5 py-0.5 rounded-md ${
-            active
-              ? "bg-primary/10 text-primary"
-              : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-          }`}
-        >
-          {count}
-        </span>
-      )}
-    </button>
   )
 }
 

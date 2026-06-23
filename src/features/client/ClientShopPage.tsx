@@ -1453,13 +1453,15 @@ export default function ClientShopPage() {
                       key={c.variant_id}
                       className="flex items-stretch gap-3 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700"
                     >
-                      {/* Aislamiento visual: object-contain + fondo neutro evita recorte agresivo de variantes */}
-                      <div className="w-14 h-14 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 self-center p-1">
+                      {/* Miniatura del carrito: object-cover llena el cuadro
+                          completo. bg-slate-50 sirve como respaldo si la imagen
+                          tarda en cargar o es transparente. */}
+                      <div className="w-14 h-14 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 self-center">
                         {c.image_url ? (
                           <img
                             src={c.image_url}
                             alt=""
-                            className="w-full h-full object-contain"
+                            className="w-full h-full object-cover"
                           />
                         ) : (
                           <Package size={20} />

@@ -17,6 +17,7 @@ import { formatMoney } from "../../lib/format";
 import KpiCard from "../../components/ui/KpiCard";
 import Skeleton from "../../components/ui/Skeleton";
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration";
+import TabBar, { type TabItem } from "../../components/ui/TabBar";
 
 const fmtDate = (dt: string) =>
   new Date(dt).toLocaleString("es-MX", {
@@ -175,48 +176,30 @@ export default function PricingHistory() {
           />
         </div>
 
-        {/* Filtros: rango */}
-        <div className="flex p-1 bg-slate-100 dark:bg-slate-800/60 rounded-2xl gap-1 border border-slate-200/60 dark:border-slate-700/60">
-          <FilterBtn
-            active={range === "7"}
-            onClick={() => setRange("7")}
-            label="7 días"
-          />
-          <FilterBtn
-            active={range === "30"}
-            onClick={() => setRange("30")}
-            label="30 días"
-          />
-          <FilterBtn
-            active={range === "90"}
-            onClick={() => setRange("90")}
-            label="90 días"
-          />
-        </div>
+        {/* Filtro de rango temporal unificado */}
+        <TabBar<"7" | "30" | "90">
+          tabs={[
+            { id: "7", label: "7 días" } as TabItem<"7" | "30" | "90">,
+            { id: "30", label: "30 días" } as TabItem<"7" | "30" | "90">,
+            { id: "90", label: "90 días" } as TabItem<"7" | "30" | "90">,
+          ]}
+          active={range as "7" | "30" | "90"}
+          onChange={(id) => setRange(id as any)}
+          layoutId="pricing-range-tab"
+        />
 
-        {/* Filtros: tier */}
-        <div className="flex p-1 bg-slate-100 dark:bg-slate-800/60 rounded-2xl gap-1 border border-slate-200/60 dark:border-slate-700/60">
-          <FilterBtn
-            active={tier === "all"}
-            onClick={() => setTier("all")}
-            label="Todos"
-          />
-          <FilterBtn
-            active={tier === "menudeo"}
-            onClick={() => setTier("menudeo")}
-            label="Menudeo"
-          />
-          <FilterBtn
-            active={tier === "medio"}
-            onClick={() => setTier("medio")}
-            label="Medio"
-          />
-          <FilterBtn
-            active={tier === "mayoreo"}
-            onClick={() => setTier("mayoreo")}
-            label="Mayoreo"
-          />
-        </div>
+        {/* Filtro de tier unificado */}
+        <TabBar<"all" | "menudeo" | "medio" | "mayoreo">
+          tabs={[
+            { id: "all", label: "Todos" } as TabItem<"all" | "menudeo" | "medio" | "mayoreo">,
+            { id: "menudeo", label: "Menudeo" } as TabItem<"all" | "menudeo" | "medio" | "mayoreo">,
+            { id: "medio", label: "Medio" } as TabItem<"all" | "menudeo" | "medio" | "mayoreo">,
+            { id: "mayoreo", label: "Mayoreo" } as TabItem<"all" | "menudeo" | "medio" | "mayoreo">,
+          ]}
+          active={tier as "all" | "menudeo" | "medio" | "mayoreo"}
+          onChange={(id) => setTier(id as any)}
+          layoutId="pricing-tier-tab"
+        />
       </div>
 
       {/* LISTADO */}
@@ -378,28 +361,5 @@ export default function PricingHistory() {
         )}
       </div>
     </div>
-  );
-}
-
-function FilterBtn({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-        active
-          ? "bg-white dark:bg-slate-900 text-primary shadow-sm"
-          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
