@@ -3,16 +3,8 @@ import { useParams, Link } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
   Truck,
-  Phone,
-  MapPin,
-  Clock,
-  DollarSign,
-  StickyNote,
-  ExternalLink,
-  Package,
   CheckCircle2,
   AlertCircle,
-  User as UserIcon,
   ArrowRight,
   Loader2,
 } from "lucide-react"
@@ -23,10 +15,9 @@ import {
   updateDeliveryStatusByToken,
   DELIVERY_STATUS_LABEL,
   type PublicDeliveryNote,
-  type DeliveryStatus,
 } from "../delivery/deliveryService"
-import { formatMoney, formatDateTime } from "../../lib/format"
-import CustomerInfoCard from "../../components/ui/CustomerInfoCard"
+import { formatMoney, formatDateTime, shortId } from "../../lib/format"
+import { getStoreInfo } from "../../lib/useStoreInfo"
 import Skeleton from "../../components/ui/Skeleton"
 
 const PAY_LABEL: Record<string, string> = {
@@ -37,10 +28,12 @@ const PAY_LABEL: Record<string, string> = {
 }
 
 /**
- * Vista pública para el repartidor. Abre con un link tipo
- * /comanda/<token>. NO requiere login. Muestra TODA la info necesaria
- * para entregar bien: cliente con foto, productos, mapa, total a cobrar,
- * notas, hora prometida.
+ * Vista pública del repartidor (/comanda/:token). Sin login.
+ *
+ * Diseño: mismo lenguaje visual que el ticket de venta (font-mono +
+ * separadores dashed + bloques label/valor). Sencillo, legible en
+ * cualquier celular, "imprimible mentalmente". Sin gradientes ni cards
+ * grandes — todo cabe en una sola hoja virtual.
  */
 export default function PublicDeliveryNotePage() {
   const { token } = useParams<{ token: string }>()
@@ -48,6 +41,7 @@ export default function PublicDeliveryNotePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [updating, setUpdating] = useState(false)
+  const store = getStoreInfo()
 
   useEffect(() => {
     if (!token) {
@@ -81,11 +75,7 @@ export default function PublicDeliveryNotePage() {
     setUpdating(true)
     const tid = toast.loading("Actualizando...")
     try {
-      // Llamada PÚBLICA via RPC con el token (no requiere login).
-      // El servidor valida el token y dispara las notifs al cliente
-      // y a los admins automáticamente.
       await updateDeliveryStatusByToken(token, next)
-      // Actualiza localmente para que el chip y los botones se sincronicen
       setNote((prev) => (prev ? { ...prev, status: next } : prev))
       toast.success(
         next === "delivered" ? "¡Entregado! Gracias 💖" : "Estatus actualizado",
@@ -100,20 +90,17 @@ export default function PublicDeliveryNotePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
-        <Skeleton className="w-full max-w-md h-96" rounded="xl" />
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex items-center justify-center p-6">
+        <Skeleton className="w-full max-w-sm h-96" rounded="xl" />
       </div>
     )
   }
 
   if (error || !note) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex items-center justify-center p-6">
         <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-premium p-8 text-center max-w-sm">
-          <AlertCircle
-            size={32}
-            className="mx-auto text-rose-400 mb-3"
-          />
+          <AlertCircle size={32} className="mx-auto text-rose-400 mb-3" />
           <h1 className="text-base font-black uppercase tracking-tight">
             Comanda no disponible
           </h1>
@@ -133,294 +120,309 @@ export default function PublicDeliveryNotePage() {
 
   const isPaid = note.sale.balance <= 0
   const mapUrl = note.delivery_location_url
+  const folio = shortId(note.sale.id).toUpperCase()
+  const phoneClean = note.customer.phone
+    ? note.customer.phone.replace(/\D/g, "")
+    : null
+  const canMarkPickedUp =
+    note.status !== "picked_up" &&
+    note.status !== "delivered" &&
+    note.status !== "cancelled"
+  const canMarkDelivered =
+    note.status === "picked_up"
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-12">
-      {/* Banda superior */}
-      <div className="h-2" style={{ background: "linear-gradient(90deg,#0ea5e9,#6366f1)" }} />
-
-      <div className="max-w-md mx-auto px-4 pt-4 space-y-3">
-        {/* Header de comanda con estatus */}
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-slate-900 rounded-3xl shadow-premium p-4"
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 py-4 px-3 print:bg-white print:p-0">
+      <div className="max-w-sm mx-auto flex flex-col gap-3">
+        {/* TICKET-COMANDA en sí */}
+        <div
+          className="bg-white text-slate-900 rounded-3xl print:rounded-none p-6 print:p-2 font-mono text-[12px] shadow-2xl print:shadow-none"
         >
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-sky-100 dark:bg-sky-500/15 text-sky-600 dark:text-sky-300 flex items-center justify-center shrink-0">
-              <Truck size={16} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                Comanda de entrega
-              </p>
-              <p className="text-[10px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-300">
-                {DELIVERY_STATUS_LABEL[note.status]}
-              </p>
-            </div>
+          {/* Header */}
+          <div className="text-center">
+            <h2 className="text-[18px] font-black uppercase tracking-tight">
+              {store.name}
+            </h2>
+            <p className="text-[10px] text-slate-500">Comanda de entrega</p>
           </div>
-        </motion.section>
 
-        {/* Datos del cliente — usa el componente reutilizable */}
-        <CustomerInfoCard
-          name={note.customer.name}
-          email={note.customer.email}
-          phone={note.customer.phone}
-          address={note.delivery_address || undefined}
-          locationUrl={note.delivery_location_url || undefined}
-          avatarUrl={note.customer.avatar_url}
-          size="md"
-          showActions
-        />
+          <Divider />
 
-        {/* Total a cobrar — destacado */}
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.04 }}
-          className={`rounded-3xl p-5 shadow-premium text-white ${
-            isPaid
-              ? "bg-gradient-to-br from-emerald-500 to-teal-600"
-              : "bg-gradient-to-br from-primary to-purple-600"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest opacity-80">
-                {isPaid ? "Ya pagado" : "Cobrar al entregar"}
-              </p>
-              <p className="text-3xl font-black tabular-nums mt-1">
-                {formatMoney(note.amount_to_collect || note.sale.balance)}
-              </p>
-              {note.payment_method_expected && (
-                <p className="text-[11px] font-bold opacity-90 mt-1 flex items-center gap-1">
-                  <DollarSign size={11} />
-                  {PAY_LABEL[note.payment_method_expected.toLowerCase()] ??
-                    note.payment_method_expected}
-                </p>
-              )}
-            </div>
-            <div className="text-right">
-              <p className="text-[9px] font-black uppercase tracking-widest opacity-80">
-                Total pedido
-              </p>
-              <p className="text-base font-black tabular-nums">
-                {formatMoney(note.sale.total)}
-              </p>
-              {note.sale.paid > 0 && !isPaid && (
-                <p className="text-[10px] font-bold opacity-90 tabular-nums mt-0.5">
-                  Pagado {formatMoney(note.sale.paid)}
-                </p>
-              )}
-            </div>
-          </div>
-        </motion.section>
-
-        {/* Logística extra — zona, punto medio, hora, repartidor */}
-        {(note.delivery_zone ||
-          note.meeting_point ||
-          note.delivery_time_target ||
-          note.driver_name ||
-          mapUrl) && (
-          <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="bg-white dark:bg-slate-900 rounded-3xl shadow-premium p-5 space-y-3"
-          >
-            {note.delivery_zone && (
+          {/* Info principal */}
+          <div className="text-[11px] leading-relaxed">
+            <Row label="Folio" value={folio} />
+            <Row label="Fecha" value={formatDateTime(note.created_at)} />
+            <Row label="Cliente" value={note.customer.name || "—"} />
+            {note.customer.phone && (
               <Row
-                icon={<MapPin size={14} className="text-slate-400" />}
-                label="Zona"
-                value={note.delivery_zone}
+                label="Tel"
+                value={
+                  phoneClean ? (
+                    <a
+                      href={`tel:${phoneClean}`}
+                      className="underline text-primary"
+                    >
+                      {note.customer.phone}
+                    </a>
+                  ) : (
+                    note.customer.phone
+                  )
+                }
               />
             )}
-            {note.meeting_point && (
-              <Row
-                icon={<MapPin size={14} className="text-amber-500" />}
-                label="Punto medio"
-                value={note.meeting_point}
-              />
+            {note.delivery_address && (
+              <Row label="Dir" value={note.delivery_address} />
             )}
-            {note.delivery_time_target && (
-              <Row
-                icon={<Clock size={14} className="text-sky-500" />}
-                label="Hora prometida"
-                value={note.delivery_time_target}
-              />
-            )}
-            {note.driver_name && (
-              <Row
-                icon={<UserIcon size={14} className="text-violet-500" />}
-                label="Repartidor"
-                value={note.driver_name}
-              />
-            )}
-
             {mapUrl && (
-              <a
-                href={mapUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full h-11 mt-2 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom press"
-              >
-                <ExternalLink size={13} />
-                Abrir mapa
-              </a>
+              <Row
+                label="Pin"
+                value={
+                  <a
+                    href={mapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline text-primary"
+                  >
+                    Abrir ubicación en Maps
+                  </a>
+                }
+              />
             )}
-          </motion.section>
-        )}
-
-        {/* Items del pedido */}
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12 }}
-          className="bg-white dark:bg-slate-900 rounded-3xl shadow-premium p-5"
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <Package size={14} className="text-primary" />
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-              {note.items.length}{" "}
-              {note.items.length === 1 ? "producto" : "productos"}
+            <p className="text-center font-black mt-1 text-[10px] tracking-widest">
+              *** {DELIVERY_STATUS_LABEL[note.status].toUpperCase()} ***
             </p>
           </div>
-          <div className="space-y-2">
-            {note.items.map((it, i) => (
-              <div
-                key={i}
-                className="flex gap-3 py-2 border-b last:border-b-0 border-slate-100 dark:border-slate-800"
-              >
-                {it.image ? (
-                  <img
-                    src={typeof it.image === "string" ? it.image : ""}
-                    alt={it.name}
-                    className="w-12 h-12 rounded-xl object-cover bg-slate-100 dark:bg-slate-800 shrink-0"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                    <Package size={16} className="text-slate-400" />
-                  </div>
+
+          {/* Logística extra (opcional) */}
+          {(note.delivery_zone ||
+            note.delivery_time_target ||
+            note.meeting_point ||
+            note.driver_name) && (
+            <>
+              <Divider />
+              <div className="text-[11px] leading-relaxed">
+                {note.delivery_zone && (
+                  <Row label="Zona" value={note.delivery_zone} />
                 )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 truncate leading-tight">
-                    {it.name}
-                  </p>
-                  {it.variant_name && (
-                    <p className="text-[10px] font-bold text-slate-500 truncate">
-                      {it.variant_name}
-                    </p>
-                  )}
-                  <p className="text-[10px] font-bold text-primary mt-0.5 tabular-nums">
-                    × {it.qty} = {formatMoney(it.subtotal)}
-                  </p>
-                </div>
+                {note.delivery_time_target && (
+                  <Row label="Hora" value={note.delivery_time_target} />
+                )}
+                {note.meeting_point && (
+                  <Row label="Punto" value={note.meeting_point} />
+                )}
+                {note.driver_name && (
+                  <Row label="Lleva" value={note.driver_name} />
+                )}
               </div>
-            ))}
+            </>
+          )}
+
+          <Divider />
+
+          {/* Items */}
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="border-b border-dashed border-slate-300">
+                <th className="text-left font-black uppercase pb-1">
+                  Producto
+                </th>
+                <th className="text-center font-black uppercase pb-1 w-8">
+                  Cant
+                </th>
+                <th className="text-right font-black uppercase pb-1 w-16">
+                  Importe
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {note.items.map((it, i) => (
+                <tr key={i} className="align-top">
+                  <td className="py-1 pr-2">
+                    <p className="leading-tight">{it.name}</p>
+                    {it.variant_name && (
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        {it.variant_name}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-slate-500 leading-tight">
+                      {formatMoney(it.unit_price)} c/u
+                    </p>
+                  </td>
+                  <td className="text-center font-black py-1 tabular-nums">
+                    {it.qty}
+                  </td>
+                  <td className="text-right py-1 font-black tabular-nums">
+                    {formatMoney(it.subtotal)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <Divider />
+
+          {/* Totales */}
+          <div className="space-y-1 text-[12px]">
+            <div className="flex items-center justify-between">
+              <span className="uppercase">Total del pedido</span>
+              <span className="tabular-nums">{formatMoney(note.sale.total)}</span>
+            </div>
+            {note.sale.paid > 0 && (
+              <div className="flex items-center justify-between text-emerald-700">
+                <span className="uppercase">Pagado</span>
+                <span className="tabular-nums">
+                  {formatMoney(note.sale.paid)}
+                </span>
+              </div>
+            )}
+            <div
+              className={`flex items-center justify-between font-black text-[14px] ${
+                isPaid ? "text-emerald-700" : "text-rose-700"
+              }`}
+            >
+              <span className="uppercase">
+                {isPaid ? "Ya pagado" : "Por cobrar"}
+              </span>
+              <span className="tabular-nums">
+                {formatMoney(
+                  isPaid ? 0 : note.amount_to_collect || note.sale.balance,
+                )}
+              </span>
+            </div>
+            {note.payment_method_expected && !isPaid && (
+              <p className="text-[10px] text-center text-slate-500 italic mt-0.5">
+                Método esperado:{" "}
+                {PAY_LABEL[note.payment_method_expected.toLowerCase()] ??
+                  note.payment_method_expected}
+              </p>
+            )}
           </div>
-        </motion.section>
 
-        {/* Notas extra */}
-        {note.notes && (
-          <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.16 }}
-            className="bg-amber-50 dark:bg-amber-500/10 rounded-3xl border border-amber-200 dark:border-amber-500/30 p-4 flex gap-3"
-          >
-            <StickyNote
-              size={14}
-              className="text-amber-600 shrink-0 mt-0.5"
-            />
-            <p className="text-[11px] font-bold text-amber-800 dark:text-amber-200 leading-snug whitespace-pre-line">
-              {note.notes}
+          {/* Notas (caja amarilla, mismo estilo que ticket regalo) */}
+          {note.notes && (
+            <>
+              <Divider />
+              <div className="my-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-[10px]">
+                <p className="font-black uppercase tracking-widest text-amber-700 text-center mb-1">
+                  ※ Notas de entrega ※
+                </p>
+                <p className="text-amber-900 italic whitespace-pre-line">
+                  {note.notes}
+                </p>
+              </div>
+            </>
+          )}
+
+          <Divider />
+
+          {/* Footer */}
+          <div className="text-center text-[10px] leading-tight">
+            <p className="font-black">¡Gracias por entregar!</p>
+            <p className="text-slate-500 mt-1">
+              Marca el estatus abajo cuando muevas el pedido.
             </p>
-          </motion.section>
-        )}
+            <p className="mt-2 text-[9px] text-slate-400">
+              Comanda generada {formatDateTime(note.created_at)}
+            </p>
+          </div>
+        </div>
 
-        {/* Acciones del repartidor — funcionan SIN login con el token de la URL.
-            Una vez entregado, los botones se bloquean para evitar dobles clicks. */}
+        {/* Acciones del repartidor — fuera del ticket para no romper el
+            print preview. Botones grandes para usar con una mano. */}
         {note.status !== "delivered" && note.status !== "cancelled" && (
-          <motion.section
+          <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="grid grid-cols-2 gap-2"
+            className="grid grid-cols-2 gap-2 print:hidden"
           >
             <button
               type="button"
               onClick={() => handleMarkStatus("picked_up")}
-              disabled={updating || note.status === "picked_up"}
-              className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50"
+              disabled={updating || !canMarkPickedUp}
+              className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {updating ? (
+              {updating && note.status !== "picked_up" ? (
                 <Loader2 size={12} className="animate-spin" />
               ) : (
-                <ArrowRight size={12} />
+                <Truck size={12} />
               )}
-              {note.status === "picked_up" ? "Ya en camino" : "Voy en camino"}
+              {note.status === "picked_up" ? "Ya en camino ✓" : "Voy en camino"}
             </button>
             <button
               type="button"
               onClick={() => handleMarkStatus("delivered")}
-              disabled={updating}
-              className="h-12 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50"
+              disabled={updating || !canMarkDelivered}
+              className="h-12 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50 disabled:cursor-not-allowed"
+              title={
+                canMarkDelivered
+                  ? "Marcar como entregado"
+                  : "Primero marca 'Voy en camino'"
+              }
             >
               <CheckCircle2 size={12} />
-              Marcar entregado
+              Entregado
             </button>
-          </motion.section>
+          </motion.div>
         )}
 
-        {/* Si ya está entregada, mostramos un banner de confirmación */}
+        {/* Banner si ya está entregado */}
         {note.status === "delivered" && (
-          <motion.section
+          <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-300 dark:border-emerald-500/50 p-4 text-center"
+            className="rounded-2xl bg-emerald-100 border border-emerald-300 p-4 text-center print:hidden"
           >
-            <CheckCircle2
-              size={24}
-              className="text-emerald-600 dark:text-emerald-300 mx-auto mb-1"
-            />
-            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 size={24} className="text-emerald-600 mx-auto mb-1" />
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-700">
               Entrega completada
             </p>
-            <p className="text-[9px] font-bold text-emerald-700/70 dark:text-emerald-300/70 mt-0.5">
+            <p className="text-[9px] font-bold text-emerald-700/70 mt-0.5">
               Gracias por tu trabajo
             </p>
-          </motion.section>
+          </motion.div>
         )}
 
-        {/* Footer */}
-        <p className="text-[9px] text-slate-400 dark:text-slate-500 text-center italic pt-2">
-          Comanda generada {formatDateTime(note.created_at)}
-        </p>
+        {/* WhatsApp al cliente como atajo (siempre visible si hay phone) */}
+        {phoneClean && note.status !== "delivered" && (
+          <a
+            href={`https://wa.me/${phoneClean}?text=${encodeURIComponent(
+              `Hola ${note.customer.name ?? ""}, soy el repartidor de ${store.name}. ¿Puedo confirmar tu ubicación?`,
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block h-10 rounded-xl bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press print:hidden"
+          >
+            <ArrowRight size={11} />
+            WhatsApp al cliente
+          </a>
+        )}
       </div>
     </div>
   )
 }
 
+/** Separador dashed reusable (mismo del ticket de venta). */
+function Divider() {
+  return (
+    <div
+      className="my-2 border-t border-dashed border-slate-300"
+      aria-hidden="true"
+    />
+  )
+}
+
+/** Renglón label/valor con el mismo formato del ticket de venta. */
 function Row({
-  icon,
   label,
   value,
 }: {
-  icon: React.ReactNode
   label: string
-  value: string
+  value: React.ReactNode
 }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="mt-0.5">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-          {label}
-        </p>
-        <p className="text-[12px] font-bold text-slate-800 dark:text-slate-100 leading-snug">
-          {value}
-        </p>
-      </div>
+    <div className="flex gap-2">
+      <span className="font-black uppercase w-14 shrink-0">{label}:</span>
+      <span className="flex-1 truncate">{value}</span>
     </div>
   )
 }
