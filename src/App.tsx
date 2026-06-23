@@ -25,13 +25,11 @@ import {
   Receipt as ReceiptIcon,
   User as UserIcon,
   LifeBuoy,
-  Heart,
   ChevronsLeft,
   ChevronsRight,
   Search,
   Home,
 } from "lucide-react"
-
 import InventoryPage from "./features/inventory/InventoryPage"
 import LoginPage from "./features/auth/LoginPage"
 import PublicTicketPage from "./features/public/PublicTicketPage"
@@ -58,7 +56,7 @@ const SupportPage = lazy(() => import("./features/support/SupportPage"))
 
 import ThemeToggle from "./components/ui/ThemeToggle"
 import CartHeaderButton from "./components/ui/CartHeaderButton"
-import ClientSearchModal from "./components/ui/ClientSearchModal"
+import ClientActionHub from "./components/ui/ClientActionHub"
 import CommandPalette from "./components/ui/CommandPalette"
 import KeyboardHelpDialog from "./components/ui/KeyboardHelpDialog"
 import ActionHub, { type HubAction } from "./components/ui/ActionHub"
@@ -1361,13 +1359,60 @@ function DockButton({
 /* SHOP SHELL (cliente + anónimo)                                   */
 /* ============================================================== */
 
+/**
+ * Tabs del dock cliente. 4 entradas + boton `+` central elevado (estilo
+ * Instagram/Threads). "Deseos" se movio al ActionHub para no saturar.
+ * Si Mari quiere mas tabs aqui, cuidar que el `+` quede simetrico.
+ */
 const SHOP_TABS = [
   { to: "/inicio", label: "Inicio", icon: Home, requiresAuth: false },
   { to: "/", label: "Tienda", icon: Store, requiresAuth: false },
   { to: "/mis-pedidos", label: "Pedidos", icon: ReceiptIcon, requiresAuth: true },
-  { to: "/mis-deseos", label: "Deseos", icon: Heart, requiresAuth: true },
   { to: "/mis-reportes", label: "Soporte", icon: LifeBuoy, requiresAuth: true },
 ] as const
+
+type ShopTab = (typeof SHOP_TABS)[number]
+
+/** Item visual de cada tab del dock cliente. Aislado para evitar
+ *  repetir el codigo del activeIndicator + auth gate. */
+function ShopDockItem({
+  t,
+  loc,
+  isLogged,
+}: {
+  t: ShopTab
+  loc: ReturnType<typeof useLocation>
+  isLogged: boolean
+}) {
+  const active = loc.pathname === t.to
+  const Icon = t.icon
+  const blocked = t.requiresAuth && !isLogged
+  return (
+    <Link
+      to={blocked ? `/login` : t.to}
+      state={blocked ? { from: t.to } : undefined}
+      className={`flex flex-col items-center justify-center flex-1 h-full relative active:scale-90 transition-all ${
+        active ? "text-primary" : "text-slate-400"
+      }`}
+    >
+      {active && (
+        <motion.div
+          layoutId="client-dock"
+          className="absolute inset-x-2 inset-y-1 bg-primary/10 rounded-2xl -z-10"
+        />
+      )}
+      <div className="relative">
+        <Icon size={18} strokeWidth={active ? 2.5 : 2} />
+        {blocked && (
+          <span className="absolute -top-1 -right-2 w-2 h-2 rounded-full bg-amber-400" />
+        )}
+      </div>
+      <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">
+        {t.label}
+      </span>
+    </Link>
+  )
+}
 
 function ShopShell() {
   const { session, role, fullName, email } = useAuth()
@@ -1376,18 +1421,19 @@ function ShopShell() {
   const loc = useLocation()
   const navigate = useNavigate()
   const [profileOpen, setProfileOpen] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
-  const rules = useBusinessRules()
+  // ActionHub abierto desde el boton `+` central del dock cliente.
+  const [actionHubOpen, setActionHubOpen] = useState(false)
 
-  // Atajo "/" para abrir el search (estilo GitHub / YouTube). NO interfiere
-  // con escritura porque chequea isEditable target.
+  // Atajo `+` para abrir el ActionHub del cliente (paridad con el
+  // atajo `n` del admin que abre su hub). NO interfiere con escritura
+  // porque chequea isEditable target.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key !== "+" || e.ctrlKey || e.metaKey || e.altKey) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return
       e.preventDefault()
-      setSearchOpen(true)
+      setActionHubOpen(true)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
@@ -1416,18 +1462,8 @@ function ShopShell() {
             </div>
           </Link>
           <div className="flex items-center gap-2 shrink-0">
-            {/* Búsqueda universal — abre el modal con input y atajos */}
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              aria-label="Buscar (/)"
-              title="Buscar (/)"
-              className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center active:scale-95 transition-all"
-            >
-              <Search size={14} />
-            </button>
-            {/* Carrito persistente — visible desde cualquier página del shop
-                en cuanto el cliente tenga items. Reemplaza al FAB flotante. */}
+            {/* Carrito persistente — visible desde cualquier pagina del
+                shop en cuanto el cliente tenga items. Reemplaza al FAB. */}
             <CartHeaderButton />
             {isLogged && <NotificationBell />}
             <ThemeToggle />
@@ -1529,62 +1565,58 @@ function ShopShell() {
         </div>
       </PullToRefresh>
 
-      {/* DOCK CLIENTE (delgado, pegado al borde) */}
+      {/* DOCK CLIENTE — 4 tabs + boton `+` central elevado (estilo
+          Instagram/Threads). El `+` abre el ClientActionHub. */}
       <nav className="fixed bottom-0 inset-x-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-pink-50 dark:border-slate-800 shadow-[0_-8px_30px_-15px_rgba(230,0,126,0.18)]">
-        <div className="relative h-12 flex items-center justify-around max-w-md mx-auto pb-safe">
-            {SHOP_TABS.map((t) => {
-              const visible =
-                t.to !== "/mis-deseos" || rules.wishes_enabled
-              if (!visible) return null
-              const active = loc.pathname === t.to
-              const Icon = t.icon
-              const blocked = t.requiresAuth && !isLogged
-              return (
-                <Link
-                  key={t.to}
-                  to={blocked ? `/login` : t.to}
-                  state={blocked ? { from: t.to } : undefined}
-                  className={`flex flex-col items-center justify-center flex-1 h-full relative active:scale-90 transition-all ${
-                    active ? "text-primary" : "text-slate-400"
-                  }`}
-                >
-                  {active && (
-                    <motion.div
-                      layoutId="client-dock"
-                      className="absolute inset-x-2 inset-y-1 bg-primary/10 rounded-2xl -z-10"
-                    />
-                  )}
-                  <div className="relative">
-                    <Icon size={18} strokeWidth={active ? 2.5 : 2} />
-                    {blocked && (
-                      <span className="absolute -top-1 -right-2 w-2 h-2 rounded-full bg-amber-400" />
-                    )}
-                  </div>
-                  <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">
-                    {t.label}
-                  </span>
-                </Link>
-              )
-            })}
-            {showAdminLink && (
-              <Link
-                to="/admin"
-                className="flex flex-col items-center justify-center flex-1 h-full text-primary active:scale-90"
-                title="Ir al panel"
-              >
-                <UserIcon size={18} />
-                <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">
-                  Panel
-                </span>
-              </Link>
-            )}
+        <div className="relative h-14 flex items-center justify-around max-w-md mx-auto pb-safe">
+          {SHOP_TABS.slice(0, 2).map((t) => (
+            <ShopDockItem key={t.to} t={t} loc={loc} isLogged={isLogged} />
+          ))}
+
+          {/* Boton + elevado central. Sobresale ~12px por encima del
+              dock para feel premium. Usa colores brand. */}
+          <button
+            type="button"
+            onClick={() => setActionHubOpen(true)}
+            aria-label="Acciones rápidas"
+            title="Acciones rápidas (+)"
+            className="flex-1 h-full relative flex items-center justify-center"
+          >
+            <span
+              className="absolute -top-4 w-12 h-12 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+              }}
+            >
+              <Plus size={20} strokeWidth={2.8} />
+            </span>
+          </button>
+
+          {SHOP_TABS.slice(2).map((t) => (
+            <ShopDockItem key={t.to} t={t} loc={loc} isLogged={isLogged} />
+          ))}
+
+          {showAdminLink && (
+            <Link
+              to="/admin"
+              className="flex flex-col items-center justify-center flex-1 h-full text-primary active:scale-90"
+              title="Ir al panel"
+            >
+              <UserIcon size={18} />
+              <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">
+                Panel
+              </span>
+            </Link>
+          )}
         </div>
       </nav>
 
       <UserProfileDrawer open={profileOpen} onClose={() => setProfileOpen(false)} />
 
-      {/* Modal de búsqueda universal — se abre desde el header o con "/" */}
-      <ClientSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
+      {/* ActionHub del cliente — se abre desde el boton + del dock
+          (paridad con el ActionHub del admin). */}
+      <ClientActionHub open={actionHubOpen} onClose={() => setActionHubOpen(false)} />
 
       {/* FAB de soporte WhatsApp (cliente / anon) */}
       <WhatsAppSupportFab bottomOffset={64} />

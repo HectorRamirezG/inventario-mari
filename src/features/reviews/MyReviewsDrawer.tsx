@@ -10,16 +10,23 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
+  Package,
+  ChevronRight,
 } from "lucide-react"
 
 import { useAuth } from "../../lib/useAuth"
 import {
   listMyReviews,
+  listMyProductsToReview,
   type Review,
   type ReviewStatus,
+  type ProductToReview,
 } from "./reviewsService"
+import ReviewsDrawer from "./ReviewsDrawer"
+import { useBusinessRules } from "../settings/businessRulesService"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useBodyScrollLock } from "../../lib/bodyScrollLock"
+import TabBar, { type TabItem } from "../../components/ui/TabBar"
 import {
   OVERLAY_BACKDROP_TRANSITION,
   OVERLAY_PANEL_STYLE,
@@ -30,7 +37,13 @@ import { formatRelative } from "../../lib/format"
 interface Props {
   open: boolean
   onClose: () => void
+  /** Tab inicial. Por default abre en 'pendientes' (las que faltan
+   *  por reseñar — accion). Si abre desde "Mis reseñas" del Home,
+   *  abre en 'hechas' (historial). */
+  initialTab?: "pendientes" | "hechas"
 }
+
+type Tab = "pendientes" | "hechas"
 
 const STATUS_META: Record<
   ReviewStatus,
@@ -54,36 +67,59 @@ const STATUS_META: Record<
 }
 
 /**
- * Drawer "Mis reseñas" para que el cliente vea TODAS las reseñas que
- * ha dejado (cualquier status). Realtime via hub multiplex.
+ * Drawer "Mis reseñas" con tabs:
+ *   - Pendientes: productos comprados sin reseñar todavía. Toca uno y
+ *     se abre el ReviewsDrawer para escribir.
+ *   - Hechas: historial de reseñas del cliente (cualquier status).
+ *
+ * Realtime: se refresca cuando llegan eventos de la tabla `reviews`.
  */
-export default function MyReviewsDrawer({ open, onClose }: Props) {
+export default function MyReviewsDrawer({
+  open,
+  onClose,
+  initialTab = "pendientes",
+}: Props) {
   const { email } = useAuth()
+  const bRules = useBusinessRules()
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [reviews, setReviews] = useState<Review[]>([])
+  const [pending, setPending] = useState<ProductToReview[]>([])
   const [loading, setLoading] = useState(true)
+  /** Producto activo en sub-drawer para escribir reseña. */
+  const [activeProduct, setActiveProduct] = useState<ProductToReview | null>(
+    null,
+  )
 
   useBodyScrollLock(open)
 
   const refresh = useCallback(async () => {
     if (!email) {
       setReviews([])
+      setPending([])
       setLoading(false)
       return
     }
     setLoading(true)
     try {
-      const data = await listMyReviews(email)
-      setReviews(data)
-    } catch {
-      setReviews([])
+      const [r, p] = await Promise.all([
+        listMyReviews(email).catch(() => []),
+        listMyProductsToReview(email, {
+          onPaidEnabled: bRules.reviews_on_paid_enabled,
+        }).catch(() => []),
+      ])
+      setReviews(r)
+      setPending(p)
     } finally {
       setLoading(false)
     }
-  }, [email])
+  }, [email, bRules.reviews_on_paid_enabled])
 
   useEffect(() => {
-    if (open) refresh()
-  }, [open, refresh])
+    if (open) {
+      setTab(initialTab)
+      refresh()
+    }
+  }, [open, initialTab, refresh])
 
   useRealtimeSubscription("reviews", refresh, {
     enabled: open && !!email,
@@ -148,7 +184,9 @@ export default function MyReviewsDrawer({ open, onClose }: Props) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-black tracking-tight">Mis reseñas</p>
                 <p className="text-[10px] font-bold text-slate-500">
-                  Tu opinión sobre los productos que probaste
+                  {pending.length > 0
+                    ? `Tienes ${pending.length} producto${pending.length === 1 ? "" : "s"} por reseñar`
+                    : "Califica los productos que probaste"}
                 </p>
               </div>
               <button
@@ -161,12 +199,88 @@ export default function MyReviewsDrawer({ open, onClose }: Props) {
               </button>
             </div>
 
+            {/* Tabs Pendientes / Hechas */}
+            <div className="px-5 pt-3 pb-1 shrink-0">
+              <TabBar<Tab>
+                layoutId="myreviews-tab"
+                active={tab}
+                onChange={setTab}
+                tabs={[
+                  {
+                    id: "pendientes",
+                    label: "Por reseñar",
+                    badge: pending.length || undefined,
+                    badgeTone: pending.length > 0 ? "primary" : "slate",
+                  } as TabItem<Tab>,
+                  {
+                    id: "hechas",
+                    label: "Hechas",
+                    badge: reviews.length || undefined,
+                    badgeTone: "slate",
+                  } as TabItem<Tab>,
+                ]}
+              />
+            </div>
+
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 scroll-container-ios">
               {loading ? (
                 <div className="flex items-center gap-2 text-[11px] text-slate-400 italic py-6 justify-center">
                   <Loader2 size={12} className="animate-spin" /> Cargando…
                 </div>
+              ) : tab === "pendientes" ? (
+                /* ───────── TAB PENDIENTES ───────── */
+                pending.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="w-14 h-14 rounded-3xl bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center mx-auto mb-3">
+                      <CheckCircle2 size={22} />
+                    </div>
+                    <p className="text-sm font-black text-slate-700 dark:text-slate-200">
+                      ¡Estás al día!
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-snug">
+                      No tienes productos pendientes por reseñar.
+                      {reviews.length === 0
+                        ? " Cuando recibas tus compras aparecerán aquí."
+                        : ""}
+                    </p>
+                  </div>
+                ) : (
+                  pending.map((p) => (
+                    <button
+                      key={p.product_id}
+                      type="button"
+                      onClick={() => setActiveProduct(p)}
+                      className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 hover:border-amber-300/60 dark:hover:border-amber-500/40 press text-left"
+                    >
+                      <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 p-1">
+                        {p.image_url ? (
+                          <img
+                            src={p.image_url}
+                            alt=""
+                            className="w-full h-full object-contain"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <Package size={18} />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 truncate">
+                          {p.product_name}
+                        </p>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                          Comprado {formatRelative(p.last_purchase_at)}
+                        </p>
+                      </div>
+                      <span className="shrink-0 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                        <Star size={10} /> Calificar
+                      </span>
+                      <ChevronRight size={14} className="text-slate-300 shrink-0" />
+                    </button>
+                  ))
+                )
               ) : reviews.length === 0 ? (
+                /* ───────── TAB HECHAS (vacío) ───────── */
                 <div className="text-center py-8">
                   <div className="w-14 h-14 rounded-3xl bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center mx-auto mb-3">
                     <MessageSquare size={22} />
@@ -180,6 +294,7 @@ export default function MyReviewsDrawer({ open, onClose }: Props) {
                   </p>
                 </div>
               ) : (
+                /* ───────── TAB HECHAS ───────── */
                 reviews.map((r) => {
                   const meta = STATUS_META[r.status as ReviewStatus] ?? STATUS_META.pending
                   const StatusIcon = meta.icon
@@ -238,21 +353,36 @@ export default function MyReviewsDrawer({ open, onClose }: Props) {
                 })
               )}
 
-              {/* Hint pedagógico final */}
-              {reviews.length > 0 && (
+              {/* Hint pedagógico final — solo en la tab Hechas con contenido */}
+              {tab === "hechas" && reviews.length > 0 && (
                 <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/30 p-3 mt-2">
                   <p className="text-[11px] font-black text-emerald-700 dark:text-emerald-300 leading-snug">
                     ¡Gracias por compartir tu opinión!
                   </p>
                   <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80 mt-0.5 leading-snug">
                     Cada reseña aprobada te suma puntos a tu programa de
-                    premios. Para escribir una nueva, entra al producto desde
-                    la tienda y toca el botón ★.
+                    premios.
                   </p>
                 </div>
               )}
             </div>
           </motion.div>
+
+          {/* Sub-drawer para escribir reseña del producto activo. */}
+          {activeProduct && (
+            <ReviewsDrawer
+              open={!!activeProduct}
+              onClose={() => {
+                setActiveProduct(null)
+                refresh()
+              }}
+              productId={activeProduct.product_id}
+              productName={activeProduct.product_name}
+              productImage={activeProduct.image_url}
+              variantId={null}
+              defaultEmail={email ?? undefined}
+            />
+          )}
         </div>
       )}
     </AnimatePresence>,

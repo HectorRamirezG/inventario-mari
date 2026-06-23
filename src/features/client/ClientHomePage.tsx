@@ -40,12 +40,17 @@ import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import ClientHero from "../../components/ui/ClientHero"
 import StoriesBar from "../stories/StoriesBar"
 import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
+import ReviewStoriesBar from "../../components/ui/ReviewStoriesBar"
 import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
 import Skeleton from "../../components/ui/Skeleton"
 import LoyaltyDrawer from "../loyalty/LoyaltyDrawer"
 import { useMyLoyaltyBalance } from "../loyalty/loyaltyService"
 import MyReviewsDrawer from "../reviews/MyReviewsDrawer"
-import { listMyReviews, type Review } from "../reviews/reviewsService"
+import {
+  listMyReviews,
+  countMyProductsToReview,
+  type Review,
+} from "../reviews/reviewsService"
 
 interface PublicVariant {
   id: string
@@ -144,6 +149,11 @@ export default function ClientHomePage() {
       {isLogged && <MyMessagesSection />}
       {isLogged && <MySavingsSection />}
       {isLogged && bRules.loyalty_enabled && <MyLoyaltyCard />}
+
+      {/* Stories de resenias — marketing organico. Banda horizontal con
+          las mejores resenias con foto, estilo Instagram stories. Click
+          en una abre el producto en la tienda. Solo aparece si hay >=3. */}
+      <ReviewStoriesBar />
 
       {/* Productos vistos recientemente */}
       <RecentlyViewedRow
@@ -440,10 +450,16 @@ function MyLoyaltyCard() {
  */
 function MyReviewsCard() {
   const { email, session } = useAuth()
+  const bRules = useBusinessRules()
   const [count, setCount] = useState(0)
   const [hasPending, setHasPending] = useState(false)
+  const [pendingToReview, setPendingToReview] = useState(0)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  /** Tab inicial del drawer: si hay productos pendientes, abrimos
+   *  directo en 'pendientes' (accion). Si no hay y tiene historial,
+   *  abrimos en 'hechas'. */
+  const initialTab = pendingToReview > 0 ? "pendientes" : "hechas"
 
   useEffect(() => {
     if (!session || !email) {
@@ -451,20 +467,29 @@ function MyReviewsCard() {
       return
     }
     let alive = true
-    listMyReviews(email)
-      .then((list: Review[]) => {
+    Promise.all([
+      listMyReviews(email).catch(() => [] as Review[]),
+      countMyProductsToReview(email, {
+        onPaidEnabled: bRules.reviews_on_paid_enabled,
+      }).catch(() => 0),
+    ])
+      .then(([list, pending]) => {
         if (!alive) return
         setCount(list.length)
         setHasPending(list.some((r) => r.status === "pending"))
+        setPendingToReview(pending)
       })
-      .catch(() => {})
       .finally(() => alive && setLoading(false))
     return () => {
       alive = false
     }
-  }, [email, session])
+  }, [email, session, bRules.reviews_on_paid_enabled])
 
   if (loading) return null
+
+  // Si no tiene historial NI pendientes, no mostramos la card (vacia
+  // no agrega valor en Home; cuando compre algo aparecera).
+  if (count === 0 && pendingToReview === 0) return null
 
   return (
     <>
@@ -475,23 +500,39 @@ function MyReviewsCard() {
         aria-label="Mis reseñas"
       >
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-2xl shrink-0">
+          <div className="relative w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-2xl shrink-0">
             ⭐
+            {pendingToReview > 0 && (
+              <span
+                aria-hidden
+                className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center shadow-sm tabular-nums ring-2 ring-amber-50 dark:ring-amber-500/20"
+              >
+                {pendingToReview > 99 ? "99+" : pendingToReview}
+              </span>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-black uppercase tracking-widest text-amber-700/80 dark:text-amber-300/80">
               Mis reseñas
             </p>
-            <p className="text-lg font-black tabular-nums leading-tight text-slate-900 dark:text-slate-100">
-              {count} {count === 1 ? "reseña" : "reseñas"}
-              {hasPending && (
-                <span className="ml-2 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">
-                  En revisión
-                </span>
-              )}
-            </p>
+            {pendingToReview > 0 ? (
+              <p className="text-lg font-black tabular-nums leading-tight text-slate-900 dark:text-slate-100">
+                {pendingToReview} por reseñar
+              </p>
+            ) : (
+              <p className="text-lg font-black tabular-nums leading-tight text-slate-900 dark:text-slate-100">
+                {count} {count === 1 ? "reseña" : "reseñas"}
+                {hasPending && (
+                  <span className="ml-2 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">
+                    En revisión
+                  </span>
+                )}
+              </p>
+            )}
             <p className="text-[10px] font-bold opacity-80 mt-0.5 text-slate-600 dark:text-slate-300">
-              {count > 0
+              {pendingToReview > 0
+                ? "Califica y suma puntos a tu programa de premios"
+                : count > 0
                 ? "Toca para ver tu historial de opiniones"
                 : "Comparte tu opinión y gana puntos"}
             </p>
@@ -501,7 +542,11 @@ function MyReviewsCard() {
           </span>
         </div>
       </button>
-      <MyReviewsDrawer open={open} onClose={() => setOpen(false)} />
+      <MyReviewsDrawer
+        open={open}
+        initialTab={initialTab}
+        onClose={() => setOpen(false)}
+      />
     </>
   )
 }

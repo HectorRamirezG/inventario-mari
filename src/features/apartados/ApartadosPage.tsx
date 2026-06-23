@@ -121,25 +121,20 @@ export default function ApartadosPage() {
   const rules = useBusinessRules();
 
   return (
-    <div className="relative px-3 pt-1 pb-28 max-w-5xl mx-auto">
-      {/* Orbs decorativos detras del contenido */}
-      <span className="deco-orb deco-orb-pink top-0 -left-16 w-64 h-64" />
-      <span className="deco-orb deco-orb-amber top-32 -right-16 w-72 h-72" />
-
-      {/* HEADER */}
+    <div className="px-3 pt-1 pb-28 max-w-5xl mx-auto">
+      {/* HEADER limpio sin orbes decorativos (saturaban en mobile).
+          Subtitle compacto que muta con el filtro activo. */}
       <PageHeader
         icon={Bookmark}
         iconTone="primary"
         title="Apartados & Cobros"
-        subtitle={
-          <>
-            {state.totals.count}{" "}
-            {state.totals.count === 1 ? "venta" : "ventas"} ·{" "}
-            <span className="text-rose-500">
-              {formatMoney(state.totals.balance)} por cobrar
-            </span>
-          </>
-        }
+        subtitle={`${state.totals.count} ${
+          state.totals.count === 1 ? "venta" : "ventas"
+        }${
+          state.totals.balance > 0
+            ? ` · ${formatMoney(state.totals.balance)} por cobrar`
+            : " · al día"
+        }`}
         right={
           <button
             onClick={actions.refresh}
@@ -158,7 +153,8 @@ export default function ApartadosPage() {
         <KpiCard label="Total" value={formatMoney(state.totals.total)} tone="default" />
       </div>
 
-      {/* CONTROLES */}
+      {/* CONTROL ROW — buscador, filtros y 'Solo apartados' en
+          una secuencia visual mas compacta y ordenada. */}
       <div className="mb-3 space-y-2">
         {/* Buscador */}
         <div className="relative">
@@ -175,9 +171,11 @@ export default function ApartadosPage() {
           />
         </div>
 
-        {/* Filtros */}
+        {/* Filtros + 'Solo apartados' como toggle pill compacto en la
+            misma fila para mantener jerarquia. En mobile el toggle
+            queda mas chico al lado del TabBar scrolleable. */}
         <div className="flex items-center gap-2">
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <TabBar
               tabs={FILTERS.map((f) => ({ id: f.id, label: f.label })) as any}
               active={state.filter}
@@ -188,9 +186,11 @@ export default function ApartadosPage() {
 
           <button
             onClick={() => actions.setOnlyLayaway(!state.onlyLayaway)}
-            className={`shrink-0 h-10 px-3 rounded-full flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest border shadow-sm transition-all ${
+            aria-pressed={state.onlyLayaway}
+            title={state.onlyLayaway ? "Mostrando solo apartados" : "Solo apartados (filtro)"}
+            className={`shrink-0 h-10 px-3 rounded-full flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest border transition-all ${
               state.onlyLayaway
-                ? "bg-amber-50 dark:bg-amber-500/15 border-amber-200 dark:border-amber-500/40 text-amber-700 dark:text-amber-300"
+                ? "bg-amber-50 dark:bg-amber-500/15 border-amber-200 dark:border-amber-500/40 text-amber-700 dark:text-amber-300 shadow-sm"
                 : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500"
             }`}
           >
@@ -198,7 +198,8 @@ export default function ApartadosPage() {
               size={11}
               fill={state.onlyLayaway ? "currentColor" : "none"}
             />
-            Solo apartados
+            <span className="hidden sm:inline">Solo apartados</span>
+            <span className="sm:hidden">Aparts</span>
           </button>
         </div>
       </div>

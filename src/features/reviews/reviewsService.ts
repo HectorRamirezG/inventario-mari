@@ -339,3 +339,248 @@ export async function hasReviewed(
     .ilike("customer_email", customerEmail.trim())
   return (count ?? 0) > 0
 }
+
+/* ─────────────── PRODUCTOS POR RESEÑAR ─────────────── */
+
+/**
+ * Producto que el cliente compró alguna vez y aún puede reseñar.
+ * `lastPurchaseAt` ayuda a ordenar por más reciente primero.
+ */
+export interface ProductToReview {
+  product_id: string
+  product_name: string
+  image_url: string | null
+  last_purchase_at: string
+  /** Si ya tiene reseña del mismo email (para flag opcional). */
+  alreadyReviewed: boolean
+}
+
+/**
+ * Lista los productos UNICOS que el cliente ha comprado y que aún NO
+ * ha reseñado.
+ *
+ * Reglas para qué pedido cuenta:
+ *   - Pedido NO cancelado (`status != 'cancelled'`).
+ *   - Si la regla `reviews_on_paid_enabled` está activa → basta con que
+ *     el pedido esté pagado (`balance <= 0`) o entregado.
+ *   - Si está apagada → solo cuenta cuando el pedido tiene
+ *     `delivery.status = 'delivered'` O cuando está pagado sin delivery
+ *     (pickup en tienda).
+ *
+ * Algoritmo:
+ *   1. Trae `sales` del cliente con joins ligeros.
+ *   2. Filtra los que califican según la regla.
+ *   3. Carga sale_items DISTINCT product_id de esos sales.
+ *   4. Cross-check con reviews del mismo email.
+ *   5. Devuelve los que NO tienen reseña (a menos que `includeReviewed=true`).
+ *
+ * Performance: best-effort. Limita a 200 productos.
+ */
+export async function listMyProductsToReview(
+  email: string,
+  opts: { onPaidEnabled?: boolean; includeReviewed?: boolean } = {},
+): Promise<ProductToReview[]> {
+  if (!email) return []
+  const { onPaidEnabled = false, includeReviewed = false } = opts
+
+  // 1. Pedidos del cliente (no cancelados) con datos minimos.
+  const { data: salesRaw } = await supabase
+    .from("sales")
+    .select("id, paid, total, status, created_at")
+    .ilike("customer_email", email.trim())
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(100)
+
+  const sales = (salesRaw ?? []) as Array<{
+    id: string
+    paid: number | null
+    total: number | null
+    status: string
+    created_at: string
+  }>
+  if (sales.length === 0) return []
+
+  // 2. Cargamos las comandas asociadas para saber cuales fueron entregadas.
+  const saleIds = sales.map((s) => s.id)
+  const { data: deliveriesRaw } = await supabase
+    .from("delivery_notes")
+    .select("sale_id, status")
+    .in("sale_id", saleIds)
+  const deliveryBySale = new Map<string, string>()
+  for (const d of (deliveriesRaw ?? []) as Array<{ sale_id: string; status: string }>) {
+    // Si una venta tiene varias comandas, gana el estatus "mas avanzado"
+    // (delivered > picked_up > sent > draft > cancelled). Para nuestro
+    // proposito basta con marcar si esta entregada.
+    if (d.status === "delivered" || !deliveryBySale.has(d.sale_id)) {
+      deliveryBySale.set(d.sale_id, d.status)
+    }
+  }
+
+  // 3. Filtra sales segun la regla.
+  const eligibleSales = sales.filter((s) => {
+    const balance = Math.max(0, (Number(s.total) || 0) - (Number(s.paid) || 0))
+    const isPaid = balance <= 0
+    if (!isPaid) return false
+    const deliveryStatus = deliveryBySale.get(s.id) // undefined si no hay comanda
+    if (onPaidEnabled) return true // pagado basta
+    // Default: entregado, o pagado sin comanda (pickup).
+    return deliveryStatus === "delivered" || !deliveryStatus
+  })
+  if (eligibleSales.length === 0) return []
+
+  // 4. sale_items DISTINCT product_id con info para mostrar.
+  const eligibleIds = eligibleSales.map((s) => s.id)
+  const { data: itemsRaw } = await supabase
+    .from("sale_items")
+    .select("sale_id, product_id, product_name, variants(image_url, image_urls)")
+    .in("sale_id", eligibleIds)
+    .limit(500)
+
+  const items = (itemsRaw ?? []) as Array<{
+    sale_id: string
+    product_id: string | null
+    product_name: string | null
+    variants:
+      | { image_url: string | null; image_urls: string[] | null }
+      | null
+  }>
+
+  // Mapa sale_id -> created_at para resolver last_purchase_at por producto.
+  const saleCreatedAt = new Map(eligibleSales.map((s) => [s.id, s.created_at]))
+
+  const productsMap = new Map<string, ProductToReview>()
+  for (const it of items) {
+    if (!it.product_id) continue
+    const existing = productsMap.get(it.product_id)
+    const purchaseAt = saleCreatedAt.get(it.sale_id) ?? ""
+    if (existing) {
+      if (purchaseAt > existing.last_purchase_at) {
+        existing.last_purchase_at = purchaseAt
+      }
+      continue
+    }
+    const img =
+      it.variants?.image_urls?.[0] ?? it.variants?.image_url ?? null
+    productsMap.set(it.product_id, {
+      product_id: it.product_id,
+      product_name: it.product_name ?? "Producto",
+      image_url: img,
+      last_purchase_at: purchaseAt,
+      alreadyReviewed: false,
+    })
+  }
+
+  if (productsMap.size === 0) return []
+
+  // 5. Cross-check con reviews: marca alreadyReviewed.
+  const productIds = Array.from(productsMap.keys())
+  const { data: reviewRows } = await supabase
+    .from("reviews")
+    .select("product_id")
+    .in("product_id", productIds)
+    .ilike("customer_email", email.trim())
+  const reviewedSet = new Set(
+    ((reviewRows ?? []) as Array<{ product_id: string }>).map(
+      (r) => r.product_id,
+    ),
+  )
+  for (const id of reviewedSet) {
+    const p = productsMap.get(id)
+    if (p) p.alreadyReviewed = true
+  }
+
+  // 6. Filtra y ordena por fecha de compra DESC.
+  const list = Array.from(productsMap.values())
+    .filter((p) => includeReviewed || !p.alreadyReviewed)
+    .sort((a, b) => b.last_purchase_at.localeCompare(a.last_purchase_at))
+    .slice(0, 200)
+
+  return list
+}
+
+/** Count rápido de productos pendientes por reseñar — para badges. */
+export async function countMyProductsToReview(
+  email: string,
+  opts: { onPaidEnabled?: boolean } = {},
+): Promise<number> {
+  try {
+    const list = await listMyProductsToReview(email, opts)
+    return list.length
+  } catch {
+    return 0
+  }
+}
+
+/* ─────────────── STORIES DE RESEÑAS (marketing orgánico) ─────────────── */
+
+/**
+ * Reseña destacada para mostrar como "story" en el Home cliente.
+ * Incluye nombre del producto para que el cliente pueda navegar.
+ */
+export interface TopReviewStory {
+  id: string
+  product_id: string
+  product_name: string
+  rating: number
+  comment: string | null
+  image_url: string
+  customer_name: string | null
+  created_at: string
+}
+
+/**
+ * Reseñas TOP con foto para la mini-banda de "Stories de reseñas".
+ *
+ * Criterio: aprobadas, rating >= 4, con `image_url`. Las ordena por
+ * recientes primero (creemos que el feed se sienta vivo). Limit 12 que
+ * es lo que cabe en un scroll horizontal estilo Instagram.
+ *
+ * Si la tabla `reviews` aún no existe (cliente sin SQL aplicado), no
+ * truena: devuelve lista vacía.
+ */
+export async function listTopReviewsWithPhoto(
+  limit = 12,
+): Promise<TopReviewStory[]> {
+  try {
+    const { data, error } = await supabase
+      .from("reviews")
+      .select(
+        "id, product_id, rating, comment, image_url, customer_name, created_at",
+      )
+      .eq("status", "approved")
+      .gte("rating", 4)
+      .not("image_url", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+    if (error) return []
+    const rows = (data ?? []) as Array<{
+      id: string
+      product_id: string
+      rating: number
+      comment: string | null
+      image_url: string
+      customer_name: string | null
+      created_at: string
+    }>
+    if (rows.length === 0) return []
+
+    // Resuelve nombres de producto en una sola query.
+    const productIds = Array.from(new Set(rows.map((r) => r.product_id)))
+    const { data: prodRows } = await supabase
+      .from("products")
+      .select("id, name")
+      .in("id", productIds)
+    const nameMap = new Map<string, string>()
+    for (const p of (prodRows ?? []) as Array<{ id: string; name: string }>) {
+      nameMap.set(p.id, p.name)
+    }
+
+    return rows.map((r) => ({
+      ...r,
+      product_name: nameMap.get(r.product_id) ?? "Producto",
+    }))
+  } catch {
+    return []
+  }
+}
