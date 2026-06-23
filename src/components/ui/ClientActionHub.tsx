@@ -27,6 +27,7 @@ import {
   ShoppingBag,
   MessageCircle,
   Sparkles,
+  Wallet,
 } from "lucide-react"
 
 import { useAuth } from "../../lib/useAuth"
@@ -119,6 +120,18 @@ export default function ClientActionHub({ open, onClose }: Props) {
       onTap: () => {
         onClose()
         requestOpenCart()
+      },
+    },
+    {
+      id: "wallet",
+      label: "Mi monedero",
+      caption: "Saldos y pagos",
+      icon: Wallet,
+      tone: "emerald",
+      visible: isLogged,
+      onTap: () => {
+        onClose()
+        navigate("/mi-monedero")
       },
     },
     {
