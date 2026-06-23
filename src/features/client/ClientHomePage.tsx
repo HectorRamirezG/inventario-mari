@@ -259,11 +259,10 @@ function MyMessagesSection() {
 }
 
 function MySavingsSection() {
-  // Calcula el "ahorro acumulado" del cliente: suma de descuentos /
-  // diferencia entre precio sin promo y precio aplicado en pedidos.
-  // Por ahora es un placeholder informativo — no hay esquema de descuentos
-  // todavía, así que mostramos el total invertido como métrica positiva.
-  const { session } = useAuth()
+  // Calcula el total invertido por el cliente. La tabla `sales` NO tiene
+  // `customer_id` — los pedidos se asocian por `customer_email`. Usamos
+  // el email del jwt para filtrar y sumar.
+  const { session, email } = useAuth()
   const [stats, setStats] = useState<{
     totalGastado: number
     pedidos: number
@@ -272,23 +271,24 @@ function MySavingsSection() {
   useEffect(() => {
     let alive = true
     const load = async () => {
-      if (!session?.user?.id) return
+      if (!session || !email) return
       const { data } = await supabase
         .from("sales")
-        .select("total")
-        .eq("customer_id", session.user.id)
+        .select("total,paid,status")
+        .eq("customer_email", email.toLowerCase())
       if (!alive) return
-      const totalGastado = (data ?? []).reduce(
-        (acc: number, r: any) => acc + Number(r.total || 0),
-        0
+      const valid = (data ?? []).filter((r: any) => r.status !== "cancelled")
+      const totalGastado = valid.reduce(
+        (acc: number, r: any) => acc + (Number(r.paid) || 0),
+        0,
       )
-      setStats({ totalGastado, pedidos: data?.length ?? 0 })
+      setStats({ totalGastado, pedidos: valid.length })
     }
     load()
     return () => {
       alive = false
     }
-  }, [session?.user?.id])
+  }, [session, email])
 
   if (!stats || stats.pedidos === 0) {
     return (

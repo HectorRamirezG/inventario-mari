@@ -75,15 +75,15 @@ export async function listProductsWithoutImage(limit = 50): Promise<InsightProdu
 export async function getRestockHints(limit = 8): Promise<InsightRestockHint[]> {
   const since = new Date()
   since.setDate(since.getDate() - 30)
-  // Antes hacíamos `sale_items.select(... variants(...,products(...)))`, que
-  // depende de las FK declaradas en BD. Si la relación no está definida
-  // exactamente como PostgREST espera, la query truena con 400 (lo que
-  // hacía que el insights panel se rompiera silenciosamente). Hacemos
-  // dos queries simples y ensamblamos en JS — siempre funciona.
+  // sale_items NO tiene columna `created_at` propia — la fecha de la venta
+  // vive en `sales.created_at`. Hacemos un join con `!inner` para poder
+  // filtrar por la fecha real de la venta (filtros sobre relaciones
+  // requieren `!inner` en PostgREST).
   const { data: items, error: itemsErr } = await supabase
     .from("sale_items")
-    .select("variant_id,qty")
-    .gte("created_at", since.toISOString())
+    .select("variant_id,qty,sales!inner(created_at,status)")
+    .gte("sales.created_at", since.toISOString())
+    .neq("sales.status", "cancelled")
     .limit(2000)
   if (itemsErr || !items) return []
 

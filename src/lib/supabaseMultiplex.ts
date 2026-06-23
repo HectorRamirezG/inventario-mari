@@ -66,15 +66,30 @@ function emitEvent() {
   }
 }
 
+// Debounce adaptivo por tabla: las tablas críticas (notificaciones,
+// comprobantes, pagos, deliveries) usan 120ms para sentirse "vivas",
+// el resto mantiene 600ms para no saturar el hilo principal cuando hay
+// cambios masivos de inventario o productos.
+const FAST_DISPATCH_MS = 120
+const SLOW_DISPATCH_MS = 600
+const FAST_TABLES = new Set<RealtimeTable>([
+  "notifications",
+  "payment_proofs",
+  "payments",
+  "delivery_notes",
+  "support_tickets",
+])
+
 function scheduleDispatch(table: RealtimeTable, payload: unknown) {
   const prev = debounceTimers.get(table)
   if (prev) clearTimeout(prev)
+  const delay = FAST_TABLES.has(table) ? FAST_DISPATCH_MS : SLOW_DISPATCH_MS
   const timer = setTimeout(() => {
     debounceTimers.delete(table)
     window.dispatchEvent(
       new CustomEvent(REALTIME_EVENT(table), { detail: payload }),
     )
-  }, 600)
+  }, delay)
   debounceTimers.set(table, timer)
 }
 

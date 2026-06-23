@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { CheckCircle2, Package, Truck, MapPin, Clock } from "lucide-react"
 
 import { formatMoney, formatRelative } from "../../lib/format"
-import { useEffect, useRef, useState } from "react"
+import { memo, useEffect, useRef, useState } from "react"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { supabase } from "../../lib/supabase"
@@ -66,7 +66,7 @@ function statusToStepIndex(status: string | null | undefined): number {
   return 0
 }
 
-export default function OrderProgressTracker({
+function OrderProgressTrackerImpl({
   total,
   paid,
   balance,
@@ -372,3 +372,29 @@ function Stepper({ activeStep, pulse }: { activeStep: number; pulse: boolean }) 
     </div>
   )
 }
+
+// Comparador shallow: el tracker solo necesita re-renderizar cuando cambian
+// los números del pago o el snapshot relevante de la entrega. Esto evita
+// trabajo inútil en listas largas (ClientOrdersPage con 20+ apartados).
+const OrderProgressTracker = memo(
+  OrderProgressTrackerImpl,
+  (prev, next) => {
+    if (prev.total !== next.total) return false
+    if (prev.paid !== next.paid) return false
+    if (prev.balance !== next.balance) return false
+    if (prev.expanded !== next.expanded) return false
+    if (prev.liveUpdates !== next.liveUpdates) return false
+    const dp = prev.delivery
+    const dn = next.delivery
+    if (!dp && !dn) return true
+    if (!dp || !dn) return false
+    return (
+      dp.id === dn.id &&
+      dp.status === dn.status &&
+      dp.current_lat === dn.current_lat &&
+      dp.current_lng === dn.current_lng &&
+      dp.last_position_at === dn.last_position_at
+    )
+  },
+)
+export default OrderProgressTracker

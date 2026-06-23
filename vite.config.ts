@@ -56,18 +56,39 @@ export default defineConfig({
         // vean instantáneo al regresar.
         runtimeCaching: [
           {
-            // Bucket de imágenes de Supabase. La URL pública es:
-            // https://<project>.supabase.co/storage/v1/object/public/product-images/...
+            // Bucket de imágenes de Supabase. Cubre AMBOS endpoints:
+            //   /storage/v1/object/public/...   (URL raw)
+            //   /storage/v1/render/image/public/... (con transform)
+            // Las variantes de producto son inmutables (SKU = UUID),
+            // así que CacheFirst por 30 días.
             urlPattern: ({ url }) =>
-              /\.supabase\.co\/storage\/v1\/object\/public\//i.test(url.href),
+              /\.supabase\.co\/storage\/v1\/(object|render\/image)\/public\//i.test(
+                url.href,
+              ),
             handler: 'CacheFirst',
             options: {
               cacheName: 'mari-supabase-images',
               expiration: {
-                maxEntries: 500,
-                // 30 días — el contenido tiene cache-control inmutable,
-                // si cambia la imagen sube con otro nombre/UUID.
+                maxEntries: 800,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
+                purgeOnQuotaError: true,
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Catálogo público (lectura de productos): SWR con TTL corto.
+            // La pantalla pinta instantáneo desde cache y revalida en bg.
+            // No incluye productos individuales con stock crítico — esos
+            // los pide la app con el cliente Supabase directo.
+            urlPattern: ({ url }) =>
+              /\.supabase\.co\/rest\/v1\/(products|variants)\?/i.test(url.href),
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'mari-supabase-catalog',
+              expiration: {
+                maxEntries: 80,
+                maxAgeSeconds: 60 * 15,
                 purgeOnQuotaError: true,
               },
               cacheableResponse: { statuses: [0, 200] },

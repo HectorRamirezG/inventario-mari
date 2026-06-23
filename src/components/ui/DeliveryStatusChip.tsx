@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { motion } from "framer-motion"
 import {
   Truck,
@@ -86,7 +87,7 @@ export interface DeliveryStatusChipProps {
   className?: string
 }
 
-export default function DeliveryStatusChip({
+export default memo(function DeliveryStatusChip({
   status,
   size = "sm",
   showCustomerHint = false,
@@ -131,4 +132,4 @@ export default function DeliveryStatusChip({
       )}
     </div>
   )
-}
+})

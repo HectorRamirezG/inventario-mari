@@ -171,7 +171,20 @@ export function useAuth(): AuthState & {
       window.dispatchEvent(new CustomEvent("mari:signing-out"))
       await new Promise((r) => setTimeout(r, 280))
     }
-    await supabase.auth.signOut()
+    // scope:'local' evita el 403 cuando el access_token ya expiró —
+    // sólo limpia el storage del navegador en vez de pedir a /auth/v1/logout
+    // que revoque tokens en todos los dispositivos. Si el logout local
+    // falla por cualquier motivo, limpiamos manualmente como red de seguridad.
+    try {
+      await supabase.auth.signOut({ scope: "local" })
+    } catch (err) {
+      console.warn("[auth] signOut local failed, clearing storage", err)
+      try {
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith("sb-") && k.endsWith("-auth-token"))
+          .forEach((k) => localStorage.removeItem(k))
+      } catch {}
+    }
   }, [])
 
   /** Cierra sesión Y olvida el dispositivo (borra lastSession). */

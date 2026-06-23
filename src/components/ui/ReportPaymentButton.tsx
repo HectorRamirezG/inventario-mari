@@ -159,6 +159,15 @@ export default function ReportPaymentButton({
       setAmount("")
       await refreshHistory()
       onUploaded?.(proof)
+      // Notificamos a OTROS contenedores (mis-pedidos, drawer ticket abierto,
+      // header bell) para que refresquen YA sin esperar al hop del realtime.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("mari:payment-proof-uploaded", {
+            detail: { saleId, proofId: proof?.id ?? null },
+          }),
+        )
+      }
     } catch (e: any) {
       sound.error()
       // Mostramos error legible (típico: violación RLS o tamaño)

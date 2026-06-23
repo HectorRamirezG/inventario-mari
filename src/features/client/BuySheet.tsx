@@ -360,7 +360,8 @@ export default function BuySheet({
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 rounded-xl bg-white dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-300 shrink-0">
+                        {/* Aislamiento visual: object-contain + fondo neutro para que no recorte tonos */}
+                        <div className="w-14 h-14 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 p-1">
                           {v.image_url ? (
                             <img
                               src={imageAvatar(v.image_url) || v.image_url}
@@ -369,7 +370,7 @@ export default function BuySheet({
                               decoding="async"
                               width={112}
                               height={112}
-                              className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
+                              className={`w-full h-full object-contain ${out ? "opacity-40" : ""}`}
                             />
                           ) : (
                             <Package size={18} />

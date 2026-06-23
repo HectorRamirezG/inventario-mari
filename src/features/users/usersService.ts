@@ -32,7 +32,41 @@ export async function listAllUsers(limit = 200, offset = 0): Promise<RegisteredU
   })
   if (error) throw error
   const payload = (data ?? {}) as { users?: RegisteredUser[] }
-  return payload.users ?? []
+  const users = payload.users ?? []
+
+  // Fallback teléfono: la RPC sólo lee `profiles.phone`, pero las clientas
+  // suelen capturar su número en el checkout (queda en `sales.customer_phone`).
+  // Aquí completamos el `phone` faltante con el último teléfono no-nulo
+  // de cualquier venta asociada al email. Una sola query, agrupada en cliente.
+  const emailsMissingPhone = users
+    .filter((u) => !u.phone && u.email)
+    .map((u) => u.email.toLowerCase())
+  if (emailsMissingPhone.length > 0) {
+    const { data: phoneRows } = await supabase
+      .from("sales")
+      .select("customer_email,customer_phone,created_at")
+      .in("customer_email", emailsMissingPhone)
+      .not("customer_phone", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1000)
+    if (phoneRows && phoneRows.length > 0) {
+      const phoneByEmail = new Map<string, string>()
+      for (const r of phoneRows as any[]) {
+        const k = String(r.customer_email || "").toLowerCase()
+        const p = String(r.customer_phone || "").trim()
+        if (!k || !p) continue
+        if (!phoneByEmail.has(k)) phoneByEmail.set(k, p)
+      }
+      for (const u of users) {
+        if (!u.phone && u.email) {
+          const fromSale = phoneByEmail.get(u.email.toLowerCase())
+          if (fromSale) u.phone = fromSale
+        }
+      }
+    }
+  }
+
+  return users
 }
 
 export async function listVisitors(limit = 200, onlyUnconverted = true): Promise<Visitor[]> {

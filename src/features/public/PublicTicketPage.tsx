@@ -499,7 +499,7 @@ export default function PublicTicketPage() {
             <ReportPaymentButton
               saleId={ticket.id}
               balance={balanceReal}
-              customerEmail={session ? null : null}
+              customerEmail={ticket.customer_email}
             />
             {ticket.is_layaway && (
               <RequestExtensionButton

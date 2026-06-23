@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { TrendingUp, TrendingDown } from "lucide-react"
 import {
-  ResponsiveContainer,
   AreaChart,
   Area,
   XAxis,
@@ -84,15 +83,23 @@ export default function TrendChart({ data, periodLabel }: TrendChartProps) {
       {/* `touch-action: pan-y` evita que Recharts atrape el gesto vertical
           y bloquee el scroll de la página cuando Mari pasa el dedo sobre
           el chart en móvil. El tooltip sigue funcionando con tap.
-          `minWidth={0}` en el ResponsiveContainer evita el warning de
-          Recharts cuando el chart se monta dentro de una transición
-          (AnimatePresence) y aún no tiene tamaño calculado. */}
-      <div className="h-[240px] w-full min-w-0" style={{ touchAction: "pan-y" }}>
-        {data.length === 0 ? (
-          <EmptyChart />
-        ) : (
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-            <AreaChart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 4 }}>
+          Reemplazamos `ResponsiveContainer` por un medidor propio con
+          `ResizeObserver`: sólo montamos `<AreaChart>` cuando el contenedor
+          tiene un tamaño REAL (>0). Eso elimina los warnings de Recharts
+          "width(-1) and height(-1) of chart should be greater than 0" que
+          aparecían al montar dentro de Suspense/AnimatePresence sin layout
+          calculado todavía. */}
+      <ChartFrame height={240}>
+        {(w, h) =>
+          data.length === 0 ? (
+            <EmptyChart />
+          ) : (
+            <AreaChart
+              width={w}
+              height={h}
+              data={data}
+              margin={{ top: 6, right: 8, left: 0, bottom: 4 }}
+            >
               <defs>
                 <linearGradient id="grad-revenue" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={brandColor} stopOpacity={0.45} />
@@ -146,10 +153,55 @@ export default function TrendChart({ data, periodLabel }: TrendChartProps) {
                 fill="url(#grad-profit)"
               />
             </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </div>
+          )
+        }
+      </ChartFrame>
     </section>
+  )
+}
+
+/**
+ * ChartFrame — wrapper que mide su contenedor con ResizeObserver y solo
+ * renderiza el chart cuando el ancho > 0. Evita warnings de Recharts
+ * cuando se monta dentro de Suspense/AnimatePresence sin layout todavía.
+ */
+function ChartFrame({
+  height,
+  children,
+}: {
+  height: number
+  children: (w: number, h: number) => React.ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState<{ w: number; h: number }>({
+    w: 0,
+    h: height,
+  })
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === "undefined") {
+      // Fallback sin ResizeObserver: tomar el clientWidth una vez.
+      if (el) setSize({ w: el.clientWidth, h: height })
+      return
+    }
+    const ro = new ResizeObserver((entries) => {
+      const e = entries[0]
+      if (!e) return
+      const w = Math.max(0, Math.floor(e.contentRect.width))
+      if (w > 0) setSize((s) => (s.w === w ? s : { ...s, w }))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [height])
+
+  return (
+    <div
+      ref={ref}
+      className="w-full min-w-0"
+      style={{ height, touchAction: "pan-y" }}
+    >
+      {size.w > 0 ? children(size.w, size.h) : null}
+    </div>
   )
 }
 

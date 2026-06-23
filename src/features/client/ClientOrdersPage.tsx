@@ -85,6 +85,18 @@ export default function ClientOrdersPage() {
   const [deliveryBySale, setDeliveryBySale] = useState<Record<string, MyDelivery>>({})
   /** sale_id -> si el bloque QuickDeliveryActions está abierto inline. */
   const [editDeliveryFor, setEditDeliveryFor] = useState<string | null>(null)
+  /** sale_ids cuya tarjeta compacta está expandida (revela acciones). */
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  /** sale_id -> cantidad de incidencias abiertas. Mantenido por realtime. */
+  const [openTicketsBySale, setOpenTicketsBySale] = useState<Record<string, number>>({})
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
   const rules = useBusinessRules()
   const aliveRef = useRef(true)
 
@@ -174,6 +186,44 @@ export default function ClientOrdersPage() {
   useRealtimeSubscription("delivery_notes", scheduleOrdersReload, {
     enabled: !!email,
   })
+  // Pago manual del admin: balance/paid cambian → refrescar lista.
+  useRealtimeSubscription("payments", scheduleOrdersReload, {
+    enabled: !!email,
+  })
+  // Comprobante aprobado/rechazado: status del proof cambia, también
+  // refresca para que el badge de "Pendiente" -> "Aprobado" sea inmediato.
+  useRealtimeSubscription("payment_proofs", scheduleOrdersReload, {
+    enabled: !!email,
+  })
+
+  // Incidencias abiertas del cliente — mantenemos un map sale_id -> count
+  // para mostrar badge inline en cada OrderCard.
+  const loadOpenTickets = useCallback(async () => {
+    if (!email) return
+    try {
+      const { data, error } = await supabase
+        .from("support_tickets")
+        .select("sale_id,status")
+        .eq("customer_email", email)
+        .in("status", ["open", "in_progress"])
+        .limit(200)
+      if (error || !data) return
+      const map: Record<string, number> = {}
+      for (const t of data as any[]) {
+        if (!t.sale_id) continue
+        map[t.sale_id] = (map[t.sale_id] ?? 0) + 1
+      }
+      if (aliveRef.current) setOpenTicketsBySale(map)
+    } catch {
+      /* tabla puede no existir todavía */
+    }
+  }, [email])
+  useEffect(() => {
+    if (email) loadOpenTickets()
+  }, [email, loadOpenTickets])
+  useRealtimeSubscription("support_tickets", loadOpenTickets, {
+    enabled: !!email,
+  })
 
   // Escuchar request de "abrir centro de pago de venta X" desde notifs.
   // Si la orden ya está cargada, abrimos PaymentCenterDrawer; si no, la
@@ -200,6 +250,13 @@ export default function ClientOrdersPage() {
       pendingPayOrderRef.current = null
     }
   }, [orders])
+
+  // Refresco INMEDIATO al subir un comprobante (sin esperar realtime).
+  useEffect(() => {
+    const handler = () => loadOrders()
+    window.addEventListener("mari:payment-proof-uploaded", handler)
+    return () => window.removeEventListener("mari:payment-proof-uploaded", handler)
+  }, [loadOrders])
 
   /** Counts por categoría (para badges en los tabs). */
   const counts = useMemo(() => {
@@ -406,12 +463,51 @@ export default function ClientOrdersPage() {
           o.status !== "cancelled" &&
           (delivery?.status === "delivered" || !delivery)
 
+        // Diferenciación visual: peso por monto, tono por estado, accordion para repetitivos.
+        const isPremium = safeTotal >= 1000
+        const isInRoute = delivery?.status === "picked_up"
+        const isPending = !paid && o.status !== "cancelled"
+        const isClosed =
+          o.status === "cancelled" ||
+          (!claim.allowed &&
+            (delivery?.status === "delivered" ||
+              (paid && !delivery)))
+        const isCompact = isPending && safeTotal < 200 && !isPremium
+        const isExpanded = expandedIds.has(o.id)
+        const showInteractive = !isClosed && (!isCompact || isExpanded)
+
+        // Capa visual: el closed se aplana, el premium gana peso, el envio activo respira.
+        const containerClass = isClosed
+          ? "bg-white/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60 opacity-75 dark:opacity-60 shadow-none rounded-2xl p-4 transition-all duration-200"
+          : isPremium
+            ? "bg-gradient-to-br from-primary/[0.06] via-white to-white dark:from-primary/[0.10] dark:via-slate-800/60 dark:to-slate-800/60 border-2 border-primary/20 dark:border-primary/30 shadow-sm rounded-2xl p-4 transition-all duration-200"
+            : isInRoute
+              ? "bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 ring-1 ring-emerald-300/50 dark:ring-emerald-500/40 rounded-2xl p-4 transition-all duration-200"
+              : isPending
+                ? "bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 border-l-4 border-l-amber-400 rounded-2xl p-4 transition-all duration-200"
+                : "bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 transition-all duration-200"
+
         return (
           <motion.div
             key={o.id}
-            initial={{ opacity: 0, y: 8 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl p-4"
+            className={containerClass}
+            style={{ contain: "layout style paint" }}
+            onClick={isCompact ? () => toggleExpanded(o.id) : undefined}
+            role={isCompact ? "button" : undefined}
+            tabIndex={isCompact ? 0 : undefined}
+            aria-expanded={isCompact ? isExpanded : undefined}
+            onKeyDown={
+              isCompact
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      toggleExpanded(o.id)
+                    }
+                  }
+                : undefined
+            }
           >
             {/* HEADER: folio + estado + chip de entrega */}
             <div className="flex items-start justify-between mb-3">
@@ -452,9 +548,45 @@ export default function ClientOrdersPage() {
               delivery={delivery}
             />
 
+            {/* Indicador en vivo cuando el repartidor está en ruta. */}
+            {isInRoute && !isClosed && (
+              <div className="mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Repartidor en camino
+              </div>
+            )}
+
+            {/* Badge inline si hay incidencias abiertas para este pedido. */}
+            {(openTicketsBySale[o.id] ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSupportSaleId(o.id)
+                  setOpenSupport(true)
+                }}
+                className="mt-2 w-full flex items-center justify-between gap-2 px-3 h-9 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 text-[10px] font-black uppercase tracking-widest press"
+              >
+                <span className="flex items-center gap-1.5">
+                  <LifeBuoy size={11} />
+                  {openTicketsBySale[o.id] === 1
+                    ? "1 incidencia abierta"
+                    : `${openTicketsBySale[o.id]} incidencias abiertas`}
+                </span>
+                <span className="text-[9px] font-bold opacity-80">Ver mensajes</span>
+              </button>
+            )}
+
+            {/* Hint para tarjetas compactas colapsadas. */}
+            {isCompact && !isExpanded && (
+              <p className="mt-2 text-[9px] text-slate-400 italic text-center">
+                Toca para pagar o ver opciones
+              </p>
+            )}
+
             {/* QUICK ACTIONS de entrega — solo si está pagado y la entrega
                 aún no salió a ruta. Inline collapsible. */}
-            {canEditDelivery && delivery && (
+            {showInteractive && canEditDelivery && delivery && (
               <div className="mt-3">
                 <QuickDeliveryActions
                   deliveryId={delivery.id}
@@ -473,27 +605,29 @@ export default function ClientOrdersPage() {
             )}
 
             {/* SMART ACTIONS — botón principal mutante según estado */}
-            <div className="mt-3">
-              <SmartOrderActions
-                order={{
-                  id: o.id,
-                  balance,
-                  paid: safePaid,
-                  total: safeTotal,
-                  status: o.status,
-                  public_token: o.public_token,
-                }}
-                delivery={delivery}
-                canSupport={claim.allowed}
-                onPay={() => setPaymentOrder(o)}
-                onViewTicket={() => setTicketToken(o.public_token ?? o.id)}
-                onSupport={() => {
-                  setSupportSaleId(o.id)
-                  setOpenSupport(true)
-                }}
-                onEditDelivery={canEditDelivery ? () => setEditDeliveryFor(o.id) : undefined}
-              />
-            </div>
+            {showInteractive && (
+              <div className="mt-3">
+                <SmartOrderActions
+                  order={{
+                    id: o.id,
+                    balance,
+                    paid: safePaid,
+                    total: safeTotal,
+                    status: o.status,
+                    public_token: o.public_token,
+                  }}
+                  delivery={delivery}
+                  canSupport={claim.allowed}
+                  onPay={() => setPaymentOrder(o)}
+                  onViewTicket={() => setTicketToken(o.public_token ?? o.id)}
+                  onSupport={() => {
+                    setSupportSaleId(o.id)
+                    setOpenSupport(true)
+                  }}
+                  onEditDelivery={canEditDelivery ? () => setEditDeliveryFor(o.id) : undefined}
+                />
+              </div>
+            )}
 
             {/* Hint de ventana para soporte */}
             {!claim.allowed && (

@@ -83,12 +83,33 @@ export async function uploadPaymentProof(input: {
   // que el admin sepa que debe validar fisicamente el dinero. La columna
   // image_url debe ser NULLABLE en la BD (fix_payments_and_notifications.sql).
   const isCash = !input.file
+
+  // La policy `payment_proofs_insert` acepta el INSERT cuando se cumple
+  // alguna de estas condiciones (cualquiera basta):
+  //   1) el usuario es staff/admin
+  //   2) el `customer_email` ya está dentro del sale al que apunta
+  //   3) el `customer_email` se rellena Y NO ES NULL
+  // Si el caller manda `customerEmail` null/vacío (común cuando el ticket
+  // se abre como anon desde /ticket/:token), buscamos el email asociado
+  // al sale para garantizar que la condición 2 ó 3 se cumpla y NO recibir
+  // un 403 por RLS.
+  let effectiveEmail = input.customerEmail?.trim() || null
+  if (!effectiveEmail) {
+    const { data: saleRow } = await supabase
+      .from("sales")
+      .select("customer_email")
+      .eq("id", input.saleId)
+      .maybeSingle()
+    const fromSale = (saleRow as any)?.customer_email
+    if (fromSale) effectiveEmail = String(fromSale).trim()
+  }
+
   const payload: Record<string, any> = {
     sale_id: input.saleId,
     image_url: publicUrl,
     amount: input.amount ?? null,
     method: input.method ?? (isCash ? "efectivo" : "transferencia"),
-    customer_email: input.customerEmail ?? null,
+    customer_email: effectiveEmail,
     note: input.note ?? null,
     status: isCash ? "pending_verification" : "pending",
   }

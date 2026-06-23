@@ -533,17 +533,19 @@ export default function ClientShopPage() {
     [totalQty, thresholds]
   )
 
-  // Re-calcular precios de cada línea según el tier activo
+  // Re-calcular precios + stock FRESCO de cada línea según el tier activo
+  // y el inventario actual (no el snapshot del momento que se agregó).
+  // Realtime de `variants` mantiene `products` al día, así que con este
+  // pase también obtenemos `stock` actualizado en cada render.
   const repricedCart = useMemo(
     () =>
       cart.map((c) => {
-        // Necesitamos los precios originales de la variante para recalcular
         const variant = products
           .flatMap((p) => p.variants)
           .find((v) => v.id === c.variant_id)
         if (!variant) return c
         const newPrice = priceForTier(variant, cartTier)
-        return { ...c, unit_price: newPrice }
+        return { ...c, unit_price: newPrice, stock: variant.stock }
       }),
     [cart, cartTier, products]
   )
@@ -622,37 +624,58 @@ export default function ClientShopPage() {
   ) {
     if (lines.length === 0) return
     let added = 0
+    let skipped = 0
+    // Resolvemos stock FRESCO desde `products` (no del snapshot del sheet).
+    const freshVariants = products
+      .flatMap((pp) => pp.variants)
+      .reduce((acc, vv) => {
+        acc.set(vv.id, vv)
+        return acc
+      }, new Map<string, PublicVariant>())
     setCart((prev) => {
       const next = [...prev]
       for (const { variantId, qty } of lines) {
-        const v = p.variants.find((vv) => vv.id === variantId)
-        if (!v) continue
-        const safeQty = Math.min(qty, v.stock)
-        if (safeQty <= 0) continue
+        const fresh = freshVariants.get(variantId) ?? p.variants.find((vv) => vv.id === variantId)
+        if (!fresh) continue
+        const realStock = Math.max(0, Number(fresh.stock) || 0)
+        const safeQty = Math.min(qty, realStock)
+        if (safeQty <= 0) {
+          skipped++
+          continue
+        }
         added += safeQty
         const ix = next.findIndex((c) => c.variant_id === variantId)
         if (ix >= 0) {
-          next[ix] = { ...next[ix], qty: safeQty } // sobrescribe (no acumula): el sheet ya muestra el total
+          next[ix] = { ...next[ix], qty: safeQty, stock: realStock }
         } else {
           next.push({
-            variant_id: v.id,
+            variant_id: fresh.id,
             product_id: p.id,
             product_name: p.name,
-            variant_name: v.variant_name,
+            variant_name: fresh.variant_name,
             image_url:
-              (v.image_urls && v.image_urls[0]) ?? v.image_url ?? p.image_url,
-            unit_price: priceOf(v),
+              (fresh.image_urls && fresh.image_urls[0]) ?? fresh.image_url ?? p.image_url,
+            unit_price: priceOf(fresh),
             qty: safeQty,
-            stock: v.stock,
+            stock: realStock,
           })
         }
       }
       return next
     })
-    sound.success()
-    toast.success(`✨ +${added} ${added === 1 ? "pieza" : "piezas"} al carrito`, {
-      duration: 1600,
-    })
+    if (added > 0) {
+      sound.success()
+      toast.success(`✨ +${added} ${added === 1 ? "pieza" : "piezas"} al carrito`, {
+        duration: 1600,
+      })
+    }
+    if (skipped > 0 && added === 0) {
+      toast.error("Sin stock disponible para los tonos seleccionados.", {
+        duration: 2800,
+      })
+    } else if (skipped > 0) {
+      toast(`Algunos tonos sin stock se omitieron.`, { icon: "⚠️", duration: 2400 })
+    }
     setBuySheetProduct(null)
   }
 
@@ -661,15 +684,22 @@ export default function ClientShopPage() {
       prev
         .map((c) => {
           if (c.variant_id !== variantId) return c
-          const next = Math.max(0, Math.min(c.stock, c.qty + delta))
-          // Si intentaba sumar y ya estaba al tope, avisamos
-          if (delta > 0 && next === c.qty && c.qty === c.stock) {
+          // Stock REAL desde products (no el snapshot del carrito).
+          const fresh = products
+            .flatMap((p) => p.variants)
+            .find((v) => v.id === variantId)
+          const realStock = fresh?.stock ?? c.stock
+          const next = Math.max(0, Math.min(realStock, c.qty + delta))
+          // Si intentaba sumar y ya estaba al tope, avisamos con el stock real.
+          if (delta > 0 && next === c.qty && c.qty === realStock) {
             toast(
-              `Ya llevas las ${c.stock} piezas disponibles de ${c.variant_name} ✨`,
-              { icon: "⚠️", duration: 2200 }
+              realStock === 0
+                ? `${c.variant_name} se agotó. Te avisamos cuando vuelva 💛`
+                : `Ya llevas las ${realStock} piezas disponibles de ${c.variant_name} ✨`,
+              { icon: "⚠️", duration: 2400 }
             )
           }
-          return { ...c, qty: next }
+          return { ...c, qty: next, stock: realStock }
         })
         .filter((c) => c.qty > 0)
     )
@@ -729,6 +759,48 @@ export default function ClientShopPage() {
     // entre el render y el envío). Si la regla `block_oversell` está
     // apagada, permitimos pre-orden y skippeamos esta validación.
     if (bRules.block_oversell) {
+      // 1) Re-fetch FRESCO del stock real desde la BD, no del state local.
+      //    Esto evita el bug "puedo sumar al carrito sin stock" cuando el
+      //    realtime tardó o el cliente lleva rato sin scrollear.
+      try {
+        const ids = repricedCart.map((c) => c.variant_id)
+        const { data: freshVariants } = await supabase
+          .from("variants")
+          .select("id,stock,variant_name")
+          .in("id", ids)
+        if (freshVariants) {
+          const stockById = new Map<string, number>(
+            (freshVariants as any[]).map((v) => [v.id, Number(v.stock) || 0]),
+          )
+          const missing = repricedCart.find((c) => {
+            const real = stockById.get(c.variant_id)
+            return real !== undefined && c.qty > real
+          })
+          if (missing) {
+            setSubmitting(false)
+            const real = stockById.get(missing.variant_id) ?? 0
+            toast.error(
+              real === 0
+                ? `"${missing.variant_name}" se agotó mientras armabas tu carrito. Te avisamos cuando vuelva 💛`
+                : `Solo quedan ${real} de "${missing.variant_name}". Ajusta tu carrito.`,
+              { id: tid, duration: 4500 },
+            )
+            // Sincronizamos el cart con stock real para que la UI ya no permita sumar.
+            setCart((prev) =>
+              prev
+                .map((c) => {
+                  const real = stockById.get(c.variant_id)
+                  if (real === undefined) return c
+                  return { ...c, stock: real, qty: Math.min(c.qty, real) }
+                })
+                .filter((c) => c.qty > 0),
+            )
+            return
+          }
+        }
+      } catch {
+        // Si el fetch falla, caemos al check con state local (mismo que antes)
+      }
       const insufficient = repricedCart.find((c) => c.qty > c.stock)
       if (insufficient) {
         setSubmitting(false)
@@ -877,7 +949,16 @@ export default function ClientShopPage() {
       }
     } catch (e: any) {
       sound.error()
-      toast.error(e?.message ?? "No se pudo apartar", { id: tid })
+      // Mensajes amigables para errores comunes (sin exponer detalles internos).
+      const raw = e?.message ?? "No se pudo apartar"
+      const friendly = /no pudimos reservar|stock|insufficient|negative|check constraint/i.test(raw)
+        ? "Alguien se nos adelantó y se agotó una pieza. Refrescamos tu carrito — vuelve a intentar 💛"
+        : /row-level security|permission|denied/i.test(raw)
+        ? "No pudimos crear el apartado por permisos. Inicia sesión o avísanos por WhatsApp."
+        : /network|fetch|timeout/i.test(raw)
+        ? "Sin conexión estable. Verifica tu internet e intenta de nuevo."
+        : raw
+      toast.error(friendly, { id: tid, duration: 4500 })
       // Compensación: si la venta quedó registrada pero falló algún paso,
       // la borramos. El trigger `restock_on_sale_cancelled` (si existe)
       // o ningún trigger (en cuyo caso ya nada se descontó) deja el
@@ -892,6 +973,9 @@ export default function ClientShopPage() {
           /* mejor no hacer nada que duplicar error */
         }
       }
+      // Forzamos un refresh del catálogo para que el cliente vea el stock
+      // real y la UI vuelva a permitirle ajustar el carrito.
+      triggerCatalogReload()
     } finally {
       setSubmitting(false)
     }
@@ -1340,13 +1424,13 @@ export default function ClientShopPage() {
                       key={c.variant_id}
                       className="flex items-stretch gap-3 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700"
                     >
-                      {/* Imagen */}
-                      <div className="w-14 h-14 rounded-xl bg-white dark:bg-slate-700 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 self-center">
+                      {/* Aislamiento visual: object-contain + fondo neutro evita recorte agresivo de variantes */}
+                      <div className="w-14 h-14 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 self-center p-1">
                         {c.image_url ? (
                           <img
                             src={c.image_url}
                             alt=""
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                           />
                         ) : (
                           <Package size={20} />
@@ -1384,7 +1468,8 @@ export default function ClientShopPage() {
                             <button
                               onClick={() => changeQty(c.variant_id, 1)}
                               aria-label="Aumentar"
-                              className="w-6 h-6 rounded-full text-primary flex items-center justify-center hover:bg-primary/10"
+                              disabled={c.stock === 0 || c.qty >= c.stock}
+                              className="w-6 h-6 rounded-full text-primary flex items-center justify-center hover:bg-primary/10 disabled:opacity-30 disabled:cursor-not-allowed"
                             >
                               <Plus size={11} />
                             </button>

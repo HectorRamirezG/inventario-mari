@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence, type PanInfo } from "framer-motion"
 import {
@@ -7,7 +7,6 @@ import {
   Clock,
   Share2,
   Copy,
-  ExternalLink,
   MessageCircle,
   Sparkles,
   AlertCircle,
@@ -87,77 +86,133 @@ export default function ClientTicketDrawer({ open, token, onClose }: Props) {
   const [delivery, setDelivery] = useState<OrderProgressDelivery | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const aliveRef = useRef(true)
   const store = getStoreInfo()
 
   useBodyScrollLock(open)
 
-  useEffect(() => {
+  // Carga del ticket: extraída para poder llamarse tanto al abrir como
+  // cuando llega un evento realtime (pago, comprobante aprobado, etc.).
+  const loadTicket = useCallback(async () => {
     if (!open || !token) return
-    let alive = true
+    const { data, error: rpcErr } = await supabase.rpc("get_public_ticket", {
+      p_token: token,
+    })
+    if (!aliveRef.current) return
+    if (rpcErr) {
+      setError(rpcErr.message)
+      setLoading(false)
+      return
+    }
+    if (!data) {
+      setError("Ticket no encontrado")
+      setLoading(false)
+      return
+    }
+    const raw = data as any
+    const flat: any = raw?.sale ? { ...raw.sale } : { ...raw }
+    flat.items = raw?.items ?? raw?.sale?.items ?? flat.items ?? []
+    flat.payments = raw?.payments ?? raw?.sale?.payments ?? flat.payments ?? []
+    if (!flat.id) {
+      setError("Ticket inválido")
+      setLoading(false)
+      return
+    }
+    setTicket(flat as PublicTicket)
+    setLoading(false)
+  }, [open, token])
+
+  // Carga de delivery: también extraída para refrescar con realtime.
+  const loadDelivery = useCallback(async (saleId: string) => {
+    try {
+      const { data: dn } = await supabase
+        .from("delivery_notes")
+        .select(
+          "id,status,driver_name,driver_phone,picked_up_at,delivered_at,current_lat,current_lng,last_position_at",
+        )
+        .eq("sale_id", saleId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+      if (!aliveRef.current) return
+      const note = (dn?.[0] as any) ?? null
+      if (note) {
+        setDelivery({
+          id: note.id,
+          status: note.status,
+          driver_name: note.driver_name ?? null,
+          driver_phone: note.driver_phone ?? null,
+          current_lat: note.current_lat ?? null,
+          current_lng: note.current_lng ?? null,
+          last_position_at: note.last_position_at ?? null,
+          picked_up_at: note.picked_up_at ?? null,
+          delivered_at: note.delivered_at ?? null,
+        })
+      } else {
+        setDelivery(null)
+      }
+    } catch {
+      /* tabla puede no existir o sin columnas nuevas */
+    }
+  }, [])
+
+  useEffect(() => {
+    aliveRef.current = true
+    if (!open || !token) {
+      return () => {
+        aliveRef.current = false
+      }
+    }
     setLoading(true)
     setError(null)
     setTicket(null)
     setDelivery(null)
     ;(async () => {
-      const { data, error: rpcErr } = await supabase.rpc("get_public_ticket", {
-        p_token: token,
-      })
-      if (!alive) return
-      if (rpcErr) {
-        setError(rpcErr.message)
-        setLoading(false)
-        return
-      }
-      if (!data) {
-        setError("Ticket no encontrado")
-        setLoading(false)
-        return
-      }
-      const raw = data as any
-      const flat: any = raw?.sale ? { ...raw.sale } : { ...raw }
-      flat.items = raw?.items ?? raw?.sale?.items ?? flat.items ?? []
-      flat.payments = raw?.payments ?? raw?.sale?.payments ?? flat.payments ?? []
-      if (!flat.id) {
-        setError("Ticket inválido")
-        setLoading(false)
-        return
-      }
-      setTicket(flat as PublicTicket)
-      setLoading(false)
-
-      // Carga comanda asociada para el tracker (best-effort)
-      try {
-        const { data: dn } = await supabase
-          .from("delivery_notes")
-          .select(
-            "id,status,driver_name,driver_phone,picked_up_at,delivered_at,current_lat,current_lng,last_position_at",
-          )
-          .eq("sale_id", flat.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-        if (!alive) return
-        const note = (dn?.[0] as any) ?? null
-        if (note) {
-          setDelivery({
-            id: note.id,
-            status: note.status,
-            driver_name: note.driver_name ?? null,
-            driver_phone: note.driver_phone ?? null,
-            current_lat: note.current_lat ?? null,
-            current_lng: note.current_lng ?? null,
-            last_position_at: note.last_position_at ?? null,
-            picked_up_at: note.picked_up_at ?? null,
-            delivered_at: note.delivered_at ?? null,
-          })
-        }
-      } catch {
-        /* tabla puede no existir o sin columnas nuevas */
-      }
+      await loadTicket()
     })()
     return () => {
-      alive = false
+      aliveRef.current = false
     }
-  }, [open, token])
+  }, [open, token, loadTicket])
+
+  // Cuando el ticket se cargó, traemos la comanda asociada (best-effort).
+  useEffect(() => {
+    if (!ticket?.id) return
+    loadDelivery(ticket.id)
+  }, [ticket?.id, loadDelivery])
+
+  // Realtime SCOPED al ticket actual: si llega un pago, un comprobante
+  // aprobado o cambia el estado de la entrega, refrescamos el RPC para
+  // que Mari y la clienta vean el cambio sin recargar.
+  useEffect(() => {
+    if (!open || !ticket?.id) return
+    const saleId = ticket.id
+    const channel = supabase
+      .channel(`client-ticket-${saleId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "sales", filter: `id=eq.${saleId}` },
+        () => loadTicket(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "payments", filter: `sale_id=eq.${saleId}` },
+        () => loadTicket(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "payment_proofs", filter: `sale_id=eq.${saleId}` },
+        () => loadTicket(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "delivery_notes", filter: `sale_id=eq.${saleId}` },
+        () => loadDelivery(saleId),
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [open, ticket?.id, loadTicket, loadDelivery])
 
   // ESC para cerrar
   useEffect(() => {
@@ -506,16 +561,8 @@ export default function ClientTicketDrawer({ open, token, onClose }: Props) {
                       onClick={copyLink}
                       className="flex-1 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press"
                     >
-                      <Copy size={11} /> Link
+                      <Copy size={11} /> Copiar link
                     </button>
-                    <a
-                      href={`/ticket/${ticket.public_token}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press"
-                    >
-                      <ExternalLink size={11} /> Abrir
-                    </a>
                   </div>
                 </div>
               </>
