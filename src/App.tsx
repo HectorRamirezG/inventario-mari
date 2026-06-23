@@ -1045,7 +1045,7 @@ function AdminShell() {
                   {greeting()}
                 </p>
                 <p className="text-xs font-black truncate text-slate-900 dark:text-slate-100">
-                  {fullName?.split(" ")[0] ?? email?.split("@")[0] ?? "Mari"}
+                  {fullName?.split(" ")[0] ?? email?.split("@")[0] ?? "amiga"}
                 </p>
               </div>
             </div>
@@ -1109,7 +1109,7 @@ function AdminShell() {
               )}
             </nav>
             <h1 className="text-xl font-black tracking-tight leading-none text-slate-900 dark:text-slate-100 truncate">
-              {greeting()}, {fullName?.split(" ")[0] ?? email?.split("@")[0] ?? "Mari"}{" "}
+              {greeting()}, {fullName?.split(" ")[0] ?? email?.split("@")[0] ?? "amiga"}{" "}
               <motion.span
                 animate={{ rotate: [0, 14, -8, 14, 0], scale: [1, 1.15, 1, 1.1, 1] }}
                 transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 4, ease: "easeInOut" }}

@@ -198,7 +198,7 @@ function TicketCard({ ticket }: { ticket: SupportTicket }) {
       {ticket.status === "resolved" && resolution && (
         <div className="mt-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/40 p-3">
           <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300 mb-1 flex items-center gap-1">
-            <CheckCircle2 size={10} /> Respuesta de Mari
+            <CheckCircle2 size={10} /> Respuesta de Beauty's Me
           </p>
           <p className="text-[12px] text-emerald-900 dark:text-emerald-100 leading-snug">
             {resolution}

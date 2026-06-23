@@ -590,7 +590,7 @@ function ProofRow({ proof }: { proof: PaymentProof }) {
           <AlertCircle size={11} className="shrink-0 mt-0.5" />
           <p className="text-[10px] font-bold leading-snug">
             <span className="uppercase tracking-widest font-black text-[8px] block opacity-80">
-              Motivo de Mari:
+              Motivo de Beauty's Me:
             </span>
             {proof.rejection_reason}
           </p>

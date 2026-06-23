@@ -14,6 +14,8 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  ChevronDown,
+  Camera,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -66,6 +68,9 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
   const [showPwd, setShowPwd] = useState(false)
   const [pwdSaving, setPwdSaving] = useState(false)
   const [emailSaving, setEmailSaving] = useState(false)
+  // Secciones colapsables (todo cerrado al abrir = vista limpia)
+  const [securityOpen, setSecurityOpen] = useState(false)
+  const [photoOpen, setPhotoOpen] = useState(false)
 
   // Cargar perfil cuando se abre
   useEffect(() => {
@@ -245,10 +250,8 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
 
               {session && !loading && (
                 <>
-                  {/* Identity Card — gradient brand + avatar + identidad
-                      compacta. Reemplaza el bloque plano de "Avatar grande
-                      + texto suelto". Pensada para que se vea premium en
-                      mobile sin invadir el resto del scroll. */}
+                  {/* Identity Card premium — gradient brand + avatar + chips
+                      de rol. Botón "Cambiar foto" abre acordeón con uploader. */}
                   <div
                     className="relative overflow-hidden rounded-3xl p-4 shadow-bloom"
                     style={{
@@ -261,7 +264,12 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                     <span className="absolute -bottom-16 -left-8 w-44 h-44 rounded-full bg-white/10 blur-3xl pointer-events-none" />
 
                     <div className="relative flex items-center gap-3">
-                      <div className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPhotoOpen((v) => !v)}
+                        className="relative shrink-0 group press"
+                        aria-label="Cambiar foto de perfil"
+                      >
                         {avatarUrl ? (
                           <img
                             src={avatarUrl}
@@ -273,7 +281,11 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                             {initials || "👤"}
                           </div>
                         )}
-                      </div>
+                        {/* Overlay con cámara — visible siempre como hint */}
+                        <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-white text-primary flex items-center justify-center shadow-md ring-2 ring-white">
+                          <Camera size={11} strokeWidth={2.5} />
+                        </span>
+                      </button>
                       <div className="flex-1 min-w-0 text-white">
                         <p className="text-[9px] font-black uppercase tracking-widest text-white/80">
                           Beauty's Me
@@ -286,7 +298,7 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                             {email}
                           </p>
                         )}
-                        <div className="flex items-center gap-1.5 mt-1.5">
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[9px] font-black uppercase tracking-widest">
                             <Shield size={9} />
                             {role}
@@ -301,13 +313,27 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                     </div>
                   </div>
 
-                  {/* Uploader avatar */}
-                  <ImageUploader
-                    value={avatarUrl}
-                    onChange={setAvatarUrl}
-                    folder={`avatars/${user?.id ?? "anon"}`}
-                    label="Cambiar foto de perfil"
-                  />
+                  {/* Uploader avatar — acordeón. Solo aparece cuando el
+                      cliente tocó "cambiar foto" en el identity card. */}
+                  <AnimatePresence initial={false}>
+                    {photoOpen && (
+                      <motion.div
+                        key="photo-acc"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        className="overflow-hidden"
+                      >
+                        <ImageUploader
+                          value={avatarUrl}
+                          onChange={setAvatarUrl}
+                          folder={`avatars/${user?.id ?? "anon"}`}
+                          label="Cambiar foto de perfil"
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {email && <MyShoppingStatsCard email={email} />}
 
@@ -382,73 +408,108 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                     </button>
                   </section>
 
-                  {/* Seguridad — correo */}
-                  <section className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                      <Mail size={10} /> Correo electrónico
-                    </h4>
-                    <FieldRow
-                      icon={Mail}
-                      label=""
-                      value={newEmail}
-                      onChange={setNewEmail}
-                      placeholder="tucorreo@ejemplo.com"
-                      type="email"
-                      autoComplete="email"
-                    />
-                    {newEmail !== email && newEmail.trim() && (
-                      <button
-                        type="button"
-                        onClick={handleChangeEmail}
-                        disabled={emailSaving}
-                        className="w-full h-10 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
-                      >
-                        {emailSaving ? (
-                          <Loader2 size={12} className="animate-spin inline" />
-                        ) : (
-                          "Cambiar correo"
-                        )}
-                      </button>
-                    )}
-                  </section>
-
-                  {/* Seguridad — contraseña */}
-                  <section className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
-                      <Lock size={10} /> Cambiar contraseña
-                    </h4>
-                    <div className="relative">
-                      <input
-                        type={showPwd ? "text" : "password"}
-                        value={newPwd}
-                        onChange={(e) => setNewPwd(e.target.value)}
-                        placeholder="Nueva contraseña (min 6 caracteres)"
-                        autoComplete="new-password"
-                        className="settings-input pr-10"
+                  {/* Cuenta y seguridad — acordeón único que agrupa email +
+                      contraseña. Evita abrumar al cliente con form gigante. */}
+                  <section className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setSecurityOpen((v) => !v)}
+                      className="w-full flex items-center justify-between gap-2 py-1 press"
+                      aria-expanded={securityOpen}
+                    >
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <Lock size={11} /> Cuenta y seguridad
+                      </span>
+                      <ChevronDown
+                        size={14}
+                        className={`text-slate-400 transition-transform ${
+                          securityOpen ? "rotate-180" : ""
+                        }`}
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowPwd((v) => !v)}
-                        aria-label={showPwd ? "Ocultar" : "Mostrar"}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700"
-                      >
-                        {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
-                    </div>
-                    {newPwd && (
-                      <button
-                        type="button"
-                        onClick={handleChangePassword}
-                        disabled={pwdSaving || newPwd.length < 6}
-                        className="w-full h-10 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
-                      >
-                        {pwdSaving ? (
-                          <Loader2 size={12} className="animate-spin inline" />
-                        ) : (
-                          "Actualizar contraseña"
-                        )}
-                      </button>
-                    )}
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {securityOpen && (
+                        <motion.div
+                          key="sec-acc"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                          className="overflow-hidden"
+                        >
+                          <div className="pt-4 space-y-5">
+                            {/* Correo */}
+                            <div className="space-y-2">
+                              <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                                <Mail size={9} /> Correo electrónico
+                              </h5>
+                              <FieldRow
+                                icon={Mail}
+                                label=""
+                                value={newEmail}
+                                onChange={setNewEmail}
+                                placeholder="tucorreo@ejemplo.com"
+                                type="email"
+                                autoComplete="email"
+                              />
+                              {newEmail !== email && newEmail.trim() && (
+                                <button
+                                  type="button"
+                                  onClick={handleChangeEmail}
+                                  disabled={emailSaving}
+                                  className="w-full h-10 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                                >
+                                  {emailSaving ? (
+                                    <Loader2 size={12} className="animate-spin inline" />
+                                  ) : (
+                                    "Cambiar correo"
+                                  )}
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Contraseña */}
+                            <div className="space-y-2">
+                              <h5 className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                                <Lock size={9} /> Cambiar contraseña
+                              </h5>
+                              <div className="relative">
+                                <input
+                                  type={showPwd ? "text" : "password"}
+                                  value={newPwd}
+                                  onChange={(e) => setNewPwd(e.target.value)}
+                                  placeholder="Nueva contraseña (mín 6 caracteres)"
+                                  autoComplete="new-password"
+                                  className="settings-input pr-10"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPwd((v) => !v)}
+                                  aria-label={showPwd ? "Ocultar" : "Mostrar"}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700"
+                                >
+                                  {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
+                                </button>
+                              </div>
+                              {newPwd && (
+                                <button
+                                  type="button"
+                                  onClick={handleChangePassword}
+                                  disabled={pwdSaving || newPwd.length < 6}
+                                  className="w-full h-10 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+                                >
+                                  {pwdSaving ? (
+                                    <Loader2 size={12} className="animate-spin inline" />
+                                  ) : (
+                                    "Actualizar contraseña"
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </section>
 
                   {/* Cerrar sesión */}

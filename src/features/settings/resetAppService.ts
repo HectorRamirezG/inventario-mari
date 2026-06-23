@@ -92,7 +92,7 @@ export const CATEGORY_INFO: Record<
   },
   notifs: {
     label: "Notificaciones",
-    description: "Buzón de Mari y todas las notifs de clientes.",
+    description: "Buzón del staff y todas las notifs de clientes.",
     tone: "sky",
   },
   deseos: {
