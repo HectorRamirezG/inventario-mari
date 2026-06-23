@@ -94,23 +94,23 @@ export default function KpiCard({
       }`}
     >
       <div className="relative z-10">
-        <p className="text-[7px] font-black uppercase tracking-widest opacity-70 flex items-center gap-1">
-          {icon && <span className="opacity-80">{icon}</span>}
+        <p className="text-[8.5px] font-black uppercase tracking-[0.18em] opacity-80 flex items-center gap-1 leading-none">
+          {icon && <span className="opacity-90">{icon}</span>}
           {label}
         </p>
-        <p className="text-sm font-black tabular-nums mt-1 leading-tight">
+        <p className="text-[15px] font-black tabular-nums mt-1.5 leading-none">
           {value}
         </p>
         {(hint || showDelta) && (
-          <div className="flex items-center gap-1.5 mt-0.5 leading-tight">
+          <div className="flex items-center gap-1.5 mt-1 leading-none">
             {showDelta && (
-              <span className={`inline-flex items-center gap-0.5 text-[8px] font-black ${deltaCls}`}>
+              <span className={`inline-flex items-center gap-0.5 text-[9px] font-black ${deltaCls}`}>
                 <DeltaIcon className="w-2.5 h-2.5" strokeWidth={2.5} />
                 {Math.abs(delta!).toFixed(0)}%
               </span>
             )}
             {hint && (
-              <span className="text-[8px] font-bold opacity-60">
+              <span className="text-[9px] font-bold opacity-60">
                 {hint}
               </span>
             )}

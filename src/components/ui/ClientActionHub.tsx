@@ -7,7 +7,7 @@
  *  - "Pedir un deseo"      → abre WishesDrawer (si rule activa)
  *  - "Reportar problema"   → abre SupportModal
  *  - "Calificar productos" → abre MyReviewsDrawer en pendientes (si rule)
- *  - "Mis premios"         → abre LoyaltyDrawer (si rule)
+ *  - "Mis premios"         → navega a /mis-premios (si rule)
  *  - "WhatsApp"            → wa.me link directo
  *  - "Ver mi carrito"      → dispara `mari:open-cart`
  *
@@ -43,7 +43,6 @@ import {
 import WishesDrawer from "../../features/wishes/WishesDrawer"
 import SupportModal from "../../features/support/SupportModal"
 import MyReviewsDrawer from "../../features/reviews/MyReviewsDrawer"
-import LoyaltyDrawer from "../../features/loyalty/LoyaltyDrawer"
 
 interface Props {
   open: boolean
@@ -84,7 +83,6 @@ export default function ClientActionHub({ open, onClose }: Props) {
   const [wishesOpen, setWishesOpen] = useState(false)
   const [supportOpen, setSupportOpen] = useState(false)
   const [reviewsOpen, setReviewsOpen] = useState(false)
-  const [loyaltyOpen, setLoyaltyOpen] = useState(false)
 
   useBodyScrollLock(open)
 
@@ -155,11 +153,14 @@ export default function ClientActionHub({ open, onClose }: Props) {
     {
       id: "loyalty",
       label: "Mis premios",
-      caption: "Tus puntos y canjes",
+      caption: "Tus puntos y logros",
       icon: Trophy,
       tone: "violet",
       visible: bRules.loyalty_enabled && isLogged,
-      onTap: () => setLoyaltyOpen(true),
+      onTap: () => {
+        onClose()
+        navigate("/mis-premios")
+      },
     },
     {
       id: "support",
@@ -310,13 +311,6 @@ export default function ClientActionHub({ open, onClose }: Props) {
             initialTab="pendientes"
             onClose={() => {
               setReviewsOpen(false)
-              onClose()
-            }}
-          />
-          <LoyaltyDrawer
-            open={loyaltyOpen}
-            onClose={() => {
-              setLoyaltyOpen(false)
               onClose()
             }}
           />

@@ -49,6 +49,7 @@ const ClientOrdersPage = lazy(() => import("./features/client/ClientOrdersPage")
 const MyReportsPage = lazy(() => import("./features/client/MyReportsPage"))
 const MyWishesPage = lazy(() => import("./features/wishes/MyWishesPage"))
 const MyWalletPage = lazy(() => import("./features/wallet/MyWalletPage"))
+const MyRewardsPage = lazy(() => import("./features/loyalty/MyRewardsPage"))
 const WishAdminPage = lazy(() => import("./features/wishes/WishAdminPage"))
 const StoriesAdminPage = lazy(() => import("./features/stories/StoriesAdminPage"))
 const ReviewsAdminPage = lazy(() => import("./features/reviews/ReviewsAdminPage"))
@@ -1569,6 +1570,20 @@ function ShopShell() {
                         to="/login"
                         replace
                         state={{ from: "/mi-monedero" }}
+                      />
+                    )
+                  }
+                />
+                <Route
+                  path="/mis-premios"
+                  element={
+                    isLogged ? (
+                      <MyRewardsPage />
+                    ) : (
+                      <Navigate
+                        to="/login"
+                        replace
+                        state={{ from: "/mis-premios" }}
                       />
                     )
                   }

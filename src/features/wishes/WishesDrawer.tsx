@@ -17,6 +17,7 @@ import { createWish, uploadWishImage } from "./wishesService"
 import { useAuth } from "../../lib/useAuth"
 import { fetchMyProfile, updateMyProfile } from "../profile/profileService"
 import {
+  OVERLAY_BACKDROP_TRANSITION,
   OVERLAY_PANEL_STYLE,
   OVERLAY_PANEL_TRANSITION,
 } from "../../lib/overlayMotion"
