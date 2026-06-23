@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
-  Clock,
-  CheckCircle2,
   LifeBuoy,
   Lock,
   ShoppingBag,
@@ -23,14 +21,10 @@ import PageHeader from "../../components/ui/PageHeader"
 import Skeleton from "../../components/ui/Skeleton"
 import SupportModal from "../support/SupportModal"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
-import DeliveryStatusChip from "../../components/ui/DeliveryStatusChip"
 import OrderProgressTracker, {
   type OrderProgressDelivery,
 } from "../../components/ui/OrderProgressTracker"
 import SmartOrderActions from "../../components/ui/SmartOrderActions"
-import QuickDeliveryActions, {
-  type DeliveryTimePref,
-} from "../../components/ui/QuickDeliveryActions"
 import OrderHelpCenter from "../../components/ui/OrderHelpCenter"
 import ClientTicketDrawer from "../../components/ui/ClientTicketDrawer"
 import RateOrderProductsDrawer from "../reviews/RateOrderProductsDrawer"
@@ -66,10 +60,11 @@ interface MyOrder {
   payment_url: string | null
 }
 
-/** Mini-snapshot de la comanda asociada a la venta. */
+/** Mini-snapshot de la comanda asociada a la venta. Solo lectura desde
+ *  el lado cliente — modificar la entrega es tarea del admin. */
 interface MyDelivery extends OrderProgressDelivery {
   client_notes?: string | null
-  client_time_pref?: DeliveryTimePref | null
+  client_time_pref?: string | null
 }
 
 export default function ClientOrdersPage() {
@@ -99,8 +94,6 @@ export default function ClientOrdersPage() {
   const openRateOrder = useCallback((id: string) => setRateOrderId(id), [])
   /** sale_id -> comanda más reciente (completa). */
   const [deliveryBySale, setDeliveryBySale] = useState<Record<string, MyDelivery>>({})
-  /** sale_id -> si el bloque QuickDeliveryActions está abierto inline. */
-  const [editDeliveryFor, setEditDeliveryFor] = useState<string | null>(null)
   /** sale_ids cuya tarjeta compacta está expandida (revela acciones). */
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   /** sale_id -> cantidad de incidencias abiertas. Mantenido por realtime. */
@@ -471,15 +464,18 @@ export default function ClientOrdersPage() {
         const paid = balance <= 0
         const delivery = deliveryBySale[o.id] ?? null
         const claim = canClaim(rules, o as any)
-        const canEditDelivery =
-          paid &&
-          delivery &&
-          (delivery.status === "draft" || delivery.status === "sent")
         const cancel = canCancelSale(rules, o as any)
         const isCompleted =
           paid &&
           o.status !== "cancelled" &&
           (delivery?.status === "delivered" || !delivery)
+        // Permitir reseñar: por default solo cuando isCompleted (entregado
+        // o pagado sin delivery). Si rule.reviews_on_paid_enabled está ON,
+        // basta con que esté pagado y no cancelado (sin esperar entrega).
+        const canReview =
+          rules.reviews_enabled &&
+          o.status !== "cancelled" &&
+          (isCompleted || (rules.reviews_on_paid_enabled && paid))
         // Permitir reseñar: por default solo cuando isCompleted (entregado
         // o pagado sin delivery). Si rule.reviews_on_paid_enabled está ON,
         // basta con que esté pagado y no cancelado (sin esperar entrega).
@@ -534,36 +530,26 @@ export default function ClientOrdersPage() {
                 : undefined
             }
           >
-            {/* HEADER limpio: folio grande + fecha sutil arriba, chip de
-                entrega a la derecha (solo si hay delivery). Quitamos el
-                pill "Pagado/Pendiente" porque el tracker ya lo comunica
-                con su barra/stepper. Mari pidio menos saturacion visual. */}
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-black">
-                  {formatDate(o.created_at)}
-                </p>
-                <p className="text-base font-black tracking-tight leading-tight mt-0.5 text-slate-900 dark:text-slate-100">
-                  Pedido #{shortId(o.id)}
-                </p>
-              </div>
-              {delivery ? (
-                <DeliveryStatusChip status={delivery.status} size="xs" />
-              ) : !paid ? (
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest shrink-0">
-                  <Clock size={10} /> Pendiente
-                </span>
-              ) : null}
-            </div>
+            {/* STATUS BANNER prominente estilo Amazon/ML: hero del pedido.
+                Comunica el estado en grande con el contexto temporal
+                ("Entregado el martes 24" / "En camino con Pedro" /
+                "Esperando envio" / "Debes $X"). Sustituye el chip
+                pequenio que antes estaba arriba a la derecha. */}
+            <OrderStatusBanner
+              paid={paid}
+              balance={balance}
+              delivery={delivery}
+              cancelled={o.status === "cancelled"}
+              createdAt={o.created_at}
+            />
 
-            {/* TOTAL — protagonista de la card. Si esta pagado, lo tachamos
-                en mode discreto para enfatizar que ya esta cerrado. */}
-            <div className="flex items-baseline justify-between mb-3">
-              <span className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-black">
-                Total
-              </span>
+            {/* SUBTITLE sutil: folio + fecha. Tipografia minima, no compite. */}
+            <div className="flex items-center justify-between gap-2 mt-3 mb-3">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500 font-black truncate">
+                Pedido #{shortId(o.id)} · {formatDate(o.created_at)}
+              </p>
               <span
-                className={`text-2xl font-black tabular-nums ${
+                className={`text-[15px] font-black tabular-nums shrink-0 ${
                   paid
                     ? "text-emerald-600 dark:text-emerald-400"
                     : "text-slate-900 dark:text-slate-100"
@@ -581,13 +567,8 @@ export default function ClientOrdersPage() {
               delivery={delivery}
             />
 
-            {/* Indicador en vivo cuando el repartidor está en ruta. */}
-            {isInRoute && !isClosed && (
-              <div className="mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Repartidor en camino
-              </div>
-            )}
+            {/* Indicador "Repartidor en camino" REMOVIDO: el OrderStatusBanner
+                superior ya lo comunica con dot pulsante + texto. No duplicar. */}
 
             {/* Badge inline si hay incidencias abiertas para este pedido. */}
             {(openTicketsBySale[o.id] ?? 0) > 0 && (
@@ -617,28 +598,9 @@ export default function ClientOrdersPage() {
               </p>
             )}
 
-            {/* QUICK ACTIONS de entrega — solo si está pagado y la entrega
-                aún no salió a ruta. Inline collapsible: solo se muestra el
-                editor cuando el cliente lo abre desde SmartOrderActions. */}
-            {showInteractive && canEditDelivery && delivery && (
-              <div className="mt-3">
-                <QuickDeliveryActions
-                  deliveryId={delivery.id}
-                  initialNote={delivery.client_notes ?? null}
-                  initialTimePref={delivery.client_time_pref ?? null}
-                  enabled={editDeliveryFor === o.id}
-                  onSaved={(patch) => {
-                    setDeliveryBySale((prev) => ({
-                      ...prev,
-                      [o.id]: { ...prev[o.id], ...patch },
-                    }))
-                    setEditDeliveryFor(null)
-                  }}
-                />
-              </div>
-            )}
-
-            {/* SMART ACTIONS — botón principal mutante según estado */}
+            {/* SMART ACTIONS — boton principal mutante segun estado.
+                El cliente YA NO modifica la entrega (es tarea del admin).
+                Por eso onEditDelivery queda undefined. */}
             {showInteractive && (
               <div className="mt-3">
                 <SmartOrderActions
@@ -658,7 +620,6 @@ export default function ClientOrdersPage() {
                     setSupportSaleId(o.id)
                     setOpenSupport(true)
                   }}
-                  onEditDelivery={canEditDelivery ? () => setEditDeliveryFor(o.id) : undefined}
                 />
               </div>
             )}
@@ -797,6 +758,121 @@ export default function ClientOrdersPage() {
         onClose={() => setRateOrderId(null)}
         saleId={rateOrderId}
       />
+    </div>
+  )
+}
+
+/**
+ * OrderStatusBanner — hero del estatus del pedido.
+ *
+ * Estilo Amazon/Mercado Libre: un banner prominente arriba de la card
+ * que comunica el estado actual en lenguaje natural (no solo un chip).
+ *
+ * Estados cubiertos (por prioridad):
+ *   - Cancelado → rose
+ *   - Entregado → emerald + fecha de entrega
+ *   - En camino (picked_up) → sky + nombre del repartidor
+ *   - Por enviar (sent/draft) → amber (delivery preparada)
+ *   - Pagado sin delivery → emerald (pickup en tienda)
+ *   - Con saldo pendiente → amber con monto
+ *
+ * NO redunda con el tracker de abajo: el tracker muestra PROGRESO,
+ * el banner muestra CONTEXTO (qué pasó / qué falta).
+ */
+function OrderStatusBanner({
+  paid,
+  balance,
+  delivery,
+  cancelled,
+  createdAt: _createdAt,
+}: {
+  paid: boolean
+  balance: number
+  delivery: MyDelivery | null
+  cancelled: boolean
+  createdAt: string
+}) {
+  // Decide qué mensaje + colores aplicar.
+  let title = ""
+  let subtitle = ""
+  let toneCls = ""
+  let dotCls = ""
+
+  if (cancelled) {
+    title = "Pedido cancelado"
+    subtitle = "Esta orden ya no está activa"
+    toneCls =
+      "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400"
+    dotCls = "bg-slate-400"
+  } else if (delivery?.status === "delivered") {
+    const when = delivery.delivered_at
+      ? new Date(delivery.delivered_at).toLocaleDateString("es-MX", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        })
+      : null
+    title = "Entregado"
+    subtitle = when ? `Llegó el ${when}` : "Tu pedido fue entregado"
+    toneCls =
+      "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+    dotCls = "bg-emerald-500"
+  } else if (delivery?.status === "picked_up") {
+    title = "En camino"
+    subtitle = delivery.driver_name
+      ? `Va contigo · con ${delivery.driver_name}`
+      : "Tu pedido salió a entrega"
+    toneCls =
+      "bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/30 text-sky-700 dark:text-sky-300"
+    dotCls = "bg-sky-500 animate-pulse"
+  } else if (
+    delivery?.status === "sent" ||
+    delivery?.status === "draft"
+  ) {
+    title = "Listo para enviar"
+    subtitle = "Beauty's Me está preparando tu pedido"
+    toneCls =
+      "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300"
+    dotCls = "bg-amber-500"
+  } else if (paid && !delivery) {
+    title = "Pagado"
+    subtitle = "Recoge en tienda cuando gustes"
+    toneCls =
+      "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+    dotCls = "bg-emerald-500"
+  } else if (balance > 0) {
+    title = "Saldo pendiente"
+    subtitle = `Te falta abonar ${new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+    }).format(balance)}`
+    toneCls =
+      "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300"
+    dotCls = "bg-amber-500"
+  } else {
+    title = "Pedido recibido"
+    subtitle = "Procesando…"
+    toneCls =
+      "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+    dotCls = "bg-slate-400"
+  }
+
+  return (
+    <div
+      className={`rounded-2xl border px-4 py-3 flex items-center gap-3 ${toneCls}`}
+    >
+      <span
+        className={`w-2 h-2 rounded-full shrink-0 ${dotCls}`}
+        aria-hidden
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-black leading-tight tracking-tight">
+          {title}
+        </p>
+        <p className="text-[11px] font-bold opacity-80 leading-snug truncate mt-0.5">
+          {subtitle}
+        </p>
+      </div>
     </div>
   )
 }
