@@ -326,3 +326,66 @@ export async function getApartadosStats() {
     pendingBalance,
   };
 }
+
+/**
+ * Regla `auto_cancel_idle_enabled`: cancela apartados pendientes sin
+ * actividad de pagos desde hace N días (configurable). Se ejecuta como
+ * "best-effort": cualquier fallo se ignora silenciosamente.
+ *
+ * Algoritmo:
+ *   1. Lee rules. Si está desactivada, sale.
+ *   2. Calcula cutoff = now - rules.auto_cancel_idle_days días.
+ *   3. Busca apartados (is_layaway=true) con status='pending' creados
+ *      antes del cutoff.
+ *   4. Para cada uno verifica si tiene pagos posteriores al cutoff;
+ *      si NO los tiene, lo cancela con reason "Auto-cancelado por
+ *      inactividad". Usa `cancelSale` para que dispare notifs y
+ *      devuelva el stock como corresponde.
+ *
+ * Devuelve cuántos canceló (útil para mostrar toast opcional).
+ */
+export async function runAutoCancelIdleSales(): Promise<number> {
+  try {
+    const rules = getBusinessRules();
+    if (!rules.auto_cancel_idle_enabled) return 0;
+    const days = Math.max(1, Number(rules.auto_cancel_idle_days || 0));
+    if (!days) return 0;
+
+    const cutoffIso = new Date(
+      Date.now() - days * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    // Apartados candidatos: pendientes, layaway, viejos
+    const { data: candidates } = await supabase
+      .from("sales")
+      .select("id, created_at")
+      .eq("status", "pending")
+      .eq("is_layaway", true)
+      .lt("created_at", cutoffIso)
+      .limit(50);
+
+    const list = (candidates ?? []) as { id: string; created_at: string }[];
+    if (list.length === 0) return 0;
+
+    let cancelled = 0;
+    for (const sale of list) {
+      // Si tiene pagos posteriores al cutoff, NO la cancelamos
+      const { count } = await supabase
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("sale_id", sale.id)
+        .gte("created_at", cutoffIso);
+      if ((count ?? 0) > 0) continue;
+
+      try {
+        await cancelSale(sale.id, "Auto-cancelado por inactividad");
+        cancelled++;
+      } catch {
+        /* best-effort: si una falla seguimos con la siguiente */
+      }
+    }
+    return cancelled;
+  } catch {
+    return 0;
+  }
+}

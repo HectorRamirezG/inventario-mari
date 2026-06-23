@@ -181,7 +181,6 @@ export default function BusinessRulesPage() {
           title="Tracking obligatorio en foráneo"
           description="Para pedidos foráneos, debes capturar la guía de paquetería antes de marcar como ‘Enviado’ o ‘Entregado’. Evita que cierres pedidos sin tener el rastreo."
           affects="admin"
-          todo
           enabled={form.force_tracking_foraneo}
           onToggle={(v) => patch({ force_tracking_foraneo: v })}
         />
@@ -195,7 +194,6 @@ export default function BusinessRulesPage() {
           description="Cuando una venta pasa del monto que pongas, te pide doble confirmación antes de cerrarla. Útil para evitar cobros erróneos enormes."
           affects="admin"
           example="Ej: con $5,000, una venta de $6,200 te pedirá ‘¿Seguro?’."
-          todo
           enabled={form.high_value_enabled}
           onToggle={(v) => patch({ high_value_enabled: v })}
         >
@@ -216,7 +214,6 @@ export default function BusinessRulesPage() {
           description="No se puede crear un apartado si el primer abono es menor al porcentaje que defines del total. Así evitas apartados ‘fantasma’."
           affects="admin"
           example="Ej: con 20%, un apartado de $1,000 necesita al menos $200 de anticipo."
-          todo
           enabled={form.min_layaway_enabled}
           onToggle={(v) => patch({ min_layaway_enabled: v })}
         >
@@ -276,7 +273,6 @@ export default function BusinessRulesPage() {
           title="Gracia extra para clientes VIP"
           description="A los clientes con badge VIP (los que más te compran) les das días adicionales para cancelar respecto al período normal."
           affects="cliente"
-          todo
           enabled={form.vip_extra_grace_enabled}
           onToggle={(v) => patch({ vip_extra_grace_enabled: v })}
         >
@@ -299,7 +295,6 @@ export default function BusinessRulesPage() {
           description="Si un cliente gasta más del umbral en los últimos 30 días, se le marca como VIP automáticamente y le aparecen precios de mayoreo."
           affects="cliente"
           example="Ej: con $3,000/mes, un cliente que gastó $3,500 ya ve precios VIP."
-          todo
           enabled={form.auto_vip_enabled}
           onToggle={(v) => patch({ auto_vip_enabled: v })}
         >
@@ -346,7 +341,6 @@ export default function BusinessRulesPage() {
           title="Auto-cancelar apartados sin abono"
           description="Si un apartado se queda sin un solo pago durante más de N días, se cancela solo y libera el stock para que otros clientes puedan comprarlo."
           affects="admin"
-          todo
           enabled={form.auto_cancel_idle_enabled}
           onToggle={(v) => patch({ auto_cancel_idle_enabled: v })}
         >
@@ -369,7 +363,6 @@ export default function BusinessRulesPage() {
           title="Descuento automático por volumen"
           description="Cuando un cliente arma un carrito grande, la app te sugiere un descuento. Tú decides aplicarlo o no en el momento de cerrar la venta."
           affects="admin"
-          todo
           enabled={form.auto_discount_enabled}
           onToggle={(v) => patch({ auto_discount_enabled: v })}
         >
@@ -493,7 +486,6 @@ export default function BusinessRulesPage() {
           title="Bloquear edición tras cerrar ciclo"
           description="Cuando cierras el ciclo del mes (en Módulo Ciclos), los pedidos de ese mes quedan congelados: no se pueden editar precios, cantidades ni borrar. Garantiza que las cifras del corte no se alteren después."
           affects="admin"
-          todo
           enabled={form.lock_edit_when_cycle_closed}
           onToggle={(v) => patch({ lock_edit_when_cycle_closed: v })}
         />
@@ -725,7 +717,6 @@ export default function BusinessRulesPage() {
           title="Ocultar precios sin sesión"
           description="Los visitantes no ven precios hasta que inician sesión. Sirve para B2B o mayoreo. ⚠️ Reduce el ‘browsing casual’ pero captura emails."
           affects="tienda"
-          todo
           enabled={form.hide_prices_until_login}
           onToggle={(v) => patch({ hide_prices_until_login: v })}
         />
@@ -735,7 +726,6 @@ export default function BusinessRulesPage() {
           title="Pedir teléfono antes de comprar"
           description="Si el cliente no tiene teléfono en su perfil, se lo pide en el carrito justo antes de cerrar la venta. Así siempre tienes cómo contactarlo para la entrega."
           affects="cliente"
-          todo
           enabled={form.require_phone_to_buy}
           onToggle={(v) => patch({ require_phone_to_buy: v })}
         />

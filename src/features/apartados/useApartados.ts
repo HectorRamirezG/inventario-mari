@@ -8,6 +8,7 @@ import {
   cancelSale,
   getLatestProofActivity,
   listApartados,
+  runAutoCancelIdleSales,
 } from "./apartadosService"
 import { supabase } from "../../lib/supabase"
 import { sound } from "../../lib/sound"
@@ -122,6 +123,23 @@ export function useApartados() {
   useRealtimeSubscription("payments", invalidateAll)
   useRealtimeSubscription("payment_proofs", invalidateAll)
   useRealtimeSubscription("delivery_notes", invalidateAll)
+
+  // Regla `auto_cancel_idle_enabled`: al montar la página de apartados,
+  // ejecutamos un barrido best-effort que cancela apartados pendientes
+  // sin actividad. Si canceló algo, recargamos la lista.
+  useEffect(() => {
+    let mounted = true
+    runAutoCancelIdleSales().then((n) => {
+      if (mounted && n > 0) {
+        invalidateAll()
+        toast.success(`${n} apartado(s) auto-cancelados por inactividad`)
+      }
+    })
+    return () => {
+      mounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Eventos broadcast de la app + paleta de comandos.
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { supabase } from "../../lib/supabase"
 import { notifyClient, notifyAdmins } from "../notifications/notificationsService"
+import { getBusinessRules } from "../settings/businessRulesService"
 
 /**
  * Delivery Notes (Comandas de entrega) — service.
@@ -131,6 +132,46 @@ export async function updateDeliveryStatus(
   status: DeliveryStatus,
   cancellationReason?: string | null,
 ): Promise<void> {
+  // Validación de regla force_tracking_foraneo: si la venta es foránea
+  // y la regla está activa, exigimos que la comanda tenga capturado el
+  // número de guía ANTES de avanzar a 'sent'/'picked_up'/'delivered'.
+  // Buscamos el tracking en notes (regex) — sin requerir columna nueva.
+  if (status === "sent" || status === "picked_up" || status === "delivered") {
+    const rules = getBusinessRules()
+    if (rules.force_tracking_foraneo) {
+      const { data: note } = await supabase
+        .from("delivery_notes")
+        .select("notes,sale_id")
+        .eq("id", id)
+        .maybeSingle()
+      const saleId = (note as any)?.sale_id as string | undefined
+      if (saleId) {
+        const { data: sale } = await supabase
+          .from("sales")
+          .select("is_foreign_shipping")
+          .eq("id", saleId)
+          .maybeSingle()
+        const isForeign = !!(sale as any)?.is_foreign_shipping
+        if (isForeign) {
+          const rawNotes = String((note as any)?.notes ?? "")
+          // Detecta cualquier mención razonable de guía/tracking/número de
+          // rastreo. Mari escribe libre, así que aceptamos varios patrones.
+          const hasTracking =
+            /\b(gu[ií]a|tracking|rastreo|n[uú]mero de env[ií]o|tracking ?#?)\b/i.test(
+              rawNotes,
+            ) ||
+            // Patrón numérico-alfanumérico largo (típica guía paquetería: 10+ chars)
+            /\b[A-Z0-9]{10,}\b/.test(rawNotes)
+          if (!hasTracking) {
+            throw new Error(
+              "Pedido foráneo: captura el número de guía en las notas de la comanda antes de avanzar el estatus.",
+            )
+          }
+        }
+      }
+    }
+  }
+
   const patch: Record<string, unknown> = { status }
   const now = new Date().toISOString()
   if (status === "sent") patch.sent_at = now

@@ -72,6 +72,7 @@ import {
   useMyLoyaltyBalance,
   spendLoyaltyPoints,
 } from "../loyalty/loyaltyService"
+import { useMonthlySpent } from "../../lib/useMonthlySpent"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { preloadOnIdle } from "../../lib/preloadOnIdle"
@@ -560,10 +561,21 @@ export default function ClientShopPage() {
     [cart]
   )
 
-  // Tier que aplica al carrito completo (segun cantidad total)
+  // Auto-VIP: si la regla está activa y el cliente gastó >= threshold
+  // en los últimos 30 días, FORZAMOS precio mayoreo. Se calcula aquí
+  // y se usa más abajo como override del cartTier natural.
+  const { spent: monthlySpent } = useMonthlySpent(authEmail, 30)
+  const isAutoVip =
+    bRules.auto_vip_enabled &&
+    !!authEmail &&
+    monthlySpent >= (bRules.auto_vip_monthly_threshold || 0) &&
+    (bRules.auto_vip_monthly_threshold || 0) > 0
+
+  // Tier que aplica al carrito completo. Si es VIP automático, va directo
+  // a mayoreo (el banner del carrito lo refleja con un chip dorado).
   const cartTier = useMemo(
-    () => tierForQty(totalQty, thresholds),
-    [totalQty, thresholds]
+    () => (isAutoVip ? "mayoreo" : tierForQty(totalQty, thresholds)),
+    [isAutoVip, totalQty, thresholds]
   )
 
   // Re-calcular precios + stock FRESCO de cada línea según el tier activo
@@ -1496,6 +1508,20 @@ export default function ClientShopPage() {
 
               {/* Lista de items: imagen + datos + qty stepper + subtotal */}
               <div className="flex-1 overflow-y-auto px-4 pb-3 space-y-2 scroll-container-ios">
+                {/* Chip de auto-VIP cuando aplica */}
+                {isAutoVip && totalQty > 0 && (
+                  <div className="rounded-2xl border border-amber-300/60 bg-gradient-to-r from-amber-50 to-amber-100/50 dark:border-amber-500/30 dark:from-amber-500/10 dark:to-amber-500/5 px-3 py-2 text-[11px] font-bold text-amber-800 dark:text-amber-200 flex items-center gap-2">
+                    <span className="text-base">✨</span>
+                    <div>
+                      <div className="font-black uppercase tracking-widest text-[9px] leading-none mb-0.5">
+                        Precio VIP automático
+                      </div>
+                      <div className="text-[10px] font-medium opacity-90">
+                        Eres cliente frecuente — aplica precio mayoreo siempre.
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {/* Banner tier (solo si hay items y tiene sentido) */}
                 {totalQty > 0 && (
                   <CartTierBanner

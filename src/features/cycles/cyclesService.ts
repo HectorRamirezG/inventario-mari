@@ -85,6 +85,40 @@ export async function listCycles(limit = 24): Promise<InventoryCycle[]> {
   return (data ?? []) as InventoryCycle[]
 }
 
+/**
+ * Devuelve true si la fecha `createdAt` cae dentro de un ciclo que ya
+ * fue cerrado. Útil para bloquear edición de ventas viejas cuando la
+ * regla `lock_edit_when_cycle_closed` está activa.
+ *
+ * Algoritmo: busca el ciclo cuyo `started_at <= createdAt` y
+ * (`closed_at IS NULL OR closed_at >= createdAt`). Si lo encuentra y
+ * está cerrado → true.
+ */
+export async function isInClosedCycle(createdAtIso: string): Promise<boolean> {
+  if (!createdAtIso) return false
+  try {
+    const { data } = await supabase
+      .from("inventory_cycles")
+      .select("status, started_at, closed_at")
+      .lte("started_at", createdAtIso)
+      .order("started_at", { ascending: false })
+      .limit(1)
+    const cycle = (data ?? [])[0] as
+      | { status: string; started_at: string; closed_at: string | null }
+      | undefined
+    if (!cycle) return false
+    // Si el ciclo está abierto, no aplica bloqueo
+    if (cycle.status !== "closed") return false
+    // Si el ciclo está cerrado, validamos que createdAt esté DENTRO
+    // del rango (started_at .. closed_at).
+    if (cycle.closed_at && createdAtIso > cycle.closed_at) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
+
 export async function getCycleSnapshot(cycleId: string): Promise<CycleSnapshot> {
   const { data, error } = await supabase.rpc("cycle_snapshot", {
     p_cycle_id: cycleId,

@@ -28,6 +28,8 @@ import { previewCascade, toCascadeLine, type CascadeLine } from "./saleCascade"
 import { getPricingConfig } from "../pricing/pricingConfigService"
 import type { PricingConfig } from "../pricing/pricingTypes"
 import { notifyClient } from "../notifications/notificationsService"
+import { useBusinessRules } from "../settings/businessRulesService"
+import { isInClosedCycle } from "../cycles/cyclesService"
 
 interface Props {
   open: boolean
@@ -65,6 +67,11 @@ export default function EditSaleAdjustModal({
   const [loadingItems, setLoadingItems] = useState(false)
   const [saving, setSaving] = useState(false)
   const [cfg, setCfg] = useState<PricingConfig | null>(null)
+  // Regla `lock_edit_when_cycle_closed`: si la venta cae en un ciclo
+  // ya cerrado, deshabilitamos la edición para no romper los reportes
+  // históricos.
+  const bRules = useBusinessRules()
+  const [cycleLocked, setCycleLocked] = useState(false)
 
   useEffect(() => {
     getPricingConfig().then(setCfg).catch(() => setCfg(null))
@@ -78,8 +85,15 @@ export default function EditSaleAdjustModal({
     setReason(sale.adjustment_reason ?? "")
     setItems([])
     loadItems(sale)
+    // Validamos el lock de ciclo cerrado
+    setCycleLocked(false)
+    if (bRules.lock_edit_when_cycle_closed && sale.created_at) {
+      isInClosedCycle(sale.created_at)
+        .then((locked) => setCycleLocked(locked))
+        .catch(() => setCycleLocked(false))
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sale?.id])
+  }, [open, sale?.id, bRules.lock_edit_when_cycle_closed])
 
   async function loadItems(s: Sale) {
     setLoadingItems(true)
@@ -196,6 +210,10 @@ export default function EditSaleAdjustModal({
 
   async function handleSave() {
     if (!sale) return
+    if (cycleLocked) {
+      toast.error("Este pedido pertenece a un ciclo cerrado. No se puede editar.")
+      return
+    }
     setSaving(true)
     const tid = toast.loading("Aplicando cambios...")
     try {
@@ -404,6 +422,15 @@ export default function EditSaleAdjustModal({
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios space-y-5">
+              {cycleLocked && (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10 p-3 text-[11px] text-amber-800 dark:text-amber-200 font-medium">
+                  <strong className="block text-[10px] font-black uppercase tracking-widest mb-1">
+                    Ciclo cerrado
+                  </strong>
+                  Este pedido pertenece a un ciclo de inventario ya cerrado. Para
+                  preservar los reportes históricos, no se puede modificar.
+                </div>
+              )}
               {/* LÍNEAS DEL TICKET — control de tier/qty por partida */}
               <section className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -551,7 +578,7 @@ export default function EditSaleAdjustModal({
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving || loadingItems}
+                disabled={saving || loadingItems || cycleLocked}
                 className="w-full h-12 rounded-2xl text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
               >
