@@ -29,6 +29,9 @@ import ImageUploader from "./ImageUploader"
 import SmartLocationInput from "./SmartLocationInput"
 import Skeleton from "./Skeleton"
 import RfmBadge from "./RfmBadge"
+import LoyaltyDrawer from "../../features/loyalty/LoyaltyDrawer"
+import { useMyLoyaltyBalance } from "../../features/loyalty/loyaltyService"
+import { useBusinessRules } from "../../features/settings/businessRulesService"
 import { fetchMyShoppingStats, type MyShoppingStats } from "../../features/profile/myShoppingStatsService"
 import { formatMoney } from "../../lib/format"
 import {
@@ -308,6 +311,11 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
 
                   {email && <MyShoppingStatsCard email={email} />}
 
+                  {/* Card de puntos del programa de premios (solo si la
+                      regla está activa). Abre el LoyaltyDrawer con la
+                      lista plana de movimientos. */}
+                  {email && <MyLoyaltyMiniCard />}
+
                   {/* Datos básicos */}
                   <section className="space-y-3">
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1">
@@ -462,6 +470,57 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
       )}
     </AnimatePresence>,
     document.body
+  )
+}
+
+/**
+ * Mini-card de loyalty: muestra balance compacto + "ver" abre LoyaltyDrawer.
+ * Solo se renderiza cuando rules.loyalty_enabled = true y el cliente tiene
+ * sesión (useMyLoyaltyBalance ya filtra por email del jwt). Reusa todo el
+ * realtime del hub para que el badge se actualice solo cuando llegan puntos.
+ */
+function MyLoyaltyMiniCard() {
+  const bRules = useBusinessRules()
+  const { balance, loading } = useMyLoyaltyBalance()
+  const [open, setOpen] = useState(false)
+
+  if (!bRules.loyalty_enabled || loading) return null
+
+  const pts = balance?.points ?? 0
+  const valueMx = pts * (bRules.loyalty_peso_por_punto || 1)
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full press group text-left rounded-3xl p-4 border border-amber-200/60 dark:border-amber-500/30 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10"
+        aria-label="Ver mis premios"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-2xl shrink-0">
+            🏆
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700/80 dark:text-amber-300/80">
+              Mis premios
+            </p>
+            <p className="text-xl font-black tabular-nums leading-tight text-slate-900 dark:text-slate-100">
+              {pts} <span className="text-xs opacity-80">pts</span>
+            </p>
+            <p className="text-[10px] font-bold opacity-80 text-slate-600 dark:text-slate-300">
+              {pts > 0
+                ? `≈ $${valueMx.toFixed(2)} en tu próxima compra`
+                : "Paga tu próximo apartado y empieza a sumar"}
+            </p>
+          </div>
+          <span className="text-[10px] font-black opacity-70 text-amber-700 dark:text-amber-300 group-hover:translate-x-0.5 transition-transform">
+            Ver →
+          </span>
+        </div>
+      </button>
+      <LoyaltyDrawer open={open} onClose={() => setOpen(false)} />
+    </>
   )
 }
 

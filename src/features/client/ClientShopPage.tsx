@@ -68,6 +68,10 @@ import { getBusinessRules, useBusinessRules, isWithinBusinessHours } from "../se
 import { notifyAdmins } from "../notifications/notificationsService"
 import WishesDrawer from "../wishes/WishesDrawer"
 import ReviewsDrawer from "../reviews/ReviewsDrawer"
+import {
+  useMyLoyaltyBalance,
+  spendLoyaltyPoints,
+} from "../loyalty/loyaltyService"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { preloadOnIdle } from "../../lib/preloadOnIdle"
@@ -591,8 +595,41 @@ export default function ClientShopPage() {
     [subtotalAmt, isForeign, shippingCfg]
   )
 
-  // TOTAL = subtotal + envío
-  const totalAmt = subtotalAmt + shippingCalc.amount
+  // Programa de premios: si el cliente está logueado, calculamos cuántos
+  // puntos puede usar como descuento (mínimo `loyalty_min_redeem`).
+  // El descuento NO puede superar el subtotal+envío.
+  const { balance: myLoyalty } = useMyLoyaltyBalance()
+  const [useLoyalty, setUseLoyalty] = useState(false)
+  const loyaltyAvailable = bRules.loyalty_enabled
+    ? Math.max(0, myLoyalty?.points ?? 0)
+    : 0
+  const loyaltyCanRedeem =
+    bRules.loyalty_enabled &&
+    loyaltyAvailable >= (bRules.loyalty_min_redeem || 0) &&
+    isLogged
+  const loyaltyDiscount = useMemo(() => {
+    if (!useLoyalty || !loyaltyCanRedeem) return 0
+    const peso = bRules.loyalty_peso_por_punto || 1
+    const baseTotal = subtotalAmt + shippingCalc.amount
+    const maxByMoney = Math.floor(baseTotal / peso) // tope: no descontar más que el total
+    const usable = Math.min(loyaltyAvailable, maxByMoney)
+    return Math.max(0, usable * peso)
+  }, [
+    useLoyalty,
+    loyaltyCanRedeem,
+    loyaltyAvailable,
+    bRules.loyalty_peso_por_punto,
+    subtotalAmt,
+    shippingCalc.amount,
+  ])
+  const loyaltyPointsToSpend = useMemo(() => {
+    const peso = bRules.loyalty_peso_por_punto || 1
+    if (loyaltyDiscount <= 0 || peso <= 0) return 0
+    return Math.round(loyaltyDiscount / peso)
+  }, [loyaltyDiscount, bRules.loyalty_peso_por_punto])
+
+  // TOTAL = subtotal + envío − descuento por puntos
+  const totalAmt = Math.max(0, subtotalAmt + shippingCalc.amount - loyaltyDiscount)
 
   // Ahorro vs menudeo (motivacional)
   const savingsVsMenudeo = useMemo(() => {
@@ -884,6 +921,25 @@ export default function ClientShopPage() {
         .single()
       if (error || !sale) throw new Error(error?.message ?? "Sin id")
       createdSaleId = sale.id
+
+      // Si el cliente eligió usar puntos, los gastamos AHORA que ya
+      // tenemos el saleId. Si falla (race condition, balance insuficiente),
+      // toast best-effort pero NO abortamos el flujo: el sale ya existe
+      // y el cliente puede pagar el monto normal sin descuento.
+      if (loyaltyPointsToSpend > 0 && guest.email) {
+        const ok = await spendLoyaltyPoints(
+          guest.email.trim().toLowerCase(),
+          loyaltyPointsToSpend,
+          `Canjeado en folio ${sale.id.slice(0, 8).toUpperCase()}`,
+          sale.id,
+        )
+        if (!ok) {
+          toast(
+            "No pudimos aplicar tus puntos (sin saldo o expiraron). El pedido se creó al precio normal.",
+            { icon: "⚠️", duration: 3500 },
+          )
+        }
+      }
 
       // Insertar items + descontar stock + registrar movement por cada uno.
       // Patrón canónico (mismo que `salesService.createSale`): asegura que el
@@ -1679,6 +1735,30 @@ export default function ClientShopPage() {
                       </span>
                     </div>
                   )}
+
+                  {/* Toggle de canje de puntos. Solo aparece si la regla
+                      está activa Y el cliente cumple el mínimo. Si se
+                      activa, descuenta automáticamente el máximo posible
+                      sin superar el total. */}
+                  {loyaltyCanRedeem && (
+                    <label className="flex items-center justify-between gap-2 pt-1 cursor-pointer">
+                      <span className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-bold">
+                        <input
+                          type="checkbox"
+                          checked={useLoyalty}
+                          onChange={(e) => setUseLoyalty(e.target.checked)}
+                          className="w-4 h-4 accent-amber-500"
+                        />
+                        <span>🏆 Usar mis {loyaltyAvailable} pts</span>
+                      </span>
+                      {useLoyalty && loyaltyDiscount > 0 && (
+                        <span className="tabular-nums font-black text-amber-700 dark:text-amber-300">
+                          -{formatMoney(loyaltyDiscount)}
+                        </span>
+                      )}
+                    </label>
+                  )}
+
                   <div className="flex items-end justify-between pt-2 mt-1 border-t border-slate-100 dark:border-slate-800">
                     <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">
                       Total

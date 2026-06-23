@@ -175,67 +175,41 @@ export default function LoyaltyDrawer({ open, onClose }: Props) {
                 )}
               </div>
 
-              {/* Cómo ganar más */}
-              {activeRules.length > 0 && (
-                <section>
-                  <header className="flex items-center gap-1.5 mb-2">
-                    <Sparkles size={12} className="text-primary" />
-                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
-                      Cómo ganar más
-                    </h3>
-                  </header>
-                  <ul className="space-y-1.5">
-                    {activeRules.map((r) => (
-                      <li
-                        key={r.action_key}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800"
-                      >
-                        <span className="text-xl shrink-0">
-                          {r.emoji ?? "✨"}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 truncate">
-                            {r.label}
-                          </p>
-                          {r.description && (
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug truncate">
-                              {r.description}
-                            </p>
-                          )}
-                        </div>
-                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black tabular-nums">
-                          +{r.points}
-                          {r.one_time && (
-                            <span className="opacity-70 ml-1">1 vez</span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              {/* Historial */}
+              {/* Lista simple y plana: mezcla eventos (ganados/usados) en orden
+                  cronológico inverso. Sin secciones separadas — Mari prefiere
+                  algo rápido tipo "extracto de cuenta". */}
               <section>
-                <header className="flex items-center gap-1.5 mb-2">
-                  <Gift size={12} className="text-primary" />
-                  <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
-                    Mi historial
+                <header className="flex items-center justify-between mb-2">
+                  <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                    <Gift size={12} className="text-primary" />
+                    Mis movimientos
                   </h3>
+                  {events.length > 0 && (
+                    <span className="text-[9px] font-bold text-slate-400 tabular-nums">
+                      {events.length}
+                    </span>
+                  )}
                 </header>
                 {loadingEv ? (
-                  <p className="text-[11px] text-slate-400 italic">Cargando…</p>
-                ) : events.length === 0 ? (
-                  <p className="text-[11px] text-slate-400 italic">
-                    Aún no hay movimientos. Empieza a ganar puntos haciendo
-                    una compra o completando tu perfil.
+                  <p className="text-[11px] text-slate-400 italic py-3 text-center">
+                    Cargando…
                   </p>
+                ) : events.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center">
+                    <p className="text-[12px] font-black text-slate-600 dark:text-slate-300">
+                      Aún no tienes movimientos
+                    </p>
+                    <p className="text-[10px] text-slate-400 mt-1 leading-snug">
+                      Cuando pagues tu primer apartado, completes tu perfil
+                      o dejes una reseña, aquí verás tus puntos.
+                    </p>
+                  </div>
                 ) : (
-                  <ul className="space-y-1.5">
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900">
                     {events.map((ev) => (
                       <li
                         key={ev.id}
-                        className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800"
+                        className="flex items-center gap-3 px-3 py-2.5"
                       >
                         <div
                           className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
@@ -259,7 +233,7 @@ export default function LoyaltyDrawer({ open, onClose }: Props) {
                           </p>
                         </div>
                         <span
-                          className={`shrink-0 text-[11px] font-black tabular-nums ${
+                          className={`shrink-0 text-[12px] font-black tabular-nums ${
                             ev.delta >= 0
                               ? "text-emerald-600 dark:text-emerald-400"
                               : "text-rose-600 dark:text-rose-400"
@@ -274,19 +248,57 @@ export default function LoyaltyDrawer({ open, onClose }: Props) {
                 )}
               </section>
 
-              {/* Footer info */}
-              <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30 p-3">
-                <div className="flex items-start gap-2">
-                  <Check size={12} className="text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-[11px] font-black text-amber-800 dark:text-amber-200 leading-snug">
-                      Tus puntos se aplican automáticamente al apartar tu
-                      próximo pedido (mínimo {rules.loyalty_min_redeem} pts).
-                    </p>
-                    <p className="text-[10px] text-amber-700/80 dark:text-amber-300/80 mt-0.5 leading-snug">
-                      1 pt = {formatMoney(rules.loyalty_peso_por_punto || 1)}
-                    </p>
-                  </div>
+              {/* Hint colapsable de "cómo funciona". Se muestra como mini-pill
+                  expandible para no robar atención de la lista de movimientos. */}
+              {activeRules.length > 0 && (
+                <details className="rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 group">
+                  <summary className="cursor-pointer list-none flex items-center justify-between px-3 py-2.5">
+                    <span className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                      <Sparkles size={12} className="text-primary" />
+                      ¿Cómo gano más puntos?
+                    </span>
+                    <span className="text-[9px] text-slate-400 group-open:rotate-90 transition-transform">
+                      ›
+                    </span>
+                  </summary>
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
+                    {activeRules.map((r) => (
+                      <li
+                        key={r.action_key}
+                        className="flex items-center gap-3 px-3 py-2"
+                      >
+                        <span className="text-base shrink-0" aria-hidden>
+                          {r.emoji ?? "✨"}
+                        </span>
+                        <p className="flex-1 min-w-0 text-[11px] font-bold text-slate-700 dark:text-slate-200 truncate">
+                          {r.label}
+                        </p>
+                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black tabular-nums">
+                          +{r.points}
+                          {r.one_time && (
+                            <span className="opacity-70 ml-1">1×</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+
+              {/* Hint final compacto */}
+              <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30 p-3 flex items-start gap-2">
+                <Check
+                  size={12}
+                  className="text-amber-700 dark:text-amber-300 mt-0.5 shrink-0"
+                />
+                <div>
+                  <p className="text-[11px] font-black text-amber-800 dark:text-amber-200 leading-snug">
+                    Tus puntos se aplican automáticamente al apartar tu
+                    próximo pedido (mínimo {rules.loyalty_min_redeem} pts).
+                  </p>
+                  <p className="text-[10px] text-amber-700/80 dark:text-amber-300/80 mt-0.5 leading-snug">
+                    1 pt = {formatMoney(rules.loyalty_peso_por_punto || 1)}
+                  </p>
                 </div>
               </div>
             </div>
