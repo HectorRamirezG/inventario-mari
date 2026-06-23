@@ -11,6 +11,7 @@ import {
   MessageCircle,
   Sparkles,
   AlertCircle,
+  Gift,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -28,6 +29,7 @@ import OrderProgressTracker, {
   type OrderProgressDelivery,
 } from "./OrderProgressTracker"
 import Skeleton, { SkeletonText } from "./Skeleton"
+import { parseGiftFromNotes } from "../../lib/giftNotes"
 
 /**
  * Drawer in-place del ticket público para el cliente. Reemplaza la
@@ -63,6 +65,7 @@ interface PublicTicket {
   status: string
   is_layaway: boolean
   payment_url: string | null
+  notes?: string | null
   adjustment_amount?: number | null
   adjustment_reason?: string | null
   shipping_amount?: number | null
@@ -348,6 +351,37 @@ export default function ClientTicketDrawer({ open, token, onClose }: Props) {
 
                 {/* Cuerpo scrolleable: items + totales */}
                 <div className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios space-y-4">
+                  {/* Banner de regalo (si aplica) — parseado desde notes
+                      con prefijo [REGALO] que viene del checkout cliente. */}
+                  {(() => {
+                    const gift = parseGiftFromNotes(ticket.notes)
+                    if (!gift.isGift) return null
+                    return (
+                      <div className="rounded-2xl border border-fuchsia-200 dark:border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-50 to-pink-50 dark:from-fuchsia-500/10 dark:to-pink-500/10 p-3">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-fuchsia-500 text-white flex items-center justify-center shrink-0 shadow-bloom">
+                            <Gift size={15} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-fuchsia-700 dark:text-fuchsia-300">
+                              Este pedido es un regalo
+                            </p>
+                            {gift.recipient && (
+                              <p className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5">
+                                Para: {gift.recipient}
+                              </p>
+                            )}
+                            {gift.message && (
+                              <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 mt-1 italic leading-snug">
+                                "{gift.message}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
                   {/* Meta */}
                   <div className="grid grid-cols-2 gap-3 text-[10px]">
                     <div>

@@ -47,6 +47,7 @@ import CategoryIcon, { getCategoryVisual } from "../../components/ui/CategoryIco
 import AbandonedCartBanner from "../../components/ui/AbandonedCartBanner"
 import QuickGlance from "../../components/ui/QuickGlance"
 import { useCartPersist, clearPersistedCart, type PersistedCartLine } from "../../lib/useCartPersist"
+import { buildGiftNotes } from "../../lib/giftNotes"
 import {
   notifyCartChanged,
   CART_OPEN_EVENT,
@@ -158,6 +159,10 @@ export default function ClientShopPage() {
   const thresholds = useTierThresholds()
   const shippingCfg = useShippingConfig()
   const [isForeign, setIsForeign] = useState(false)
+  /** Modo regalo: 3 estados que se pasan a sales.notes con prefijo. */
+  const [giftMode, setGiftMode] = useState(false)
+  const [giftRecipient, setGiftRecipient] = useState("")
+  const [giftMessage, setGiftMessage] = useState("")
 
   // Layout switcher persistente
   type ViewMode = "focus" | "grid" | "list"
@@ -411,6 +416,29 @@ export default function ClientShopPage() {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, searchParams])
+
+  // Si llegamos con `?variant=VARIANT_ID` (desde notif de stock_back, por
+  // ejemplo), abrimos el BuySheet con esa variante pre-seleccionada. Si
+  // no existe, silenciosamente limpiamos el query.
+  useEffect(() => {
+    const requestedVariant = searchParams.get("variant")
+    if (!requestedVariant) return
+    if (products.length === 0) return
+    const product = products.find((p) =>
+      p.variants.some((v) => v.id === requestedVariant),
+    )
+    if (product) {
+      preloadBuySheet()
+      setBuySheetPreselectedVariant(requestedVariant)
+      setBuySheetProduct(product)
+    } else {
+      toast("Ese producto ya no está disponible", { icon: "ℹ️" })
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete("variant")
+    setSearchParams(next, { replace: true })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, searchParams])
 
@@ -718,6 +746,13 @@ export default function ClientShopPage() {
     // recién creado en la misma sesión).
     let createdSaleId: string | null = null
     try {
+      // Si el cliente marcó "Es un regalo", empaquetamos los datos en
+      // sales.notes con el prefijo estandarizado [REGALO] para que el
+      // admin lo identifique sin cambios de schema.
+      const giftNotes = giftMode
+        ? buildGiftNotes(giftRecipient, giftMessage, null)
+        : null
+
       const { data: sale, error } = await supabase
         .from("sales")
         .insert({
@@ -726,6 +761,7 @@ export default function ClientShopPage() {
           customer_phone: guest.phone.trim() || null,
           customer_address: guest.address.trim() || null,
           customer_location: guest.locationUrl.trim() || null,
+          notes: giftNotes,
           total,
           paid: 0,
           balance: total,
@@ -823,6 +859,10 @@ export default function ClientShopPage() {
       clearPersistedCart()
       setOpenGuestForm(false)
       setOpenCart(false)
+      // Reset del modo regalo para próxima compra (es por-pedido).
+      setGiftMode(false)
+      setGiftRecipient("")
+      setGiftMessage("")
       // UX: ya NO redirigimos al ticket. El cliente queda en su lista de
       // pedidos para que vea TODO su historial (no solo el último). Si
       // quiere abrir el ticket, lo hace desde el CTA del toast ↑. Si está
@@ -956,6 +996,46 @@ export default function ClientShopPage() {
             <span className="absolute -top-1 -right-1 text-[8px] font-black tabular-nums bg-white text-rose-600 rounded-full px-1 min-w-[14px] h-[14px] flex items-center justify-center border border-rose-300">
               {wishlist.count}
             </span>
+          </button>
+        )}
+        {/* Compartir mi wishlist por WhatsApp/share-text. Solo aparece
+            cuando el cliente está viendo SOLO sus favoritos y tiene al
+            menos 1. Genera un mensaje con los productos marcados +
+            link al catálogo. */}
+        {onlyWishlist && wishlist.count > 0 && (
+          <button
+            type="button"
+            onClick={async () => {
+              const { shareText } = await import("../../lib/share")
+              const lines = products
+                .filter((p) => wishlist.has(p.id))
+                .slice(0, 20)
+                .map((p) => {
+                  const v = p.variants[0]
+                  const price =
+                    v?.price_menudeo ?? v?.price ?? v?.price_medio ?? 0
+                  return `- ${p.name}${price ? ` — ${formatMoney(price)}` : ""}`
+                })
+              const text = [
+                "Mi lista de deseos en Beauty's Me",
+                "",
+                ...lines,
+                "",
+                `Ver catálogo: ${window.location.origin}/`,
+              ].join("\n")
+              const r = await shareText({
+                title: "Mi lista de deseos",
+                text,
+              })
+              if (r === "copied") {
+                toast.success("Lista copiada al portapapeles")
+              }
+            }}
+            aria-label="Compartir mi lista de deseos"
+            title="Compartir lista por WhatsApp"
+            className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0 hover:bg-emerald-100"
+          >
+            <Share2 size={14} />
           </button>
         )}
         <button
@@ -1237,6 +1317,22 @@ export default function ClientShopPage() {
                   />
                 )}
 
+                {/* Sticky CTA mini cuando hay muchos items: el cliente no
+                    tiene que scrollear hasta el fondo para apartar. */}
+                {repricedCart.length > 5 && (
+                  <div className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={startCheckout}
+                      disabled={submitting}
+                      className="bg-brand w-full h-9 rounded-xl text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                    >
+                      Apartar · {formatMoney(totalAmt)}
+                      <ArrowRight size={12} />
+                    </button>
+                  </div>
+                )}
+
                 {repricedCart.map((c) => {
                   const lineTotal = c.qty * c.unit_price
                   return (
@@ -1346,6 +1442,73 @@ export default function ClientShopPage() {
                     />
                   </span>
                 </button>
+
+                {/* Switch modo regalo + inputs cuando está activo. */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setGiftMode((v) => !v)}
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all active:scale-[0.99] ${
+                      giftMode
+                        ? "border-fuchsia-300 bg-fuchsia-50 dark:bg-fuchsia-500/10"
+                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    }`}
+                  >
+                    <div className="text-left min-w-0 flex-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
+                        Es un regalo
+                      </p>
+                      <p className="text-[9px] text-slate-500 truncate">
+                        {giftMode
+                          ? "Mari preparará envoltorio + tarjeta"
+                          : "Marca para personalizar dedicatoria"}
+                      </p>
+                    </div>
+                    <span
+                      className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
+                        giftMode ? "bg-fuchsia-500" : "bg-slate-300"
+                      }`}
+                    >
+                      <motion.span
+                        animate={{ x: giftMode ? 20 : 2 }}
+                        transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                        className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow"
+                      />
+                    </span>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {giftMode && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-2 pt-2">
+                          <input
+                            type="text"
+                            value={giftRecipient}
+                            onChange={(e) => setGiftRecipient(e.target.value.slice(0, 60))}
+                            placeholder="Para: (nombre del afortunado)"
+                            className="w-full h-9 px-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-fuchsia-400"
+                          />
+                          <textarea
+                            value={giftMessage}
+                            onChange={(e) => setGiftMessage(e.target.value.slice(0, 240))}
+                            placeholder="Mensaje en la tarjeta (opcional, máx 240)"
+                            rows={2}
+                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-fuchsia-400 resize-none"
+                          />
+                          <p className="text-[8px] text-slate-400 text-right">
+                            {giftMessage.length}/240
+                          </p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
 
                 {/* Desglose: subtotal, envío, ahorro tier, total */}
                 <div className="space-y-1 text-xs">

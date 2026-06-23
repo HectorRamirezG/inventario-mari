@@ -282,12 +282,50 @@ export default function TicketView({ open, sale, onClose }: Props) {
                 </>
               )}
 
-              {sale.notes && (
-                <>
-                  <Divider />
-                  <p className="text-[10px] italic">Nota: {sale.notes}</p>
-                </>
-              )}
+              {sale.notes && (() => {
+                // Parsea gift inline (sin agregar imports). Si tiene prefix
+                // [REGALO], renderiza un bloque destacado y limpia el resto
+                // de notas. Si no, lo muestra como nota normal.
+                const raw = sale.notes.trim()
+                const isGift = raw.startsWith("[REGALO]")
+                if (!isGift) {
+                  return (
+                    <>
+                      <Divider />
+                      <p className="text-[10px] italic">Nota: {raw}</p>
+                    </>
+                  )
+                }
+                const parts = raw.split(/\n---\n/)
+                const header = parts[0] ?? ""
+                const rest = (parts.slice(1).join("\n---\n") ?? "").trim()
+                let recipient = ""
+                let message = ""
+                for (const line of header.split(/\r?\n/)) {
+                  if (line.startsWith("Para:")) recipient = line.slice(5).trim()
+                  else if (line.startsWith("Mensaje:")) message = line.slice(8).trim()
+                }
+                return (
+                  <>
+                    <Divider />
+                    <div className="my-1 rounded-md border border-fuchsia-300 bg-fuchsia-50 p-2 text-[10px]">
+                      <p className="font-black uppercase tracking-widest text-fuchsia-700 text-center mb-1">
+                        ※ PEDIDO REGALO ※
+                      </p>
+                      {recipient && (
+                        <p className="font-black text-fuchsia-900">Para: {recipient}</p>
+                      )}
+                      {message && (
+                        <p className="text-fuchsia-800 italic mt-0.5">"{message}"</p>
+                      )}
+                      <p className="text-[8px] text-fuchsia-600 font-bold mt-1 uppercase">
+                        Preparar tarjeta + envoltorio
+                      </p>
+                    </div>
+                    {rest && <p className="text-[10px] italic">Nota: {rest}</p>}
+                  </>
+                )
+              })()}
 
               <Divider />
 

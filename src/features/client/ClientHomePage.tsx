@@ -26,6 +26,7 @@ import {
   MessageSquare,
   Bell,
   ShoppingBag,
+  ChevronRight,
 } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -291,14 +292,56 @@ function MySavingsSection() {
 
   if (!stats || stats.pedidos === 0) {
     return (
-      <section className="my-3 rounded-3xl bg-gradient-to-br from-emerald-50 via-white to-emerald-50 dark:from-emerald-500/10 dark:via-slate-900 dark:to-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 p-4 text-center">
-        <PiggyBank className="mx-auto mb-1 text-emerald-500/70" size={20} />
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-          Aún no tienes compras
-        </p>
-        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-          Cuando compres verás aquí cuánto inviertes en ti.
-        </p>
+      <section
+        className="my-3 rounded-3xl border p-5 relative overflow-hidden"
+        style={{
+          background:
+            "linear-gradient(135deg, color-mix(in srgb, var(--brand-from) 12%, white), color-mix(in srgb, var(--brand-to) 12%, white))",
+          borderColor: "color-mix(in srgb, var(--brand-from) 25%, transparent)",
+        }}
+      >
+        {/* Orb decorativo */}
+        <span
+          className="absolute -right-8 -top-8 w-24 h-24 rounded-full opacity-30 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+          }}
+        />
+        <div className="relative flex items-start gap-3">
+          <div
+            className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-bloom shrink-0 text-white"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+            }}
+          >
+            <Sparkles size={18} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-primary">
+              Bienvenida a Beauty's Me
+            </p>
+            <p className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5 leading-snug">
+              Tu primera compra está cerca
+            </p>
+            <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 mt-1 leading-snug">
+              Arma tu carrito, aparta sin pagar todo hoy, y te contactamos por
+              WhatsApp para coordinar entrega.
+            </p>
+            <a
+              href="/"
+              className="inline-flex items-center gap-1.5 mt-3 h-9 px-4 rounded-xl text-white text-[10px] font-black uppercase tracking-widest shadow-bloom press-hard"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+              }}
+            >
+              Explorar catálogo
+              <ChevronRight size={12} />
+            </a>
+          </div>
+        </div>
       </section>
     )
   }
