@@ -476,13 +476,6 @@ export default function ClientOrdersPage() {
           rules.reviews_enabled &&
           o.status !== "cancelled" &&
           (isCompleted || (rules.reviews_on_paid_enabled && paid))
-        // Permitir reseñar: por default solo cuando isCompleted (entregado
-        // o pagado sin delivery). Si rule.reviews_on_paid_enabled está ON,
-        // basta con que esté pagado y no cancelado (sin esperar entrega).
-        const canReview =
-          rules.reviews_enabled &&
-          o.status !== "cancelled" &&
-          (isCompleted || (rules.reviews_on_paid_enabled && paid))
 
         // Diferenciación visual: peso por monto, tono por estado, accordion para repetitivos.
         const isPremium = safeTotal >= 1000
