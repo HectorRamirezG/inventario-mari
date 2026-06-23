@@ -2237,27 +2237,17 @@ const ProductCardClient = memo(function ProductCardClientImpl({
   const out = variant.stock <= 0
 
   // Badges automáticos: NUEVO (producto creado dentro de la ventana
-  // configurada) y OFERTA (price_medio < price_menudeo). El % de
-  // descuento se calcula contra el precio_menudeo (el de referencia
-  // más alto). Ambos umbrales viven en business_rules para que Mari
-  // los ajuste desde Reglas sin tocar código.
-  const newDaysWindow = rules.new_badge_days || 7
-  const offerMinPct = rules.offer_min_discount_pct ?? 5
+  // Badge 'Nuevo' (solo Últimos 3 días para que no sea perpetuo). El
+  // umbral configurable de `new_badge_days` ya no se usa: Mari prefirió
+  // un threshold fijo bajo. La promo de oferta porcentual (-X%) también
+  // se eliminó — generaba confusión entre 'oferta real' y 'precio
+  // medio por volumen'. Ese contexto vive en el carrito.
   const isNew = (() => {
     if (!product.created_at) return false
     const created = Date.parse(product.created_at)
     if (!created) return false
-    return Date.now() - created < newDaysWindow * 24 * 3600 * 1000
+    return Date.now() - created < 3 * 24 * 3600 * 1000
   })()
-  const discountPct = (() => {
-    const m = Number(variant?.price_menudeo) || 0
-    const med = Number(variant?.price_medio) || 0
-    if (m > 0 && med > 0 && med < m) {
-      return Math.round(((m - med) / m) * 100)
-    }
-    return 0
-  })()
-  const onOffer = discountPct >= offerMinPct
 
   // Slices para VariantImageCarousel. REGLA CRÍTICA:
   // toda variante DEBE existir en este array, aunque no tenga fotos propias,
@@ -2346,19 +2336,14 @@ const ProductCardClient = memo(function ProductCardClientImpl({
               <Package size={22} />
             </div>
           )}
-          {(isNew || onOffer) && (
+          {/* Modo list: badge 'Nuevo' SOLO si el producto es de los
+              ultimos 3 dias (calculado en `isNew` arriba). */}
+          {isNew && (
             <div className="absolute top-1 left-1">
-              {/* En thumb chico (80x80) solo mostramos UN badge prioritario:
-                  oferta gana sobre nuevo para empujar acción de compra. */}
-              {onOffer ? (
-                <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[7px] font-black uppercase tracking-widest shadow-sm">
-                  -{discountPct}%
-                </span>
-              ) : (
-                <span className="px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 text-[7px] font-black uppercase tracking-widest shadow-sm">
-                  Nuevo
-                </span>
-              )}
+              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-md bg-white/90 dark:bg-slate-900/90 backdrop-blur text-[7px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 shadow-sm">
+                <span className="w-1 h-1 rounded-full bg-emerald-500" />
+                Nuevo
+              </span>
             </div>
           )}
         </motion.button>
@@ -2382,7 +2367,9 @@ const ProductCardClient = memo(function ProductCardClientImpl({
               ) : (
                 <>
                   {formatMoney(price)}
-                  {!out && variant.stock <= 3 && (
+                  {/* Stock urgente: SOLO 1 o 2 ultimas. Antes mostrabamos
+                      'solo 8' que no era urgente. */}
+                  {!out && variant.stock <= 2 && (
                     <span
                       className={`ml-1.5 text-[8px] font-black uppercase ${
                         variant.stock === 1
@@ -2390,7 +2377,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                           : "text-amber-600"
                       }`}
                     >
-                      {variant.stock === 1 ? "¡ÚLTIMA!" : `· ${variant.stock} pz`}
+                      {variant.stock === 1 ? "¡ÚLTIMA!" : "2 pz"}
                     </span>
                   )}
                   {out && (
@@ -2439,20 +2426,16 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           showVariantBadge={showVariantBadge}
           priority={priority}
         />
-        {/* Badge unico esquina sup izquierda. Jerarquia: Oferta > Nuevo.
-            Si ambos aplican, gana oferta (porcentaje empuja accion). Antes
-            mostrabamos dos pills apilados y se sentia saturado. */}
-        {(isNew || onOffer) && (
+        {/* Badge UNICO discreto SOLO si el producto es de los ultimos
+            3 dias (calculado arriba en `isNew`). Sin chip de oferta
+            porcentual: Mari argumenta que confunde y que la promo se
+            ve en el carrito. */}
+        {isNew && (
           <div className="absolute top-2 left-2 z-10">
-            {onOffer ? (
-              <span className="px-2 py-0.5 rounded-full bg-rose-500/90 text-white text-[9px] font-black uppercase tracking-widest shadow-sm">
-                -{discountPct}%
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 rounded-full bg-sky-500/90 text-white text-[9px] font-black uppercase tracking-widest shadow-sm">
-                Nuevo
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/90 dark:bg-slate-900/90 backdrop-blur text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 shadow-sm">
+              <span className="w-1 h-1 rounded-full bg-emerald-500" />
+              Nuevo
+            </span>
           </div>
         )}
         {/* Contador de viewers fake — psicológico para crear prueba social.
@@ -2482,32 +2465,36 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           {product.name}
         </p>
 
-        {/* Variantes (compactas: 3 visibles + "+N" en grid, 8 en focus) */}
+        {/* Variantes: si son <=4 mostramos chips compactos. Si son
+            muchas, NO saturamos con chips truncados; solo decimos
+            "N colores" como sub-texto sutil. El cliente abre BuySheet
+            para ver todos. */}
         {product.variants.length > 1 && (
-          <div className="flex flex-wrap gap-1 mb-2">
-            {product.variants.slice(0, isFocus ? 8 : 3).map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setSelected(v.id)
-                }}
-                className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-colors max-w-[80px] truncate ${
-                  v.id === selected
-                    ? "bg-primary text-white shadow-sm"
-                    : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-200"
-                }`}
-              >
-                {v.variant_name}
-              </button>
-            ))}
-            {product.variants.length > (isFocus ? 8 : 3) && (
-              <span className="px-1.5 py-0.5 text-[9px] font-bold text-slate-400 self-center">
-                +{product.variants.length - (isFocus ? 8 : 3)}
-              </span>
-            )}
-          </div>
+          product.variants.length <= 4 ? (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {product.variants.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelected(v.id)
+                  }}
+                  className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-colors max-w-[80px] truncate ${
+                    v.id === selected
+                      ? "bg-primary text-white shadow-sm"
+                      : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300"
+                  }`}
+                >
+                  {v.variant_name}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mb-2">
+              {product.variants.length} tonos disponibles
+            </p>
+          )
         )}
 
         {/* Fila PRINCIPAL: precio grande + stock/CTA. mt-auto la pega
@@ -2527,9 +2514,9 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                 formatMoney(price)
               )}
             </span>
-            {/* Mini rating inline: solo estrella + numero. Sin pill ni
-                background. Click escapa a onOpenReviews del padre. */}
-            {onOpenReviews && (product.review_count ?? 0) > 0 && (
+            {/* Mini rating SOLO si el producto tiene 3+ resenias. Con menos
+                no da prueba social real y solo agrega ruido visual. */}
+            {onOpenReviews && (product.review_count ?? 0) >= 3 && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -2549,13 +2536,13 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                 </span>
               </button>
             )}
-            {/* Stock urgente inline DEBAJO del precio. Solo si aplica. */}
+            {/* Stock urgente: SOLO ultimas 1-2 piezas. Antes mostrabamos
+                'solo 8' que no era urgente — saturaba. */}
             {out ? (
               <span className="inline-block text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 mt-1">
                 Agotado
               </span>
-            ) : (rules.show_stock_to_client && variant.stock <= 10) ||
-              variant.stock <= 3 ? (
+            ) : variant.stock <= 2 ? (
               <span
                 className={`inline-block text-[9px] font-black uppercase tracking-widest mt-1 ${
                   variant.stock === 1
@@ -2563,9 +2550,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                     : "text-amber-600 dark:text-amber-400"
                 }`}
               >
-                {variant.stock === 1
-                  ? "¡ÚLTIMA!"
-                  : `Solo ${variant.stock}`}
+                {variant.stock === 1 ? "¡ÚLTIMA!" : "Últimas 2"}
               </span>
             ) : null}
           </div>
@@ -2587,8 +2572,10 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           </button>
         </div>
 
-        {/* Banda inferior compacta con TIER HINT (solo si hay mayoreo real) */}
-        <CompactTierHint variant={variant} />
+        {/* Sin CompactTierHint: Mari dijo no repetir info del carrito.
+            La promo de mayoreo se reveal en el BuySheet/carrito con la
+            barra de progreso, no en cada card del catalogo (donde solo
+            ruido visual). */}
       </div>
     </motion.div>
       </div>
@@ -2711,36 +2698,17 @@ function CartTierBanner({
   )
 }
 
-/* ──────── Pista de tier por variante (en ProductCard) ──────── */
-function TierHint({ variant }: { variant: PublicVariant }) {
-  const thresholds = useTierThresholds()
-  const menudeo = variant.price_menudeo ?? variant.price ?? 0
-  const mayoreo = variant.price_mayoreo
-  if (!mayoreo || mayoreo >= menudeo) return null
-  return (
-    <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 truncate mb-0.5">
-      Lleva {thresholds.mayoreo_min_qty}+ y pagas {formatMoney(mayoreo)} c/u
-    </p>
-  )
-}
+/* ──────── TierHint ELIMINADO ────────
+   Era codigo muerto desde hace tiempo. La info de mayoreo se
+   muestra ahora unicamente en BuySheet/CartTierBanner para no
+   repetir contenido en multiples superficies (principio que Mari
+   pidio aplicar en toda la app).
+*/
 
-/* ──────── Pista de tier COMPACTA: solo aparece si hay mayoreo real.
-   Diseño: chip lineal abajo del precio, no compite con el CTA. */
-function CompactTierHint({ variant }: { variant: PublicVariant }) {
-  const thresholds = useTierThresholds()
-  const menudeo = variant.price_menudeo ?? variant.price ?? 0
-  const mayoreo = variant.price_mayoreo
-  if (!mayoreo || mayoreo >= menudeo) return null
-  const savings = menudeo - mayoreo
-  return (
-    <div className="mt-2 -mx-1 px-2 py-1 rounded-lg bg-emerald-50/70 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 flex items-center gap-1">
-      <span className="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
-      <p className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 truncate flex-1">
-        {thresholds.mayoreo_min_qty}+ a {formatMoney(mayoreo)}
-      </p>
-      <span className="text-[8px] font-black text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
-        -{formatMoney(savings)}
-      </span>
-    </div>
-  )
-}
+/* ──────── CompactTierHint ELIMINADA ────────
+   Mari pidio no repetir info que ya vive en el carrito. El hint
+   '12+ a $X / -$Y' se mostraba en CADA card del catalogo agregando
+   ruido visual. Ahora la promo de mayoreo se reveal en BuySheet
+   (al elegir variante) y en el CartTierBanner del drawer carrito
+   con barra de progreso. Catalogo = vitrina limpia.
+*/
