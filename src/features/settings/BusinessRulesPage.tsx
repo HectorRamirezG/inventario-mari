@@ -60,6 +60,7 @@ import {
 } from "./businessRulesService"
 import LoyaltyRulesEditor from "../loyalty/LoyaltyRulesEditor"
 
+
 export default function BusinessRulesPage() {
   const live = useBusinessRules()
   const [form, setForm] = useState<BusinessRules>(live)
@@ -878,15 +879,15 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={Trophy}
           title="Activar programa de premios"
-          description="Si está apagado, no se muestra el botón de premios al cliente. Los puntos siguen acumulándose en BD pero no son visibles."
+          description="Si esta apagado, no se muestra el boton de premios al cliente. Los puntos siguen acumulandose en BD pero no son visibles."
           affects="cliente"
           enabled={form.loyalty_enabled}
-          onToggle={(v: boolean) => patch({ loyalty_enabled: v })}
+          onToggle={(v) => patch({ loyalty_enabled: v })}
         >
           <NumberField
-            label="¿Cuánto vale cada punto?"
+            label="Cuanto vale cada punto"
             value={form.loyalty_peso_por_punto}
-            onChange={(v: number) => patch({ loyalty_peso_por_punto: v })}
+            onChange={(v) => patch({ loyalty_peso_por_punto: v })}
             suffix="$/pt"
             min={0.1}
             max={100}
@@ -898,9 +899,9 @@ export default function BusinessRulesPage() {
             {formatMoney(100 * form.loyalty_peso_por_punto)} de descuento.
           </Hint>
           <NumberField
-            label="Mínimo de puntos para canjear"
+            label="Minimo de puntos para canjear"
             value={form.loyalty_min_redeem}
-            onChange={(v: number) => patch({ loyalty_min_redeem: v })}
+            onChange={(v) => patch({ loyalty_min_redeem: v })}
             suffix="pts"
             min={0}
             max={1000}
@@ -909,13 +910,7 @@ export default function BusinessRulesPage() {
             Evita microcanjes. La clienta solo puede aplicar puntos si
             tiene al menos {form.loyalty_min_redeem} acumulados.
           </Hint>
-
-          <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
-            <p className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-2">
-              ¿Cuántos puntos da cada acción?
-            </p>
-            <LoyaltyRulesEditor />
-          </div>
+          <LoyaltyRulesSection />
         </RuleRow>
       </Section>
 
@@ -1298,6 +1293,19 @@ const SLIDE_THEMES: { id: WelcomeSlide["theme"]; label: string; gradient: string
 ]
 
 const MAX_SLIDES = 6
+
+/** Bloque dedicado: separador + título + LoyaltyRulesEditor. Aislado
+ *  para no inflar el JSX de la sección "Programa de premios" arriba. */
+function LoyaltyRulesSection() {
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
+      <p className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-2">
+        Cuantos puntos da cada accion
+      </p>
+      <LoyaltyRulesEditor />
+    </div>
+  )
+}
 
 function WelcomeSlidesEditor({
   slides,

@@ -9,6 +9,7 @@ import {
   ShoppingBag,
   XCircle,
   RotateCcw,
+  Star,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -31,6 +32,7 @@ import QuickDeliveryActions, {
 } from "../../components/ui/QuickDeliveryActions"
 import OrderHelpCenter from "../../components/ui/OrderHelpCenter"
 import ClientTicketDrawer from "../../components/ui/ClientTicketDrawer"
+import RateOrderProductsDrawer from "../reviews/RateOrderProductsDrawer"
 import TabBar from "../../components/ui/TabBar"
 import { cancelSale } from "../apartados/apartadosService"
 import { promptDialog } from "../../lib/prompt"
@@ -91,6 +93,9 @@ export default function ClientOrdersPage() {
   const [filter, setFilter] = useState<OrderFilter>("active")
   /** Token (o id) del pedido cuyo ticket se abre como drawer in-place. */
   const [ticketToken, setTicketToken] = useState<string | null>(null)
+  /** Sale id cuya calificación de productos está abierta (drawer Rate). */
+  const [rateOrderId, setRateOrderId] = useState<string | null>(null)
+  const openRateOrder = useCallback((id: string) => setRateOrderId(id), [])
   /** sale_id -> comanda más reciente (completa). */
   const [deliveryBySale, setDeliveryBySale] = useState<Record<string, MyDelivery>>({})
   /** sale_id -> si el bloque QuickDeliveryActions está abierto inline. */
@@ -654,7 +659,18 @@ export default function ClientOrdersPage() {
             {/* Botón "Reordenar" — solo para pedidos COMPLETADOS (entregado o
                 pagado sin entrega). UX: cliente quiere repetir la compra. */}
             {isCompleted && (
-              <div className="mt-2 flex justify-end">
+              <div className="mt-2 flex justify-end gap-2 flex-wrap">
+                {rules.reviews_enabled && (
+                  <button
+                    type="button"
+                    onClick={() => openRateOrder(o.id)}
+                    className="h-8 px-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
+                    title="Calificar los productos de este pedido"
+                  >
+                    <Star size={11} />
+                    Calificar productos
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleReorder(o.id)}
@@ -750,6 +766,13 @@ export default function ClientOrdersPage() {
         open={!!ticketToken}
         token={ticketToken}
         onClose={() => setTicketToken(null)}
+      />
+
+      {/* Drawer para calificar los productos de un pedido entregado. */}
+      <RateOrderProductsDrawer
+        open={!!rateOrderId}
+        onClose={() => setRateOrderId(null)}
+        saleId={rateOrderId}
       />
     </div>
   )

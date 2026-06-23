@@ -12,6 +12,10 @@ export interface RegisteredUser {
   orders: number
   total_spent: number
   last_purchase_at: string | null
+  /** Puntos disponibles en programa de premios (loyalty). 0 si nunca participó. */
+  loyalty_points?: number
+  /** Total acumulado de puntos ganados de por vida (mide engagement). */
+  lifetime_earned?: number
 }
 
 export interface Visitor {
@@ -63,6 +67,35 @@ export async function listAllUsers(limit = 200, offset = 0): Promise<RegisteredU
           if (fromSale) u.phone = fromSale
         }
       }
+    }
+  }
+
+  // Loyalty: traemos balance de TODOS los usuarios con email en un solo
+  // query y mergeamos. Tolerante: si la tabla no existe, no rompemos.
+  const emails = users.map((u) => u.email?.toLowerCase()).filter(Boolean)
+  if (emails.length > 0) {
+    try {
+      const { data: loyaltyRows } = await supabase
+        .from("loyalty_balance")
+        .select("customer_email,points,lifetime_earned")
+        .in("customer_email", emails)
+      if (loyaltyRows) {
+        const byEmail = new Map<string, { p: number; e: number }>(
+          (loyaltyRows as any[]).map((r) => [
+            String(r.customer_email).toLowerCase(),
+            { p: Number(r.points) || 0, e: Number(r.lifetime_earned) || 0 },
+          ]),
+        )
+        for (const u of users) {
+          const k = u.email?.toLowerCase()
+          if (!k) continue
+          const lb = byEmail.get(k)
+          u.loyalty_points = lb?.p ?? 0
+          u.lifetime_earned = lb?.e ?? 0
+        }
+      }
+    } catch {
+      /* tabla puede no existir todavía: SQL fix_loyalty_system pendiente */
     }
   }
 

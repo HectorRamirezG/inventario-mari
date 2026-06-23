@@ -34,6 +34,7 @@ import KpiCard from "../../components/ui/KpiCard"
 import Avatar from "../../components/ui/Avatar"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import Skeleton from "../../components/ui/Skeleton"
+import TabBar, { type TabItem } from "../../components/ui/TabBar"
 import { confirmAction } from "../../lib/confirm"
 import { promptDialog } from "../../lib/prompt"
 
@@ -259,31 +260,37 @@ export default function ReviewsAdminPage() {
         />
       </div>
 
-      {/* Filtros */}
-      <div className="flex p-1 bg-slate-100 dark:bg-slate-800/60 rounded-2xl gap-1 border border-slate-200/60 dark:border-slate-700/60 mb-4 overflow-x-auto">
-        <FilterChip
-          active={filter === "pending"}
-          onClick={() => setFilter("pending")}
-          label="Por moderar"
-          count={stats.pending}
-        />
-        <FilterChip
-          active={filter === "approved"}
-          onClick={() => setFilter("approved")}
-          label="Publicadas"
-          count={stats.approved}
-        />
-        <FilterChip
-          active={filter === "rejected"}
-          onClick={() => setFilter("rejected")}
-          label="Rechazadas"
-          count={stats.rejected}
-        />
-        <FilterChip
-          active={filter === "all"}
-          onClick={() => setFilter("all")}
-          label="Todas"
-          count={total}
+      {/* Filtros — TabBar unificado para que se vea igual que el resto. */}
+      <div className="mb-4">
+        <TabBar<FilterStatus>
+          tabs={[
+            {
+              id: "pending",
+              label: "Por moderar",
+              badge: stats.pending,
+              badgeTone: "warn",
+            } as TabItem<FilterStatus>,
+            {
+              id: "approved",
+              label: "Publicadas",
+              badge: stats.approved,
+              badgeTone: "success",
+            } as TabItem<FilterStatus>,
+            {
+              id: "rejected",
+              label: "Rechazadas",
+              badge: stats.rejected,
+              badgeTone: "danger",
+            } as TabItem<FilterStatus>,
+            {
+              id: "all",
+              label: "Todas",
+              badge: total,
+            } as TabItem<FilterStatus>,
+          ]}
+          active={filter}
+          onChange={setFilter}
+          layoutId="reviews-admin-tab"
         />
       </div>
 
@@ -448,42 +455,6 @@ export default function ReviewsAdminPage() {
         )}
       </div>
     </div>
-  )
-}
-
-function FilterChip({
-  active,
-  onClick,
-  label,
-  count,
-}: {
-  active: boolean
-  onClick: () => void
-  label: string
-  count?: number
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`h-9 px-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 ${
-        active
-          ? "bg-white dark:bg-slate-900 text-primary shadow-sm"
-          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-      }`}
-    >
-      {label}
-      {count !== undefined && count > 0 && (
-        <span
-          className={`text-[8px] font-black px-1.5 py-0.5 rounded-md ${
-            active
-              ? "bg-primary/10 text-primary"
-              : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-          }`}
-        >
-          {count}
-        </span>
-      )}
-    </button>
   )
 }
 

@@ -22,7 +22,10 @@ import TabBar from "../../components/ui/TabBar"
 import KpiCard from "../../components/ui/KpiCard"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import Skeleton from "../../components/ui/Skeleton"
+import VipBadge from "../../components/ui/VipBadge"
 import { formatDateTime, formatMoney } from "../../lib/format"
+import { isVipCustomer } from "../../lib/vipStatus"
+import { useBusinessRules } from "../settings/businessRulesService"
 import {
   listAllUsers,
   listVisitors,
@@ -250,9 +253,16 @@ export default function UsersPage() {
 }
 
 function UserRow({ user }: { user: RegisteredUser }) {
+  const rules = useBusinessRules()
   const isAdmin = user.role === "admin"
   const isStaff = user.role === "staff"
   const hasBought = user.orders > 0
+  // VIP heurística: role explícito o gasto mensual o lifetime points.
+  const isVip = isVipCustomer(rules, {
+    role: user.role,
+    monthlySpent: user.total_spent, // best-effort: usamos total_spent global
+    lifetimePoints: user.lifetime_earned,
+  })
   const initials = (user.full_name || user.email)
     .split(/\s+|@/)
     .map((p) => p[0])
@@ -263,11 +273,18 @@ function UserRow({ user }: { user: RegisteredUser }) {
 
   return (
     <li className="rounded-2xl border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800/60 p-3 flex items-center gap-3">
-      <div className="w-11 h-11 rounded-full overflow-hidden bg-primary/10 text-primary flex items-center justify-center shrink-0 font-black text-sm">
-        {user.avatar_url ? (
-          <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
-        ) : (
-          initials
+      <div className="relative shrink-0">
+        <div className="w-11 h-11 rounded-full overflow-hidden bg-primary/10 text-primary flex items-center justify-center font-black text-sm">
+          {user.avatar_url ? (
+            <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+          ) : (
+            initials
+          )}
+        </div>
+        {isVip && (
+          <span className="absolute -top-1 -right-1 pointer-events-none">
+            <VipBadge size={12} title={`${user.full_name || user.email} es VIP`} />
+          </span>
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -283,6 +300,11 @@ function UserRow({ user }: { user: RegisteredUser }) {
           {isStaff && (
             <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
               Staff
+            </span>
+          )}
+          {isVip && !isAdmin && !isStaff && (
+            <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center gap-0.5 shadow-sm">
+              ★ VIP
             </span>
           )}
           {!hasBought && (
@@ -312,6 +334,14 @@ function UserRow({ user }: { user: RegisteredUser }) {
         <span className="text-[9px] text-slate-400">
           {user.orders} {user.orders === 1 ? "compra" : "compras"}
         </span>
+        {(user.loyalty_points ?? 0) > 0 && (
+          <span
+            className="mt-1 text-[9px] font-black tabular-nums px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 flex items-center gap-0.5"
+            title={`Puntos disponibles · Total ganado: ${user.lifetime_earned ?? 0}`}
+          >
+            🏆 {user.loyalty_points} pts
+          </span>
+        )}
         {user.phone && (
           <a
             href={`https://wa.me/${String(user.phone).replace(/\D/g, "")}`}

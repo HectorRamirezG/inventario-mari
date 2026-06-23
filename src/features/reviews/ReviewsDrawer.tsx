@@ -25,6 +25,7 @@ import ReviewStars from "./ReviewStars"
 import { useAuth } from "../../lib/useAuth"
 import Skeleton from "../../components/ui/Skeleton"
 import Avatar from "../../components/ui/Avatar"
+import TabBar, { type TabItem } from "../../components/ui/TabBar"
 import {
   OVERLAY_BACKDROP_TRANSITION,
   OVERLAY_PANEL_STYLE,
@@ -265,21 +266,26 @@ export default function ReviewsDrawer({
               </button>
             </div>
 
-            {/* Tabs */}
+            {/* Tabs unificados (mismo look que toda la app) */}
             <div className="shrink-0 px-5 pt-3">
-              <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl gap-1">
-                <TabBtn
-                  active={tab === "view"}
-                  onClick={() => setTab("view")}
-                  label={`Ver (${reviews.length})`}
-                />
-                <TabBtn
-                  active={tab === "write"}
-                  onClick={() => setTab("write")}
-                  label={alreadyReviewed ? "Ya reseñaste" : "Escribir"}
-                  disabled={alreadyReviewed}
-                />
-              </div>
+              <TabBar<"view" | "write">
+                tabs={[
+                  {
+                    id: "view",
+                    label: `Ver (${reviews.length})`,
+                  } as TabItem<"view" | "write">,
+                  {
+                    id: "write",
+                    label: alreadyReviewed ? "Ya reseñaste" : "Escribir",
+                  } as TabItem<"view" | "write">,
+                ]}
+                active={tab}
+                onChange={(id) => {
+                  if (id === "write" && alreadyReviewed) return
+                  setTab(id)
+                }}
+                layoutId="reviews-drawer-tab"
+              />
             </div>
 
             {/* Contenido scrollable */}
@@ -397,35 +403,6 @@ export default function ReviewsDrawer({
       )}
     </AnimatePresence>,
     document.body,
-  )
-}
-
-function TabBtn({
-  active,
-  onClick,
-  label,
-  disabled,
-}: {
-  active: boolean
-  onClick: () => void
-  label: string
-  disabled?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-        active
-          ? "bg-white dark:bg-slate-900 text-primary shadow-sm"
-          : disabled
-          ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
-          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-      }`}
-    >
-      {label}
-    </button>
   )
 }
 

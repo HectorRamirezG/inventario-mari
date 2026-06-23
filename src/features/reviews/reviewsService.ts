@@ -165,6 +165,28 @@ export async function listApprovedReviewsByProduct(
   return (data ?? []) as Review[]
 }
 
+/**
+ * Reseñas hechas por un cliente (cualquier estado: pending/approved/rejected).
+ * Útil para que el cliente vea su propio historial en "Mis reseñas".
+ */
+export async function listMyReviews(
+  email: string,
+  limit = 50,
+): Promise<Review[]> {
+  if (!email) return []
+  const { data, error } = await supabase
+    .from("reviews")
+    .select("*")
+    .eq("customer_email", email.toLowerCase())
+    .order("created_at", { ascending: false })
+    .limit(limit)
+  if (error) {
+    if (/does not exist|not found|404/i.test(error.message)) return []
+    throw error
+  }
+  return (data ?? []) as Review[]
+}
+
 /** Lista TODAS las reseñas (admin). Filtros opcionales. */
 export async function listAllReviews(opts?: {
   status?: ReviewStatus | "all"

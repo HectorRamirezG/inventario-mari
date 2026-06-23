@@ -44,6 +44,8 @@ import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
 import Skeleton from "../../components/ui/Skeleton"
 import LoyaltyDrawer from "../loyalty/LoyaltyDrawer"
 import { useMyLoyaltyBalance } from "../loyalty/loyaltyService"
+import MyReviewsDrawer from "../reviews/MyReviewsDrawer"
+import { listMyReviews, type Review } from "../reviews/reviewsService"
 
 interface PublicVariant {
   id: string
@@ -189,6 +191,9 @@ export default function ClientHomePage() {
 
       {/* Sección Mis Premios (solo si la regla está activa y hay sesión) */}
       {isLogged && bRules.loyalty_enabled && <MyLoyaltyCard />}
+
+      {/* Sección Mis Reseñas (solo si reviews_enabled) */}
+      {isLogged && bRules.reviews_enabled && <MyReviewsCard />}
     </div>
   )
 }
@@ -426,6 +431,78 @@ function MyLoyaltyCard() {
         </div>
       </button>
       <LoyaltyDrawer open={open} onClose={() => setOpen(false)} />
+    </>
+  )
+}
+
+/**
+ * Card "Mis reseñas": muestra cuántas reseñas ha dejado el cliente y
+ * abre el drawer con el historial completo + estado de moderación.
+ */
+function MyReviewsCard() {
+  const { email, session } = useAuth()
+  const [count, setCount] = useState(0)
+  const [hasPending, setHasPending] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!session || !email) {
+      setLoading(false)
+      return
+    }
+    let alive = true
+    listMyReviews(email)
+      .then((list: Review[]) => {
+        if (!alive) return
+        setCount(list.length)
+        setHasPending(list.some((r) => r.status === "pending"))
+      })
+      .catch(() => {})
+      .finally(() => alive && setLoading(false))
+    return () => {
+      alive = false
+    }
+  }, [email, session])
+
+  if (loading) return null
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full mt-4 group press relative overflow-hidden rounded-3xl p-4 text-left bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 border border-amber-200/60 dark:border-amber-500/30"
+        aria-label="Mis reseñas"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-2xl shrink-0">
+            ⭐
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700/80 dark:text-amber-300/80">
+              Mis reseñas
+            </p>
+            <p className="text-lg font-black tabular-nums leading-tight text-slate-900 dark:text-slate-100">
+              {count} {count === 1 ? "reseña" : "reseñas"}
+              {hasPending && (
+                <span className="ml-2 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 dark:bg-amber-500/30 dark:text-amber-200">
+                  En revisión
+                </span>
+              )}
+            </p>
+            <p className="text-[10px] font-bold opacity-80 mt-0.5 text-slate-600 dark:text-slate-300">
+              {count > 0
+                ? "Toca para ver tu historial de opiniones"
+                : "Comparte tu opinión y gana puntos"}
+            </p>
+          </div>
+          <span className="text-[10px] font-black opacity-70 group-hover:translate-x-0.5 transition-transform text-amber-700 dark:text-amber-300">
+            Ver →
+          </span>
+        </div>
+      </button>
+      <MyReviewsDrawer open={open} onClose={() => setOpen(false)} />
     </>
   )
 }
