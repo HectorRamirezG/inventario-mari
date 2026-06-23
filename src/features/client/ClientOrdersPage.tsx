@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { motion } from "framer-motion"
-import { Clock, CheckCircle2, LifeBuoy, Lock, ShoppingBag, XCircle } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  Clock,
+  CheckCircle2,
+  LifeBuoy,
+  Lock,
+  ShoppingBag,
+  XCircle,
+  RotateCcw,
+} from "lucide-react"
 import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
@@ -21,6 +29,11 @@ import SmartOrderActions from "../../components/ui/SmartOrderActions"
 import QuickDeliveryActions, {
   type DeliveryTimePref,
 } from "../../components/ui/QuickDeliveryActions"
+import OrdersStatsHeader, {
+  type MiniOrder,
+} from "../../components/ui/OrdersStatsHeader"
+import OrderHelpCenter from "../../components/ui/OrderHelpCenter"
+import TabBar from "../../components/ui/TabBar"
 import { cancelSale } from "../apartados/apartadosService"
 import { promptDialog } from "../../lib/prompt"
 import { runWithUndo } from "../../lib/withUndo"
@@ -30,6 +43,15 @@ import {
   canCancelSale,
   formatRemaining,
 } from "../settings/businessRulesService"
+
+type OrderFilter = "all" | "active" | "delivered" | "cancelled"
+
+const ORDER_TABS: { id: OrderFilter; label: string }[] = [
+  { id: "active", label: "Activos" },
+  { id: "all", label: "Todos" },
+  { id: "delivered", label: "Entregados" },
+  { id: "cancelled", label: "Cancelados" },
+]
 
 interface MyOrder {
   id: string
@@ -57,6 +79,8 @@ export default function ClientOrdersPage() {
   const [paymentOrder, setPaymentOrder] = useState<MyOrder | null>(null)
   const [openSupport, setOpenSupport] = useState(false)
   const [supportSaleId, setSupportSaleId] = useState<string | null>(null)
+  const [openHelp, setOpenHelp] = useState(false)
+  const [filter, setFilter] = useState<OrderFilter>("active")
   /** sale_id -> comanda más reciente (completa). */
   const [deliveryBySale, setDeliveryBySale] = useState<Record<string, MyDelivery>>({})
   /** sale_id -> si el bloque QuickDeliveryActions está abierto inline. */
@@ -177,6 +201,94 @@ export default function ClientOrdersPage() {
     }
   }, [orders])
 
+  /** Counts por categoría (para badges en los tabs). */
+  const counts = useMemo(() => {
+    const c = { all: orders.length, active: 0, delivered: 0, cancelled: 0 }
+    for (const o of orders) {
+      if (o.status === "cancelled") {
+        c.cancelled++
+        continue
+      }
+      const safePaid = Number(o.paid) || 0
+      const safeTotal = Number(o.total) || 0
+      const balance = Math.max(0, safeTotal - safePaid)
+      const dStatus = deliveryBySale[o.id]?.status
+      const isDelivered = balance <= 0 && (dStatus === "delivered" || !dStatus)
+      if (isDelivered) {
+        c.delivered++
+      } else {
+        c.active++
+      }
+    }
+    return c
+  }, [orders, deliveryBySale])
+
+  /** Pedidos filtrados según el tab seleccionado. */
+  const filteredOrders = useMemo(() => {
+    if (filter === "all") return orders
+    if (filter === "cancelled") return orders.filter((o) => o.status === "cancelled")
+    if (filter === "delivered") {
+      return orders.filter((o) => {
+        if (o.status === "cancelled") return false
+        const safePaid = Number(o.paid) || 0
+        const safeTotal = Number(o.total) || 0
+        const balance = Math.max(0, safeTotal - safePaid)
+        const dStatus = deliveryBySale[o.id]?.status
+        return balance <= 0 && (dStatus === "delivered" || !dStatus)
+      })
+    }
+    return orders.filter((o) => {
+      if (o.status === "cancelled") return false
+      const safePaid = Number(o.paid) || 0
+      const safeTotal = Number(o.total) || 0
+      const balance = Math.max(0, safeTotal - safePaid)
+      const dStatus = deliveryBySale[o.id]?.status
+      const isDelivered = balance <= 0 && (dStatus === "delivered" || !dStatus)
+      return !isDelivered
+    })
+  }, [orders, filter, deliveryBySale])
+
+  /** Sale más reciente con ventana de soporte aún abierta (canClaim).
+   *  Si existe, el FAB de ayuda lo asocia al ticket. Si NO existe, el
+   *  centro de ayuda ofrece solo FAQ + WhatsApp directo (no ticket). */
+  const contextualSaleForSupport = useMemo(() => {
+    for (const o of orders) {
+      const claim = canClaim(rules, o as any)
+      if (claim.allowed) return o
+    }
+    return null
+  }, [orders, rules])
+
+  /** Mini-orders para el header de stats (sin necesidad de delivery). */
+  const miniOrders: MiniOrder[] = useMemo(
+    () =>
+      orders.map((o) => ({
+        id: o.id,
+        total: o.total,
+        paid: o.paid,
+        balance: o.balance,
+        status: o.status,
+        created_at: o.created_at,
+      })),
+    [orders],
+  )
+
+  /** Para invitar a reordenar: cliente puede repetir compra de un pedido
+   *  ya entregado o pagado completamente. Reordena via reusing
+   *  sales:prefill-cart pero en el cliente (BuySheet). Simple: navega
+   *  al catálogo. Si queremos, después conectamos a un evento que
+   *  pre-llene el carrito del cliente. */
+  const handleReorder = useCallback(
+    (saleId: string) => {
+      toast("Te llevamos al catálogo · reorganizamos tu carrito 💖", {
+        icon: "♻️",
+        duration: 1800,
+      })
+      navigate(`/?reorder=${saleId}`)
+    },
+    [navigate],
+  )
+
   if (loading) {
     return (
       <div className="space-y-3 pb-24">
@@ -209,33 +321,72 @@ export default function ClientOrdersPage() {
     )
   }
 
-  if (orders.length === 0) {
-    return (
-      <EmptyStateIllustration
-        variant="no-orders"
-        title="Aún no tienes pedidos"
-        subtitle="Arma tu carrito desde el catálogo y aparecerán aquí para que sigas su estado."
-        cta={
-          <a
-            href="/"
-            className="inline-flex items-center gap-1.5 h-11 px-5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest shadow-bloom press-hard"
-          >
-            <ShoppingBag size={12} /> Ir al catálogo
-          </a>
-        }
-      />
-    )
-  }
-
   return (
     <div className="space-y-3 pb-24">
-      <div>
-        <h1 className="text-2xl font-black tracking-tight">Mis pedidos</h1>
-        <p className="text-sm text-slate-500">
-          Aquí ves todos tus apartados y compras.
-        </p>
-      </div>
-      {orders.map((o) => {
+      {/* Header personalizado con stats del cliente. */}
+      <OrdersStatsHeader
+        customerFirstName={(fullName ?? email ?? "").split(" ")[0] ?? null}
+        orders={miniOrders}
+      />
+
+      {/* Filtros tab — solo si tiene más de 1 pedido. */}
+      {orders.length > 1 && (
+        <TabBar
+          tabs={ORDER_TABS.map((t) => ({
+            id: t.id,
+            label: t.label,
+            badge:
+              t.id === "all"
+                ? counts.all
+                : t.id === "active"
+                ? counts.active
+                : t.id === "delivered"
+                ? counts.delivered
+                : counts.cancelled,
+            badgeTone: t.id === "active" ? "warn" : "slate",
+          })) as any}
+          active={filter}
+          onChange={(id) => setFilter(id as OrderFilter)}
+          layoutId="orders-filter"
+        />
+      )}
+
+      {/* Empty state contextual por filtro. */}
+      {filteredOrders.length === 0 && (
+        <EmptyStateIllustration
+          variant="no-orders"
+          title={
+            filter === "active"
+              ? "Sin pedidos activos"
+              : filter === "delivered"
+              ? "Sin entregas todavía"
+              : filter === "cancelled"
+              ? "Sin pedidos cancelados"
+              : "Aún no tienes pedidos"
+          }
+          subtitle={
+            filter === "active"
+              ? "Cuando apartes o tengas saldo pendiente aparecerá aquí."
+              : filter === "delivered"
+              ? "Tus compras entregadas aparecerán aquí."
+              : filter === "cancelled"
+              ? "Esperemos que nunca tengas que ver esto."
+              : "Arma tu carrito desde el catálogo y aparecerán aquí."
+          }
+          cta={
+            filter === "active" || orders.length === 0 ? (
+              <a
+                href="/"
+                className="inline-flex items-center gap-1.5 h-11 px-5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest shadow-bloom press-hard"
+              >
+                <ShoppingBag size={12} /> Ir al catálogo
+              </a>
+            ) : null
+          }
+        />
+      )}
+
+      {filteredOrders.map((o) => {
         // Defensa contra datos inconsistentes en BD: si balance no
         // cuadra con total - paid (por ajustes viejos), recalculamos
         // localmente para que el cliente NUNCA vea "Total $375 / Falta $440".
@@ -250,6 +401,10 @@ export default function ClientOrdersPage() {
           delivery &&
           (delivery.status === "draft" || delivery.status === "sent")
         const cancel = canCancelSale(rules, o as any)
+        const isCompleted =
+          paid &&
+          o.status !== "cancelled" &&
+          (delivery?.status === "delivered" || !delivery)
 
         return (
           <motion.div
@@ -352,6 +507,22 @@ export default function ClientOrdersPage() {
               </p>
             )}
 
+            {/* Botón "Reordenar" — solo para pedidos COMPLETADOS (entregado o
+                pagado sin entrega). UX: cliente quiere repetir la compra. */}
+            {isCompleted && (
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => handleReorder(o.id)}
+                  className="h-8 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
+                  title="Repetir esta compra"
+                >
+                  <RotateCcw size={11} />
+                  Reordenar
+                </button>
+              </div>
+            )}
+
             {/* Botón cancelar — solo si la regla `client_can_self_cancel` está
                 activa Y la venta sigue dentro de la ventana de gracia. */}
             {rules.client_can_self_cancel && cancel.allowed && (
@@ -408,23 +579,35 @@ export default function ClientOrdersPage() {
         onClose={() => setPaymentOrder(null)}
       />
 
-      {/* FAB de soporte (siempre visible, abajo a la izquierda) */}
-      <motion.button
-        type="button"
-        onClick={() => {
-          setSupportSaleId(null)
+      {/* FAB de ayuda — solo se muestra si hay AL MENOS un pedido todavía
+          activo (no entregado/cancelado). Si no, escondido para no ofrecer
+          una ruta a soporte que tirará "fuera de ventana". El centro de
+          ayuda en sí siempre tiene FAQ + WhatsApp directo como fallback. */}
+      {counts.active > 0 && (
+        <motion.button
+          type="button"
+          onClick={() => setOpenHelp(true)}
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.4 }}
+          whileTap={{ scale: 0.9 }}
+          aria-label="Centro de ayuda"
+          title="¿Necesitas ayuda?"
+          className="fixed bottom-16 left-4 z-40 w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-primary shadow-[0_10px_30px_-10px_rgba(15,23,42,0.25)] flex items-center justify-center hover:scale-105 transition-transform"
+        >
+          <LifeBuoy size={18} />
+        </motion.button>
+      )}
+
+      <OrderHelpCenter
+        open={openHelp}
+        onClose={() => setOpenHelp(false)}
+        contextualSaleId={contextualSaleForSupport?.id ?? null}
+        onOpenSupport={(saleId) => {
+          setSupportSaleId(saleId)
           setOpenSupport(true)
         }}
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.4 }}
-        whileTap={{ scale: 0.9 }}
-        aria-label="Centro de soporte"
-        title="¿Necesitas ayuda?"
-        className="fixed bottom-16 left-4 z-40 w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-primary shadow-[0_10px_30px_-10px_rgba(15,23,42,0.25)] flex items-center justify-center hover:scale-105 transition-transform"
-      >
-        <LifeBuoy size={18} />
-      </motion.button>
+      />
 
       <SupportModal
         open={openSupport}

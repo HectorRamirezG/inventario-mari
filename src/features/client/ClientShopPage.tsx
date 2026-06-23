@@ -354,6 +354,65 @@ export default function ClientShopPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, searchParams])
 
+  // Si llegamos con `?reorder=SALE_ID` (desde "Reordenar" en /mis-pedidos),
+  // cargamos los items de esa venta y los agregamos al carrito actual.
+  // Limpia el query al terminar para no re-disparar al refrescar.
+  useEffect(() => {
+    const reorderId = searchParams.get("reorder")
+    if (!reorderId) return
+    if (products.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      const { data, error } = await supabase
+        .from("sale_items")
+        .select("variant_id,product_id,qty")
+        .eq("sale_id", reorderId)
+      if (cancelled) return
+      if (error || !data || data.length === 0) {
+        toast.error("No pudimos recuperar los productos de ese pedido")
+      } else {
+        let added = 0
+        let missing = 0
+        // Agrupamos por product_id para usar addBatchToCart por producto
+        const byProduct: Record<string, { variantId: string; qty: number }[]> = {}
+        for (const it of data as any[]) {
+          if (!it.product_id) continue
+          if (!byProduct[it.product_id]) byProduct[it.product_id] = []
+          byProduct[it.product_id].push({
+            variantId: it.variant_id,
+            qty: Math.max(1, Number(it.qty) || 1),
+          })
+        }
+        for (const [pid, lines] of Object.entries(byProduct)) {
+          const p = products.find((pp) => pp.id === pid)
+          if (!p) {
+            missing += lines.length
+            continue
+          }
+          addBatchToCart(p, lines)
+          added += lines.length
+        }
+        if (added > 0) {
+          toast.success(
+            missing > 0
+              ? `${added} productos recargados (${missing} ya no existen)`
+              : `${added} productos al carrito · listos para apartar`,
+            { duration: 3200 },
+          )
+        } else if (missing > 0) {
+          toast.error("Esos productos ya no están disponibles")
+        }
+      }
+      const next = new URLSearchParams(searchParams)
+      next.delete("reorder")
+      setSearchParams(next, { replace: true })
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, searchParams])
+
   const categories = useMemo(() => {
     const set = new Set<string>()
     products.forEach((p) => {
