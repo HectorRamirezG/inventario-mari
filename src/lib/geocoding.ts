@@ -229,9 +229,12 @@ export function buildMapsUrl(lat: number, lng: number, label?: string): string {
 
 /**
  * URL de imagen estática del mapa con un pin marcado.
- * Usa staticmap.openstreetmap.de — gratis, sin API key.
- * No usar en producción de alto volumen (ellos piden cache local agresivo);
- * para uso normal de está perfecto.
+ * Usa el static map endpoint de Wikimedia (basado en OSM) — gratis y sin
+ * API key. Lo elegimos porque `staticmap.openstreetmap.de` dejó de
+ * resolver DNS en producción (ERR_NAME_NOT_RESOLVED).
+ *
+ * Formato wikimedia:
+ *   https://maps.wikimedia.org/img/osm-intl,{zoom},{lat},{lng},{w}x{h}@2x.png
  *
  *   <img src={staticMapUrl(lat, lng)} />
  */
@@ -240,14 +243,10 @@ export function staticMapUrl(
   lng: number,
   opts: { zoom?: number; width?: number; height?: number } = {},
 ): string {
-  const z = opts.zoom ?? 16
-  const w = opts.width ?? 400
-  const h = opts.height ?? 200
-  const params = new URLSearchParams({
-    center: `${lat},${lng}`,
-    zoom: String(z),
-    size: `${w}x${h}`,
-    markers: `${lat},${lng},red-pushpin`,
-  })
-  return `https://staticmap.openstreetmap.de/staticmap.php?${params.toString()}`
+  const z = Math.max(1, Math.min(18, opts.zoom ?? 16))
+  // Wikimedia espera dimensiones razonables (1-1500). Acotamos por seguridad.
+  const w = Math.max(50, Math.min(1500, opts.width ?? 400))
+  const h = Math.max(50, Math.min(1500, opts.height ?? 200))
+  // El @2x devuelve retina (mejor para PWA en mobile con DPR>1).
+  return `https://maps.wikimedia.org/img/osm-intl,${z},${lat.toFixed(5)},${lng.toFixed(5)},${w}x${h}@2x.png`
 }

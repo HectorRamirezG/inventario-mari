@@ -737,7 +737,16 @@ export default function ClientShopPage() {
   /** Inicia el proceso de apartado. Si faltan datos del invitado, abre el modal. */
   function startCheckout() {
     if (cart.length === 0) return
-    const needsForm = !guest.name.trim() || !guest.email.trim() || !guest.phone.trim()
+    // Phone es siempre útil para envíos. Si rule require_phone_to_buy
+    // está activa, lo HACEMOS estricto (no se puede continuar sin él).
+    // Si está apagada, mantenemos el comportamiento legacy (también lo
+    // pide para no perder contactabilidad).
+    const phoneRequired = bRules.require_phone_to_buy
+    const needsForm =
+      !guest.name.trim() ||
+      !guest.email.trim() ||
+      (phoneRequired ? !guest.phone.trim() : false) ||
+      !guest.phone.trim()
     if (needsForm) {
       setOpenCart(false)
       setOpenGuestForm(true)
@@ -1312,6 +1321,7 @@ export default function ClientShopPage() {
                 mode={viewMode}
                 isFavorite={wishlist.has(p.id)}
                 priority={idx === 0}
+                hidePrice={bRules.hide_prices_until_login && !isLogged}
                 onToggleFavorite={() => wishlist.toggle(p.id)}
                 onOpenLightbox={(variantId) => {
                   setLightboxStartVariant(variantId)
@@ -1330,6 +1340,16 @@ export default function ClientShopPage() {
                     .catch(() => {})
                 }}
                 onOpenBuy={(variantId) => {
+                  // hide_prices_until_login: si no hay sesión, redirigimos
+                  // al login antes de mostrar el sheet con precio.
+                  if (bRules.hide_prices_until_login && !isLogged) {
+                    toast("Inicia sesión para ver precios y comprar", {
+                      icon: "🔒",
+                      duration: 2400,
+                    })
+                    navigate("/login")
+                    return
+                  }
                   setBuySheetPreselectedVariant(variantId)
                   setBuySheetProduct(p)
                   import("../../lib/useRecentViews")
@@ -2017,6 +2037,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
   mode = "grid",
   isFavorite = false,
   priority = false,
+  hidePrice = false,
   onToggleFavorite,
   onOpenLightbox,
   onOpenBuy,
@@ -2028,6 +2049,9 @@ const ProductCardClient = memo(function ProductCardClientImpl({
   /** Si true, la imagen principal usa fetchPriority alta y carga eager.
    *  Sólo el primer producto del listado lo recibe para mejorar LCP. */
   priority?: boolean
+  /** Si true, oculta los precios y muestra CTA "Inicia sesión".
+   *  Activado por rule.hide_prices_until_login cuando !isLogged. */
+  hidePrice?: boolean
   onToggleFavorite?: () => void
   onOpenLightbox: (variantId: string) => void
   onOpenBuy: (variantId: string) => void
@@ -2205,22 +2229,30 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-black text-primary truncate">
-              {formatMoney(price)}
-              {!out && variant.stock <= 3 && (
-                <span
-                  className={`ml-1.5 text-[8px] font-black uppercase ${
-                    variant.stock === 1
-                      ? "text-rose-600 dark:text-rose-400 animate-pulse"
-                      : "text-amber-600"
-                  }`}
-                >
-                  {variant.stock === 1 ? "¡ÚLTIMA!" : `· ${variant.stock} pz`}
+              {hidePrice ? (
+                <span className="text-[10px] uppercase tracking-widest text-slate-400">
+                  Inicia sesión para ver precio
                 </span>
-              )}
-              {out && (
-                <span className="ml-1.5 text-[8px] text-rose-500 font-black uppercase">
-                  Agotado
-                </span>
+              ) : (
+                <>
+                  {formatMoney(price)}
+                  {!out && variant.stock <= 3 && (
+                    <span
+                      className={`ml-1.5 text-[8px] font-black uppercase ${
+                        variant.stock === 1
+                          ? "text-rose-600 dark:text-rose-400 animate-pulse"
+                          : "text-amber-600"
+                      }`}
+                    >
+                      {variant.stock === 1 ? "¡ÚLTIMA!" : `· ${variant.stock} pz`}
+                    </span>
+                  )}
+                  {out && (
+                    <span className="ml-1.5 text-[8px] text-rose-500 font-black uppercase">
+                      Agotado
+                    </span>
+                  )}
+                </>
               )}
             </span>
             <button
@@ -2364,7 +2396,13 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                 isFocus ? "text-2xl" : "text-base"
               }`}
             >
-              {formatMoney(price)}
+              {hidePrice ? (
+                <span className="text-[11px] uppercase tracking-widest text-slate-400 font-black">
+                  Inicia sesión
+                </span>
+              ) : (
+                formatMoney(price)
+              )}
             </span>
             {/* Stock urgente inline DEBAJO del precio. Solo si aplica. */}
             {out ? (

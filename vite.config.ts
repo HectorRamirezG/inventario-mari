@@ -95,9 +95,12 @@ export default defineConfig({
             },
           },
           {
-            // Avatares públicos (OpenStreetMap, gravatar, etc.) — net first
+            // Imágenes públicas de terceros (mapas + avatares).
+            // - wikimedia.org: nuestro static map endpoint (reemplazó al
+            //   staticmap.openstreetmap.de que dejó de resolver DNS).
+            // - openstreetmap.org / gravatar / googleusercontent: avatars.
             urlPattern: ({ url }) =>
-              /openstreetmap\.org|gravatar\.com|googleusercontent\.com/i.test(url.host),
+              /wikimedia\.org|openstreetmap\.org|gravatar\.com|googleusercontent\.com/i.test(url.host),
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'mari-third-party-images',
