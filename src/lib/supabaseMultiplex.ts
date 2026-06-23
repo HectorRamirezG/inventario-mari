@@ -26,6 +26,9 @@ const TABLES = [
   "notifications",
   "stories",
   "app_settings",
+  "loyalty_rules",
+  "loyalty_balance",
+  "loyalty_events",
 ] as const
 
 export type RealtimeTable = (typeof TABLES)[number]
@@ -78,6 +81,8 @@ const FAST_TABLES = new Set<RealtimeTable>([
   "payments",
   "delivery_notes",
   "support_tickets",
+  "loyalty_balance",
+  "loyalty_events",
 ])
 
 function scheduleDispatch(table: RealtimeTable, payload: unknown) {

@@ -42,6 +42,8 @@ import StoriesBar from "../stories/StoriesBar"
 import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
 import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
 import Skeleton from "../../components/ui/Skeleton"
+import LoyaltyDrawer from "../loyalty/LoyaltyDrawer"
+import { useMyLoyaltyBalance } from "../loyalty/loyaltyService"
 
 interface PublicVariant {
   id: string
@@ -184,6 +186,9 @@ export default function ClientHomePage() {
 
       {/* Sección Mis ahorros (solo si logueado) */}
       {isLogged && <MySavingsSection />}
+
+      {/* Sección Mis Premios (solo si la regla está activa y hay sesión) */}
+      {isLogged && bRules.loyalty_enabled && <MyLoyaltyCard />}
     </div>
   )
 }
@@ -365,5 +370,62 @@ function MySavingsSection() {
         </div>
       </div>
     </section>
+  )
+}
+
+/**
+ * Card "Mis premios" para el cliente: muestra balance y abre el drawer
+ * con historial completo + reglas activas + valor en pesos.
+ */
+function MyLoyaltyCard() {
+  const { balance, loading } = useMyLoyaltyBalance()
+  const bRules = useBusinessRules()
+  const [open, setOpen] = useState(false)
+
+  // No mostrar nada si está cargando o si nunca ha ganado puntos: la
+  // experiencia de "0 puntos en seco" es desmotivante. Mejor invitamos
+  // a ganar el primero con un CTA sutil.
+  const points = balance?.points ?? 0
+  const moneyValue = points * (bRules.loyalty_peso_por_punto || 1)
+
+  if (loading) return null
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full mt-4 group press relative overflow-hidden rounded-3xl p-4 text-left text-white shadow-bloom"
+        style={{
+          background:
+            "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+        }}
+        aria-label="Ver mis premios"
+      >
+        <span className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-white/15 blur-xl" />
+        <div className="relative flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-white/20 flex items-center justify-center text-2xl shrink-0">
+            🏆
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-80">
+              Mis premios
+            </p>
+            <p className="text-2xl font-black tabular-nums leading-tight">
+              {points} <span className="text-xs opacity-80">pts</span>
+            </p>
+            <p className="text-[10px] font-bold opacity-90 mt-0.5">
+              {points > 0
+                ? `≈ $${moneyValue.toFixed(2)} en tu próxima compra`
+                : "Aún no tienes puntos. ¡Empieza ya!"}
+            </p>
+          </div>
+          <span className="text-[10px] font-black opacity-90 group-hover:translate-x-0.5 transition-transform">
+            Ver →
+          </span>
+        </div>
+      </button>
+      <LoyaltyDrawer open={open} onClose={() => setOpen(false)} />
+    </>
   )
 }

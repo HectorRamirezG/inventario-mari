@@ -19,6 +19,10 @@ import {
   ShoppingBag,
   Loader2,
   Tag,
+  LifeBuoy,
+  HelpCircle,
+  Heart,
+  ShoppingCart,
   type LucideIcon,
 } from "lucide-react"
 import toast from "react-hot-toast"
@@ -32,11 +36,11 @@ import {
 import { useBusinessRules } from "../../features/settings/businessRulesService"
 import { useAuth } from "../../lib/useAuth"
 import { useDebouncedValue } from "../../lib/useDebouncedValue"
+import { reopenOnboardingTour } from "./OnboardingTour"
 import {
   universalSearch,
   type UniversalResult,
 } from "../../lib/universalSearch"
-
 interface Command {
   id: string
   label: string
@@ -240,6 +244,85 @@ export default function CommandPalette({ open, onClose }: Props) {
         run: () => dispatch("mari:open-profile"),
       },
 
+      /* Comando universal disponible para admin y cliente. */
+      {
+        id: "show-tutorial",
+        label: "Ver tutorial de la app",
+        hint: "Tour guiado de 30 segundos",
+        icon: HelpCircle,
+        group: "Acciones",
+        run: () => {
+          onClose()
+          setTimeout(() => reopenOnboardingTour(), 100)
+        },
+      },
+
+      /* Comandos exclusivos para cliente (no-admin). Solo se añaden si
+         el usuario no tiene rol admin/staff. visibleSections() devuelve []
+         para cliente, así que sin estos, la palette quedaba vacía. */
+      ...(!isAdmin
+        ? [
+            {
+              id: "client-go-shop",
+              label: "Ir a la tienda",
+              hint: "Catálogo de productos",
+              icon: ShoppingBag,
+              group: "Navegación" as const,
+              run: () => {
+                onClose()
+                routerNavigate("/")
+              },
+            },
+            {
+              id: "client-go-orders",
+              label: "Mis pedidos",
+              hint: "Historial y apartados activos",
+              icon: Receipt,
+              group: "Navegación" as const,
+              run: () => {
+                onClose()
+                routerNavigate("/mis-pedidos")
+              },
+            },
+            {
+              id: "client-go-wishes",
+              label: "Mis deseos",
+              hint: "Productos que pediste especialmente",
+              icon: Heart,
+              group: "Navegación" as const,
+              run: () => {
+                onClose()
+                routerNavigate("/mis-deseos")
+              },
+            },
+            {
+              id: "client-go-cart",
+              label: "Abrir mi carrito",
+              hint: "Revisa antes de apartar",
+              icon: ShoppingCart,
+              group: "Acciones" as const,
+              run: () => {
+                onClose()
+                // Reusa el evento global del cart drawer (idéntico al
+                // botón flotante del carrito en la tienda).
+                dispatch("mari:open-cart")
+              },
+            },
+            {
+              id: "client-help",
+              label: "Pedir ayuda",
+              hint: "Preguntas frecuentes o contacto directo",
+              icon: LifeBuoy,
+              group: "Acciones" as const,
+              run: () => {
+                onClose()
+                // Navegamos a /mis-pedidos con flag para abrir el centro de ayuda.
+                routerNavigate("/mis-pedidos", { state: { openHelp: true } })
+              },
+            },
+          ]
+        : []),
+
       /* ─────────── Diagnóstico ─────────── */
       {
         id: "ping-supabase",
@@ -310,7 +393,7 @@ export default function CommandPalette({ open, onClose }: Props) {
         run: () => setTheme("system"),
       },
     ],
-    [navCommands, effective, toggle, setTheme]
+    [navCommands, effective, toggle, setTheme, isAdmin, onClose, routerNavigate]
   )
 
   // Mezcla comandos estáticos con resultados dinámicos. Si hay query, los

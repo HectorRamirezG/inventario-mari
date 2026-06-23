@@ -40,6 +40,7 @@ import {
   ImagePlus,
   Megaphone,
   Tag,
+  Trophy,
   Trash2,
   Plus,
   GripVertical,
@@ -57,6 +58,7 @@ import {
   type BusinessRules,
   type WelcomeSlide,
 } from "./businessRulesService"
+import LoyaltyRulesEditor from "../loyalty/LoyaltyRulesEditor"
 
 export default function BusinessRulesPage() {
   const live = useBusinessRules()
@@ -860,8 +862,60 @@ export default function BusinessRulesPage() {
         >
           <WelcomeSlidesEditor
             slides={form.welcome_slides}
-            onChange={(slides) => patch({ welcome_slides: slides })}
+            onChange={(slides: WelcomeSlide[]) =>
+              patch({ welcome_slides: slides })
+            }
           />
+        </RuleRow>
+      </Section>
+
+      {/* ════════════ PROGRAMA DE PREMIOS ════════════ */}
+      <Section
+        icon={<Trophy size={14} />}
+        title="Programa de premios"
+        subtitle="Gamifica la app: tus clientas ganan puntos por usarla"
+      >
+        <RuleRow
+          icon={Trophy}
+          title="Activar programa de premios"
+          description="Si está apagado, no se muestra el botón de premios al cliente. Los puntos siguen acumulándose en BD pero no son visibles."
+          affects="cliente"
+          enabled={form.loyalty_enabled}
+          onToggle={(v: boolean) => patch({ loyalty_enabled: v })}
+        >
+          <NumberField
+            label="¿Cuánto vale cada punto?"
+            value={form.loyalty_peso_por_punto}
+            onChange={(v: number) => patch({ loyalty_peso_por_punto: v })}
+            suffix="$/pt"
+            min={0.1}
+            max={100}
+            step={0.5}
+          />
+          <Hint>
+            1 punto = {formatMoney(form.loyalty_peso_por_punto)}. Ejemplo:
+            si la cliente tiene 100 puntos, puede usarlos como{" "}
+            {formatMoney(100 * form.loyalty_peso_por_punto)} de descuento.
+          </Hint>
+          <NumberField
+            label="Mínimo de puntos para canjear"
+            value={form.loyalty_min_redeem}
+            onChange={(v: number) => patch({ loyalty_min_redeem: v })}
+            suffix="pts"
+            min={0}
+            max={1000}
+          />
+          <Hint>
+            Evita microcanjes. La clienta solo puede aplicar puntos si
+            tiene al menos {form.loyalty_min_redeem} acumulados.
+          </Hint>
+
+          <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 mb-2">
+              ¿Cuántos puntos da cada acción?
+            </p>
+            <LoyaltyRulesEditor />
+          </div>
         </RuleRow>
       </Section>
 

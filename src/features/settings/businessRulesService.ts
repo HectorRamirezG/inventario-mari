@@ -210,6 +210,21 @@ export interface BusinessRules {
    *  cualquier producto con descuento < 5% no muestra nada (evita ruido
    *  de descuentos diminutos). Default 5. */
   offer_min_discount_pct: number
+
+  /* ════════════════════════ PROGRAMA DE PREMIOS ════════════════════════ */
+
+  /** Master switch del sistema de puntos. Si está apagado, los triggers
+   *  SQL siguen activos pero la UI cliente NO muestra puntos ni el botón
+   *  de canje. Apagar es seguro: no pierde datos, solo oculta. */
+  loyalty_enabled: boolean
+
+  /** Cuántos pesos vale cada punto en el canje. Default 1 (1pt = $1).
+   *  Permite valores fraccionales (ej. 0.5 = 2pts = $1). */
+  loyalty_peso_por_punto: number
+
+  /** Mínimo de puntos para poder canjear en una compra. Evita micro-
+   *  canjeos (ej. canjear 5 puntos por $5 no vale la pena). Default 50. */
+  loyalty_min_redeem: number
 }
 
 /**
@@ -315,6 +330,11 @@ export const DEFAULT_RULES: BusinessRules = {
   low_stock_label: "Apúrate, solo quedan",
   new_badge_days: 7,
   offer_min_discount_pct: 5,
+
+  // Programa de Premios
+  loyalty_enabled: false,
+  loyalty_peso_por_punto: 1,
+  loyalty_min_redeem: 50,
 }
 
 let cache: BusinessRules | null = null
@@ -469,6 +489,19 @@ function merge(raw: any): BusinessRules {
       Number(raw.offer_min_discount_pct) >= 0
         ? Math.min(99, Math.floor(Number(raw.offer_min_discount_pct)))
         : DEFAULT_RULES.offer_min_discount_pct,
+
+    // Programa de Premios
+    loyalty_enabled: !!raw.loyalty_enabled,
+    loyalty_peso_por_punto:
+      Number.isFinite(Number(raw.loyalty_peso_por_punto)) &&
+      Number(raw.loyalty_peso_por_punto) > 0
+        ? Number(raw.loyalty_peso_por_punto)
+        : DEFAULT_RULES.loyalty_peso_por_punto,
+    loyalty_min_redeem:
+      Number.isFinite(Number(raw.loyalty_min_redeem)) &&
+      Number(raw.loyalty_min_redeem) >= 0
+        ? Math.floor(Number(raw.loyalty_min_redeem))
+        : DEFAULT_RULES.loyalty_min_redeem,
   }
 }
 

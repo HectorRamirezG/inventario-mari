@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
   Clock,
@@ -72,12 +72,22 @@ interface MyDelivery extends OrderProgressDelivery {
 export default function ClientOrdersPage() {
   const { email, fullName } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  // Si llegamos con state.openHelp=true (típicamente desde el
+  // CommandPalette > "Pedir ayuda"), abrimos el centro de ayuda al montar.
+  const [shouldOpenHelpOnMount] = useState<boolean>(
+    () => !!(location.state as { openHelp?: boolean } | null)?.openHelp,
+  )
   const [orders, setOrders] = useState<MyOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [paymentOrder, setPaymentOrder] = useState<MyOrder | null>(null)
   const [openSupport, setOpenSupport] = useState(false)
   const [supportSaleId, setSupportSaleId] = useState<string | null>(null)
   const [openHelp, setOpenHelp] = useState(false)
+  // Auto-abrir si veníamos del CommandPalette > Pedir ayuda.
+  useEffect(() => {
+    if (shouldOpenHelpOnMount) setOpenHelp(true)
+  }, [shouldOpenHelpOnMount])
   const [filter, setFilter] = useState<OrderFilter>("active")
   /** Token (o id) del pedido cuyo ticket se abre como drawer in-place. */
   const [ticketToken, setTicketToken] = useState<string | null>(null)
