@@ -16,6 +16,7 @@ import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import DeliveryStatusChip from "../../components/ui/DeliveryStatusChip"
 import { cancelSale } from "../apartados/apartadosService"
 import { promptDialog } from "../../lib/prompt"
+import { runWithUndo } from "../../lib/withUndo"
 import {
   useBusinessRules,
   canClaim,
@@ -310,15 +311,18 @@ export default function ClientOrdersPage() {
                           multiline: true,
                         })
                         if (reason === null) return
-                        try {
-                          await cancelSale(o.id, reason || null)
-                          toast.success("Pedido cancelado. Te contactaremos pronto.")
-                        } catch (e: any) {
-                          toast.error(
-                            e?.message ??
-                              "No se pudo cancelar. Contacta a la tienda por soporte."
-                          )
-                        }
+                        // Optimismo: ocultamos la orden de la lista ya. Si el
+                        // usuario presiona "Deshacer" antes de 5s, restauramos.
+                        const snapshot = orders
+                        runWithUndo({
+                          message: "Pedido cancelado",
+                          optimisticUI: () =>
+                            setOrders((prev) => prev.filter((x) => x.id !== o.id)),
+                          revertUI: () => setOrders(snapshot),
+                          commit: async () => {
+                            await cancelSale(o.id, reason || null)
+                          },
+                        })
                       }}
                       className="self-end h-8 px-3 rounded-xl bg-transparent text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
                     >

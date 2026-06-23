@@ -16,6 +16,7 @@ import { promptDialog } from "../../lib/prompt"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { useDebouncedValue } from "../../lib/useDebouncedValue"
+import { runWithUndo } from "../../lib/withUndo"
 import type { Sale } from "../../types/database"
 
 export type ApartadosFilter = "pending" | "paid" | "all"
@@ -223,7 +224,7 @@ export function useApartados() {
       const ok = await confirmAction({
         title: "¿Cancelar esta venta?",
         description:
-          "El stock se devolverá al inventario automáticamente. El cliente recibirá una notificación con el motivo. No se puede deshacer.",
+          "El stock se devolverá al inventario y el cliente recibirá una notificación con el motivo. Tendrás 5 segundos para deshacer.",
         confirmLabel: "Sí, cancelar venta",
         tone: "danger",
       })
@@ -239,18 +240,29 @@ export function useApartados() {
         maxLength: 280,
       })
       if (reason === null) return false
-      const toastId = toast.loading("Cancelando venta...")
-      try {
-        await cancelSale(saleId, reason || null)
-        toast.success("Venta cancelada (stock devuelto)", { id: toastId })
-        await refresh()
-        return true
-      } catch (e: any) {
-        toast.error(e?.message ?? "Error al cancelar", { id: toastId })
-        return false
-      }
+      // Snapshot del cache para revertir si user da Deshacer dentro del delay.
+      const key = apartadosQueryKey(filter, onlyLayaway)
+      const snapshot = queryClient.getQueryData<ApartadosBundle>(key)
+      runWithUndo({
+        message: "Venta cancelada (stock por liberar)",
+        optimisticUI: () => {
+          queryClient.setQueryData<ApartadosBundle>(key, (prev) =>
+            prev
+              ? { ...prev, sales: prev.sales.filter((s) => s.id !== saleId) }
+              : prev,
+          )
+        },
+        revertUI: () => {
+          if (snapshot) queryClient.setQueryData(key, snapshot)
+        },
+        commit: async () => {
+          await cancelSale(saleId, reason || null)
+          await refresh()
+        },
+      })
+      return true
     },
-    [refresh],
+    [filter, onlyLayaway, queryClient, refresh],
   )
 
   return {

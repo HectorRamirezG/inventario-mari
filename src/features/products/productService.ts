@@ -221,6 +221,26 @@ export async function createVariant(variant: Partial<Variant>): Promise<Variant>
   return data as Variant
 }
 
+/**
+ * Crea N variantes del mismo producto en un solo INSERT. Cada item del
+ * arreglo se sanitiza igual que en `createVariant`. Útil para sembrar
+ * de golpe los tonos/talles de un producto recién creado.
+ */
+export async function createVariantsBulk(
+  variants: Array<Partial<Variant>>,
+): Promise<Variant[]> {
+  if (variants.length === 0) return []
+  const rows = variants.map((v) => ({
+    ...pick(v, VARIANT_COLUMNS),
+    price: v.price ?? 0,
+    stock: v.stock ?? 0,
+    is_active: true,
+  }))
+  const { data, error } = await supabase.from("variants").insert(rows).select()
+  if (error) throw error
+  return (data ?? []) as Variant[]
+}
+
 export async function deleteProduct(productId: string) {
   const { error } = await supabase
     .from("products")

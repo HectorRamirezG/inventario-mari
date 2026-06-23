@@ -39,6 +39,7 @@ import {
 import { formatMoney, formatRelative } from "../../lib/format"
 import { copyToClipboard } from "../../lib/clipboard"
 import { confirmAction } from "../../lib/confirm"
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
 import CustomerInfoCard from "../../components/ui/CustomerInfoCard"
 import type { Sale } from "../../types/database"
 
@@ -133,14 +134,7 @@ export default function CreateDeliveryNoteModal({
     loadExisting()
   }, [open, sale, loadExisting])
 
-  useEffect(() => {
-    if (!open) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [open])
+  useBodyScrollLock(open)
 
   function pickDriver(name: string, phone: string) {
     setDriverName(name)

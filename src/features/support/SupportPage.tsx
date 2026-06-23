@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, type PanInfo } from "framer-motion"
 import {
   LifeBuoy,
   RefreshCw,
@@ -27,6 +27,8 @@ import {
   buildSupportResolutionWhatsApp,
   resolveTicket,
   SUPPORT_CATEGORIES,
+  SUPPORT_QUICK_REPLIES,
+  fillQuickReply,
   type SupportTicket,
   type SupportStatus,
 } from "./supportService"
@@ -37,6 +39,9 @@ import { isVideoUrl } from "../../lib/media"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import PageHeader from "../../components/ui/PageHeader"
 import { useLocalStorageState } from "../../lib/useLocalStorageState"
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
+import { promptDialog } from "../../lib/prompt"
+import { confirmAction } from "../../lib/confirm"
 
 const STATUS_TABS: { id: SupportStatus | "all"; label: string }[] = [
   { id: "open", label: "Abiertas" },
@@ -141,29 +146,63 @@ export default function SupportPage() {
   }, [tickets])
 
   async function changeStatus(id: string, status: SupportStatus) {
+    // Optimistic: actualizamos ambas listas YA. Si la BD truena, revertimos.
+    const snapshot = { tickets, allTickets }
+    const applyLocal = (arr: SupportTicket[]) =>
+      arr.map((t) => (t.id === id ? { ...t, status } : t))
+    setTickets((prev) => applyLocal(prev))
+    setAllTickets((prev) => applyLocal(prev))
+    setSelected((s) => (s && s.id === id ? { ...s, status } : s))
     try {
       await updateSupportStatus(id, status)
-      toast.success("Estatus actualizado")
-      setSelected((s) => (s && s.id === id ? { ...s, status } : s))
-      refresh()
     } catch (e: any) {
+      setTickets(snapshot.tickets)
+      setAllTickets(snapshot.allTickets)
       toast.error(e?.message ?? "No se pudo actualizar")
     }
   }
 
+  async function handleQuickResolve(t: SupportTicket) {
+    // Confirmación + mensaje opcional para el cliente. NO abre el drawer.
+    const ok = await confirmAction({
+      title: "¿Marcar como resuelta?",
+      description: t.customer_email
+        ? "Le mandaremos una notificación al cliente con tu mensaje (opcional)."
+        : "Sin email del cliente no podemos notificarlo, pero el ticket queda cerrado.",
+      confirmLabel: "Sí, cerrar",
+      tone: "success",
+    })
+    if (!ok) return
+    const msg =
+      (await promptDialog({
+        title: "Mensaje para el cliente (opcional)",
+        placeholder: "Ej. Listo, ya quedo resuelto. ¡Gracias por avisar!",
+        confirmLabel: "Cerrar ticket",
+        cancelLabel: "Sin mensaje",
+        multiline: true,
+        maxLength: 280,
+      })) ?? ""
+    await handleResolve(t, msg)
+  }
+
   async function handleResolve(ticket: SupportTicket, message: string) {
+    // Optimistic: marcamos resuelta YA. Si la BD truena, revertimos.
+    const snapshot = { tickets, allTickets }
+    const apply = (arr: SupportTicket[]) =>
+      arr.map((t) => (t.id === ticket.id ? { ...t, status: "resolved" as SupportStatus } : t))
+    setTickets((prev) => apply(prev))
+    setAllTickets((prev) => apply(prev))
+    setSelected((s) =>
+      s && s.id === ticket.id ? { ...s, status: "resolved" } : s,
+    )
     try {
       await resolveTicket(ticket, message)
       toast.success(
-        ticket.customer_email
-          ? "Resuelta · cliente notificado"
-          : "Resuelta"
+        ticket.customer_email ? "Resuelta · cliente notificado" : "Resuelta",
       )
-      setSelected((s) =>
-        s && s.id === ticket.id ? { ...s, status: "resolved" } : s
-      )
-      refresh()
     } catch (e: any) {
+      setTickets(snapshot.tickets)
+      setAllTickets(snapshot.allTickets)
       toast.error(e?.message ?? "No se pudo resolver")
     }
   }
@@ -294,15 +333,35 @@ export default function SupportPage() {
                 {items.map((t) => {
                   const meta = categoryMeta(t.category)
                   const isOpen = t.status === "open"
+                  const isResolved = t.status === "resolved"
                   return (
-                    <motion.button
+                    <motion.div
                       key={t.id}
-                      type="button"
                       layout
                       whileTap={{ scale: 0.99 }}
                       onClick={() => setSelected(t)}
-                      className="relative w-full text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-primary/30 dark:hover:border-primary/40 hover:shadow-md transition-all rounded-2xl p-3 shadow-sm overflow-hidden"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") setSelected(t)
+                      }}
+                      drag={!isResolved ? "x" : false}
+                      dragConstraints={{ left: -200, right: 0 }}
+                      dragElastic={{ left: 0.3, right: 0 }}
+                      onDragEnd={(_e, info: PanInfo) => {
+                        if (info.offset.x < -100 || info.velocity.x < -500) {
+                          handleQuickResolve(t)
+                        }
+                      }}
+                      className="relative w-full text-left bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-primary/30 dark:hover:border-primary/40 hover:shadow-md transition-all rounded-2xl p-3 shadow-sm overflow-hidden cursor-pointer touch-pan-y"
                     >
+                      {/* Hint visual del swipe-to-resolve: chip flotante al
+                          lado derecho que aparece cuando se está arrastrando. */}
+                      {!isResolved && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[8px] font-black uppercase tracking-widest pointer-events-none opacity-0 transition-opacity">
+                          Swipe = Resolver
+                        </span>
+                      )}
                       {/* Barra lateral de color por estatus */}
                       <div
                         className={`absolute left-0 top-0 bottom-0 w-1 ${
@@ -361,7 +420,35 @@ export default function SupportPage() {
                           </div>
                         </div>
                       </div>
-                    </motion.button>
+
+                      {/* Acciones rápidas inline (no abren el drawer). Solo
+                          aparecen si el ticket NO está resuelto. */}
+                      {!isResolved && (
+                        <div
+                          className="flex items-center gap-1.5 mt-2 pl-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {isOpen && (
+                            <button
+                              type="button"
+                              onClick={() => changeStatus(t.id, "in_progress")}
+                              className="h-7 px-2.5 rounded-full bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-200 text-[9px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                              title="Marcar en curso (yo me hago cargo)"
+                            >
+                              <Activity size={10} /> Tomar
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleQuickResolve(t)}
+                            className="h-7 px-2.5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-200 text-[9px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                            title="Cerrar el ticket directamente"
+                          >
+                            <CheckCircle2 size={10} /> Resolver
+                          </button>
+                        </div>
+                      )}
+                    </motion.div>
                   )
                 })}
               </div>
@@ -400,15 +487,8 @@ function TicketDrawer({
   useEffect(() => {
     setResolveMessage("")
   }, [ticket?.id])
-  // Bloquear scroll body
-  useEffect(() => {
-    if (!ticket) return
-    const o = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = o
-    }
-  }, [ticket])
+  // Bloquear scroll body (centralizado)
+  useBodyScrollLock(!!ticket)
 
   useEffect(() => {
     if (!ticket) return
@@ -568,6 +648,24 @@ function TicketDrawer({
                   <label className="text-[9px] font-black uppercase tracking-widest text-slate-500">
                     Respuesta para el cliente (opcional)
                   </label>
+                  {/* Quick replies: contextual a la categoría + universales al final */}
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scroll-container-ios">
+                    {SUPPORT_QUICK_REPLIES.filter(
+                      (q) => !q.category || q.category === ticket.category,
+                    ).map((q) => (
+                      <button
+                        key={q.id}
+                        type="button"
+                        onClick={() =>
+                          setResolveMessage(fillQuickReply(q.body, ticket))
+                        }
+                        className="shrink-0 h-7 px-2.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-wider hover:bg-primary/10 hover:text-primary press"
+                        title={q.body}
+                      >
+                        {q.label}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
                     rows={2}
                     value={resolveMessage}

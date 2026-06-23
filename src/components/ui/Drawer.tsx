@@ -8,6 +8,7 @@ import {
   OVERLAY_PANEL_STYLE,
   OVERLAY_PANEL_TRANSITION,
 } from "../../lib/overlayMotion"
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
 
 interface DrawerProps {
   open: boolean
@@ -38,14 +39,7 @@ export default function Drawer({
     return () => window.removeEventListener("keydown", handler)
   }, [open, onClose])
 
-  useEffect(() => {
-    if (!open) return
-    const original = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [open])
+  useBodyScrollLock(open)
 
   const sizes = {
     sm: "max-w-sm",
@@ -66,10 +60,46 @@ export default function Drawer({
   }
 
   function handleDragEnd(_e: any, info: PanInfo) {
-    if (info.offset.y > 120 || info.velocity.y > 500) {
+    // Detecta dirección según el side del drawer. El umbral es 120px de
+    // arrastre o 500px/s de velocidad. Sólo el eje "alejándose" cuenta:
+    //   bottom → drag abajo, right → drag derecha, left → drag izquierda.
+    if (side === "bottom" && (info.offset.y > 120 || info.velocity.y > 500)) {
+      onClose()
+    } else if (
+      side === "right" &&
+      (info.offset.x > 120 || info.velocity.x > 500)
+    ) {
+      onClose()
+    } else if (
+      side === "left" &&
+      (info.offset.x < -120 || info.velocity.x < -500)
+    ) {
       onClose()
     }
   }
+
+  // Configuración de drag por lado. `right` y `left` arrastran horizontal.
+  const dragConfig = draggable
+    ? side === "bottom"
+      ? {
+          drag: "y" as const,
+          dragConstraints: { top: 0, bottom: 0 },
+          dragElastic: { top: 0, bottom: 0.4 },
+        }
+      : side === "right"
+        ? {
+            drag: "x" as const,
+            dragConstraints: { left: 0, right: 0 },
+            dragElastic: { left: 0, right: 0.4 },
+          }
+        : side === "left"
+          ? {
+              drag: "x" as const,
+              dragConstraints: { left: 0, right: 0 },
+              dragElastic: { left: 0.4, right: 0 },
+            }
+          : null
+    : null
 
   return (
     <AnimatePresence>
@@ -89,10 +119,8 @@ export default function Drawer({
             animate={motionVariants[side].animate}
             exit={motionVariants[side].exit}
             transition={OVERLAY_PANEL_TRANSITION}
-            drag={side === "bottom" && draggable ? "y" : false}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.4 }}
-            onDragEnd={handleDragEnd}
+            {...(dragConfig ?? {})}
+            onDragEnd={dragConfig ? handleDragEnd : undefined}
             className={clsx(
               "relative flex flex-col",
               "bg-white dark:bg-slate-900",

@@ -28,6 +28,7 @@ import {
   OVERLAY_PANEL_TRANSITION,
 } from "../../lib/overlayMotion"
 import { useDeferredMount } from "../../lib/useDeferredMount"
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
 
 /* Estructura mínima reutilizable desde ClientShopPage */
 export interface BuySheetVariant {
@@ -104,15 +105,8 @@ export default function BuySheet({
     }
   }, [open, product?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Bloquear scroll del body
-  useEffect(() => {
-    if (!open) return
-    const original = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [open])
+  // Bloquear scroll del body (centralizado para evitar leaks).
+  useBodyScrollLock(open)
 
   // ESC para cerrar
   useEffect(() => {
@@ -402,8 +396,14 @@ export default function BuySheet({
                               📦 Pre-orden · entrega luego
                             </p>
                           ) : v.stock <= 3 ? (
-                            <p className="text-[9px] font-bold text-amber-600 uppercase">
-                              ¡Últimas {v.stock}!
+                            <p
+                              className={`text-[9px] font-black uppercase ${
+                                v.stock === 1
+                                  ? "text-rose-600 dark:text-rose-400 animate-pulse"
+                                  : "text-amber-600"
+                              }`}
+                            >
+                              {v.stock === 1 ? "🔥 ¡ÚLTIMA!" : `¡Últimas ${v.stock}!`}
                             </p>
                           ) : (
                             <p className="text-[9px] text-slate-400 font-bold">

@@ -17,6 +17,7 @@ import {
 
 import { formatMoney, formatRelative, shortId } from "../../lib/format"
 import { useAuth } from "../../lib/useAuth"
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
 import {
   OVERLAY_BACKDROP_TRANSITION,
   OVERLAY_PANEL_STYLE,
@@ -87,15 +88,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
     }
   }, [sale?.id, open])
 
-  // Bloquear scroll body
-  useEffect(() => {
-    if (!open) return
-    const original = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [open])
+  useBodyScrollLock(open)
 
   // ESC para cerrar
   useEffect(() => {

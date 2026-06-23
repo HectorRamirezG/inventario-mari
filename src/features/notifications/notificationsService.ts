@@ -267,15 +267,75 @@ export function useNotifications(opts: {
 
   const unread = items.filter((n) => !n.read_at).length
 
+  // Wrappers OPTIMISTAS: pintan el cambio en UI YA y revierten si la BD
+  // truena. Importan los exports "puros" del módulo. Sin esto, el badge
+  // tardaba ~600ms (el debounce del multiplex realtime) en refrescarse.
+  const optimisticMarkAsRead = useCallback(
+    async (id: string) => {
+      const snapshot = items
+      const at = new Date().toISOString()
+      setItems((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read_at: at } : n)),
+      )
+      try {
+        await markAsRead(id)
+      } catch {
+        setItems(snapshot)
+      }
+    },
+    [items],
+  )
+
+  const optimisticMarkAsUnread = useCallback(
+    async (id: string) => {
+      const snapshot = items
+      setItems((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read_at: null } : n)),
+      )
+      try {
+        await markAsUnread(id)
+      } catch {
+        setItems(snapshot)
+      }
+    },
+    [items],
+  )
+
+  const optimisticMarkAllRead = useCallback(async () => {
+    const snapshot = items
+    const at = new Date().toISOString()
+    setItems((prev) =>
+      prev.map((n) => (n.read_at ? n : { ...n, read_at: at })),
+    )
+    try {
+      await markAllRead()
+    } catch {
+      setItems(snapshot)
+    }
+  }, [items])
+
+  const optimisticRemove = useCallback(
+    async (id: string) => {
+      const snapshot = items
+      setItems((prev) => prev.filter((n) => n.id !== id))
+      try {
+        await removeNotification(id)
+      } catch {
+        setItems(snapshot)
+      }
+    },
+    [items],
+  )
+
   return {
     items,
     unread,
     loading,
     refresh,
-    markAsRead,
-    markAsUnread,
-    markAllRead,
-    removeNotification,
+    markAsRead: optimisticMarkAsRead,
+    markAsUnread: optimisticMarkAsUnread,
+    markAllRead: optimisticMarkAllRead,
+    removeNotification: optimisticRemove,
   }
 }
 

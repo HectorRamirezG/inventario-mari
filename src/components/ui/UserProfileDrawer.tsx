@@ -242,34 +242,60 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
 
               {session && !loading && (
                 <>
-                  {/* Avatar grande */}
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="relative">
-                      {avatarUrl ? (
-                        <img
-                          src={avatarUrl}
-                          alt="Tu foto"
-                          className="w-24 h-24 rounded-3xl object-cover shadow-bloom"
-                        />
-                      ) : (
-                        <div
-                          className="w-24 h-24 rounded-3xl flex items-center justify-center text-white text-3xl font-black shadow-bloom"
-                          style={{
-                            background:
-                              "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
-                          }}
-                        >
-                          {initials || "👤"}
+                  {/* Identity Card — gradient brand + avatar + identidad
+                      compacta. Reemplaza el bloque plano de "Avatar grande
+                      + texto suelto". Pensada para que se vea premium en
+                      mobile sin invadir el resto del scroll. */}
+                  <div
+                    className="relative overflow-hidden rounded-3xl p-4 shadow-bloom"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, var(--brand-from) 0%, var(--brand-to) 100%)",
+                    }}
+                  >
+                    {/* Orbes decorativos del fondo */}
+                    <span className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-white/15 blur-2xl pointer-events-none" />
+                    <span className="absolute -bottom-16 -left-8 w-44 h-44 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+
+                    <div className="relative flex items-center gap-3">
+                      <div className="shrink-0">
+                        {avatarUrl ? (
+                          <img
+                            src={avatarUrl}
+                            alt="Tu foto"
+                            className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white/40 shadow-sm"
+                          />
+                        ) : (
+                          <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-xl font-black ring-2 ring-white/40">
+                            {initials || "👤"}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 text-white">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-white/80">
+                          Beauty's Me
+                        </p>
+                        <p className="text-base font-black leading-tight truncate">
+                          {name || fullName || "Cliente"}
+                        </p>
+                        {email && (
+                          <p className="text-[10px] font-bold text-white/85 truncate">
+                            {email}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-md text-[9px] font-black uppercase tracking-widest">
+                            <Shield size={9} />
+                            {role}
+                          </span>
+                          {isStaffOrAdmin(role) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white text-primary text-[9px] font-black uppercase tracking-widest">
+                              <Sparkles size={9} /> Panel
+                            </span>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </div>
-                    <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black flex items-center gap-1">
-                      <Shield size={9} />
-                      Rol: {role}
-                      {isStaffOrAdmin(role) && (
-                        <span className="ml-1 text-primary">· panel ✓</span>
-                      )}
-                    </p>
                   </div>
 
                   {/* Uploader avatar */}

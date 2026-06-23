@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "./supabase"
+import { setLastSession, clearLastSession } from "./lastSession"
 
 export type AppRole = "admin" | "staff" | "client" | "anon"
 
@@ -36,21 +37,33 @@ async function refreshProfile(session: Session | null) {
   }
   const { data, error } = await supabase
     .from("user_profiles")
-    .select("role, full_name, email")
+    .select("role, full_name, email, avatar_url")
     .eq("id", session.user.id)
     .maybeSingle()
 
   // Si el trigger todavía no corrió (caso muy raro de race), asumimos
   // rol 'client' temporalmente y reintentamos en 1s.
   const role = (data?.role as AppRole) ?? (error ? "anon" : "client")
+  const finalEmail = data?.email ?? session.user.email ?? null
+  const finalName = data?.full_name ?? session.user.email ?? null
   setState({
     loading: false,
     session,
     user: session.user,
     role,
-    email: data?.email ?? session.user.email ?? null,
-    fullName: data?.full_name ?? session.user.email ?? null,
+    email: finalEmail,
+    fullName: finalName,
   })
+
+  // Persiste el último usuario logueado para el Smart Login del próximo
+  // acceso. Sólo data visual (email/nombre/avatar). NUNCA password.
+  if (finalEmail) {
+    setLastSession({
+      email: finalEmail,
+      full_name: finalName,
+      avatar_url: (data?.avatar_url as string | null) ?? null,
+    })
+  }
 
   if (!data && session.user) {
     setTimeout(() => refreshProfile(session), 1200)
@@ -106,6 +119,7 @@ export function useAuth(): AuthState & {
   signUpWithPassword: (email: string, password: string, fullName?: string) => Promise<void>
   sendMagicLink: (email: string) => Promise<void>
   signOut: () => Promise<void>
+  forgetDevice: () => Promise<void>
 } {
   const [state, setLocal] = useState<AuthState>(cached)
 
@@ -151,8 +165,20 @@ export function useAuth(): AuthState & {
   }, [])
 
   const signOut = useCallback(async () => {
+    // Disparamos un evento para que el shell aplique fade-out (300ms)
+    // antes de que Supabase tumbe la sesión y React rerender al Login.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("mari:signing-out"))
+      await new Promise((r) => setTimeout(r, 280))
+    }
     await supabase.auth.signOut()
   }, [])
+
+  /** Cierra sesión Y olvida el dispositivo (borra lastSession). */
+  const forgetDevice = useCallback(async () => {
+    clearLastSession()
+    await signOut()
+  }, [signOut])
 
   return {
     ...state,
@@ -160,6 +186,7 @@ export function useAuth(): AuthState & {
     signUpWithPassword,
     sendMagicLink,
     signOut,
+    forgetDevice,
   }
 }
 

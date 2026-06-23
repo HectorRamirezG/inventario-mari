@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles,
@@ -16,6 +16,8 @@ import {
 import toast from "react-hot-toast"
 import { useAuth } from "../../lib/useAuth"
 import { supabase } from "../../lib/supabase"
+import { getLastSession, clearLastSession } from "../../lib/lastSession"
+import Avatar from "../../components/ui/Avatar"
 import {
   notifyAdmins,
   notifyClient,
@@ -31,6 +33,18 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState("")
   const [loading, setLoading] = useState(false)
   const [showPwd, setShowPwd] = useState(false)
+  // Smart Login: si hay sesión previa en este dispositivo, mostramos
+  // "Continuar como X" con avatar. El user puede "Usar otra cuenta"
+  // para revelar el form completo.
+  const [last, setLast] = useState(() => getLastSession())
+  const [quickMode, setQuickMode] = useState(() => !!getLastSession())
+
+  // Si el user prellena email desde quick login, lo sincronizamos.
+  useEffect(() => {
+    if (quickMode && last?.email && !email) {
+      setEmail(last.email)
+    }
+  }, [quickMode, last?.email, email])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -113,7 +127,7 @@ export default function LoginPage() {
   }[mode]
 
   const ctaLabel = {
-    signin: "Entrar",
+    signin: quickMode && last?.full_name ? `Continuar como ${last.full_name.split(" ")[0]}` : "Entrar",
     signup: "Crear cuenta",
     magic: "Enviar enlace",
     reset: "Enviar correo",
@@ -172,6 +186,42 @@ export default function LoginPage() {
         <h2 className="text-2xl font-black tracking-tight mb-1">{title}</h2>
         <p className="text-xs text-slate-500 mb-5">{subtitle}</p>
 
+        {/* Smart Login: identity card del último user logueado.
+            Aparece solo en modo signin si tenemos lastSession. */}
+        {quickMode && last && mode === "signin" && (
+          <div className="mb-4 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-violet-500/5 p-3 flex items-center gap-3">
+            <Avatar
+              name={last.full_name || last.email}
+              src={last.avatar_url}
+              size={44}
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                Continuar como
+              </p>
+              <p className="text-sm font-black text-slate-900 dark:text-slate-100 truncate">
+                {last.full_name || last.email.split("@")[0]}
+              </p>
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">
+                {last.email}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                clearLastSession()
+                setLast(null)
+                setQuickMode(false)
+                setEmail("")
+              }}
+              className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-rose-500 self-start press"
+              title="Olvidar este dispositivo y usar otra cuenta"
+            >
+              Otra
+            </button>
+          </div>
+        )}
+
         <form onSubmit={submit} className="flex flex-col gap-3" autoComplete="on">
           <AnimatePresence>
             {mode === "signup" && (
@@ -204,6 +254,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="correo@ejemplo.com"
+              readOnly={quickMode && mode === "signin"}
               className="bg-transparent outline-none flex-1 text-sm font-semibold dark:text-slate-100"
             />
           </label>

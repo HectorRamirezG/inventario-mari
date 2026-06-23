@@ -8,6 +8,7 @@ import {
   OVERLAY_PANEL_STYLE,
   OVERLAY_PANEL_TRANSITION,
 } from "../../lib/overlayMotion"
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
 
 export type OverlayVariant = "sheet" | "modal" | "drawer-right" | "drawer-left"
 
@@ -70,14 +71,7 @@ export default function OverlayShell({
     return () => window.removeEventListener("keydown", onKey)
   }, [open, closeOnEsc, onClose])
 
-  useEffect(() => {
-    if (!open || !lockBodyScroll) return
-    const original = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [open, lockBodyScroll])
+  useBodyScrollLock(open && lockBodyScroll)
 
   if (typeof document === "undefined") return null
 

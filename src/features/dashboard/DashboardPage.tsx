@@ -31,6 +31,7 @@ import { motion, AnimatePresence } from "framer-motion"
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/Tabs"
 import Skeleton from "../../components/ui/Skeleton"
+import SafeSection from "../../components/ui/SafeSection"
 
 import { useDashboard } from "./useDashboard"
 import DayCloseView from "./DayCloseView"
@@ -41,6 +42,10 @@ import { useCountUp } from "../../lib/useCountUp"
 import Sparkline from "../../components/ui/Sparkline"
 import { shareTicketPdf } from "../../lib/shareImage"
 import { useBusinessRules } from "../settings/businessRulesService"
+import DailyReportShareButton from "./DailyReportShareButton"
+import HotProductsCard from "./HotProductsCard"
+import DueRemindersCard from "./DueRemindersCard"
+import TodayDeliveriesCard from "./TodayDeliveriesCard"
 
 /**
  * TrendChart vive en archivo separado e importa `recharts` (~250kb gz).
@@ -139,6 +144,7 @@ export default function DashboardPage() {
             targetId="dashboard-report-area"
             periodLabel={periodLabelFor(period)}
           />
+          <DailyReportShareButton />
           <button
             onClick={() => setDayCloseOpen(true)}
             className="h-10 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom active:scale-95 transition-transform"
@@ -187,7 +193,9 @@ export default function DashboardPage() {
       </div>
 
       {/* BANNER DE CICLO ACTIVO */}
-      <CycleBanner />
+      <SafeSection scope="dashboard:cycle-banner">
+        <CycleBanner />
+      </SafeSection>
 
       {/* 3 CARDS DE ACCESO RÁPIDO (operaciones del día) */}
       <DailyOpsCards
@@ -281,17 +289,30 @@ export default function DashboardPage() {
           </AnimatePresence>
 
           {/* Tendencia diaria */}
-          <Suspense fallback={<ChartSkeleton />}>
-            <TrendChart
-              data={stats?.trend ?? []}
-              periodLabel={periodLabelFor(period)}
-            />
-          </Suspense>
+          <SafeSection scope="dashboard:trend-chart">
+            <Suspense fallback={<ChartSkeleton />}>
+              <TrendChart
+                data={stats?.trend ?? []}
+                periodLabel={periodLabelFor(period)}
+              />
+            </Suspense>
+          </SafeSection>
 
           {/* Insights inteligentes (sin IA externa) */}
-          <Suspense fallback={null}>
-            <InsightsPanel />
-          </Suspense>
+          <SafeSection scope="dashboard:insights">
+            <Suspense fallback={null}>
+              <InsightsPanel />
+            </Suspense>
+          </SafeSection>
+
+          {/* Entregas activas — marca entregada en 1 toque */}
+          <TodayDeliveriesCard />
+
+          {/* Apartados con saldo que vencen pronto — recordatorio en 1 toque */}
+          <DueRemindersCard />
+
+          {/* Productos que las clientas vienen viendo seguido */}
+          <HotProductsCard />
 
           {/* Valor de inventario */}
           <InventoryValueCard

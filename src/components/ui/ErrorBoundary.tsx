@@ -7,6 +7,10 @@ interface Props {
   scope?: string
   /** Fallback custom; si se omite usa el default bonito. */
   fallback?: (reset: () => void, error: Error) => ReactNode
+  /** Hook opcional para telemetría (Sentry, log a Supabase, etc.). */
+  onError?: (error: Error, info: ErrorInfo, scope: string) => void
+  /** Si true, usa un fallback compacto (tarjeta) en vez de pantalla completa. */
+  compact?: boolean
 }
 
 interface State {
@@ -29,8 +33,23 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
+    const scope = this.props.scope ?? "root"
     // eslint-disable-next-line no-console
-    console.error(`[ErrorBoundary:${this.props.scope ?? "root"}]`, error, info.componentStack)
+    console.error(`[ErrorBoundary:${scope}]`, error, info.componentStack)
+    // Telemetría opcional + evento global para que otros listeners (p.ej.
+    // un mini-logger a Supabase) capturen sin acoplarse al componente.
+    try {
+      this.props.onError?.(error, info, scope)
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("mari:error-caught", {
+            detail: { scope, message: error.message },
+          }),
+        )
+      }
+    } catch {
+      /* nunca propagar errores del propio boundary */
+    }
   }
 
   reset = () => {
@@ -41,6 +60,30 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError && this.state.error) {
       if (this.props.fallback) {
         return this.props.fallback(this.reset, this.state.error)
+      }
+      // Compact: tarjeta pequeña que NO ocupa toda la pantalla. Para usar
+      // dentro de páginas (un widget que truena sin tumbar la página).
+      if (this.props.compact) {
+        return (
+          <div className="rounded-2xl border border-rose-200 dark:border-rose-500/30 bg-rose-50/60 dark:bg-rose-500/10 p-4 flex items-start gap-3">
+            <AlertTriangle size={18} className="text-rose-500 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-black text-rose-700 dark:text-rose-200">
+                No se pudo mostrar esta sección
+              </p>
+              <p className="text-[10px] font-bold text-rose-600/80 dark:text-rose-300/80 mt-0.5 line-clamp-2">
+                {this.state.error.message || "Error desconocido"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={this.reset}
+              className="h-8 px-3 rounded-xl bg-rose-500 text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-1 press shrink-0"
+            >
+              <RotateCw size={11} /> Reintentar
+            </button>
+          </div>
+        )
       }
       return (
         <div className="min-h-[60vh] flex flex-col items-center justify-center px-6 py-10 text-center">

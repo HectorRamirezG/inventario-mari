@@ -10,6 +10,8 @@ import {
   ZoomOut,
 } from "lucide-react"
 
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
+
 export interface LightboxSlide {
   url: string
   variantId: string
@@ -77,15 +79,7 @@ export default function ProductLightbox({
     }
   }, [open, startIndex])
 
-  // Bloquear scroll body
-  useEffect(() => {
-    if (!open) return
-    const original = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [open])
+  useBodyScrollLock(open)
 
   // Teclado
   useEffect(() => {

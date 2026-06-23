@@ -11,6 +11,7 @@ import {
 import KpiCard from "../../components/ui/KpiCard"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import { StockRowSkeleton } from "../../components/ui/Skeletons"
+import InlineStockStepper from "../../components/ui/InlineStockStepper"
 
 interface LowItem {
   product: Product
@@ -133,26 +134,33 @@ export default function LowStockView() {
                   </div>
 
                   <div className="text-right shrink-0">
-                    <p
-                      className={`text-sm font-black tabular-nums ${
-                        empty ? "text-rose-500 dark:text-rose-300" : "text-amber-600 dark:text-amber-400"
-                      }`}
-                    >
-                      {stock}/{product.min_stock ?? 0}
+                    <p className="text-[8px] font-bold text-slate-400 dark:text-slate-500">
+                      mínimo {product.min_stock ?? 0}
                     </p>
-                    <p className="text-[8px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1 justify-end">
+                    <p className="text-[8px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1 justify-end">
                       <AlertTriangle size={9} />
                       faltan {diff > 0 ? diff : 1}
                     </p>
                   </div>
 
+                  {/* Stepper inline: el "+" suma 1 al instante, el "-" baja 1.
+                      A los 1.2s sin tocar, persiste con applyMovement().
+                      Si quieres registrar una entrada con cantidad grande
+                      (lote, factura), abre el modal con el botón verde. */}
+                  <InlineStockStepper
+                    variantId={variant.id}
+                    stock={stock}
+                    onCommitted={load}
+                  />
+
                   <motion.button
                     whileTap={{ scale: 0.92 }}
                     onClick={() => handleEntrada(variant)}
-                    className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center press shadow-[0_8px_20px_-4px_rgba(16,185,129,0.45)] hover:brightness-110"
-                    title="Registrar entrada"
+                    className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center press"
+                    title="Registrar entrada con cantidad y nota"
+                    aria-label="Entrada manual"
                   >
-                    <PlusCircle size={16} />
+                    <PlusCircle size={14} />
                   </motion.button>
                 </motion.div>
               )

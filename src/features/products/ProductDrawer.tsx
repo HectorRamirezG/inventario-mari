@@ -30,6 +30,7 @@ import { getPricingConfig } from "../pricing/pricingConfigService"
 import {
   createProduct,
   createVariant,
+  createVariantsBulk,
   updateProduct,
   updateVariant,
 } from "./productService"
@@ -848,6 +849,21 @@ function NewVariantForm({
   const [sku, setSku] = useState("")
   const [stock, setStock] = useState<number | "">("")
   const [saving, setSaving] = useState(false)
+  // Modo bulk: textarea con N nombres separados por coma, punto y coma
+  // o salto de línea. Cada uno se convierte en una variante con el mismo
+  // precio sugerido del producto padre y stock 0 (Mari sube fotos después).
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkText, setBulkText] = useState("")
+
+  // Detecta los nombres únicos separados por ,;\n o |. Se ignora vacío.
+  const bulkNames = useMemo(() => {
+    if (!bulkText.trim()) return [] as string[]
+    const parts = bulkText
+      .split(/[,;\n|]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    return Array.from(new Set(parts))
+  }, [bulkText])
 
   async function handleCreate() {
     if (!vName.trim()) {
@@ -907,69 +923,177 @@ function NewVariantForm({
     }
   }
 
+  async function handleCreateBulk() {
+    if (bulkNames.length === 0) {
+      toast.error("Pega o escribe al menos un nombre")
+      return
+    }
+    setSaving(true)
+    try {
+      // Misma lógica de precios sugeridos pero compartidos por todas.
+      const [{ data: prod }, cfg] = await Promise.all([
+        supabase
+          .from("products")
+          .select("cost")
+          .eq("id", productId)
+          .maybeSingle(),
+        getPricingConfig().catch(() => null),
+      ])
+      const cost = Number(prod?.cost) || 0
+      let priceFields: Partial<Variant> = {}
+      if (cost > 0 && cfg) {
+        const sug = suggestedPrices(cost, cfg)
+        priceFields = {
+          price: Math.round(sug.men * 100) / 100,
+          price_menudeo: Math.round(sug.men * 100) / 100,
+          price_medio: Math.round(sug.med * 100) / 100,
+          price_mayoreo: Math.round(sug.may * 100) / 100,
+        }
+      }
+      const rows = bulkNames.map((name) => ({
+        product_id: productId,
+        variant_name: name,
+        ...priceFields,
+      }))
+      await createVariantsBulk(rows)
+      toast.success(
+        `${rows.length} variante${rows.length === 1 ? "" : "s"} creadas${cost > 0 && cfg ? " con precios sugeridos" : ""}`,
+      )
+      onDone()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Error creando variantes")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="rounded-2xl bg-pink-50/40 dark:bg-pink-500/5 border border-pink-200/60 dark:border-pink-500/20 p-3 space-y-2 mb-1">
-      <p className="text-[10px] font-black uppercase tracking-widest text-primary">
-        Nueva variante
-      </p>
-      <div className="relative">
-        <input
-          type="text"
-          value={vName}
-          onChange={(e) => setVName(e.target.value)}
-          placeholder="Ej. Tono Canela 03"
-          className="w-full h-10 pl-3 pr-24 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-primary"
-          autoFocus
-        />
-        {productName && vName.trim() !== productName.trim() && (
-          <button
-            type="button"
-            onClick={() => setVName(productName)}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-primary/10 hover:bg-primary/20 text-primary active:scale-95 transition-all"
-            title="Usar el nombre del producto"
-          >
-            Usar nombre
-          </button>
-        )}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <input
-          type="text"
-          value={sku}
-          onChange={(e) => setSku(e.target.value)}
-          placeholder="SKU (opcional)"
-          className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold uppercase outline-none focus:border-primary"
-        />
-        <input
-          type="number"
-          min={0}
-          value={stock}
-          onChange={(e) =>
-            setStock(e.target.value === "" ? "" : Number(e.target.value))
-          }
-          placeholder="Stock inicial"
-          className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-center tabular-nums outline-none focus:border-primary"
-        />
-      </div>
-      <div className="flex gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-primary">
+          {bulkMode ? "Crear varias" : "Nueva variante"}
+        </p>
         <button
           type="button"
-          onClick={onCancel}
-          disabled={saving}
-          className="flex-1 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest"
+          onClick={() => setBulkMode((v) => !v)}
+          className="text-[9px] font-black uppercase tracking-widest text-primary/80 hover:text-primary press underline-offset-2 hover:underline"
         >
-          Cancelar
-        </button>
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={saving}
-          className="flex-[2] h-9 rounded-lg bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 disabled:opacity-50"
-        >
-          {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-          Crear
+          {bulkMode ? "← Una sola" : "Crear varias →"}
         </button>
       </div>
+
+      {bulkMode ? (
+        <>
+          <textarea
+            rows={3}
+            value={bulkText}
+            onChange={(e) => setBulkText(e.target.value)}
+            placeholder={"Pega o escribe los nombres separados por coma o salto de línea\nEj: espresso, toast, ribbon"}
+            className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-primary resize-none"
+            autoFocus
+          />
+          {bulkNames.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {bulkNames.slice(0, 12).map((n) => (
+                <span
+                  key={n}
+                  className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black"
+                >
+                  {n}
+                </span>
+              ))}
+              {bulkNames.length > 12 && (
+                <span className="text-[10px] font-black text-slate-500 self-center">
+                  + {bulkNames.length - 12} más
+                </span>
+              )}
+            </div>
+          )}
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+            Todas heredan los precios sugeridos del producto y nacen con stock 0.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+              className="flex-1 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleCreateBulk}
+              disabled={saving || bulkNames.length === 0}
+              className="flex-[2] h-9 rounded-lg bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+              Crear {bulkNames.length > 0 ? `${bulkNames.length} ` : ""}variantes
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="relative">
+            <input
+              type="text"
+              value={vName}
+              onChange={(e) => setVName(e.target.value)}
+              placeholder="Ej. Tono Canela 03"
+              className="w-full h-10 pl-3 pr-24 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-primary"
+              autoFocus
+            />
+            {productName && vName.trim() !== productName.trim() && (
+              <button
+                type="button"
+                onClick={() => setVName(productName)}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-2 rounded-lg text-[9px] font-black uppercase tracking-widest bg-primary/10 hover:bg-primary/20 text-primary active:scale-95 transition-all"
+                title="Usar el nombre del producto"
+              >
+                Usar nombre
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              placeholder="SKU (opcional)"
+              className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold uppercase outline-none focus:border-primary"
+            />
+            <input
+              type="number"
+              min={0}
+              value={stock}
+              onChange={(e) =>
+                setStock(e.target.value === "" ? "" : Number(e.target.value))
+              }
+              placeholder="Stock inicial"
+              className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-center tabular-nums outline-none focus:border-primary"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+              className="flex-1 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={saving}
+              className="flex-[2] h-9 rounded-lg bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+              Crear
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

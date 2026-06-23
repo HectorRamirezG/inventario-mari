@@ -9,6 +9,7 @@ import {
 } from "framer-motion"
 import { Package, X, ChevronLeft, ChevronRight } from "lucide-react"
 import { imageMedium, imageLarge, imageAvatar } from "../../lib/imageTransform"
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
 
 interface Props {
   /** Lista ordenada de URLs. La primera es la portada. */
@@ -255,14 +256,7 @@ function FullscreenViewer({
     if (open) setIndex(startIndex)
   }, [open, startIndex])
 
-  useEffect(() => {
-    if (!open) return
-    const original = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [open])
+  useBodyScrollLock(open)
 
   // ESC para cerrar
   useEffect(() => {

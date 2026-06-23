@@ -33,6 +33,7 @@ import { useAuth } from "../../lib/useAuth"
 import { fetchMyProfile } from "../profile/profileService"
 import { sound } from "../../lib/sound"
 import { useWishlist } from "../../lib/useWishlist"
+import { useLongPress } from "../../lib/useLongPress"
 import SmartLocationInput from "../../components/ui/SmartLocationInput"
 import VariantImageCarousel from "../../components/ui/VariantImageCarousel"
 import ProductLightbox, { type LightboxSlide } from "../../components/ui/ProductLightbox"
@@ -43,6 +44,7 @@ import OnboardingTour from "../../components/ui/OnboardingTour"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import CategoryIcon, { getCategoryVisual } from "../../components/ui/CategoryIcon"
 import AbandonedCartBanner from "../../components/ui/AbandonedCartBanner"
+import QuickGlance from "../../components/ui/QuickGlance"
 import { useCartPersist, clearPersistedCart, type PersistedCartLine } from "../../lib/useCartPersist"
 import type { BuySheetProduct } from "./BuySheet"
 import SupportModal from "../support/SupportModal"
@@ -1486,6 +1488,23 @@ const ProductCardClient = memo(function ProductCardClientImpl({
   // Reglas del negocio para decidir si mostrar stock y label de urgencia
   // personalizado al cliente.
   const rules = useBusinessRules()
+  // Quick Glance: long-press abre un popover con TODAS las variantes
+  // y su stock sin entrar al lightbox. Solo se activa si hay >1 variante.
+  const cardRef = useRef<HTMLDivElement | null>(null)
+  const [glanceOpen, setGlanceOpen] = useState(false)
+  const [glanceRect, setGlanceRect] = useState<DOMRect | null>(null)
+  const longPressHandlers = useLongPress(
+    () => {
+      if (product.variants.length <= 1) return
+      setGlanceRect(cardRef.current?.getBoundingClientRect() ?? null)
+      setGlanceOpen(true)
+    },
+    {
+      onCancel: () => setGlanceOpen(false),
+      delay: 420,
+      moveThreshold: 10,
+    },
+  )
   const variant =
     product.variants.find((v) => v.id === selected) ?? product.variants[0]
   const price =
@@ -1636,8 +1655,14 @@ const ProductCardClient = memo(function ProductCardClientImpl({
             <span className="text-sm font-black text-primary truncate">
               {formatMoney(price)}
               {!out && variant.stock <= 3 && (
-                <span className="ml-1.5 text-[8px] text-amber-600 font-bold uppercase">
-                  · {variant.stock} pz
+                <span
+                  className={`ml-1.5 text-[8px] font-black uppercase ${
+                    variant.stock === 1
+                      ? "text-rose-600 dark:text-rose-400 animate-pulse"
+                      : "text-amber-600"
+                  }`}
+                >
+                  {variant.stock === 1 ? "¡ÚLTIMA!" : `· ${variant.stock} pz`}
                 </span>
               )}
               {out && (
@@ -1665,13 +1690,15 @@ const ProductCardClient = memo(function ProductCardClientImpl({
   const isFocus = mode === "focus"
 
   return (
-    <motion.div
-      layoutId={`card-${product.id}`}
-      whileTap={{ scale: 0.99 }}
-      layout
-      transition={{ type: "spring", stiffness: 280, damping: 26 }}
-      className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
-    >
+    <>
+      <div ref={cardRef} {...longPressHandlers} className="relative">
+        <motion.div
+          layoutId={`card-${product.id}`}
+          whileTap={{ scale: 0.99 }}
+          layout
+          transition={{ type: "spring", stiffness: 280, damping: 26 }}
+          className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
+        >
       <motion.div layoutId={`img-${product.id}`} className="relative">
         <VariantImageCarousel
           variants={carouselSafe}
@@ -1792,9 +1819,16 @@ const ProductCardClient = memo(function ProductCardClientImpl({
               </span>
             ) : (rules.show_stock_to_client && variant.stock <= 10) ||
               variant.stock <= 3 ? (
-              <span className="inline-block text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mt-0.5">
-                {rules.low_stock_label || "Apúrate, solo quedan"} {variant.stock}{" "}
-                {variant.stock === 1 ? "pieza" : "piezas"}
+              <span
+                className={`inline-block text-[9px] font-black uppercase tracking-widest mt-0.5 ${
+                  variant.stock === 1
+                    ? "text-rose-600 dark:text-rose-400 animate-pulse"
+                    : "text-amber-600 dark:text-amber-400"
+                }`}
+              >
+                {variant.stock === 1
+                  ? "¡ÚLTIMA PIEZA!"
+                  : `${rules.low_stock_label || "Apúrate, solo quedan"} ${variant.stock} piezas`}
               </span>
             ) : null}
           </div>
@@ -1816,6 +1850,23 @@ const ProductCardClient = memo(function ProductCardClientImpl({
         </div>
       </div>
     </motion.div>
+      </div>
+      <QuickGlance
+        open={glanceOpen}
+        productName={product.name}
+        productImage={carouselSafe[0]?.images[0] ?? product.image_url ?? null}
+        anchorRect={glanceRect}
+        variants={product.variants.map((v) => ({
+          id: v.id,
+          variant_name: v.variant_name,
+          price: v.price,
+          price_menudeo: v.price_menudeo,
+          stock: v.stock,
+          image_url:
+            v.image_urls?.[0] ?? v.image_url ?? null,
+        }))}
+      />
+    </>
   )
 })
 

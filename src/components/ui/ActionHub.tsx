@@ -5,6 +5,8 @@ import {
   Zap, ScanLine, Plus, BookmarkPlus, X, Receipt,
 } from "lucide-react"
 
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
+
 export interface HubAction {
   id: string
   label: string
@@ -25,14 +27,7 @@ interface Props {
  * Se invoca desde el botón flotante central del dock.
  */
 export default function ActionHub({ open, onClose, actions }: Props) {
-  useEffect(() => {
-    if (!open) return
-    const original = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = original
-    }
-  }, [open])
+  useBodyScrollLock(open)
 
   if (typeof document === "undefined") return null
 

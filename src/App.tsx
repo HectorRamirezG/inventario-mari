@@ -69,6 +69,8 @@ import ErrorBoundary from "./components/ui/ErrorBoundary"
 import PwaUpdatePrompt from "./components/ui/PwaUpdatePrompt"
 import ShortcutsCheatsheet, { useShortcutsCheatsheet } from "./components/ui/ShortcutsCheatsheet"
 import PullToRefresh from "./components/ui/PullToRefresh"
+import ScrollToTopButton from "./components/ui/ScrollToTopButton"
+import SignOutOverlay from "./components/ui/SignOutOverlay"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
@@ -86,6 +88,7 @@ import { applyAccent, applyForceDark } from "./lib/applyTheme"
 import { useVisitorTracking } from "./lib/useVisitorTracking"
 import { applyMotionLevel } from "./lib/applyMotion"
 import { useUserPrefs, isDarkScheduleNow } from "./lib/userPrefs"
+import { prefetchSection } from "./lib/useNavPrefetch"
 
 // ──────────────────────────────────────────────────────────────────
 // Menús del shell admin/staff. Etiquetas más cortas y orientadas a acción.
@@ -116,67 +119,71 @@ const ADMIN_MENU = ADMIN_SECTIONS // alias para retrocompat de search/dispatcher
 /* ============================================================== */
 export default function App() {
   return (
-    <BrowserRouter>
-      <Toaster
-        position="top-center"
-        gutter={10}
-        toastOptions={{
-          duration: 3200,
-          style: {
-            borderRadius: "1.25rem",
-            fontWeight: 700,
-            fontSize: "12.5px",
-            color: "#0f172a",
-            background: "rgba(255,255,255,0.92)",
-            backdropFilter: "blur(16px)",
-            WebkitBackdropFilter: "blur(16px)",
-            padding: "10px 16px",
-            boxShadow:
-              "0 20px 50px -15px rgba(15,23,42,0.18), 0 0 0 1px rgba(15,23,42,0.05)",
-            maxWidth: "380px",
-          },
-          success: {
-            iconTheme: { primary: "#10b981", secondary: "#ecfdf5" },
+    <ErrorBoundary scope="app:root">
+      <BrowserRouter>
+        <Toaster
+          position="top-center"
+          gutter={10}
+          toastOptions={{
+            duration: 3200,
             style: {
-              borderLeft: "4px solid #10b981",
-              paddingLeft: "12px",
+              borderRadius: "1.25rem",
+              fontWeight: 700,
+              fontSize: "12.5px",
+              color: "#0f172a",
+              background: "rgba(255,255,255,0.92)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              padding: "10px 16px",
+              boxShadow:
+                "0 20px 50px -15px rgba(15,23,42,0.18), 0 0 0 1px rgba(15,23,42,0.05)",
+              maxWidth: "380px",
             },
-          },
-          error: {
-            iconTheme: { primary: "#ef4444", secondary: "#fef2f2" },
-            style: {
-              borderLeft: "4px solid #ef4444",
-              paddingLeft: "12px",
+            success: {
+              iconTheme: { primary: "#10b981", secondary: "#ecfdf5" },
+              style: {
+                borderLeft: "4px solid #10b981",
+                paddingLeft: "12px",
+              },
             },
-          },
-          loading: {
-            iconTheme: { primary: "#e6007e", secondary: "#fff0f7" },
-            style: {
-              borderLeft: "4px solid #e6007e",
-              paddingLeft: "12px",
+            error: {
+              iconTheme: { primary: "#ef4444", secondary: "#fef2f2" },
+              style: {
+                borderLeft: "4px solid #ef4444",
+                paddingLeft: "12px",
+              },
             },
-          },
-        }}
-      />
-      <ThemeMount />
-      <ConnectionBanner />
-      <InstallPrompt />
-      <PwaUpdatePrompt />
-      <ShortcutsCheatsheetMount />
-      <VisitorTrackingMount />
-      <Routes>
-        {/* Públicas (sin login) */}
-        <Route path="/ticket/:token" element={<PublicTicketPage />} />
-        <Route path="/comanda/:token" element={<PublicDeliveryNotePage />} />
-        <Route path="/login" element={<LoginRoute />} />
+            loading: {
+              iconTheme: { primary: "#e6007e", secondary: "#fff0f7" },
+              style: {
+                borderLeft: "4px solid #e6007e",
+                paddingLeft: "12px",
+              },
+            },
+          }}
+        />
+        <ThemeMount />
+        <ConnectionBanner />
+        <InstallPrompt />
+        <PwaUpdatePrompt />
+        <ShortcutsCheatsheetMount />
+        <VisitorTrackingMount />
+        <ScrollToTopButton />
+        <SignOutOverlay />
+        <Routes>
+          {/* Públicas (sin login) */}
+          <Route path="/ticket/:token" element={<PublicTicketPage />} />
+          <Route path="/comanda/:token" element={<PublicDeliveryNotePage />} />
+          <Route path="/login" element={<LoginRoute />} />
 
-        {/* Admin / staff */}
-        <Route path="/admin/*" element={<AdminGate />} />
+          {/* Admin / staff */}
+          <Route path="/admin/*" element={<AdminGate />} />
 
-        {/* Por defecto: tienda (cliente o anónimo). Sin login. */}
-        <Route path="/*" element={<ShopShell />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Por defecto: tienda (cliente o anónimo). Sin login. */}
+          <Route path="/*" element={<ShopShell />} />
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }
 
@@ -817,6 +824,9 @@ function AdminShell() {
                     setSection(m.id)
                     if (m.id === "pendientes") setApartadoBadge(0)
                   }}
+                  onMouseEnter={() => prefetchSection(m.id)}
+                  onTouchStart={() => prefetchSection(m.id)}
+                  onFocus={() => prefetchSection(m.id)}
                   className={`group relative w-full flex items-center rounded-2xl transition-all ${
                     sidebarExpanded
                       ? "px-3 py-2.5 gap-3"
@@ -1176,6 +1186,7 @@ function AdminShell() {
                   setSection(m.id)
                   if (m.id === "pendientes") setApartadoBadge(0)
                 }}
+                onPrefetch={() => prefetchSection(m.id)}
                 icon={m.icon}
                 label={m.label}
                 badge={m.id === "pendientes" ? apartadoBadge : 0}
@@ -1204,6 +1215,7 @@ function AdminShell() {
                   setSection(m.id)
                   if (m.id === "pendientes") setApartadoBadge(0)
                 }}
+                onPrefetch={() => prefetchSection(m.id)}
                 icon={m.icon}
                 label={m.label}
                 badge={m.id === "pendientes" ? apartadoBadge : 0}
@@ -1243,12 +1255,14 @@ function AdminShell() {
 function DockButton({
   active,
   onClick,
+  onPrefetch,
   icon: Icon,
   label,
   badge = 0,
 }: {
   active: boolean
   onClick: () => void
+  onPrefetch?: () => void
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>
   label: string
   badge?: number
@@ -1256,6 +1270,9 @@ function DockButton({
   return (
     <button
       onClick={onClick}
+      onMouseEnter={onPrefetch}
+      onTouchStart={onPrefetch}
+      onFocus={onPrefetch}
       className={`flex flex-col items-center justify-center flex-1 h-full relative active:scale-90 transition-all ${
         active ? "text-primary" : "text-slate-400 dark:text-slate-500"
       }`}

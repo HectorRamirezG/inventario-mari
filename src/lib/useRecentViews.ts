@@ -45,12 +45,37 @@ function write(items: RecentViewItem[]) {
 
 /**
  * Marca un producto como visto. Si ya estaba en la lista lo mueve al
- * frente. Si no, lo agrega y recorta a MAX_ITEMS.
+ * frente. Si no, lo agrega y recorta a MAX_ITEMS. Además dispara un
+ * tracking server-side (best-effort) con path `/p/<id>` para que la
+ * agregación de "productos calientes" en admin funcione sin cambios de
+ * router.
  */
 export function trackProductView(item: Omit<RecentViewItem, "viewedAt">): void {
   const items = read().filter((x) => x.id !== item.id)
   items.unshift({ ...item, viewedAt: Date.now() })
   write(items.slice(0, MAX_ITEMS))
+  // Server-side tracking (silencioso). Lazy import para no traer la
+  // dependencia si nunca se ve un producto.
+  if (typeof window === "undefined") return
+  const sessionId = (() => {
+    try {
+      return localStorage.getItem("mari:visitor-session") ?? ""
+    } catch {
+      return ""
+    }
+  })()
+  if (!sessionId) return
+  import("../features/users/usersService")
+    .then(({ trackVisit }) => {
+      trackVisit({
+        sessionId,
+        userAgent: navigator?.userAgent ?? null,
+        path: `/p/${item.id}`,
+      })
+    })
+    .catch(() => {
+      /* best-effort: si la RPC no existe seguimos sin romper */
+    })
 }
 
 /** Hook reactivo: re-renderiza cuando cambia el historial. */

@@ -20,6 +20,7 @@ import {
   OVERLAY_PANEL_STYLE,
   OVERLAY_PANEL_TRANSITION,
 } from "../../lib/overlayMotion"
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
 
 interface Props {
   open: boolean
@@ -113,15 +114,8 @@ export default function WishesDrawer({
     }
   }, [open, productRef, isLogged, defaultEmail, authEmail, fullName])
 
-  // Bloquear scroll body
-  useEffect(() => {
-    if (!open) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [open])
+  // Bloquear scroll body (centralizado)
+  useBodyScrollLock(open)
 
   function handleFile(f: File | null) {
     if (!f) {

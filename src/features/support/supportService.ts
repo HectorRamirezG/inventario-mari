@@ -31,6 +31,110 @@ export const SUPPORT_CATEGORIES: {
   },
 ]
 
+/**
+ * Plantillas de respuesta rápida para que el admin resuelva un ticket
+ * en 1 toque desde el celular. Cada plantilla incluye:
+ *   - category: si está, solo aparece cuando el ticket es de esa categoría.
+ *     Si no, aparece siempre (universal).
+ *   - label: texto corto para el chip.
+ *   - body: texto completo que se inyecta en el textarea (editable después).
+ *
+ * Los placeholders {first_name}, {folio} se sustituyen al usarlos.
+ */
+export interface SupportQuickReply {
+  id: string
+  category?: SupportCategory
+  label: string
+  body: string
+}
+
+export const SUPPORT_QUICK_REPLIES: SupportQuickReply[] = [
+  // Damaged
+  {
+    id: "damaged-replace",
+    category: "damaged",
+    label: "Reposición",
+    body:
+      "Hola{first_name}, lamento mucho lo que pasó con tu pedido{folio}. Ya estamos preparando una pieza de reemplazo y te avisamos en cuanto salga.",
+  },
+  {
+    id: "damaged-need-photo",
+    category: "damaged",
+    label: "Pedir foto",
+    body:
+      "Hola{first_name}, para procesar la reposición de tu pedido{folio} necesito una foto del producto tal como llegó. ¿Me la puedes mandar por aquí?",
+  },
+  {
+    id: "damaged-original",
+    category: "damaged",
+    label: "Es original",
+    body:
+      "Hola{first_name}, todos nuestros productos son originales con factura del distribuidor autorizado. Si quieres, te paso evidencia del lote.",
+  },
+  // Shipping
+  {
+    id: "shipping-sent",
+    category: "shipping",
+    label: "Ya salió",
+    body:
+      "Hola{first_name}, tu pedido{folio} ya salió hoy. Tiempo estimado de entrega 2-5 días hábiles dependiendo de la zona. En cuanto tenga guía te la mando.",
+  },
+  {
+    id: "shipping-tracking",
+    category: "shipping",
+    label: "Estatus",
+    body:
+      "Hola{first_name}, déjame revisar el estatus de tu envío{folio} con la paquetería y en un momento te confirmo por aquí.",
+  },
+  {
+    id: "shipping-address",
+    category: "shipping",
+    label: "Confirmar dirección",
+    body:
+      "Hola{first_name}, para asegurar la entrega de tu pedido{folio}, ¿me confirmas la dirección completa y un teléfono al que el repartidor pueda llamar?",
+  },
+  // Comment
+  {
+    id: "comment-thanks",
+    category: "comment",
+    label: "Agradecer",
+    body:
+      "Hola{first_name}, gracias por escribirnos. Tu comentario nos ayuda muchísimo a mejorar. Cualquier cosa, aquí estamos. ✨",
+  },
+  // Universales
+  {
+    id: "ack-soon",
+    label: "Lo reviso",
+    body:
+      "Hola{first_name}, recibí tu mensaje. Lo estoy revisando y te respondo aquí en cuanto tenga la información completa.",
+  },
+  {
+    id: "ack-resolved",
+    label: "Listo",
+    body:
+      "Hola{first_name}, ya quedó resuelto. Si necesitas algo más, escríbenos sin pena. ✨",
+  },
+]
+
+/**
+ * Sustituye placeholders {first_name} y {folio} con datos del ticket.
+ * Si el dato no existe, deja vacío (sin texto raro tipo "undefined").
+ */
+export function fillQuickReply(
+  body: string,
+  ticket: { customer_name: string | null; sale_id: string | null },
+): string {
+  const first =
+    ticket.customer_name?.trim().split(/\s+/)[0]?.replace(/[^\p{L}'-]/gu, "") ??
+    ""
+  const folio = ticket.sale_id
+    ? ` (folio ${ticket.sale_id.slice(0, 8).toUpperCase()})`
+    : ""
+  return body
+    .replaceAll("{first_name}", first ? ` ${first}` : "")
+    .replaceAll("{folio}", folio)
+}
+
 export interface SupportTicket {
   id: string
   sale_id: string | null
