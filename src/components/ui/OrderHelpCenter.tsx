@@ -9,10 +9,12 @@ import {
   Truck,
   Receipt,
   HelpCircle,
+  Sparkles,
 } from "lucide-react"
 
 import { useStoreInfo } from "../../lib/useStoreInfo"
 import { cleanPhone } from "../../lib/format"
+import { reopenOnboardingTour } from "./OnboardingTour"
 
 /**
  * Centro de ayuda flotante para el cliente. Reemplaza al FAB de soporte
@@ -183,6 +185,25 @@ export default function OrderHelpCenter({
                 <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
                   ¿Sigues con dudas?
                 </p>
+
+                {/* Reabrir el tutorial guiado de la app. Útil para usuarios
+                    nuevos que cerraron sin terminar o quieren refrescar. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    reopenOnboardingTour()
+                    onClose()
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-sky-50 hover:bg-sky-100 dark:bg-sky-500/10 dark:hover:bg-sky-500/15 text-sky-700 dark:text-sky-300 press-hard transition-colors"
+                >
+                  <Sparkles size={16} />
+                  <div className="text-left flex-1">
+                    <p className="text-[12px] font-black">Ver tutorial guiado</p>
+                    <p className="text-[10px] font-bold opacity-75">
+                      Te explico cada botón en 30 segundos
+                    </p>
+                  </div>
+                </button>
 
                 {contextualSaleId && (
                   <button

@@ -99,6 +99,10 @@ interface PublicProduct {
   image_url: string | null
   created_at?: string | null
   variants: PublicVariant[]
+  /** Conteo de reseñas publicadas (>=0). Calculado en loadCatalog. */
+  review_count?: number
+  /** Promedio de rating (1–5). 0 si no hay reseñas. */
+  avg_rating?: number
 }
 
 interface CartLine {
@@ -297,15 +301,26 @@ export default function ClientShopPage() {
   useEffect(() => {
     let alive = true
     const loadCatalog = async () => {
-      const { data: prods } = await supabase
-        .from("products")
-        .select("id,name,category,image_url,created_at")
-        .eq("is_active", true)
-        .order("name")
-      const { data: vars } = await supabase
-        .from("variants")
-        .select("id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls")
-        .eq("is_active", true)
+      const [{ data: prods }, { data: vars }, { data: reviewsRaw }] = await Promise.all([
+        supabase
+          .from("products")
+          .select("id,name,category,image_url,created_at")
+          .eq("is_active", true)
+          .order("name"),
+        supabase
+          .from("variants")
+          .select(
+            "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls",
+          )
+          .eq("is_active", true),
+        // Stats de reseñas publicadas para enriquecer las cards del catálogo.
+        // Tolerante: si la tabla aún no existe, ignoramos silenciosamente.
+        supabase
+          .from("reviews")
+          .select("product_id,rating")
+          .eq("status", "published")
+          .limit(5000),
+      ])
       if (!alive) return
       const byProduct: Record<string, PublicVariant[]> = {}
       ;(vars ?? []).forEach((v: any) => {
@@ -316,12 +331,26 @@ export default function ClientShopPage() {
           image_urls: v.image_urls ?? null,
         } as PublicVariant)
       })
+      // Agregamos count + sum por product_id (1 pase, O(n)).
+      const reviewAgg: Record<string, { count: number; sum: number }> = {}
+      for (const r of (reviewsRaw ?? []) as any[]) {
+        const k = r.product_id
+        if (!k) continue
+        if (!reviewAgg[k]) reviewAgg[k] = { count: 0, sum: 0 }
+        reviewAgg[k].count += 1
+        reviewAgg[k].sum += Number(r.rating) || 0
+      }
       setProducts(
-        (prods ?? []).map((p: any) => ({
-          ...(p as Omit<PublicProduct, "variants">),
-          image_url: p.image_url ?? null,
-          variants: byProduct[p.id] ?? [],
-        }))
+        (prods ?? []).map((p: any) => {
+          const agg = reviewAgg[p.id]
+          return {
+            ...(p as Omit<PublicProduct, "variants">),
+            image_url: p.image_url ?? null,
+            variants: byProduct[p.id] ?? [],
+            review_count: agg?.count ?? 0,
+            avg_rating: agg && agg.count > 0 ? agg.sum / agg.count : 0,
+          }
+        }),
       )
       setLoading(false)
     }
@@ -1272,7 +1301,7 @@ export default function ClientShopPage() {
               viewMode === "focus"
                 ? "flex flex-col gap-3 stagger-list"
                 : viewMode === "grid"
-                ? "grid grid-cols-2 gap-3 stagger-list"
+                ? "grid grid-cols-2 gap-3 auto-rows-fr stagger-list"
                 : "flex flex-col gap-2 stagger-list"
             }
           >
@@ -2212,13 +2241,13 @@ const ProductCardClient = memo(function ProductCardClientImpl({
 
   return (
     <>
-      <div ref={cardRef} {...longPressHandlers} className="relative">
+      <div ref={cardRef} {...longPressHandlers} className="relative h-full">
         <motion.div
           layoutId={`card-${product.id}`}
           whileTap={{ scale: 0.99 }}
           layout
           transition={{ type: "spring", stiffness: 280, damping: 26 }}
-          className="bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
+          className="h-full flex flex-col bg-white dark:bg-slate-800/60 rounded-2xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow"
         >
       <motion.div layoutId={`img-${product.id}`} className="relative">
         <VariantImageCarousel
@@ -2262,7 +2291,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           </div>
         )}
       </motion.div>
-      <div className={isFocus ? "p-4" : "p-3"}>
+      <div className={`flex-1 flex flex-col ${isFocus ? "p-4" : "p-3"}`}>
         {/* Nombre + chip de reseñas inline (sin línea extra). El chip
             es discreto pero clickeable: estrella amarilla + "(reseñas)". */}
         <div className="flex items-start justify-between gap-2 mb-1">
@@ -2274,18 +2303,24 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           >
             {product.name}
           </p>
-          {onOpenReviews && (
+          {onOpenReviews && (product.review_count ?? 0) > 0 && (
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
                 onOpenReviews()
               }}
-              className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[9px] font-black press"
-              aria-label="Ver reseñas"
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100/80 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-black press border border-amber-200/60 dark:border-amber-500/30"
+              aria-label={`Ver ${product.review_count} reseñas, calificación ${(product.avg_rating ?? 0).toFixed(1)} de 5`}
               title="Ver reseñas"
             >
-              <Star size={9} className="fill-amber-400 text-amber-400" />
+              <Star size={10} className="fill-amber-400 text-amber-400" />
+              <span className="tabular-nums">
+                {(product.avg_rating ?? 0).toFixed(1)}
+              </span>
+              <span className="opacity-70 tabular-nums">
+                ({product.review_count})
+              </span>
             </button>
           )}
         </div>
@@ -2318,8 +2353,9 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           </div>
         )}
 
-        {/* Fila PRINCIPAL: precio grande + stock/CTA */}
-        <div className="flex items-end justify-between gap-2">
+        {/* Fila PRINCIPAL: precio grande + stock/CTA. mt-auto la pega
+            al fondo para que TODAS las cards tengan el CTA a la misma altura. */}
+        <div className="mt-auto flex items-end justify-between gap-2">
           <div className="min-w-0 flex-1">
             <span
               className={`block font-black text-primary leading-none tabular-nums ${

@@ -170,22 +170,27 @@
 
   /* Tab pill bar — clonar de PricingPage en toda la app */
   .tab-bar {
-    @apply flex bg-white dark:bg-slate-900
+    @apply flex gap-1 bg-white dark:bg-slate-900
            border border-slate-200/80 dark:border-slate-800
            p-1 rounded-full shadow-sm;
   }
   .tab-item {
-    @apply relative flex-1 py-2 rounded-full
+    /* min-h-10 evita que en móvil se vea aplastada (antes py-2 daba ~28px). */
+    @apply relative flex-1 min-h-10 px-2 rounded-full
            flex items-center justify-center gap-1.5
            text-[10px] font-black uppercase tracking-widest
            transition-colors duration-200
-           text-slate-400 dark:text-slate-500;
+           text-slate-500 dark:text-slate-400 active:scale-[0.97];
   }
   .tab-item-active {
     @apply text-white;
   }
+  /* Fondo activo: gradient de marca en AMBOS modos (antes era negro en
+     light mode, lo que se sentía fuera de identidad). Acompañamos con
+     shadow-bloom para que "flote" como los CTAs principales. */
   .tab-item-bg {
-    @apply absolute inset-0 bg-slate-900 dark:bg-primary rounded-full;
+    @apply absolute inset-0 rounded-full shadow-bloom;
+    background: linear-gradient(135deg, var(--brand-from), var(--brand-to));
   }
 
   /* KPI card — métrica con tono semántico */

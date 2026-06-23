@@ -28,6 +28,7 @@ import {
   type PaymentProof,
 } from "../../features/payments/paymentProofsService"
 import ReportPaymentButton, { ProofsHistory } from "./ReportPaymentButton"
+import TabBar, { type TabItem } from "./TabBar"
 
 interface Props {
   open: boolean
@@ -290,24 +291,26 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
               </div>
             ) : (
               <>
-                {/* TABS */}
+                {/* TABS unificados (mismo look de toda la app) */}
                 <div className="px-5 pb-2 shrink-0">
-                  <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
-                    <InnerTab
-                      active={tab === "send"}
-                      onClick={() => setTab("send")}
-                      icon={<Wallet size={11} />}
-                      label="Enviar pago"
-                      highlight={!proofs.length}
-                    />
-                    <InnerTab
-                      active={tab === "history"}
-                      onClick={() => setTab("history")}
-                      icon={<HistoryIcon size={11} />}
-                      label="Historial"
-                      badge={proofsCount + payments.length || undefined}
-                    />
-                  </div>
+                  <TabBar<TabId>
+                    tabs={[
+                      {
+                        id: "send",
+                        label: "Enviar pago",
+                        icon: Wallet,
+                      } as TabItem<TabId>,
+                      {
+                        id: "history",
+                        label: "Historial",
+                        icon: HistoryIcon,
+                        badge: proofsCount + payments.length || undefined,
+                      } as TabItem<TabId>,
+                    ]}
+                    active={tab}
+                    onChange={setTab}
+                    layoutId="payment-center-tab"
+                  />
                 </div>
 
                 {/* Contenido */}
@@ -525,60 +528,5 @@ function ProofStatusBanner({
         </p>
       </div>
     </motion.div>
-  )
-}
-
-function InnerTab({
-  active,
-  onClick,
-  icon,
-  label,
-  badge,
-  highlight,
-}: {
-  active: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  label: string
-  badge?: number
-  highlight?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 ${
-        active
-          ? "text-white"
-          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-      }`}
-    >
-      {active && (
-        <motion.span
-          layoutId="paycenter-tab-pill"
-          className="absolute inset-0 rounded-xl shadow-bloom"
-          style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
-          transition={{ type: "spring", stiffness: 380, damping: 30 }}
-        />
-      )}
-      <span className="relative z-10 flex items-center gap-1.5">
-        {icon}
-        {label}
-        {badge != null && badge > 0 && (
-          <span
-            className={`min-w-4 h-4 px-1 rounded-full text-[8px] font-black tabular-nums flex items-center justify-center ${
-              active
-                ? "bg-white/25 text-white"
-                : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
-            }`}
-          >
-            {badge}
-          </span>
-        )}
-        {highlight && !active && (
-          <span className="w-1.5 h-1.5 rounded-full bg-primary pulse-dot" />
-        )}
-      </span>
-    </button>
   )
 }

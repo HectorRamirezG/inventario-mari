@@ -9,9 +9,10 @@ export const APP_CONSTANTS = {
   CART_PERSIST_KEY: "mari_cart_v1",
   GUEST_PROFILE_KEY: "mari_guest_v1",
   WISHLIST_KEY: "mari_wishlist_v1",
-  // v2: bump cuando agregas pasos nuevos al tour para reabrirlo a clientes
-  // que ya lo cerraron una vez (no se vuelve a mostrar si lo cierran de nuevo).
-  ONBOARDING_KEY: "mari_onboarding_done_v2",
+  // v3: bump cuando agregas pasos nuevos al tour para reabrirlo a clientes
+  // que ya lo cerraron una vez. v3 = explicación visual de iconos
+  // (LifeBuoy soporte, MessageCircle preguntas, Star reseñas, Bell notifs).
+  ONBOARDING_KEY: "mari_onboarding_done_v3",
   SHOP_VIEW_KEY: "mari_shop_view",
   STORAGE_DELETE_CHUNK: 1000,
   HTML2CANVAS_IMAGE_TIMEOUT_MS: 8000,

@@ -38,6 +38,7 @@ import Avatar from "../../components/ui/Avatar"
 import { isVideoUrl } from "../../lib/media"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import PageHeader from "../../components/ui/PageHeader"
+import TabBar, { type TabItem } from "../../components/ui/TabBar"
 import { useLocalStorageState } from "../../lib/useLocalStorageState"
 import { useBodyScrollLock } from "../../lib/bodyScrollLock"
 import { promptDialog } from "../../lib/prompt"
@@ -277,44 +278,21 @@ export default function SupportPage() {
         />
       </div>
 
-      {/* TABS */}
-      <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-2xl mb-4 border border-slate-200/60 dark:border-slate-700/60">
-        {STATUS_TABS.map((t) => {
-          const active = tab === t.id
-          const badge =
-            t.id === "open" ? counts.open :
-            t.id === "in_progress" ? counts.in_progress :
-            t.id === "resolved" ? counts.resolved : counts.total
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={`relative flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 ${
-                active ? "text-white" : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-              }`}
-            >
-              {active && (
-                <motion.span
-                  layoutId="support-tab-pill"
-                  className="absolute inset-0 rounded-xl shadow-bloom"
-                  style={{ background: "linear-gradient(135deg, var(--brand-from), var(--brand-to))" }}
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-              <span className="relative z-10">{t.label}</span>
-              {badge > 0 && (
-                <span
-                  className={`relative z-10 min-w-4 h-4 px-1 rounded-full text-[8px] font-black tabular-nums flex items-center justify-center ${
-                    active ? "bg-white/25 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
-                  }`}
-                >
-                  {badge}
-                </span>
-              )}
-            </button>
-          )
-        })}
+      {/* TABS unificados */}
+      <div className="mb-4">
+        <TabBar
+          tabs={STATUS_TABS.map<TabItem<SupportStatus | "all">>((t) => ({
+            id: t.id,
+            label: t.label,
+            badge:
+              t.id === "open" ? counts.open :
+              t.id === "in_progress" ? counts.in_progress :
+              t.id === "resolved" ? counts.resolved : counts.total,
+          }))}
+          active={tab}
+          onChange={setTab}
+          layoutId="support-tab-pill"
+        />
       </div>
 
       {/* LISTA */}
