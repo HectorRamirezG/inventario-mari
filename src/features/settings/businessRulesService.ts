@@ -192,6 +192,12 @@ export interface BusinessRules {
   welcome_slides_enabled: boolean
   welcome_slides: WelcomeSlide[]
 
+  /** Calendario de promociones / fechas especiales que el cliente ve
+   *  en /promociones. Pensado para anunciar eventos como Black Friday,
+   *  días de cierre por inventario, lanzamientos, etc. */
+  promo_calendar_enabled: boolean
+  promo_events: PromoEvent[]
+
   /** Mensaje del banner superior anclado en la tienda. Se ve antes
    *  del catálogo. Ideal para anuncios temporales tipo
    *  "Cerrado por inventario el 25" o "Envío gratis hoy". */
@@ -248,6 +254,21 @@ export interface WelcomeSlide {
     | "stories"    // orange → rose
     | "reviews"    // amber → pink
     | "bienvenida" // violet → fuchsia
+}
+
+/**
+ * Evento del calendario de promociones (Mari lo edita desde Reglas).
+ * Pensado para anunciar al cliente fechas especiales: descuentos,
+ * lanzamientos, días sin operación, eventos en tienda.
+ */
+export interface PromoEvent {
+  id: string
+  /** Fecha local (YYYY-MM-DD). Se interpreta sin zona — siempre día calendario. */
+  date: string
+  title: string
+  description?: string | null
+  /** Tono visual: define color del badge/card. */
+  tone: "discount" | "launch" | "closed" | "event"
 }
 
 export const DEFAULT_RULES: BusinessRules = {
@@ -330,6 +351,8 @@ export const DEFAULT_RULES: BusinessRules = {
   // Mensajes personalizados
   welcome_slides_enabled: false,
   welcome_slides: [],
+  promo_calendar_enabled: false,
+  promo_events: [],
   pinned_banner_enabled: false,
   pinned_banner_message: "",
   pinned_banner_tone: "info",
@@ -472,6 +495,26 @@ function merge(raw: any): BusinessRules {
               ? s.theme
               : "bienvenida",
           }))
+      : [],
+    promo_calendar_enabled: !!raw.promo_calendar_enabled,
+    promo_events: Array.isArray(raw.promo_events)
+      ? (raw.promo_events as any[])
+          .filter(
+            (e) =>
+              e &&
+              typeof e.date === "string" &&
+              typeof e.title === "string",
+          )
+          .map((e) => ({
+            id: typeof e.id === "string" ? e.id : crypto.randomUUID(),
+            date: String(e.date).slice(0, 10),
+            title: String(e.title).slice(0, 80),
+            description: e.description ? String(e.description).slice(0, 240) : null,
+            tone: ["discount", "launch", "closed", "event"].includes(e.tone)
+              ? e.tone
+              : "event",
+          }))
+          .sort((a, b) => a.date.localeCompare(b.date))
       : [],
     pinned_banner_enabled: !!raw.pinned_banner_enabled,
     pinned_banner_message:

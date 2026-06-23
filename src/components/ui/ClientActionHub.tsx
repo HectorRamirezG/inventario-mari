@@ -1,18 +1,25 @@
 /**
  * ClientActionHub — Drawer del botón `+` central del dock cliente.
  *
- * Estilo iOS sheet con grid de acciones rápidas más comunes que el
- * cliente quiere hacer "sin navegar". Cada chip es un acceso directo:
+ * PRINCIPIO: TODO el menu rapido del cliente vive aqui.
+ * Avatar (UserProfileDrawer) = SOLO cuenta personal (perfil + seguridad).
  *
- *  - "Pedir un deseo"      → abre WishesDrawer (si rule activa)
- *  - "Reportar problema"   → abre SupportModal
- *  - "Calificar productos" → abre MyReviewsDrawer en pendientes (si rule)
- *  - "Mis premios"         → navega a /mis-premios (si rule)
- *  - "WhatsApp"            → wa.me link directo
- *  - "Ver mi carrito"      → dispara `mari:open-cart`
+ * Estructura del menu:
+ *  MI INFO (navega a paginas):
+ *   - Pedidos     → /mis-pedidos
+ *   - Monedero    → /mi-monedero
+ *   - Premios     → /mis-premios (si rule)
+ *   - Resenas     → /mis-resenas (o drawer, segun como las pongamos)
+ *   - Deseos      → /mis-deseos (si rule)
  *
- * Filtra acciones según business rules. Si una acción no aplica
- * (regla apagada / sin sesión), no aparece — UI nunca con botones rotos.
+ *  ACCIONES (hace algo aquí mismo):
+ *   - Mi carrito  → reabrir carrito
+ *   - Pedir deseo → abre WishesDrawer (si rule)
+ *   - Reportar    → abre SupportModal
+ *   - WhatsApp    → wa.me link directo
+ *   - Iniciar sesion (fallback solo si !logged)
+ *
+ * Filtra cada chip según business rules / sesión.
  */
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
@@ -22,12 +29,13 @@ import {
   X,
   Heart,
   LifeBuoy,
-  Star,
-  Trophy,
   ShoppingBag,
   MessageCircle,
   Sparkles,
   Wallet,
+  Trophy,
+  Star,
+  Receipt as ReceiptIcon,
 } from "lucide-react"
 
 import { useAuth } from "../../lib/useAuth"
@@ -107,17 +115,17 @@ export default function ClientActionHub({ open, onClose }: Props) {
       }?text=${encodeURIComponent("Hola Beauty's Me 💖")}`
     : null
 
-  const actions: ActionItem[] = [
+  const infoActions: ActionItem[] = [
     {
-      id: "cart",
-      label: "Mi carrito",
-      caption: "Ver lo que llevas",
-      icon: ShoppingBag,
+      id: "orders",
+      label: "Mis pedidos",
+      caption: "Tu historial",
+      icon: ReceiptIcon,
       tone: "primary",
-      visible: true,
+      visible: isLogged,
       onTap: () => {
         onClose()
-        requestOpenCart()
+        navigate("/mis-pedidos")
       },
     },
     {
@@ -133,27 +141,9 @@ export default function ClientActionHub({ open, onClose }: Props) {
       },
     },
     {
-      id: "wish",
-      label: "Pedir un deseo",
-      caption: "¿No lo encuentras? Pídelo",
-      icon: Heart,
-      tone: "rose",
-      visible: bRules.wishes_enabled && isLogged,
-      onTap: () => setWishesOpen(true),
-    },
-    {
-      id: "review",
-      label: "Calificar productos",
-      caption: "Suma puntos y ayuda",
-      icon: Star,
-      tone: "amber",
-      visible: bRules.reviews_enabled && isLogged,
-      onTap: () => setReviewsOpen(true),
-    },
-    {
-      id: "loyalty",
+      id: "rewards",
       label: "Mis premios",
-      caption: "Tus puntos y logros",
+      caption: "Puntos y logros",
       icon: Trophy,
       tone: "violet",
       visible: bRules.loyalty_enabled && isLogged,
@@ -161,6 +151,51 @@ export default function ClientActionHub({ open, onClose }: Props) {
         onClose()
         navigate("/mis-premios")
       },
+    },
+    {
+      id: "reviews",
+      label: "Mis reseñas",
+      caption: "Califica y suma puntos",
+      icon: Star,
+      tone: "amber",
+      visible: bRules.reviews_enabled && isLogged,
+      onTap: () => setReviewsOpen(true),
+    },
+    {
+      id: "wishlist",
+      label: "Mis deseos",
+      caption: "Lo que has pedido",
+      icon: Heart,
+      tone: "rose",
+      visible: bRules.wishes_enabled && isLogged,
+      onTap: () => {
+        onClose()
+        navigate("/mis-deseos")
+      },
+    },
+  ]
+
+  const actions: ActionItem[] = [
+    {
+      id: "cart",
+      label: "Mi carrito",
+      caption: "Ver lo que llevas",
+      icon: ShoppingBag,
+      tone: "primary",
+      visible: true,
+      onTap: () => {
+        onClose()
+        requestOpenCart()
+      },
+    },
+    {
+      id: "wish",
+      label: "Pedir un deseo",
+      caption: "¿No lo encuentras? Pídelo",
+      icon: Heart,
+      tone: "rose",
+      visible: bRules.wishes_enabled && isLogged,
+      onTap: () => setWishesOpen(true),
     },
     {
       id: "support",
@@ -198,6 +233,12 @@ export default function ClientActionHub({ open, onClose }: Props) {
   ]
 
   const visibleActions = actions.filter((a) => a.visible)
+  const visibleInfo = infoActions.filter((a) => a.visible)
+
+  // ¿Algún sub-drawer está abierto? Cuando si, ocultamos el panel + backdrop
+  // del ActionHub principal para que el cliente vea SOLO el sub-drawer
+  // limpio (Mari: 'que se esconda y deje ver lo que abrio').
+  const subDrawerOpen = wishesOpen || supportOpen || reviewsOpen
 
   if (typeof document === "undefined") return null
 
@@ -208,26 +249,32 @@ export default function ClientActionHub({ open, onClose }: Props) {
           className="fixed inset-0 z-[218] flex items-end justify-center"
           style={{ isolation: "isolate" }}
         >
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={OVERLAY_BACKDROP_TRANSITION}
-            onClick={onClose}
-            className="absolute inset-0 bg-slate-950/70"
-            aria-hidden
-          />
+          {/* Backdrop principal — oculto cuando hay sub-drawer (el sub
+              tiene su propio backdrop, no necesitamos doble). */}
+          {!subDrawerOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={OVERLAY_BACKDROP_TRANSITION}
+              onClick={onClose}
+              className="absolute inset-0 bg-slate-950/70"
+              aria-hidden
+            />
+          )}
 
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={OVERLAY_PANEL_TRANSITION}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.4 }}
-            onDragEnd={onDragEnd}
-            style={OVERLAY_PANEL_STYLE}
+          {/* Panel principal — solo si NO hay sub-drawer abierto. */}
+          {!subDrawerOpen && (
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={OVERLAY_PANEL_TRANSITION}
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.4 }}
+              onDragEnd={onDragEnd}
+              style={OVERLAY_PANEL_STYLE}
             className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[88vh] flex flex-col touch-pan-y"
           >
             {/* Handle */}
@@ -257,29 +304,33 @@ export default function ClientActionHub({ open, onClose }: Props) {
               </button>
             </div>
 
-            {/* Grid de acciones */}
-            <div className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios">
-              <div className="grid grid-cols-2 gap-2.5">
-                {visibleActions.map((a, i) => (
-                  <motion.button
-                    key={a.id}
-                    type="button"
-                    onClick={a.onTap}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.min(i * 0.03, 0.15) }}
-                    className={`text-left rounded-2xl p-3 ${TONE_CLASS[a.tone]} press active:scale-[0.97] transition-transform`}
-                  >
-                    <a.icon size={22} strokeWidth={2.2} />
-                    <p className="mt-2 text-[12px] font-black leading-tight">
-                      {a.label}
-                    </p>
-                    <p className="text-[10px] font-bold opacity-80 leading-snug mt-0.5 line-clamp-2">
-                      {a.caption}
-                    </p>
-                  </motion.button>
-                ))}
-              </div>
+            {/* 2 secciones: MI INFO (navega) + ACCIONES (hacer aqui) */}
+            <div className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios space-y-4">
+              {visibleInfo.length > 0 && (
+                <section>
+                  <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500 mb-2 px-1">
+                    Mi cuenta
+                  </p>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {visibleInfo.map((a, i) => (
+                      <ActionButton key={a.id} action={a} index={i} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {visibleActions.length > 0 && (
+                <section>
+                  <p className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500 mb-2 px-1">
+                    Acciones rápidas
+                  </p>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {visibleActions.map((a, i) => (
+                      <ActionButton key={a.id} action={a} index={i} />
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {!isLogged && (
                 <p className="text-center text-[10px] text-slate-400 mt-4 italic">
@@ -288,6 +339,7 @@ export default function ClientActionHub({ open, onClose }: Props) {
               )}
             </div>
           </motion.div>
+          )}
 
           {/* Sub-drawers (todos heredan z-index del portal) */}
           <WishesDrawer
@@ -318,5 +370,32 @@ export default function ClientActionHub({ open, onClose }: Props) {
       )}
     </AnimatePresence>,
     document.body,
+  )
+}
+
+/** Boton tarjeta individual del grid. Extraido para no duplicar JSX
+ *  entre la seccion 'Mi cuenta' y 'Acciones'. */
+function ActionButton({
+  action: a,
+  index: i,
+}: {
+  action: ActionItem
+  index: number
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={a.onTap}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(i * 0.03, 0.15) }}
+      className={`text-left rounded-2xl p-3 ${TONE_CLASS[a.tone]} press active:scale-[0.97] transition-transform`}
+    >
+      <a.icon size={20} strokeWidth={2.2} />
+      <p className="mt-2 text-[12px] font-black leading-tight">{a.label}</p>
+      <p className="text-[10px] font-bold opacity-80 leading-snug mt-0.5 line-clamp-2">
+        {a.caption}
+      </p>
+    </motion.button>
   )
 }

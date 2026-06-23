@@ -120,7 +120,7 @@ export default function SupportModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[210] flex items-end sm:items-center justify-center"
+          className="fixed inset-0 z-[235] flex items-end sm:items-center justify-center"
         >
           <motion.div
             className="absolute inset-0 bg-slate-950/70"

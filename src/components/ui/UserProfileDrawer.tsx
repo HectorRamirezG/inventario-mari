@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
-import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence, PanInfo } from "framer-motion"
 import {
   X,
@@ -17,10 +16,6 @@ import {
   Sparkles,
   ChevronDown,
   Camera,
-  ShoppingBag,
-  Heart,
-  Trophy,
-  Star,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -38,8 +33,6 @@ import Skeleton from "./Skeleton"
 import RfmBadge from "./RfmBadge"
 import LoyaltyDrawer from "../../features/loyalty/LoyaltyDrawer"
 import { useMyLoyaltyBalance } from "../../features/loyalty/loyaltyService"
-import MyReviewsDrawer from "../../features/reviews/MyReviewsDrawer"
-import { countMyProductsToReview } from "../../features/reviews/reviewsService"
 import { useBusinessRules } from "../../features/settings/businessRulesService"
 import { fetchMyShoppingStats, type MyShoppingStats } from "../../features/profile/myShoppingStatsService"
 import { formatMoney } from "../../lib/format"
@@ -60,7 +53,6 @@ interface Props {
  */
 export default function UserProfileDrawer({ open, onClose }: Props) {
   const { user, session, role, email, fullName, signOut } = useAuth()
-  const navigate = useNavigate()
   const bRules = useBusinessRules()
   const [profile, setProfile] = useState<UserProfileDetail | null>(null)
   const [loading, setLoading] = useState(false)
@@ -80,16 +72,6 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
   // Secciones colapsables (todo cerrado al abrir = vista limpia)
   const [securityOpen, setSecurityOpen] = useState(false)
   const [photoOpen, setPhotoOpen] = useState(false)
-  // LoyaltyDrawer abierto desde el chip "Premios" (solo si la regla
-  // está activa y el cliente no es admin/staff)
-  const [loyaltyDrawerOpen, setLoyaltyDrawerOpen] = useState(false)
-  // MyReviewsDrawer abierto desde el chip "Reseñas". Inicia en tab
-  // "pendientes" para empujar la accion.
-  const [reviewsDrawerOpen, setReviewsDrawerOpen] = useState(false)
-  // Count de productos por reseñar — sirve de badge en el chip.
-  // Se recalcula cuando se abre el drawer principal y cuando llegan
-  // eventos via realtime (a traves del propio MyReviewsDrawer al cerrar).
-  const [pendingReviewsCount, setPendingReviewsCount] = useState(0)
 
   // Cargar perfil cuando se abre
   useEffect(() => {
@@ -131,24 +113,6 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onClose])
-
-  // Refresca el count de productos por reseñar cuando se abre el drawer
-  // y cuando la regla cambia. Best-effort — silencioso en error.
-  useEffect(() => {
-    if (!open || !email || isStaffOrAdmin(role)) {
-      setPendingReviewsCount(0)
-      return
-    }
-    if (!bRules.reviews_enabled) {
-      setPendingReviewsCount(0)
-      return
-    }
-    countMyProductsToReview(email, {
-      onPaidEnabled: bRules.reviews_on_paid_enabled,
-    })
-      .then((n) => setPendingReviewsCount(n))
-      .catch(() => setPendingReviewsCount(0))
-  }, [open, email, role, bRules.reviews_enabled, bRules.reviews_on_paid_enabled])
 
   function onDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.y > 120 || info.velocity.y > 600) onClose()
@@ -372,59 +336,12 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                     )}
                   </AnimatePresence>
 
-                  {/* Quick access chips: 4 atajos en grid 2x2 para mejor
-                      ergonomia mobile. Solo clientes \u2014 admin/staff tiene
-                      sidebar dedicado. El chip Resenas muestra badge con
-                      productos pendientes por resenar (gamificacion). */}
-                  {!isStaffOrAdmin(role) && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <QuickChip
-                        icon={ShoppingBag}
-                        label="Mis pedidos"
-                        tone="primary"
-                        onClick={() => {
-                          navigate("/mis-pedidos")
-                          onClose()
-                        }}
-                      />
-                      <QuickChip
-                        icon={Heart}
-                        label="Mis deseos"
-                        tone="rose"
-                        onClick={() => {
-                          navigate("/mis-deseos")
-                          onClose()
-                        }}
-                      />
-                      {bRules.reviews_enabled && (
-                        <QuickChip
-                          icon={Star}
-                          label="Reseñas"
-                          tone="amber"
-                          badge={pendingReviewsCount}
-                          onClick={() => setReviewsDrawerOpen(true)}
-                        />
-                      )}
-                      {bRules.loyalty_enabled ? (
-                        <QuickChip
-                          icon={Trophy}
-                          label="Premios"
-                          tone="violet"
-                          onClick={() => setLoyaltyDrawerOpen(true)}
-                        />
-                      ) : !bRules.reviews_enabled ? (
-                        <QuickChip
-                          icon={Sparkles}
-                          label="Tienda"
-                          tone="violet"
-                          onClick={() => {
-                            navigate("/")
-                            onClose()
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                  )}
+                  {/* Quick access chips REMOVIDOS: Mari decidio que TODOS
+                      los accesos rapidos (pedidos / monedero / premios /
+                      resenas / deseos) viven en el bot\u00f3n + (ActionHub)
+                      para no duplicar acceso. Aqui solo queda info de
+                      la cuenta personal: stats + datos + seguridad +
+                      cerrar sesion. */}
 
                   {email && <MyShoppingStatsCard email={email} />}
 
@@ -619,30 +536,13 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
             </div>
           </motion.div>
 
-          {/* LoyaltyDrawer montado adentro del portal del UserProfileDrawer
-              para que herede el z-index correcto. Se abre desde el chip
-              "Premios" en la fila de quick-access. */}
-          <LoyaltyDrawer
-            open={loyaltyDrawerOpen}
-            onClose={() => setLoyaltyDrawerOpen(false)}
-          />
+          {/* LoyaltyDrawer ya NO se monta aqui: 'Premios' del grid de
+              chips navega directo a /mis-premios. El MyLoyaltyMiniCard
+              de mas abajo es quien usa el LoyaltyDrawer y se monta solo. */}
 
-          {/* MyReviewsDrawer (Por resenar + Hechas) abierto desde el
-              chip "Resenas". Al cerrar, recalcula el count del badge. */}
-          <MyReviewsDrawer
-            open={reviewsDrawerOpen}
-            initialTab="pendientes"
-            onClose={() => {
-              setReviewsDrawerOpen(false)
-              if (email && bRules.reviews_enabled) {
-                countMyProductsToReview(email, {
-                  onPaidEnabled: bRules.reviews_on_paid_enabled,
-                })
-                  .then((n) => setPendingReviewsCount(n))
-                  .catch(() => {})
-              }
-            }}
-          />
+          {/* MyReviewsDrawer ELIMINADO: TODOS los accesos rapidos (incluido
+              Resenas) viven ahora en el bot\u00f3n + del dock (ClientActionHub).
+              Aqu\u00ed solo cuenta personal. */}
         </div>
       )}
     </AnimatePresence>,
@@ -650,54 +550,8 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
   )
 }
 
-/**
- * Chip-tarjeta para la fila de acceso rápido (Mis pedidos / Mis deseos /
- * Resenas / Premios). Diseño tipo "icon + label" con tono pastel +
- * press feedback. Si recibe `badge` > 0, muestra un pill rosa con el
- * conteo en la esquina superior derecha.
- */
-function QuickChip({
-  icon: Icon,
-  label,
-  tone,
-  badge,
-  onClick,
-}: {
-  icon: typeof UserIcon
-  label: string
-  tone: "primary" | "rose" | "amber" | "violet"
-  badge?: number
-  onClick: () => void
-}) {
-  const toneCls = {
-    primary: "bg-primary/10 text-primary dark:bg-primary/15",
-    rose: "bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300",
-    amber:
-      "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-    violet:
-      "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
-  }[tone]
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative press flex flex-col items-center justify-center gap-1.5 rounded-2xl py-3 px-2 ${toneCls} active:scale-95 transition-transform`}
-    >
-      {badge !== undefined && badge > 0 && (
-        <span
-          aria-hidden
-          className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shadow-sm tabular-nums"
-        >
-          {badge > 99 ? "99+" : badge}
-        </span>
-      )}
-      <Icon size={18} strokeWidth={2.2} />
-      <span className="text-[10px] font-black uppercase tracking-widest leading-none">
-        {label}
-      </span>
-    </button>
-  )
-}
+/* QuickChip helper REMOVIDO: ya no se usan chips de navegacion en este
+   drawer. Si Mari quiere volver, vive en git history (commit anterior). */
 
 /**
  * Mini-card de loyalty: muestra balance compacto + "ver" abre LoyaltyDrawer.

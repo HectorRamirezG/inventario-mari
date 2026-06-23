@@ -184,7 +184,7 @@ export default function WishesDrawer({
       {open && (
         <div
           key="wish-drawer-root"
-          className="fixed inset-0 z-[60] flex items-end justify-center"
+          className="fixed inset-0 z-[235] flex items-end justify-center"
           style={{ isolation: "isolate" }}
         >
           <motion.div

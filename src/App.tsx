@@ -50,6 +50,7 @@ const MyReportsPage = lazy(() => import("./features/client/MyReportsPage"))
 const MyWishesPage = lazy(() => import("./features/wishes/MyWishesPage"))
 const MyWalletPage = lazy(() => import("./features/wallet/MyWalletPage"))
 const MyRewardsPage = lazy(() => import("./features/loyalty/MyRewardsPage"))
+const MyPromosPage = lazy(() => import("./features/promos/MyPromosPage"))
 const WishAdminPage = lazy(() => import("./features/wishes/WishAdminPage"))
 const StoriesAdminPage = lazy(() => import("./features/stories/StoriesAdminPage"))
 const ReviewsAdminPage = lazy(() => import("./features/reviews/ReviewsAdminPage"))
@@ -1587,6 +1588,10 @@ function ShopShell() {
                       />
                     )
                   }
+                />
+                <Route
+                  path="/promociones"
+                  element={<MyPromosPage />}
                 />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
