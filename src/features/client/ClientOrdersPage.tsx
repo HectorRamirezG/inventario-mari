@@ -477,6 +477,13 @@ export default function ClientOrdersPage() {
           paid &&
           o.status !== "cancelled" &&
           (delivery?.status === "delivered" || !delivery)
+        // Permitir reseñar: por default solo cuando isCompleted (entregado
+        // o pagado sin delivery). Si rule.reviews_on_paid_enabled está ON,
+        // basta con que esté pagado y no cancelado (sin esperar entrega).
+        const canReview =
+          rules.reviews_enabled &&
+          o.status !== "cancelled" &&
+          (isCompleted || (rules.reviews_on_paid_enabled && paid))
 
         // Diferenciación visual: peso por monto, tono por estado, accordion para repetitivos.
         const isPremium = safeTotal >= 1000
@@ -524,35 +531,43 @@ export default function ClientOrdersPage() {
                 : undefined
             }
           >
-            {/* HEADER: folio + estado + chip de entrega */}
-            <div className="flex items-start justify-between mb-3">
+            {/* HEADER limpio: folio grande + fecha sutil arriba, chip de
+                entrega a la derecha (solo si hay delivery). Quitamos el
+                pill "Pagado/Pendiente" porque el tracker ya lo comunica
+                con su barra/stepper. Mari pidio menos saturacion visual. */}
+            <div className="flex items-start justify-between gap-3 mb-3">
               <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-widest text-slate-400">
-                  Folio · {formatDate(o.created_at)}
+                <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-black">
+                  {formatDate(o.created_at)}
                 </p>
-                <p className="text-sm font-black truncate">{shortId(o.id)}</p>
+                <p className="text-base font-black tracking-tight leading-tight mt-0.5 text-slate-900 dark:text-slate-100">
+                  Pedido #{shortId(o.id)}
+                </p>
               </div>
-              <div className="flex flex-col items-end gap-1 shrink-0">
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-black uppercase ${
-                    paid
-                      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                      : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
-                  }`}
-                >
-                  {paid ? <CheckCircle2 size={10} /> : <Clock size={10} />}
-                  {paid ? "Pagado" : "Pendiente"}
+              {delivery ? (
+                <DeliveryStatusChip status={delivery.status} size="xs" />
+              ) : !paid ? (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest shrink-0">
+                  <Clock size={10} /> Pendiente
                 </span>
-                {delivery && (
-                  <DeliveryStatusChip status={delivery.status} size="xs" />
-                )}
-              </div>
+              ) : null}
             </div>
 
-            {/* TOTAL */}
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-slate-500">Total</span>
-              <span className="text-base font-black">{formatMoney(o.total)}</span>
+            {/* TOTAL — protagonista de la card. Si esta pagado, lo tachamos
+                en mode discreto para enfatizar que ya esta cerrado. */}
+            <div className="flex items-baseline justify-between mb-3">
+              <span className="text-[10px] uppercase tracking-[0.25em] text-slate-400 font-black">
+                Total
+              </span>
+              <span
+                className={`text-2xl font-black tabular-nums ${
+                  paid
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-slate-900 dark:text-slate-100"
+                }`}
+              >
+                {formatMoney(o.total)}
+              </span>
             </div>
 
             {/* TRACKER dinámico: barra pago / stepper delivery / mini-mapa */}
@@ -600,14 +615,15 @@ export default function ClientOrdersPage() {
             )}
 
             {/* QUICK ACTIONS de entrega — solo si está pagado y la entrega
-                aún no salió a ruta. Inline collapsible. */}
+                aún no salió a ruta. Inline collapsible: solo se muestra el
+                editor cuando el cliente lo abre desde SmartOrderActions. */}
             {showInteractive && canEditDelivery && delivery && (
               <div className="mt-3">
                 <QuickDeliveryActions
                   deliveryId={delivery.id}
                   initialNote={delivery.client_notes ?? null}
                   initialTimePref={delivery.client_time_pref ?? null}
-                  enabled={editDeliveryFor === o.id || true}
+                  enabled={editDeliveryFor === o.id}
                   onSaved={(patch) => {
                     setDeliveryBySale((prev) => ({
                       ...prev,
@@ -656,11 +672,13 @@ export default function ClientOrdersPage() {
               </p>
             )}
 
-            {/* Botón "Reordenar" — solo para pedidos COMPLETADOS (entregado o
-                pagado sin entrega). UX: cliente quiere repetir la compra. */}
-            {isCompleted && (
+            {/* Acciones post-pago: reseñar (si aplica regla) o reordenar.
+                "Reordenar" requiere pedido completado; "Calificar" puede
+                aparecer antes si la regla `reviews_on_paid_enabled` está
+                activa. */}
+            {(isCompleted || canReview) && (
               <div className="mt-2 flex justify-end gap-2 flex-wrap">
-                {rules.reviews_enabled && (
+                {canReview && (
                   <button
                     type="button"
                     onClick={() => openRateOrder(o.id)}
@@ -671,15 +689,17 @@ export default function ClientOrdersPage() {
                     Calificar productos
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => handleReorder(o.id)}
-                  className="h-8 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
-                  title="Repetir esta compra"
-                >
-                  <RotateCcw size={11} />
-                  Reordenar
-                </button>
+                {isCompleted && (
+                  <button
+                    type="button"
+                    onClick={() => handleReorder(o.id)}
+                    className="h-8 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
+                    title="Repetir esta compra"
+                  >
+                    <RotateCcw size={11} />
+                    Reordenar
+                  </button>
+                )}
               </div>
             )}
 

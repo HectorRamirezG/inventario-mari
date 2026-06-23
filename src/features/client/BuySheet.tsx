@@ -13,7 +13,7 @@ import Target from "lucide-react/dist/esm/icons/target"
 
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"
-import ProductQA from "../../components/ui/ProductQA"
+import ProductConversation from "../../components/ui/ProductConversation"
 import {
   detectCartTier,
   priceForTier,
@@ -460,7 +460,7 @@ export default function BuySheet({
                   transition={OVERLAY_INNER_TRANSITION}
                   className="pt-4 border-t border-slate-100 dark:border-slate-800"
                 >
-                  <ProductQA productId={product.id} productName={product.name} />
+                  <ProductConversation productId={product.id} productName={product.name} />
                 </motion.div>
               )}
             </div>

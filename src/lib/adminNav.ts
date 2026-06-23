@@ -26,6 +26,7 @@ import Heart from "lucide-react/dist/esm/icons/heart"
 import Camera from "lucide-react/dist/esm/icons/camera"
 import Star from "lucide-react/dist/esm/icons/star"
 import Users from "lucide-react/dist/esm/icons/users"
+import Truck from "lucide-react/dist/esm/icons/truck"
 
 import type { BusinessRules } from "../features/settings/businessRulesService"
 
@@ -34,6 +35,7 @@ export type AdminSection =
   | "catalogo"
   | "caja"
   | "pendientes"
+  | "entregas"
   | "ciclos"
   | "calculadora"
   | "soporte"
@@ -94,6 +96,15 @@ export const ADMIN_SECTIONS: AdminSectionEntry[] = [
     accent: "linear-gradient(135deg,#f59e0b,#fb923c)",
     shortcut: "3",
     hint: "Control de saldos y cobranza",
+  },
+  {
+    id: "entregas",
+    label: "Comandas",
+    caption: "Entregas activas y su historial",
+    icon: Truck,
+    accent: "linear-gradient(135deg,#0ea5e9,#6366f1)",
+    shortcut: "9",
+    hint: "Comandas de entrega · estatus y repartidor",
   },
   {
     id: "catalogo",

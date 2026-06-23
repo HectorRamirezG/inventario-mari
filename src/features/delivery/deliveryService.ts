@@ -127,6 +127,29 @@ export async function listActiveDeliveryNotes(): Promise<DeliveryNote[]> {
   return (data ?? []) as DeliveryNote[]
 }
 
+/**
+ * Lista comandas con filtros opcionales para la página admin
+ * `DeliveriesAdminPage`. Permite filtrar por estatus (uno o varios) y
+ * limita por defecto a 200 para no traer años de historial.
+ */
+export async function listAllDeliveryNotes(opts: {
+  statuses?: DeliveryStatus[]
+  limit?: number
+} = {}): Promise<DeliveryNote[]> {
+  const { statuses, limit = 200 } = opts
+  let query = supabase
+    .from("delivery_notes")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit)
+  if (statuses && statuses.length > 0) {
+    query = query.in("status", statuses)
+  }
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []) as DeliveryNote[]
+}
+
 export async function updateDeliveryStatus(
   id: string,
   status: DeliveryStatus,

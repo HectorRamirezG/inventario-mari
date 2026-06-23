@@ -43,6 +43,7 @@ const PricingPage = lazy(() => import("./features/pricing/PricingPage"))
 const DashboardPage = lazy(() => import("./features/dashboard/DashboardPage"))
 const SalesPage = lazy(() => import("./features/sales/SalesPage"))
 const ApartadosPage = lazy(() => import("./features/apartados/ApartadosPage"))
+const DeliveriesAdminPage = lazy(() => import("./features/delivery/DeliveriesAdminPage"))
 const SettingsPage = lazy(() => import("./features/settings/SettingsPage"))
 const BusinessRulesPage = lazy(() => import("./features/settings/BusinessRulesPage"))
 const UsersPage = lazy(() => import("./features/users/UsersPage"))
@@ -1204,6 +1205,7 @@ function AdminShell() {
                     {section === "catalogo" && <InventoryPage />}
                     {section === "caja" && <SalesPage />}
                     {section === "pendientes" && <ApartadosPage />}
+                    {section === "entregas" && <DeliveriesAdminPage />}
                     {section === "soporte" && <SupportPage />}
                     {section === "sugerencias" && <WishAdminPage />}
                     {section === "stories" && <StoriesAdminPage />}

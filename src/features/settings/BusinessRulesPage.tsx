@@ -523,6 +523,15 @@ export default function BusinessRulesPage() {
           enabled={form.reviews_enabled}
           onToggle={(v) => patch({ reviews_enabled: v })}
         />
+
+        <RuleRow
+          icon={Star}
+          title="Reseñar al pagar (no esperar entrega)"
+          description="Por default el cliente reseña hasta que su pedido se marca como entregado. Con esto activado, también puede reseñar tan pronto liquide el saldo — útil cuando lo recoge en tienda o se lo lleva en el momento."
+          affects="cliente"
+          enabled={form.reviews_on_paid_enabled}
+          onToggle={(v) => patch({ reviews_on_paid_enabled: v })}
+        />
       </Section>
 
       {/* ════════════ MODO DIRECTO (sin moderación) ════════════ */}

@@ -112,7 +112,12 @@ export interface BusinessRules {
   /** Reseñas con foto del cliente (dentro de cada producto, vista compacta).
    *  Pendiente de implementar. Toggle reservado. */
   reviews_enabled: boolean
-
+  /** Si está activa, el cliente puede dejar reseña tan pronto como liquide
+   *  el pedido (no espera a que se marque como entregado). Útil cuando hay
+   *  pickup en tienda o pedidos pequeños que se llevan en el momento.
+   *  Cuando está apagada (default), sólo aplica el flujo clásico:
+   *  reseña habilitada al marcar delivery como 'delivered'. */
+  reviews_on_paid_enabled: boolean
   /* ════════════════════════ MODO DIRECTO (sin fricción) ═══════════════════
    * Cuando Mari quiere operar SIN moderar nada — todo entra automático.
    * Útil para clientes confiables o eventos especiales. Cada hijo puede
@@ -299,6 +304,7 @@ export const DEFAULT_RULES: BusinessRules = {
   wishes_enabled: true,
   stories_enabled: false,
   reviews_enabled: false,
+  reviews_on_paid_enabled: false,
 
   // Modo directo (sin moderación) — todos OFF por seguridad
   direct_mode_enabled: false,
@@ -402,6 +408,7 @@ function merge(raw: any): BusinessRules {
     wishes_enabled: raw.wishes_enabled ?? DEFAULT_RULES.wishes_enabled,
     stories_enabled: raw.stories_enabled ?? DEFAULT_RULES.stories_enabled,
     reviews_enabled: raw.reviews_enabled ?? DEFAULT_RULES.reviews_enabled,
+    reviews_on_paid_enabled: !!raw.reviews_on_paid_enabled,
 
     // Modo directo
     direct_mode_enabled: !!raw.direct_mode_enabled,

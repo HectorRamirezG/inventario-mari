@@ -112,12 +112,12 @@ export default function UsersPage() {
   const filteredUsers = useMemo(() => {
     const q = search.trim()
     if (!q) return users
-    return fuseUsers.search(q).map((r) => r.item)
+    return fuseUsers.search(q).map((r: { item: any }) => r.item)
   }, [users, search, fuseUsers])
   const filteredVisitors = useMemo(() => {
     const q = search.trim()
     if (!q) return visitors
-    return fuseVisitors.search(q).map((r) => r.item)
+    return fuseVisitors.search(q).map((r: { item: any }) => r.item)
   }, [visitors, search, fuseVisitors])
 
   // KPIs
@@ -213,7 +213,7 @@ export default function UsersPage() {
               />
             ) : (
               <ul className="space-y-2">
-                {filteredUsers.map((u) => (
+                {filteredUsers.map((u: RegisteredUser) => (
                   <UserRow key={u.id} user={u} />
                 ))}
               </ul>
@@ -240,7 +240,7 @@ export default function UsersPage() {
               />
             ) : (
               <ul className="space-y-2">
-                {filteredVisitors.map((v) => (
+                {filteredVisitors.map((v: Visitor) => (
                   <VisitorRow key={v.id} visitor={v} />
                 ))}
               </ul>

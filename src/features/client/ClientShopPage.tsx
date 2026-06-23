@@ -2439,20 +2439,18 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           showVariantBadge={showVariantBadge}
           priority={priority}
         />
-        {/* Badges esquina superior izquierda: NUEVO / OFERTA.
-            Layout en fila (flex-wrap) para no apilarse verticalmente y
-            no competir contra el contador X/N que vive en top-right ni
-            contra la etiqueta de variante que ahora vive en bottom-left. */}
+        {/* Badge unico esquina sup izquierda. Jerarquia: Oferta > Nuevo.
+            Si ambos aplican, gana oferta (porcentaje empuja accion). Antes
+            mostrabamos dos pills apilados y se sentia saturado. */}
         {(isNew || onOffer) && (
-          <div className="absolute top-2 left-2 z-10 flex flex-wrap items-start gap-1 max-w-[75%]">
-            {isNew && (
-              <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200 text-[9px] font-black uppercase tracking-widest shadow-sm border border-sky-200/60">
-                Nuevo
-              </span>
-            )}
-            {onOffer && (
-              <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-200 text-[9px] font-black uppercase tracking-widest shadow-sm border border-rose-200/60">
+          <div className="absolute top-2 left-2 z-10">
+            {onOffer ? (
+              <span className="px-2 py-0.5 rounded-full bg-rose-500/90 text-white text-[9px] font-black uppercase tracking-widest shadow-sm">
                 -{discountPct}%
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-full bg-sky-500/90 text-white text-[9px] font-black uppercase tracking-widest shadow-sm">
+                Nuevo
               </span>
             )}
           </div>
@@ -2472,38 +2470,17 @@ const ProductCardClient = memo(function ProductCardClientImpl({
         )}
       </motion.div>
       <div className={`flex-1 flex flex-col ${isFocus ? "p-4" : "p-3"}`}>
-        {/* Nombre + chip de reseñas inline (sin línea extra). El chip
-            es discreto pero clickeable: estrella amarilla + "(reseñas)". */}
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <p
-            className={`font-black truncate flex-1 min-w-0 ${
-              isFocus ? "text-base" : "text-xs"
-            }`}
-            title={product.name}
-          >
-            {product.name}
-          </p>
-          {onOpenReviews && (product.review_count ?? 0) > 0 && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onOpenReviews()
-              }}
-              className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100/80 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-black press border border-amber-200/60 dark:border-amber-500/30"
-              aria-label={`Ver ${product.review_count} reseñas, calificación ${(product.avg_rating ?? 0).toFixed(1)} de 5`}
-              title="Ver reseñas"
-            >
-              <Star size={10} className="fill-amber-400 text-amber-400" />
-              <span className="tabular-nums">
-                {(product.avg_rating ?? 0).toFixed(1)}
-              </span>
-              <span className="opacity-70 tabular-nums">
-                ({product.review_count})
-              </span>
-            </button>
-          )}
-        </div>
+        {/* Nombre full-width (sin chip de resenias al lado). El rating
+            se movio a una linea mini ABAJO, junto al precio, para reducir
+            la saturacion visual de la header. */}
+        <p
+          className={`font-black truncate mb-1 ${
+            isFocus ? "text-base" : "text-xs"
+          }`}
+          title={product.name}
+        >
+          {product.name}
+        </p>
 
         {/* Variantes (compactas: 3 visibles + "+N" en grid, 8 en focus) */}
         {product.variants.length > 1 && (
@@ -2550,6 +2527,28 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                 formatMoney(price)
               )}
             </span>
+            {/* Mini rating inline: solo estrella + numero. Sin pill ni
+                background. Click escapa a onOpenReviews del padre. */}
+            {onOpenReviews && (product.review_count ?? 0) > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenReviews()
+                }}
+                className="mt-1 inline-flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400 press"
+                aria-label={`${product.review_count} reseñas, ${(product.avg_rating ?? 0).toFixed(1)} de 5`}
+                title="Ver reseñas"
+              >
+                <Star size={9} className="fill-amber-400 text-amber-400" />
+                <span className="tabular-nums">
+                  {(product.avg_rating ?? 0).toFixed(1)}
+                </span>
+                <span className="opacity-60 tabular-nums font-bold">
+                  ({product.review_count})
+                </span>
+              </button>
+            )}
             {/* Stock urgente inline DEBAJO del precio. Solo si aplica. */}
             {out ? (
               <span className="inline-block text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 mt-1">
