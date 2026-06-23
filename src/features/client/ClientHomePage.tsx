@@ -37,7 +37,6 @@ import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 
 import ClientHero from "../../components/ui/ClientHero"
-import InstallAppBanner from "../../components/ui/InstallAppBanner"
 import StoriesBar from "../stories/StoriesBar"
 import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
 import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
@@ -133,8 +132,6 @@ export default function ClientHomePage() {
         customerName={authName || (authEmail ? authEmail.split("@")[0] : "")}
         isLogged={isLogged}
       />
-
-      <InstallAppBanner />
 
       {/* Productos vistos recientemente */}
       <RecentlyViewedRow

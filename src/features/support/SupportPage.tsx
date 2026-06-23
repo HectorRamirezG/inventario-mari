@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { motion, AnimatePresence, type PanInfo } from "framer-motion"
 import {
   LifeBuoy,
@@ -80,6 +80,36 @@ export default function SupportPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SupportTicket | null>(null)
   const [tableReady, setTableReady] = useState<boolean | null>(null)
+
+  // Escuchar notificación "abrir ticket específico" → encuentra el
+  // ticket por id en `allTickets` y abre el drawer. Si todavía no llegó
+  // del fetch inicial, guarda el id pendiente y abre cuando llegue.
+  const pendingTicketIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ticketId = (e as CustomEvent).detail?.ticketId as string | undefined
+      if (!ticketId) return
+      const t = allTickets.find((x) => x.id === ticketId)
+      if (t) {
+        setSelected(t)
+      } else {
+        pendingTicketIdRef.current = ticketId
+      }
+    }
+    window.addEventListener("support:open-ticket", handler)
+    return () => window.removeEventListener("support:open-ticket", handler)
+  }, [allTickets])
+
+  // Cuando allTickets se refresca, si hay un ticket pendiente lo abrimos
+  useEffect(() => {
+    const id = pendingTicketIdRef.current
+    if (!id) return
+    const t = allTickets.find((x) => x.id === id)
+    if (t) {
+      setSelected(t)
+      pendingTicketIdRef.current = null
+    }
+  }, [allTickets])
 
   // Counts globales (para KPIs + badges en tabs)
   const counts = useMemo(() => {

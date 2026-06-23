@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   ShoppingCart,
   Plus,
@@ -97,6 +97,61 @@ export default function SalesPage() {
       window.removeEventListener("sales:focus-customer", onFocusCustomer);
     };
   }, [actions, state.cart.length]);
+
+  // Re-ordenar desde venta cancelada: ApartadosPage dispara
+  // `sales:prefill-cart` con items y datos del cliente. Aquí guardamos
+  // el request en una ref y lo procesamos cuando `state.results` ya
+  // tenga datos (puede llegar antes o después que el evento).
+  const prefillRef = useRef<{
+    items: { variant_id: string; qty: number }[]
+    customer_name?: string | null
+    customer_phone?: string | null
+    customer_email?: string | null
+  } | null>(null)
+
+  useEffect(() => {
+    const onPrefill = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (!detail || !Array.isArray(detail.items)) return
+      prefillRef.current = detail
+    }
+    window.addEventListener("sales:prefill-cart", onPrefill)
+    return () => window.removeEventListener("sales:prefill-cart", onPrefill)
+  }, [])
+
+  // Procesa el prefill cuando ya tenemos catálogo cargado
+  useEffect(() => {
+    const req = prefillRef.current
+    if (!req || !state.results || state.results.length === 0) return
+
+    let added = 0
+    let missing = 0
+    actions.clearCart()
+    for (const it of req.items) {
+      const variant = state.results.find((v: any) => v.id === it.variant_id)
+      if (!variant) {
+        missing++
+        continue
+      }
+      actions.addToCart(variant)
+      if (it.qty > 1) actions.updateQty(variant.id, it.qty)
+      added++
+    }
+    if (req.customer_name) actions.setCustomer(req.customer_name)
+    if (req.customer_phone) actions.setPhone(req.customer_phone)
+    setShowCustomer(true)
+
+    if (added > 0) {
+      toast.success(
+        missing > 0
+          ? `${added} productos recargados (${missing} ya no existen)`
+          : `${added} productos recargados`,
+      )
+    } else if (missing > 0) {
+      toast.error("Ninguno de los productos sigue disponible")
+    }
+    prefillRef.current = null
+  }, [state.results, actions])
 
   // Hotkeys locales de la pantalla Caja.
   // Se evita capturar cuando el foco está en un input/textarea para no

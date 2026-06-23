@@ -13,6 +13,9 @@ import ReportPaymentButton from "../../components/ui/ReportPaymentButton"
 import RequestExtensionButton from "../client/RequestExtensionButton"
 import SupportModal from "../support/SupportModal"
 import DeliveryStatusChip from "../../components/ui/DeliveryStatusChip"
+import OrderProgressTracker, {
+  type OrderProgressDelivery,
+} from "../../components/ui/OrderProgressTracker"
 import TicketTotalsDetailed from "../../components/ui/TicketTotalsDetailed"
 interface TicketItem {
   id: string
@@ -62,6 +65,7 @@ export default function PublicTicketPage() {
   const [openSupport, setOpenSupport] = useState(false)
   /** Status de la comanda más reciente asociada a esta venta. */
   const [deliveryStatus, setDeliveryStatus] = useState<string | null>(null)
+  const [deliveryFull, setDeliveryFull] = useState<OrderProgressDelivery | null>(null)
   const store = getStoreInfo()
 
   /** Vuelve a un home contextual según el usuario logueado. */
@@ -144,19 +148,37 @@ export default function PublicTicketPage() {
       })
     }
 
-    /** Carga el status de la comanda más reciente. */
+    /** Carga la comanda más reciente con campos para el tracker. */
     const loadDelivery = async () => {
       try {
         const { data } = await supabase
           .from("delivery_notes")
-          .select("status")
+          .select(
+            "id,status,driver_name,driver_phone,picked_up_at,delivered_at,current_lat,current_lng,last_position_at",
+          )
           .eq("sale_id", ticket.id)
           .order("created_at", { ascending: false })
           .limit(1)
         if (!alive) return
-        setDeliveryStatus((data?.[0] as any)?.status ?? null)
+        const note = (data?.[0] as any) ?? null
+        setDeliveryStatus(note?.status ?? null)
+        setDeliveryFull(
+          note
+            ? {
+                id: note.id,
+                status: note.status,
+                driver_name: note.driver_name ?? null,
+                driver_phone: note.driver_phone ?? null,
+                current_lat: note.current_lat ?? null,
+                current_lng: note.current_lng ?? null,
+                last_position_at: note.last_position_at ?? null,
+                picked_up_at: note.picked_up_at ?? null,
+                delivered_at: note.delivered_at ?? null,
+              }
+            : null,
+        )
       } catch {
-        /* tabla puede no existir */
+        /* tabla puede no existir o campos nuevos faltantes */
       }
     }
     loadDelivery()
@@ -409,32 +431,18 @@ export default function PublicTicketPage() {
             )
           })()}
 
-          {/* Progreso del apartado */}
-          {ticket.is_layaway && totalReal > 0 && (
-            <ProgressBlock
-              pct={pct}
+          {/* Tracker dinámico: muta entre barra de pago, stepper de entrega
+              y mini-mapa del repartidor en vivo según el estado actual. */}
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white/70 px-4 py-4">
+            <OrderProgressTracker
+              total={totalReal}
               paid={paidReal}
               balance={balanceReal}
+              delivery={deliveryFull}
             />
-          )}
-
-          {/* Estado */}
-          <div
-            className={`mt-4 flex items-center gap-2 px-4 py-3 rounded-2xl ${
-              isPaid
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-amber-50 text-amber-700"
-            }`}
-          >
-            {isPaid ? <CheckCircle2 size={18} /> : <Clock size={18} />}
-            <span className="text-sm font-black">
-              {isPaid ? "Pagado completo" : "Saldo pendiente"}
-            </span>
           </div>
 
-          {/* Status de la comanda de entrega — visible cuando hay comanda
-              activa. Le da al cliente certeza visual del progreso de
-              su entrega: asignada → en camino → entregada. */}
+          {/* Status de la comanda de entrega — banner descriptivo. */}
           {deliveryStatus && (
             <div className="mt-3 rounded-2xl border border-sky-200 dark:border-sky-500/30 bg-sky-50/60 dark:bg-sky-500/10 px-4 py-3 flex items-center gap-3">
               <DeliveryStatusChip
@@ -450,7 +458,7 @@ export default function PublicTicketPage() {
                   {deliveryStatus === "picked_up"
                     ? "Tu pedido va en camino, te avisamos cuando llegue"
                     : deliveryStatus === "delivered"
-                      ? "Entregado · esperamos que te encante 💖"
+                      ? "Entregado · esperamos que te encante"
                       : deliveryStatus === "sent"
                         ? "Repartidor asignado, pronto sale a entregar"
                         : deliveryStatus === "cancelled"

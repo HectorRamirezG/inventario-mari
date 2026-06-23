@@ -198,6 +198,14 @@ type ResolvedTarget =
   | { kind: "admin"; section: string }
   | { kind: "route"; path: string }
   | { kind: "event"; name: string; detail?: any }
+  /** Navegar a una sección admin Y disparar un evento de "abrir esto"
+   *  cuando la sección haya montado. */
+  | {
+      kind: "compound"
+      section?: string
+      route?: string
+      followUp: { event: string; detail?: any; delayMs?: number }
+    }
 
 function resolveTarget(
   n: { type: string; metadata?: any; link?: string | null },
@@ -218,8 +226,14 @@ function resolveTarget(
 
   // 3) Fallback por tipo
   if (isAdmin) {
+    const saleId = n.metadata?.sale_id as string | undefined
+    const ticketId = n.metadata?.ticket_id as string | undefined
+    const wishId = n.metadata?.wish_id as string | undefined
+    const reviewId = n.metadata?.review_id as string | undefined
+    const variantId = n.metadata?.variant_id as string | undefined
+
     switch (n.type) {
-      // Ventas / pagos / entregas → caja o pendientes según haya saldo
+      // Ventas / pagos / entregas — si trae sale_id resaltamos esa card
       case "payment_added":
       case "sale_paid":
       case "sale_cancelled":
@@ -231,26 +245,80 @@ function resolveTarget(
       case "delivery_picked_up":
       case "delivery_delivered":
       case "delivery_not_opened":
-        return { kind: "admin", section: "pendientes" }
       case "new_layaway":
       case "layaway_due_soon":
       case "layaway_stale":
       case "layaway_extension":
       case "abandoned_cart":
       case "payment_proof_reminder":
+        if (saleId) {
+          return {
+            kind: "compound",
+            section: "pendientes",
+            followUp: {
+              event: "apartados:highlight-sale",
+              detail: { saleId },
+              delayMs: 250,
+            },
+          }
+        }
         return { kind: "admin", section: "pendientes" }
       case "support_ticket":
       case "support_resolved":
+        if (ticketId) {
+          return {
+            kind: "compound",
+            section: "soporte",
+            followUp: {
+              event: "support:open-ticket",
+              detail: { ticketId },
+              delayMs: 250,
+            },
+          }
+        }
         return { kind: "admin", section: "soporte" }
       case "wish_created":
       case "wish_status":
       case "wish_available":
+        if (wishId) {
+          return {
+            kind: "compound",
+            section: "sugerencias",
+            followUp: {
+              event: "wishes:highlight-wish",
+              detail: { wishId },
+              delayMs: 250,
+            },
+          }
+        }
         return { kind: "admin", section: "sugerencias" }
       case "review_created":
       case "review_published":
+        if (reviewId) {
+          return {
+            kind: "compound",
+            section: "resenias",
+            followUp: {
+              event: "reviews:highlight-review",
+              detail: { reviewId },
+              delayMs: 250,
+            },
+          }
+        }
         return { kind: "admin", section: "resenias" }
       case "stock_low":
       case "stock_back":
+        if (variantId) {
+          return {
+            kind: "compound",
+            section: "catalogo",
+            followUp: {
+              event: "catalog:highlight-variant",
+              detail: { variantId },
+              delayMs: 250,
+            },
+          }
+        }
         return { kind: "admin", section: "catalogo" }
       case "daily_goal":
         return { kind: "admin", section: "hoy" }
@@ -260,19 +328,41 @@ function resolveTarget(
         return { kind: "admin", section: "usuarios" }
     }
   } else {
-    // Cliente
+    // Cliente — si trae sale_id navegamos a /mis-pedidos y abrimos
+    // PaymentCenterDrawer (cuando hay saldo) o navegamos directo al
+    // ticket público según el tipo.
+    const saleId = n.metadata?.sale_id as string | undefined
+    const publicToken = n.metadata?.public_token as string | undefined
+
     switch (n.type) {
-      case "payment_added":
-      case "sale_paid":
-      case "sale_cancelled":
-      case "price_adjusted":
       case "payment_approved":
       case "payment_rejected":
       case "proof_rejected":
       case "payment_proof_rejected":
+        if (saleId) {
+          return {
+            kind: "compound",
+            route: "/mis-pedidos",
+            followUp: {
+              event: "orders:open-payment-center",
+              detail: { saleId },
+              delayMs: 300,
+            },
+          }
+        }
+        return { kind: "route", path: "/mis-pedidos" }
+      case "sale_paid":
+      case "payment_added":
+      case "new_layaway":
       case "delivery_picked_up":
       case "delivery_delivered":
-      case "new_layaway":
+        // Directo al ticket público si tenemos token (es la vista de
+        // verdad del cliente). Si no, lista de pedidos.
+        if (publicToken) return { kind: "route", path: `/ticket/${publicToken}` }
+        if (saleId) return { kind: "route", path: `/ticket/${saleId}` }
+        return { kind: "route", path: "/mis-pedidos" }
+      case "sale_cancelled":
+      case "price_adjusted":
       case "layaway_extension":
       case "payment_proof_reminder":
         return { kind: "route", path: "/mis-pedidos" }
@@ -459,6 +549,23 @@ export default function NotificationBell({
       navigate(target.path)
     } else if (target.kind === "event") {
       window.dispatchEvent(new CustomEvent(target.name, { detail: target.detail }))
+    } else if (target.kind === "compound") {
+      // Navegamos a la sección/ruta y luego (al montar) disparamos el
+      // followUp para que la página específica abra/resalte lo concreto.
+      // El delay (default 250ms) le da chance a la sección de pintar.
+      if (target.section) {
+        window.dispatchEvent(
+          new CustomEvent("mari:navigate", { detail: { tab: target.section } })
+        )
+      } else if (target.route) {
+        navigate(target.route)
+      }
+      const delay = target.followUp.delayMs ?? 250
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent(target.followUp.event, { detail: target.followUp.detail })
+        )
+      }, delay)
     }
   }
 

@@ -54,6 +54,16 @@ export function useGlobalShortcuts() {
 
       const k = e.key.toLowerCase()
 
+      // Shift+N → Nueva venta directo (sin pasar por ActionHub)
+      // Conviven: `n` solo = abre hub (App.tsx line ~517). Shift+N = atajo directo.
+      if (e.shiftKey && k === "n") {
+        e.preventDefault()
+        window.dispatchEvent(new CustomEvent("app:navigate", { detail: { tab: "ventas" } }))
+        return
+      }
+
+      if (e.shiftKey) return
+
       // Esc cancela el modo "g"
       if (k === "escape") {
         waitingForG = false

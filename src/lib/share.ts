@@ -22,3 +22,32 @@ export async function shareUrl(opts: {
   }
   return "failed"
 }
+
+/**
+ * Comparte un bloque de TEXTO usando Web Share API.
+ * Fallback: copia al portapapeles.
+ * Útil cuando lo que quieres mandar NO es una URL sino un mensaje largo
+ * (carrito, recibo en texto, plantilla WhatsApp, etc.).
+ */
+export async function shareText(opts: {
+  title?: string
+  text: string
+}): Promise<"shared" | "copied" | "failed"> {
+  try {
+    if (typeof navigator !== "undefined" && "share" in navigator) {
+      await (navigator as any).share({ title: opts.title, text: opts.text })
+      return "shared"
+    }
+  } catch (e: any) {
+    if (e?.name === "AbortError") return "failed"
+  }
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      await navigator.clipboard.writeText(opts.text)
+      return "copied"
+    }
+  } catch {
+    /* noop */
+  }
+  return "failed"
+}

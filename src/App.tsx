@@ -56,18 +56,20 @@ const CyclesPage = lazy(() => import("./features/cycles/CyclesPage"))
 const SupportPage = lazy(() => import("./features/support/SupportPage"))
 
 import ThemeToggle from "./components/ui/ThemeToggle"
+import CartHeaderButton from "./components/ui/CartHeaderButton"
+import ClientSearchModal from "./components/ui/ClientSearchModal"
 import CommandPalette from "./components/ui/CommandPalette"
 import KeyboardHelpDialog from "./components/ui/KeyboardHelpDialog"
 import ActionHub, { type HubAction } from "./components/ui/ActionHub"
 import NotificationBell from "./components/ui/NotificationBell"
 import ConnectionBanner from "./components/ui/ConnectionBanner"
+import CriticalStockBanner from "./components/ui/CriticalStockBanner"
 import UserProfileDrawer from "./components/ui/UserProfileDrawer"
 import ReviewProofDrawer from "./components/ui/ReviewProofDrawer"
 import WhatsAppSupportFab from "./components/ui/WhatsAppSupportFab"
 import InstallPrompt from "./components/ui/InstallPrompt"
 import ErrorBoundary from "./components/ui/ErrorBoundary"
 import PwaUpdatePrompt from "./components/ui/PwaUpdatePrompt"
-import ShortcutsCheatsheet, { useShortcutsCheatsheet } from "./components/ui/ShortcutsCheatsheet"
 import PullToRefresh from "./components/ui/PullToRefresh"
 import ScrollToTopButton from "./components/ui/ScrollToTopButton"
 import SignOutOverlay from "./components/ui/SignOutOverlay"
@@ -166,7 +168,7 @@ export default function App() {
         <ConnectionBanner />
         <InstallPrompt />
         <PwaUpdatePrompt />
-        <ShortcutsCheatsheetMount />
+        <KeyboardHelpMount />
         <VisitorTrackingMount />
         <ScrollToTopButton />
         <SignOutOverlay />
@@ -241,10 +243,37 @@ function ThemeMount() {
   return null
 }
 
-/** Cheatsheet global con tecla `?`. Funciona en cualquier ruta. */
-function ShortcutsCheatsheetMount() {
-  const { open, setOpen } = useShortcutsCheatsheet()
-  return <ShortcutsCheatsheet open={open} onClose={() => setOpen(false)} />
+/** Cheatsheet único global con tecla `?` y evento `app:open-shortcuts`.
+ *  Reemplaza al viejo ShortcutsCheatsheet duplicado. */
+function KeyboardHelpMount() {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const isTyping = () => {
+      const t = document.activeElement as HTMLElement | null
+      if (!t) return false
+      return (
+        t.tagName === "INPUT" ||
+        t.tagName === "TEXTAREA" ||
+        t.tagName === "SELECT" ||
+        t.isContentEditable
+      )
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (isTyping()) return
+        e.preventDefault()
+        setOpen((v) => !v)
+      }
+    }
+    const onOpen = () => setOpen(true)
+    window.addEventListener("keydown", onKey)
+    window.addEventListener("app:open-shortcuts", onOpen)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.removeEventListener("app:open-shortcuts", onOpen)
+    }
+  }, [])
+  return <KeyboardHelpDialog open={open} onClose={() => setOpen(false)} />
 }
 
 /** Trackea visita anónima/logueada en BD para que Mari vea quién entra.
@@ -335,7 +364,9 @@ function AdminShell() {
   const prevSectionRef = useRef<AdminSection>("hoy")
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [hubOpen, setHubOpen] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
+  // helpOpen state eliminado — el cheatsheet ahora es global vía
+  // KeyboardHelpMount en el root. Los disparadores locales hacen
+  // dispatch del evento "app:open-shortcuts".
   // Easter egg: contador de taps sobre el logo. A los 7, dispara confetti
   // + mensaje especial. Se resetea automáticamente al pasar 1.5s sin taps.
   const [logoTaps, setLogoTaps] = useState(0)
@@ -507,11 +538,13 @@ function AdminShell() {
         e.preventDefault()
         setSidebarExpanded((v) => !v)
       }
-      // "?" abre la hoja de atajos (siempre y cuando no estés escribiendo)
+      // "?" abre la hoja de atajos (siempre y cuando no estés escribiendo).
+      // El cheatsheet vive globalmente en KeyboardHelpMount; aquí solo
+      // disparamos el evento para evitar dos listeners superpuestos.
       if (e.key === "?" && !(e.metaKey || e.ctrlKey || e.altKey)) {
         if (isTyping()) return
         e.preventDefault()
-        setHelpOpen((v) => !v)
+        window.dispatchEvent(new CustomEvent("app:open-shortcuts"))
       }
       // "n" abre el ActionHub (nuevo / quick add) — gmail-style
       if (
@@ -1098,7 +1131,7 @@ function AdminShell() {
             </button>
             {/* Botón discreto a la hoja de atajos. También se abre con "?" */}
             <button
-              onClick={() => setHelpOpen(true)}
+              onClick={() => window.dispatchEvent(new CustomEvent("app:open-shortcuts"))}
               aria-label="Ver atajos de teclado"
               title="Atajos (?)"
               className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center press"
@@ -1120,6 +1153,11 @@ function AdminShell() {
             </button>
           </div>
         </header>
+
+        {/* Banner sticky de stock crítico (solo admin/staff). Se renderiza
+            entre header y contenido para que sea lo primero visible cuando
+            hay productos en 0. Auto-oculta si no hay stock crítico. */}
+        <CriticalStockBanner />
 
         {/* ─── CONTENIDO ───
             En móvil el dock fijo (h-12) + safe-area + FAB sobresale ~28px
@@ -1226,7 +1264,6 @@ function AdminShell() {
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <KeyboardHelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ActionHub open={hubOpen} onClose={() => setHubOpen(false)} actions={hubActions} />
       <UserProfileDrawer open={profileOpen} onClose={() => setProfileOpen(false)} />
       <ReviewProofDrawer
@@ -1320,7 +1357,7 @@ const SHOP_TABS = [
   { to: "/", label: "Tienda", icon: Store, requiresAuth: false },
   { to: "/mis-pedidos", label: "Pedidos", icon: ReceiptIcon, requiresAuth: true },
   { to: "/mis-deseos", label: "Deseos", icon: Heart, requiresAuth: true },
-  { to: "/mis-reportes", label: "Reportes", icon: LifeBuoy, requiresAuth: true },
+  { to: "/mis-reportes", label: "Soporte", icon: LifeBuoy, requiresAuth: true },
 ] as const
 
 function ShopShell() {
@@ -1330,7 +1367,22 @@ function ShopShell() {
   const loc = useLocation()
   const navigate = useNavigate()
   const [profileOpen, setProfileOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const rules = useBusinessRules()
+
+  // Atajo "/" para abrir el search (estilo GitHub / YouTube). NO interfiere
+  // con escritura porque chequea isEditable target.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return
+      e.preventDefault()
+      setSearchOpen(true)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
 
   const showAdminLink = isLogged && isStaffOrAdmin(role)
 
@@ -1355,6 +1407,19 @@ function ShopShell() {
             </div>
           </Link>
           <div className="flex items-center gap-2 shrink-0">
+            {/* Búsqueda universal — abre el modal con input y atajos */}
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Buscar (/)"
+              title="Buscar (/)"
+              className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center active:scale-95 transition-all"
+            >
+              <Search size={14} />
+            </button>
+            {/* Carrito persistente — visible desde cualquier página del shop
+                en cuanto el cliente tenga items. Reemplaza al FAB flotante. */}
+            <CartHeaderButton />
             {isLogged && <NotificationBell />}
             <ThemeToggle />
             {showAdminLink && (
@@ -1507,6 +1572,9 @@ function ShopShell() {
       </nav>
 
       <UserProfileDrawer open={profileOpen} onClose={() => setProfileOpen(false)} />
+
+      {/* Modal de búsqueda universal — se abre desde el header o con "/" */}
+      <ClientSearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
 
       {/* FAB de soporte WhatsApp (cliente / anon) */}
       <WhatsAppSupportFab bottomOffset={64} />

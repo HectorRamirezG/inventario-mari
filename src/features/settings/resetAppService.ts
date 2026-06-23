@@ -1,67 +1,133 @@
 import { supabase } from "../../lib/supabase"
 
 /**
- * Reset operativo para producción: borra TODO lo transaccional y de catálogo
- * sin tocar usuarios ni configuración general.
+ * Reset operativo SELECTIVO para producción: borra SOLO las categorías
+ * que el admin elija. Permite por ejemplo limpiar ventas y soporte sin
+ * tocar el catálogo o los clientes.
  *
- * QUÉ SE BORRA (todo lo operativo del negocio)
- *   • products, variants, movements                 (catálogo + stock)
- *   • sales, sale_items, payments, payment_proofs   (ventas + pagos)
- *   • delivery_notes                                (comandas de entrega)
- *   • support_tickets, notifications                (soporte + buzón)
- *   • pricing_operations                            (historial calculadora)
- *   • wishes                                        (sugerencias cliente)
- *   • stories                                       (fotos del día)
- *   • reviews                                       (reseñas con foto)
- *   • inventory_cycles, capital_injections, operating_expenses (ciclos)
- *   • Todos los archivos del bucket `product-images` EXCEPTO la carpeta
- *     `avatars/` (fotos de perfil)
+ * Categorías disponibles:
+ *   - `ventas`      → sales, sale_items, payments, payment_proofs,
+ *                     movements, delivery_notes (todo el flujo monetario
+ *                     y de inventario que generó la venta).
+ *   - `soporte`     → support_tickets
+ *   - `notifs`      → notifications (buzón de Mari y de clientes)
+ *   - `deseos`      → wishes (sugerencias del cliente)
+ *   - `stories`     → stories
+ *   - `resenias`    → reviews
+ *   - `pricing_ops` → pricing_operations (historial calculadora)
+ *   - `ciclos`      → inventory_cycles, capital_injections, operating_expenses
+ *   - `catalogo`    → products, variants, movements (incluye imágenes del
+ *                     bucket EXCEPTO avatars/). Borra todo el catálogo.
  *
- * QUÉ SE PRESERVA
- *   • auth.users                  (cuentas de y clientes)
- *   • user_profiles               (datos del perfil y avatars)
- *   • app_settings, business_rules, bank_accounts, pricing_config
- *   • storage avatars/
+ * QUÉ NO SE TOCA NUNCA:
+ *   - auth.users, user_profiles (cuentas y avatars)
+ *   - app_settings, business_rules, bank_accounts, pricing_config
+ *   - storage avatars/
  *
- * IMPORTANTE: requiere que la sesión activa sea de un admin. Las RLS
- * `*_write_staff` impedirán a usuarios normales correrlo. Aun así
- * cuenta filas afectadas y devuelve un reporte por tabla para que la
- * UI pueda mostrar "10 productos borrados, 47 archivos eliminados…".
+ * Requiere sesión admin. Las RLS `*_write_staff` impiden a clientes
+ * normales correrlo. Cuenta filas afectadas y devuelve reporte por
+ * tabla.
  */
+
+export type ResetCategory =
+  | "ventas"
+  | "soporte"
+  | "notifs"
+  | "deseos"
+  | "stories"
+  | "resenias"
+  | "pricing_ops"
+  | "ciclos"
+  | "catalogo"
+
 export interface ResetReport {
   tables: Record<string, number>
   storage_deleted: number
   errors: { where: string; message: string }[]
 }
 
-const TABLES_IN_ORDER = [
-  // Hijas primero (FKs hacia variants/sales)
-  "movements",
-  "notifications",
-  "payment_proofs",
-  "payments",
-  "support_tickets",
-  "delivery_notes", // comandas — depende de sales (cascade igual)
-  "sale_items",
-  "sales",
-  // Engagement / cliente
-  "pricing_operations", // historial de la calculadora
-  "wishes",             // sugerencias / wishlist server-side
-  "stories",            // fotos del día (efimeras)
-  "reviews",            // reseñas con foto
-  // Catálogo
-  "variants",
-  "products",
-  // Ciclos
-  "capital_injections",
-  "operating_expenses",
-  "inventory_cycles",
-] as const
+/** Definición de qué tablas borra cada categoría (FK-safe order). */
+export const CATEGORY_TABLES: Record<ResetCategory, string[]> = {
+  // Hijas primero (FKs hacia sales)
+  ventas: [
+    "movements",       // referencia sale_id, variant_id
+    "payment_proofs",  // referencia sale_id
+    "payments",        // referencia sale_id
+    "delivery_notes",  // referencia sale_id
+    "sale_items",      // referencia sale_id, variant_id
+    "sales",
+  ],
+  soporte: ["support_tickets"],
+  notifs: ["notifications"],
+  deseos: ["wishes"],
+  stories: ["stories"],
+  resenias: ["reviews"],
+  pricing_ops: ["pricing_operations"],
+  ciclos: [
+    "capital_injections", // FK a inventory_cycles
+    "operating_expenses", // FK a inventory_cycles
+    "inventory_cycles",
+  ],
+  catalogo: [
+    "movements", // referencia variant_id — borrar antes que variants
+    "variants",
+    "products",
+  ],
+}
 
-/**
- * Etiquetas legibles para el reporte y la UI. Si una tabla no está
- * mapeada, se usa el nombre raw.
- */
+/** UI-friendly label + descripción corta. */
+export const CATEGORY_INFO: Record<
+  ResetCategory,
+  { label: string; description: string; tone: "rose" | "amber" | "sky" | "slate" }
+> = {
+  ventas: {
+    label: "Ventas y apartados",
+    description: "Sales, items, pagos, comprobantes, comandas y movimientos.",
+    tone: "rose",
+  },
+  soporte: {
+    label: "Tickets de soporte",
+    description: "Todos los tickets que clientes han abierto.",
+    tone: "amber",
+  },
+  notifs: {
+    label: "Notificaciones",
+    description: "Buzón de Mari y todas las notifs de clientes.",
+    tone: "sky",
+  },
+  deseos: {
+    label: "Sugerencias / deseos",
+    description: "Wishlist del cliente y sus solicitudes.",
+    tone: "rose",
+  },
+  stories: {
+    label: "Stories",
+    description: "Fotos del día efímeras publicadas.",
+    tone: "amber",
+  },
+  resenias: {
+    label: "Reseñas",
+    description: "Comentarios con foto que clientes dejaron.",
+    tone: "sky",
+  },
+  pricing_ops: {
+    label: "Cálculos guardados",
+    description: "Historial de la calculadora de precios.",
+    tone: "slate",
+  },
+  ciclos: {
+    label: "Ciclos de inventario",
+    description: "Ciclos cerrados, inyecciones de capital y gastos.",
+    tone: "amber",
+  },
+  catalogo: {
+    label: "Catálogo COMPLETO",
+    description: "Productos, variantes y fotos. ⚠ Acción más destructiva.",
+    tone: "rose",
+  },
+}
+
+/** Etiquetas legibles para el reporte y la UI por tabla. */
 export const TABLE_LABEL: Record<string, string> = {
   products: "Productos",
   variants: "Variantes",
@@ -84,40 +150,33 @@ export const TABLE_LABEL: Record<string, string> = {
 
 async function deleteAllRows(
   table: string,
-  report: ResetReport
+  report: ResetReport,
 ): Promise<void> {
-  // Truco: `not.is.null` en la PK matchea TODAS las filas y nos devuelve
-  // count via head request. Las RLS bloquean automáticamente lo que no
-  // se pueda borrar (en cuyo caso reportamos 0 y seguimos).
   const { error, count } = await supabase
     .from(table)
     .delete({ count: "exact" })
     .not("id", "is", null)
 
   if (error) {
-    // Si la tabla no existe (404), no es fatal — la marcamos como 0.
     if (/relation .* does not exist/i.test(error.message) || error.code === "42P01") {
-      report.tables[table] = 0
+      report.tables[table] = report.tables[table] ?? 0
       return
     }
     report.errors.push({ where: `table:${table}`, message: error.message })
-    report.tables[table] = 0
+    report.tables[table] = report.tables[table] ?? 0
     return
   }
-  report.tables[table] = count ?? 0
+  report.tables[table] = (report.tables[table] ?? 0) + (count ?? 0)
 }
 
 /**
- * Recorre el bucket `product-images` listando carpetas en la raíz, y
- * borra recursivamente todo excepto `avatars/`. Supabase storage no
- * tiene un "DELETE WHERE name LIKE ..." nativo, así que listamos y
- * pasamos los paths a `remove()`.
+ * Limpia el bucket `product-images` solo si la categoría `catalogo`
+ * está incluida. NUNCA toca la carpeta `avatars/`.
  */
 async function purgeStorage(report: ResetReport): Promise<void> {
   const BUCKET = "product-images"
 
   try {
-    // Lista carpetas raíz del bucket
     const { data: rootFolders, error: rootErr } = await supabase.storage
       .from(BUCKET)
       .list("", { limit: 1000, sortBy: { column: "name", order: "asc" } })
@@ -136,8 +195,6 @@ async function purgeStorage(report: ResetReport): Promise<void> {
     for (const folder of foldersToWipe) {
       const paths = await listAllFiles(BUCKET, folder)
       if (paths.length === 0) continue
-
-      // Borra en chunks de 1000 (límite de la API)
       for (let i = 0; i < paths.length; i += 1000) {
         const chunk = paths.slice(i, i + 1000)
         const { error: remErr, data: removed } = await supabase.storage
@@ -160,22 +217,19 @@ async function purgeStorage(report: ResetReport): Promise<void> {
   }
 }
 
-/** Lista recursivamente todos los paths bajo `prefix` en el bucket dado. */
+/** Lista recursivamente todos los paths bajo `prefix` en el bucket. */
 async function listAllFiles(bucket: string, prefix: string): Promise<string[]> {
   const out: string[] = []
   const stack: string[] = [prefix]
-
   while (stack.length > 0) {
     const current = stack.pop()!
     let offset = 0
-    // Loop para paginar (la API lista max 100 por defecto, max 1000)
     while (true) {
       const { data, error } = await supabase.storage
         .from(bucket)
         .list(current, { limit: 1000, offset })
       if (error || !data) break
       for (const entry of data) {
-        // Entradas sin metadata = carpetas
         const path = `${current}/${entry.name}`
         if (!entry.metadata) {
           stack.push(path)
@@ -191,65 +245,60 @@ async function listAllFiles(bucket: string, prefix: string): Promise<string[]> {
 }
 
 /**
- * Resetea `pricing_config` (fila id=1) a defaults razonables sin
- * eliminarla — otras vistas asumen que existe.
+ * Acción principal. Acepta lista de categorías; si está vacía o
+ * undefined, se interpreta como "borrar TODO" (comportamiento legacy).
  */
-async function resetPricingConfig(report: ResetReport): Promise<void> {
-  const { error } = await supabase
-    .from("pricing_config")
-    .update({
-      margen_menudeo: 35,
-      margen_medio: 25,
-      margen_mayoreo: 15,
-      umbral_medio: 6,
-      umbral_mayoreo: 12,
-      costo_extra: 0,
-    })
-    .eq("id", 1)
-  if (error) {
-    report.errors.push({ where: "pricing_config:reset", message: error.message })
-  }
-}
-
-/** Acción principal. */
-export async function resetAppData(): Promise<ResetReport> {
+export async function resetAppData(
+  categories?: ResetCategory[],
+): Promise<ResetReport> {
   const report: ResetReport = {
     tables: {},
     storage_deleted: 0,
     errors: [],
   }
 
-  // 1) Intento PRIMERO la RPC SECURITY DEFINER `reset_app_data` — esta
-  //    bypasea RLS y limpia tablas donde el cliente NO tiene DELETE
-  //    (support_tickets, notifications, etc.). Si la RPC no existe (404)
-  //    o falla, caemos al método tabla-por-tabla (legacy).
-  const rpcOk = await tryRpcReset(report)
+  const ALL = Object.keys(CATEGORY_TABLES) as ResetCategory[]
+  const selected: ResetCategory[] =
+    categories && categories.length > 0 ? categories : ALL
 
-  if (!rpcOk) {
-    // Fallback: borra tablas en orden FK-safe desde el cliente
-    for (const t of TABLES_IN_ORDER) {
-      await deleteAllRows(t, report)
+  const isFullReset = selected.length === ALL.length
+
+  // Si es reset completo Y la RPC `reset_app_data` existe, la usamos:
+  // bypasea RLS y es más eficiente. Si falla o el set es parcial,
+  // vamos tabla-por-tabla (RLS staff/admin debe permitirlo).
+  if (isFullReset) {
+    const rpcOk = await tryRpcReset(report)
+    if (rpcOk) {
+      if (selected.includes("catalogo")) {
+        await purgeStorage(report)
+      }
+      return report
     }
-    // 2) Resetea pricing_config (UPDATE, no DELETE)
-    await resetPricingConfig(report)
   }
 
-  // 3) Limpia el bucket de imágenes (excepto avatars/). Esto SIEMPRE
-  //    corre desde el cliente porque storage no se toca desde la RPC.
-  await purgeStorage(report)
+  // Método selectivo: borra cada categoría en orden FK-safe.
+  // Las tablas compartidas (movements en ventas Y catalogo) se intentan
+  // dos veces pero `deleteAllRows` es idempotente.
+  for (const cat of selected) {
+    for (const t of CATEGORY_TABLES[cat]) {
+      await deleteAllRows(t, report)
+    }
+  }
+
+  if (selected.includes("catalogo")) {
+    await purgeStorage(report)
+  }
 
   return report
 }
 
 /**
- * Llama a la RPC `reset_app_data` del servidor. Devuelve true si la
- * función existe y completó (rellena `report.tables`), false si no
- * existe (caller debe hacer fallback al método legacy).
+ * Llama a la RPC `reset_app_data` del servidor (sin parámetros).
+ * Devuelve true si existe y completó.
  */
 async function tryRpcReset(report: ResetReport): Promise<boolean> {
   const { data, error } = await supabase.rpc("reset_app_data")
   if (error) {
-    // Función no existe → caller hace fallback. NO es error.
     if (
       /function .* does not exist|404|not found/i.test(error.message) ||
       error.code === "PGRST202" ||
@@ -257,11 +306,9 @@ async function tryRpcReset(report: ResetReport): Promise<boolean> {
     ) {
       return false
     }
-    // Error real (ej. "requires admin role"): reportamos y abortamos
     report.errors.push({ where: "rpc:reset_app_data", message: error.message })
     return true
   }
-  // data esperado: { ok: true, caller: "...", tables: { products: 10, ... } }
   const payload = (data ?? {}) as { tables?: Record<string, number | { error: string }> }
   const tables = payload.tables ?? {}
   for (const [name, val] of Object.entries(tables)) {

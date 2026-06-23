@@ -116,7 +116,7 @@ export const ADMIN_SECTIONS: AdminSectionEntry[] = [
   },
   {
     id: "sugerencias",
-    label: "Sugerencias",
+    label: "Deseos",
     caption: "Lo que tus clientes te piden",
     icon: Heart,
     ruleFlag: "wishes_enabled",

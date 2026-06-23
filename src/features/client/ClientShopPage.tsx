@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState, useMemo, useDeferredValue, memo, lazy, Suspense } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Fuse from "fuse.js"
 import {
   Search,
-  ShoppingBag,
   Package,
   Loader2,
   X,
@@ -25,6 +24,7 @@ import {
   Eye,
 } from "lucide-react"
 import toast from "react-hot-toast"
+import { toastWithAction } from "../../lib/toastAction"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney } from "../../lib/format"
@@ -46,6 +46,10 @@ import CategoryIcon, { getCategoryVisual } from "../../components/ui/CategoryIco
 import AbandonedCartBanner from "../../components/ui/AbandonedCartBanner"
 import QuickGlance from "../../components/ui/QuickGlance"
 import { useCartPersist, clearPersistedCart, type PersistedCartLine } from "../../lib/useCartPersist"
+import {
+  notifyCartChanged,
+  CART_OPEN_EVENT,
+} from "../../lib/useCartSummary"
 import type { BuySheetProduct } from "./BuySheet"
 import SupportModal from "../support/SupportModal"
 import {
@@ -146,6 +150,7 @@ function saveGuest(g: GuestInfo) {
  */
 export default function ClientShopPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const { email: authEmail, fullName: authName, session, user } = useAuth()
   const isLogged = !!session
@@ -170,7 +175,9 @@ export default function ClientShopPage() {
 
   const [products, setProducts] = useState<PublicProduct[]>([])
   const [loading, setLoading] = useState(true)
-  const [q, setQ] = useState("")
+  // Lee `?q=` del URL al inicializar para que el search del header pueda
+  // navegar a `/?q=texto` y el catálogo lo aplique de inmediato.
+  const [q, setQ] = useState(() => searchParams.get("q") ?? "")
   // Debounce automatico del search para no recomputar fuse en cada tecla.
   const deferredQ = useDeferredValue(q)
   const [sortBy, setSortBy] = useState<"newest" | "price_asc" | "price_desc" | "name">("newest")
@@ -178,6 +185,36 @@ export default function ClientShopPage() {
   const [cart, setCart] = useState<CartLine[]>([])
   useCartPersist(cart as PersistedCartLine[])
   const [openCart, setOpenCart] = useState(false)
+
+  // Notificar al header (CartHeaderButton) cada vez que cambia el carrito.
+  // El custom event `mari:cart-changed` re-sincroniza el badge sin tener
+  // que esperar a un `storage` event (que no se dispara en mismo tab).
+  useEffect(() => {
+    notifyCartChanged()
+  }, [cart])
+
+  // Escuchar petición externa de abrir el carrito (header → cualquier
+  // ruta del shop puede pedir que se abra el drawer). Si llegamos a esta
+  // página vía `navigate("/", { state: { openCart: true } })`, también
+  // lo abrimos.
+  useEffect(() => {
+    const handler = () => setOpenCart(true)
+    window.addEventListener(CART_OPEN_EVENT, handler)
+    return () => window.removeEventListener(CART_OPEN_EVENT, handler)
+  }, [])
+
+  // Backup: si llegamos con state.openCart=true desde otra página (el
+  // CartHeaderButton lo manda), abrimos el drawer al montar. Esto cubre
+  // la race condition donde el CustomEvent llega antes de que estemos
+  // escuchando.
+  useEffect(() => {
+    if ((location.state as { openCart?: boolean } | null)?.openCart) {
+      setOpenCart(true)
+      // Limpiar el state para que un refresh no re-abra el drawer
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [openGuestForm, setOpenGuestForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [guest, setGuest] = useState<GuestInfo>(() => loadGuest())
@@ -599,6 +636,27 @@ export default function ClientShopPage() {
     setSubmitting(true)
     const total = totalAmt
     const tid = toast.loading("Creando tu apartado...")
+
+    // Validación previa de stock cliente-side (defensa contra cambios
+    // entre el render y el envío). Si la regla `block_oversell` está
+    // apagada, permitimos pre-orden y skippeamos esta validación.
+    if (bRules.block_oversell) {
+      const insufficient = repricedCart.find((c) => c.qty > c.stock)
+      if (insufficient) {
+        setSubmitting(false)
+        toast.error(
+          `Stock insuficiente para "${insufficient.variant_name}" (quedan ${insufficient.stock}).`,
+          { id: tid },
+        )
+        return
+      }
+    }
+
+    // sale.id se mantiene fuera del try para poder hacer rollback si algo
+    // falla a mitad. Si quedó algo registrado a medias, lo borramos para
+    // no dejar huérfanas (Postgres RLS permite delete por public_token
+    // recién creado en la misma sesión).
+    let createdSaleId: string | null = null
     try {
       const { data: sale, error } = await supabase
         .from("sales")
@@ -619,8 +677,11 @@ export default function ClientShopPage() {
         .select()
         .single()
       if (error || !sale) throw new Error(error?.message ?? "Sin id")
+      createdSaleId = sale.id
 
-      // Insertar items con el tier ya calculado y los precios actualizados
+      // Insertar items + descontar stock + registrar movement por cada uno.
+      // Patrón canónico (mismo que `salesService.createSale`): asegura que el
+      // inventario refleje la realidad en el instante que el cliente aparta.
       for (const c of repricedCart) {
         const { error: itemErr } = await supabase.from("sale_items").insert({
           sale_id: sale.id,
@@ -635,6 +696,37 @@ export default function ClientShopPage() {
           profit: 0,
         })
         if (itemErr) throw new Error(itemErr.message)
+
+        // Descuento atómico del stock. El RPC garantiza que si dos clientes
+        // toman la última pieza al mismo tiempo, solo uno se queda con ella
+        // (el segundo verá el stock real). Si la regla `block_oversell` está
+        // apagada, el RPC simplemente deja stock negativo (pre-orden).
+        const { error: stockErr } = await supabase.rpc("decrease_variant_stock", {
+          p_variant_id: c.variant_id,
+          p_qty: c.qty,
+        })
+        if (stockErr) {
+          throw new Error(
+            `No pudimos reservar "${c.variant_name}": ${stockErr.message}`,
+          )
+        }
+
+        // Registro del movement para historial y conciliación (Mari ve la
+        // salida en "Movimientos" igual que las ventas de mostrador).
+        const { error: movErr } = await supabase.from("movements").insert({
+          product_id: c.product_id ?? null,
+          variant_id: c.variant_id,
+          type: "salida",
+          quantity: c.qty,
+          sale_id: sale.id,
+        })
+        if (movErr) {
+          // No es crítico — el stock ya bajó. Solo log para depurar.
+          // No revertimos para no rebotar al cliente por un movimiento
+          // de historial que no afecta su pedido.
+          // eslint-disable-next-line no-console
+          console.warn("[client checkout] movement insert failed", movErr.message)
+        }
       }
 
       // Persiste datos del invitado para próximas compras
@@ -656,16 +748,50 @@ export default function ClientShopPage() {
       })
 
       sound.success()
-      toast.success("✨ ¡Apartado creado!", { id: tid })
+      // Dismissamos el loading y mostramos un toast con CTA: el cliente
+      // decide si quiere ver su ticket de inmediato o seguir comprando.
+      // Antes esto era un `toast.success` plano y forzaba ir a /mis-pedidos.
+      toast.dismiss(tid)
+      const ticketPath = `/ticket/${(sale as any).public_token ?? sale.id}`
+      toastWithAction({
+        message: "✨ ¡Apartado creado! Te enviamos los detalles.",
+        actionLabel: "Ver ticket",
+        onAction: () => navigate(ticketPath),
+        duration: 5500,
+      })
       setCart([])
       clearPersistedCart()
       setOpenGuestForm(false)
       setOpenCart(false)
-      // Navegación SPA hacia el ticket público (no reload)
-      navigate(`/ticket/${sale.public_token ?? sale.id}`)
+      // UX: ya NO redirigimos al ticket. El cliente queda en su lista de
+      // pedidos para que vea TODO su historial (no solo el último). Si
+      // quiere abrir el ticket, lo hace desde el CTA del toast ↑. Si está
+      // sin login, mandamos al home con el toast claro.
+      if (authEmail) {
+        navigate("/mis-pedidos")
+      } else {
+        // Cliente invitado: mantiene contexto en la tienda. El toast con
+        // "Apartado creado" es la confirmación. Si quiere ver el ticket,
+        // el WhatsApp que Mari le mande tendrá el link público.
+        navigate("/")
+      }
     } catch (e: any) {
       sound.error()
       toast.error(e?.message ?? "No se pudo apartar", { id: tid })
+      // Compensación: si la venta quedó registrada pero falló algún paso,
+      // la borramos. El trigger `restock_on_sale_cancelled` (si existe)
+      // o ningún trigger (en cuyo caso ya nada se descontó) deja el
+      // inventario consistente.
+      if (createdSaleId) {
+        try {
+          await supabase
+            .from("sales")
+            .update({ status: "cancelled" })
+            .eq("id", createdSaleId)
+        } catch {
+          /* mejor no hacer nada que duplicar error */
+        }
+      }
     } finally {
       setSubmitting(false)
     }
@@ -791,39 +917,46 @@ export default function ClientShopPage() {
         </button>
       </div>
 
-      {/* Filtros: categoría + sort */}
+      {/* Filtros: categoría + sort.
+          Los chips de categoría son STICKY: cuando el cliente scrollea hacia
+          abajo, la fila de categorías se queda pegada justo debajo del
+          header. Así puede cambiar de categoría sin tener que scrollear
+          hasta arriba. Mantenemos `-mx-4 px-4` para que el fondo blur
+          cubra todo el ancho de la columna. */}
       {categories.length > 0 && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 -mx-1 px-1 mb-1 scroll-container-ios">
-          <button
-            type="button"
-            onClick={() => setCategoryFilter("all")}
-            className={`shrink-0 px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
-              categoryFilter === "all"
-                ? "bg-primary text-white shadow-bloom"
-                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500"
-            }`}
-          >
-            Todo
-          </button>
-          {categories.map((c) => {
-            const active = categoryFilter === c
-            const { Icon } = getCategoryVisual(c)
-            return (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCategoryFilter(c)}
-                className={`shrink-0 inline-flex items-center gap-1.5 px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
-                  active
-                    ? "bg-primary text-white shadow-bloom"
-                    : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500"
-                }`}
-              >
-                <Icon size={11} />
-                {c}
-              </button>
-            )
-          })}
+        <div className="sticky top-0 z-30 -mx-4 px-4 pt-2 pb-2 mb-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 scroll-container-ios">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter("all")}
+              className={`shrink-0 px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                categoryFilter === "all"
+                  ? "bg-primary text-white shadow-bloom"
+                  : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500"
+              }`}
+            >
+              Todo
+            </button>
+            {categories.map((c) => {
+              const active = categoryFilter === c
+              const { Icon } = getCategoryVisual(c)
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategoryFilter(c)}
+                  className={`shrink-0 inline-flex items-center gap-1.5 px-3 h-8 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                    active
+                      ? "bg-primary text-white shadow-bloom"
+                      : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500"
+                  }`}
+                >
+                  <Icon size={11} />
+                  {c}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -977,23 +1110,10 @@ export default function ClientShopPage() {
         </LayoutGroup>
       )}
 
-      {/* FAB carrito */}
-      <AnimatePresence>
-        {cart.length > 0 && (
-          <motion.button
-            initial={{ scale: 0, y: 30 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0 }}
-            onClick={() => setOpenCart(true)}
-            className="bg-brand fixed bottom-16 right-4 z-40 h-12 rounded-2xl px-4 text-white font-black flex items-center gap-2 shadow-[0_15px_40px_-10px_rgba(230,0,126,0.5)]"
-          >
-            <ShoppingBag size={16} />
-            <span className="text-sm">
-              {totalQty} · {formatMoney(totalAmt)}
-            </span>
-          </motion.button>
-        )}
-      </AnimatePresence>
+      {/* FAB carrito eliminado — ahora vive como botón en el header del
+          ShopShell (CartHeaderButton), siempre visible desde cualquier
+          ruta del shop. Esto evita que el cliente "pierda" el carrito al
+          navegar a /mis-pedidos o /inicio. */}
 
       {/* FABs flotantes lado izquierdo: AHORA solo vive WhatsAppSupportFab
           (renderizado por App.tsx para todas las rutas cliente). Antes había
@@ -1167,6 +1287,48 @@ export default function ClientShopPage() {
                   Apartar y generar ticket
                   <ArrowRight size={14} />
                 </button>
+
+                {/* Compartir carrito por WhatsApp — útil cuando el cliente
+                    quiere mostrarle el carrito a alguien (pareja, mamá) antes
+                    de pagar. Genera un mensaje con productos + total y abre
+                    el share nativo (o copia el texto si no hay Web Share). */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { shareText } = await import("../../lib/share")
+                    const lines = repricedCart.map(
+                      (c) =>
+                        `• ${c.qty}× ${c.product_name}${c.variant_name ? ` (${c.variant_name})` : ""} — ${formatMoney(c.qty * c.unit_price)}`,
+                    )
+                    const tierLabel =
+                      cartTier === "menudeo"
+                        ? "Precio menudeo"
+                        : cartTier === "medio"
+                        ? "Precio medio mayoreo"
+                        : "Precio mayoreo"
+                    const text = [
+                      `🛍️ Mi carrito en Beauty's Me`,
+                      ``,
+                      ...lines,
+                      ``,
+                      `💖 ${tierLabel}`,
+                      `Total: ${formatMoney(totalAmt)}`,
+                      ``,
+                      `Ver catálogo: ${window.location.origin}/`,
+                    ].join("\n")
+                    const r = await shareText({
+                      title: "Mi carrito Beauty's Me",
+                      text,
+                    })
+                    if (r === "copied") {
+                      toast.success("Carrito copiado al portapapeles 💖")
+                    }
+                  }}
+                  className="w-full h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-500/20"
+                >
+                  💬 Compartir carrito
+                </button>
+
                 <p className="text-[10px] text-center text-slate-400 dark:text-slate-500">
                   Recibiremos tu apartado y te contactaremos por WhatsApp.
                 </p>
@@ -1927,26 +2089,43 @@ function CartTierBanner({
     )
   }
 
-  const nextNeeded =
-    cartTier === "menudeo"
-      ? thresholds.medio_min_qty - totalQty
-      : thresholds.mayoreo_min_qty - totalQty
+  const nextThreshold =
+    cartTier === "menudeo" ? thresholds.medio_min_qty : thresholds.mayoreo_min_qty
+  const nextNeeded = nextThreshold - totalQty
   const nextTier = cartTier === "menudeo" ? "medio" : "mayoreo"
 
   if (nextNeeded <= 0) return null
 
+  const progressPct = Math.min(100, Math.max(0, (totalQty / nextThreshold) * 100))
+
   return (
-    <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/30 p-3">
-      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
-        🎯 Te faltan {nextNeeded} {nextNeeded === 1 ? "pieza" : "piezas"}
-      </p>
-      <p className="text-xs font-bold text-amber-700 dark:text-amber-300 mt-0.5">
+    <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 border border-amber-200/60 dark:border-amber-500/30 p-3.5 space-y-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300">
+          🎯 Te faltan {nextNeeded} {nextNeeded === 1 ? "pieza" : "piezas"}
+        </p>
+        <span className="text-[9px] font-black uppercase tracking-widest text-amber-700/70 dark:text-amber-300/70 tabular-nums">
+          {totalQty}/{nextThreshold}
+        </span>
+      </div>
+
+      {/* Barra de progreso visual al siguiente tier */}
+      <div className="relative h-2 bg-amber-100/70 dark:bg-amber-500/10 rounded-full overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${progressPct}%` }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-amber-400 to-orange-400"
+        />
+      </div>
+
+      <p className="text-xs font-bold text-amber-700 dark:text-amber-300 leading-tight">
         Lleva {nextNeeded} más y desbloqueas el precio de{" "}
-        <span className="font-black uppercase">{nextTier}</span>.
+        <span className="font-black uppercase">{nextTier}</span> ✨
       </p>
       {savings > 0 && (
-        <p className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-1">
-          Ahora mismo ya ahorras {formatMoney(savings)}.
+        <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">
+          Ya ahorras {formatMoney(savings)} con tu carrito actual.
         </p>
       )}
     </div>

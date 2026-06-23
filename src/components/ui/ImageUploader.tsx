@@ -18,7 +18,7 @@ interface Props {
  * Sube una imagen al bucket `product-images` y devuelve la URL pública.
  * Soporta cámara (capture="environment") en móviles + galería.
  */
-export default function ProductImageUploader({
+export default function ImageUploader({
   value,
   onChange,
   folder = "products",

@@ -29,7 +29,7 @@ import {
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../components/ui/Tabs"
+import TabBar from "../../components/ui/TabBar"
 import Skeleton from "../../components/ui/Skeleton"
 import SafeSection from "../../components/ui/SafeSection"
 
@@ -73,11 +73,19 @@ function ChartSkeleton() {
 
 type PeriodDays = 7 | 30 | 90
 
+type DashTab = "resumen" | "analisis"
+
+const DASHBOARD_TABS: { id: DashTab; label: string }[] = [
+  { id: "resumen", label: "Resumen" },
+  { id: "analisis", label: "Análisis" },
+]
+
 export default function DashboardPage() {
   const [period, setPeriod] = useState<PeriodDays>(30)
   const { stats, loading, refresh } = useDashboard(period)
   const [dayCloseOpen, setDayCloseOpen] = useState(false)
   const [showLowStock, setShowLowStock] = useState(false)
+  const [dashTab, setDashTab] = useState<DashTab>("resumen")
 
   // Atajo desde la paleta de comandos
   useEffect(() => {
@@ -204,15 +212,16 @@ export default function DashboardPage() {
         proofs={stats?.pendingProofs ?? 0}
       />
 
-      <Tabs defaultValue="resumen" className="space-y-6">
-        <TabsList className="grid grid-cols-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-[10px] font-black uppercase">
-          <TabsTrigger value="resumen">Resumen</TabsTrigger>
-          <TabsTrigger value="analisis">Análisis</TabsTrigger>
-        </TabsList>
+      <TabBar
+        tabs={DASHBOARD_TABS}
+        active={dashTab}
+        onChange={setDashTab}
+        layoutId="dashboard-tabs"
+      />
 
-        {/* ════════════════ RESUMEN ════════════════ */}
-        <TabsContent value="resumen" className="space-y-5">
-          <div id="dashboard-report-area" className="space-y-5 bg-white dark:bg-slate-950 p-1">
+      {/* ════════════════ RESUMEN ════════════════ */}
+      {dashTab === "resumen" && (
+        <div id="dashboard-report-area" className="space-y-5 bg-white dark:bg-slate-950 p-1">
           <FinanceHero
             revenue={revenue}
             cogs={cogs}
@@ -322,11 +331,12 @@ export default function DashboardPage() {
           />
 
           <StockoutRiskCard items={stats?.stockoutRisk ?? []} />
-          </div>
-        </TabsContent>
+        </div>
+      )}
 
-        {/* ════════════════ ANÁLISIS ════════════════ */}
-        <TabsContent value="analisis" className="space-y-5">
+      {/* ════════════════ ANÁLISIS ════════════════ */}
+      {dashTab === "analisis" && (
+        <div className="space-y-5">
           {/* Métodos de pago */}
           <PaymentMethodsCard methods={stats?.paymentMethods ?? []} />
 
@@ -371,8 +381,8 @@ export default function DashboardPage() {
               sub: `${c.qty} ${c.qty === 1 ? "pieza" : "piezas"}`,
             }))}
           />
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
   )
 }

@@ -36,6 +36,7 @@ const SHORTCUTS: ShortcutGroup[] = [
       { keys: ["?"], description: "Mostrar atajos (esta ventana)" },
       { keys: ["["], description: "Colapsar / expandir sidebar" },
       { keys: ["N"], description: "Abrir hub de acciones rápidas" },
+      { keys: ["⇧", "N"], description: "Nueva venta (directo)" },
     ],
   },
   {

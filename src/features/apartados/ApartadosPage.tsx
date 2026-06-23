@@ -71,6 +71,34 @@ export default function ApartadosPage() {
   const [deliverySale, setDeliverySale] = useState<Sale | null>(null);
   const [profiles, setProfiles] = useState<Record<string, UserProfileDetail>>({});
   const [customerStats, setCustomerStats] = useState<Record<string, CustomerStat>>({});
+  /** ID de venta que llega vía notificación → la resaltamos visualmente
+   *  por unos segundos y hacemos scroll para que sea fácil de ubicar. */
+  const [highlightedSaleId, setHighlightedSaleId] = useState<string | null>(null);
+
+  // Escuchar request de "abrir/resaltar una venta específica" desde
+  // notificaciones. Funciona si la sale ya está en la lista; si todavía
+  // no llega del realtime, reintenta una vez después de 500ms.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      const saleId = detail?.saleId as string | undefined
+      if (!saleId) return
+      setHighlightedSaleId(saleId)
+      // Scroll a la card una vez pintada
+      requestAnimationFrame(() => {
+        const node = document.getElementById(`apartado-${saleId}`)
+        if (node) {
+          node.scrollIntoView({ behavior: "smooth", block: "center" })
+        }
+      })
+      // Auto-clear del highlight tras 3.5s
+      window.setTimeout(() => {
+        setHighlightedSaleId((prev) => (prev === saleId ? null : prev))
+      }, 3500)
+    }
+    window.addEventListener("apartados:highlight-sale", handler)
+    return () => window.removeEventListener("apartados:highlight-sale", handler)
+  }, [])
 
   useEffect(() => {
     const emails = state.sales
@@ -217,6 +245,7 @@ export default function ApartadosPage() {
                   hasPendingProof={state.pendingProofIds.has(sale.id)}
                   deliveryStatus={state.deliveryStatusBySale[sale.id] ?? null}
                   cancelGuard={canCancelSale(rules, sale, { isVip })}
+                  highlighted={highlightedSaleId === sale.id}
                   onPay={() => setSelected(sale)}
                   onTicket={() => setTicketSale(sale)}
                   onAdjust={() => setAdjustSale(sale)}
@@ -274,6 +303,7 @@ const SaleCard = memo(function SaleCardImpl({
   hasPendingProof,
   deliveryStatus,
   cancelGuard,
+  highlighted = false,
   onPay,
   onTicket,
   onAdjust,
@@ -287,6 +317,8 @@ const SaleCard = memo(function SaleCardImpl({
   /** Status de la comanda más reciente (si existe). */
   deliveryStatus?: string | null;
   cancelGuard?: { allowed: boolean; reason?: string };
+  /** Highlight pulse temporal cuando se navega desde notificación. */
+  highlighted?: boolean;
   onPay: () => void;
   onTicket: () => void;
   onAdjust: () => void;
@@ -381,11 +413,16 @@ const SaleCard = memo(function SaleCardImpl({
 
   return (
     <motion.div
+      id={`apartado-${sale.id}`}
       layout
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96 }}
-      className={`relative rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden ${cardBg} ${cardRing}`}
+      className={`relative rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden ${cardBg} ${cardRing} ${
+        highlighted
+          ? "ring-4 ring-primary/40 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 animate-pulse"
+          : ""
+      }`}
     >
       {/* Stamp PAGADO (gigante de fondo) */}
       {isPaid && (
@@ -559,18 +596,17 @@ const SaleCard = memo(function SaleCardImpl({
         </div>
       )}
 
-      {/* Toggle del acordeón */}
+      {/* Toggle del acordeón: solo despliega DATOS DE CONTACTO + mapa +
+          notas. Los items y pagos viven exclusivamente en el TicketView
+          (botón "Ticket") para evitar duplicar información. */}
       <button
         onClick={() => setExpanded((v) => !v)}
         className="w-full flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-2 py-1.5"
       >
         <span>
-          {expanded ? "▲ Ocultar detalle" : "▼ Ver detalle"}
+          {expanded ? "▲ Ocultar contacto" : "▼ Ver contacto"}
           <span className="ml-1 normal-case font-bold text-slate-300">
-            ({sale.sale_items?.length ?? 0} items
-            {(sale.payments?.length ?? 0) > 0 &&
-              ` · ${sale.payments?.length} pagos`}
-            )
+            (teléfono · dirección · mapa)
           </span>
         </span>
       </button>
@@ -665,64 +701,16 @@ const SaleCard = memo(function SaleCardImpl({
               </p>
             )}
 
-            {sale.sale_items && sale.sale_items.length > 0 && (
-              <div>
-                <p className="text-[8px] font-black uppercase text-slate-400 mb-1">
-                  Productos
-                </p>
-                <div className="space-y-1">
-                  {sale.sale_items.map((it) => (
-                    <div
-                      key={it.id}
-                      className="flex items-center justify-between text-[10px] bg-slate-50 dark:bg-slate-800/60 rounded-lg px-2 py-1.5"
-                    >
-                      <div className="min-w-0">
-                        <span className="font-black">{it.qty}×</span>{" "}
-                        <span className="text-slate-700 dark:text-slate-300">
-                          {it.product_name}
-                          {it.variant_name && (
-                            <span className="text-slate-400">
-                              {" "}
-                              · {it.variant_name}
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                      <span className="font-black tabular-nums shrink-0">
-                        {formatMoney(it.qty * it.unit_price)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Timeline de pagos */}
-            {sale.payments && sale.payments.length > 0 && (
-              <div>
-                <p className="text-[8px] font-black uppercase text-slate-400 mb-1">
-                  Historial de pagos
-                </p>
-                <div className="relative pl-3 border-l-2 border-emerald-200 dark:border-emerald-500/30 space-y-1.5">
-                  {sale.payments.map((p) => (
-                    <div key={p.id} className="relative">
-                      <span className="absolute -left-[14px] top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-emerald-100 dark:ring-emerald-500/20" />
-                      <div className="flex items-center justify-between text-[10px] bg-emerald-50/70 dark:bg-emerald-500/10 rounded-lg px-2 py-1.5">
-                        <span className="text-slate-600 dark:text-slate-300">
-                          {formatDateTime(p.created_at)}{" "}
-                          <span className="text-slate-400 uppercase text-[8px] font-black">
-                            {p.method ?? "efectivo"}
-                          </span>
-                        </span>
-                        <span className="font-black tabular-nums text-emerald-700 dark:text-emerald-400">
-                          +{formatMoney(p.amount)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Atajo al ticket completo: items y pagos viven SOLO ahí
+                para no duplicar la información dentro de la card. */}
+            <button
+              type="button"
+              onClick={onTicket}
+              className="w-full h-9 rounded-xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press"
+              title="Ver detalle de productos, pagos y totales"
+            >
+              <Receipt size={12} /> Ver ticket completo
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -786,6 +774,42 @@ const SaleCard = memo(function SaleCardImpl({
             title={cancelGuard?.reason ?? "Cancelar venta"}
           >
             <XCircle size={12} />
+          </motion.button>
+        </div>
+      )}
+
+      {/* Acción para ventas canceladas: re-pre-llenar el carrito de Caja
+          con los mismos items y abrir SalesPage. Útil cuando el cliente
+          dice "ya cambié de opinión, sí lo quiero". */}
+      {isCancelled && (sale.sale_items ?? []).length > 0 && (
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => {
+              const items = (sale.sale_items ?? []).map((it: any) => ({
+                variant_id: it.variant_id,
+                qty: Number(it.qty) || 1,
+              }))
+              // Dispatch ANTES de navegar para que SalesPage al montar (o si
+              // ya estaba) reciba el detalle y precargue al llegar `results`.
+              window.dispatchEvent(
+                new CustomEvent("sales:prefill-cart", {
+                  detail: {
+                    items,
+                    customer_name: sale.customer_name,
+                    customer_phone: sale.customer_phone,
+                    customer_email: sale.customer_email,
+                  },
+                }),
+              )
+              window.dispatchEvent(
+                new CustomEvent("app:navigate", { detail: { tab: "ventas" } }),
+              )
+            }}
+            className="w-full h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-100 dark:hover:bg-emerald-500/20"
+            title="Recrear esta venta en Caja con los mismos productos"
+          >
+            ♻️ Volver a apartar (mismos productos)
           </motion.button>
         </div>
       )}

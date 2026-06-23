@@ -50,7 +50,13 @@ import {
   savePricingConfig,
 } from "../pricing/pricingConfigService"
 import type { PricingConfig } from "../pricing/pricingTypes"
-import { resetAppData, type ResetReport, TABLE_LABEL } from "./resetAppService"
+import {
+  resetAppData,
+  type ResetReport,
+  type ResetCategory,
+  CATEGORY_INFO,
+  TABLE_LABEL,
+} from "./resetAppService"
 import StorageUsageCard from "./StorageUsageCard"
 import AuditLogCard from "./AuditLogCard"
 import PerformanceCard from "./PerformanceCard"
@@ -1278,66 +1284,90 @@ function NotifPrefsSection() {
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   DANGER ZONE — reset operativo
-   Limpia productos, ventas, ciclos, imágenes. NO toca cuentas de
-   usuarios ni configuración. Requiere doble confirmación: cliquear
-   "Resetear", escribir RESETEAR exacto y volver a confirmar.
+   DANGER ZONE — reset SELECTIVO por categorías
+   Mari elige qué borrar (ventas, soporte, deseos, etc.) sin tocar
+   usuarios ni configuración. Si selecciona todo, equivalente a reset
+   total. Doble confirmación: checklist + escribir RESETEAR.
    ════════════════════════════════════════════════════════════════════ */
 function DangerZoneSection() {
+  const ALL_CATEGORIES = Object.keys(CATEGORY_INFO) as ResetCategory[]
   const [open, setOpen] = useState(false)
   const [confirmText, setConfirmText] = useState("")
   const [busy, setBusy] = useState(false)
   const [report, setReport] = useState<ResetReport | null>(null)
+  // Por default proponemos TODO menos catálogo (lo más conservador).
+  const [selected, setSelected] = useState<ResetCategory[]>(
+    ALL_CATEGORIES.filter((c) => c !== "catalogo"),
+  )
 
-  const canRun = confirmText.trim().toUpperCase() === "RESETEAR" && !busy
+  const canRun =
+    confirmText.trim().toUpperCase() === "RESETEAR" &&
+    selected.length > 0 &&
+    !busy
+  const isFullReset = selected.length === ALL_CATEGORIES.length
+
+  function toggle(cat: ResetCategory) {
+    setSelected((prev) =>
+      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat],
+    )
+  }
+
+  function selectAll() {
+    setSelected(ALL_CATEGORIES)
+  }
+  function selectNone() {
+    setSelected([])
+  }
+  function selectSafe() {
+    setSelected(ALL_CATEGORIES.filter((c) => c !== "catalogo"))
+  }
 
   async function handleReset() {
     if (!canRun) return
+    const labels = selected.map((c) => CATEGORY_INFO[c].label).join(", ")
     const confirmed = await confirmAction({
-      title: "⚠️ Última confirmación — reinicio total",
-      description:
-        "Vas a BORRAR el catálogo completo, todas las ventas, apartados, comandas, comprobantes, reseñas, sugerencias, stories, tickets de soporte, ciclos y fotos. La app quedará VACÍA, como recién instalada.\n\nLos USUARIOS y la CONFIGURACIÓN se preservan.\n\nEsto NO se puede deshacer.",
-      confirmLabel: "Sí, reiniciar la app",
+      title: "⚠️ Última confirmación",
+      description: isFullReset
+        ? "Vas a BORRAR TODO lo operativo: catálogo, ventas, comprobantes, soporte, notificaciones, deseos, stories, reseñas, ciclos y cálculos. La app quedará VACÍA, como recién instalada.\n\nLos USUARIOS y la CONFIGURACIÓN se preservan.\n\nEsto NO se puede deshacer."
+        : `Vas a borrar SOLO: ${labels}.\n\nLas demás categorías y los usuarios/configuración se preservan.\n\nEsto NO se puede deshacer.`,
+      confirmLabel: isFullReset ? "Sí, reiniciar la app" : "Sí, borrar lo seleccionado",
       tone: "danger",
     })
     if (!confirmed) return
     setBusy(true)
-    const tid = toast.loading("Borrando todos los datos operativos...")
+    const tid = toast.loading(
+      isFullReset ? "Borrando todo..." : "Borrando seleccionados...",
+    )
     try {
-      const r = await resetAppData()
+      const r = await resetAppData(selected)
       setReport(r)
       const totalRows = Object.values(r.tables).reduce((a, b) => a + b, 0)
       const hadErrors = r.errors.length > 0
       if (hadErrors) {
         toast.error(
-          `Reset parcial: ${totalRows} filas y ${r.storage_deleted} archivos eliminados, ${r.errors.length} errores. Revisa el reporte.`,
+          `Reset parcial: ${totalRows} filas y ${r.storage_deleted} archivos. ${r.errors.length} errores. Revisa el reporte.`,
           { id: tid, duration: 6000 },
         )
-        setConfirmText("")
-        setOpen(false)
-        return
+      } else {
+        toast.success(
+          `✓ Listo: ${totalRows} filas y ${r.storage_deleted} archivos eliminados.`,
+          { id: tid, duration: 4500 },
+        )
       }
-
-      // Reset OK. Pregunta si quiere recargar para que el cliente y
-      // todos los listeners se reinicialicen con el estado limpio.
-      toast.success(
-        `✓ App reiniciada: ${totalRows} filas y ${r.storage_deleted} archivos eliminados.`,
-        { id: tid, duration: 4500 },
-      )
       setConfirmText("")
       setOpen(false)
-
-      const reload = await confirmAction({
-        title: "App reiniciada",
-        description:
-          "La app quedó como recién instalada. Te recomendamos recargar ahora para que todas las vistas reflejen el estado vacío. Si ya tienes la app abierta en otra pestaña o el cliente la tiene abierta, también deberían recargar.",
-        confirmLabel: "Recargar ahora",
-        cancelLabel: "Más tarde",
-        tone: "primary",
-      })
-      if (reload) {
-        // Limpia el reporte para que no quede colgado al recargar
-        setTimeout(() => window.location.reload(), 200)
+      if (!hadErrors) {
+        const reload = await confirmAction({
+          title: "Datos eliminados",
+          description:
+            "Te recomendamos recargar la app para que todas las vistas reflejen el estado actualizado.",
+          confirmLabel: "Recargar ahora",
+          cancelLabel: "Más tarde",
+          tone: "primary",
+        })
+        if (reload) {
+          setTimeout(() => window.location.reload(), 200)
+        }
       }
     } catch (e: any) {
       toast.error(e?.message ?? "Falló el reset", { id: tid })
@@ -1361,34 +1391,18 @@ function DangerZoneSection() {
             Zona peligrosa
           </h3>
           <p className="text-[9px] font-bold text-rose-600/80 dark:text-rose-400/80">
-            Reiniciar la app (borrar todo lo operativo)
+            Borrar datos por categoría
           </p>
         </div>
       </div>
 
       <div className="rounded-2xl bg-white dark:bg-slate-900/60 border border-rose-200/60 dark:border-rose-500/20 p-3 text-[11px] leading-snug text-slate-700 dark:text-slate-200 space-y-1.5">
         <p className="font-bold">
-          Reinicia la app a estado de instalación nueva. Se borra:
+          Elige qué categorías borrar. Lo que NO esté seleccionado se preserva.
         </p>
-        <ul className="list-disc pl-4 space-y-0.5 text-slate-600 dark:text-slate-300">
-          <li>Catálogo completo (productos, variantes, fotos)</li>
-          <li>Movimientos e historial de stock</li>
-          <li>Ventas, apartados, items, pagos y comprobantes</li>
-          <li>Comandas de entrega activas e históricas</li>
-          <li>Notificaciones y tickets de soporte</li>
-          <li>Sugerencias, stories y reseñas del cliente</li>
-          <li>Ciclos de inventario, inyecciones y gastos</li>
-          <li>Cálculos guardados de la calculadora</li>
-        </ul>
-        <p className="font-bold pt-1.5">NO se tocan:</p>
-        <ul className="list-disc pl-4 space-y-0.5 text-emerald-700 dark:text-emerald-400">
-          <li>Cuentas de Mari, admins y clientes registrados</li>
-          <li>Configuración de tienda, envíos, banco, reglas y precios</li>
-          <li>Avatars de los usuarios</li>
-        </ul>
-        <p className="font-bold pt-1.5 text-rose-700 dark:text-rose-300">
-          ⚠ Acción irreversible. Si alguien tiene la app abierta verá que
-          desaparecieron sus datos.
+        <p className="font-bold pt-1 text-emerald-700 dark:text-emerald-400">
+          NUNCA se tocan: cuentas de usuarios, configuración (tienda, banco,
+          reglas, precios) ni avatars.
         </p>
       </div>
 
@@ -1398,11 +1412,85 @@ function DangerZoneSection() {
           onClick={() => setOpen(true)}
           className="w-full h-11 rounded-xl bg-white dark:bg-slate-900/60 border-2 border-rose-300 dark:border-rose-500/40 text-rose-600 dark:text-rose-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-500/10 active:scale-[0.99] transition-all"
         >
-          <Trash2 size={12} /> Reiniciar la app (borrar todo)
+          <Trash2 size={12} /> Elegir qué borrar
         </button>
       ) : (
-        <div className="space-y-2.5">
-          <label className="text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 block">
+        <div className="space-y-3">
+          {/* Atajos rápidos de selección */}
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={selectSafe}
+              disabled={busy}
+              className="h-7 px-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100 disabled:opacity-50"
+              title="Todo menos catálogo (seguro)"
+            >
+              ✓ Seguro
+            </button>
+            <button
+              type="button"
+              onClick={selectAll}
+              disabled={busy}
+              className="h-7 px-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 text-[9px] font-black uppercase tracking-widest hover:bg-rose-100 disabled:opacity-50"
+              title="Marca todas — borra absolutamente todo"
+            >
+              ⚠ Todo
+            </button>
+            <button
+              type="button"
+              onClick={selectNone}
+              disabled={busy}
+              className="h-7 px-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 disabled:opacity-50"
+            >
+              Ninguno
+            </button>
+          </div>
+
+          {/* Checklist de categorías */}
+          <div className="space-y-1.5">
+            {ALL_CATEGORIES.map((cat) => {
+              const info = CATEGORY_INFO[cat]
+              const isOn = selected.includes(cat)
+              const toneRing =
+                info.tone === "rose"
+                  ? "border-rose-300/60 dark:border-rose-500/30"
+                  : info.tone === "amber"
+                  ? "border-amber-300/60 dark:border-amber-500/30"
+                  : info.tone === "sky"
+                  ? "border-sky-300/60 dark:border-sky-500/30"
+                  : "border-slate-300/60 dark:border-slate-600/40"
+              return (
+                <label
+                  key={cat}
+                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border bg-white dark:bg-slate-900/60 cursor-pointer hover:border-rose-400/60 transition-colors ${
+                    isOn ? "ring-2 ring-rose-400/40 " + toneRing : toneRing + " opacity-70"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isOn}
+                    onChange={() => toggle(cat)}
+                    disabled={busy}
+                    className="mt-1 w-4 h-4 accent-rose-500"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-[11px] font-black ${
+                        isOn ? "text-slate-900 dark:text-slate-100" : "text-slate-500"
+                      }`}
+                    >
+                      {info.label}
+                    </p>
+                    <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 leading-tight">
+                      {info.description}
+                    </p>
+                  </div>
+                </label>
+              )
+            })}
+          </div>
+
+          <label className="text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 block pt-1">
             Escribe <span className="font-mono">RESETEAR</span> para confirmar
           </label>
           <input
@@ -1410,7 +1498,6 @@ function DangerZoneSection() {
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
             placeholder="RESETEAR"
-            autoFocus
             disabled={busy}
             className="w-full h-11 px-3 rounded-xl border-2 border-rose-300 dark:border-rose-500/40 bg-white dark:bg-slate-900 text-sm font-black uppercase tracking-widest tabular-nums outline-none focus:border-rose-500 disabled:opacity-50"
           />
@@ -1437,7 +1524,9 @@ function DangerZoneSection() {
               ) : (
                 <Trash2 size={13} />
               )}
-              Sí, borrar todo
+              {isFullReset
+                ? "Sí, borrar TODO"
+                : `Borrar ${selected.length} ${selected.length === 1 ? "categoría" : "categorías"}`}
             </button>
           </div>
         </div>

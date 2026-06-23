@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, Sparkles, Boxes, Plus, X } from "lucide-react"
+import { Search, Sparkles, Boxes, Plus, X, Package, AlertTriangle, TrendingDown } from "lucide-react"
 import toast from "react-hot-toast"
 
 import ProductCard from "./ProductCard"
@@ -142,6 +142,24 @@ export default function ProductList() {
     [products]
   )
 
+  /** Stats globales (sobre TODO el catálogo, no sobre `filtered`) para
+   *  mostrar en el PageHeader. Recorre variantes activas y cuenta cuántas
+   *  están agotadas (stock=0) y cuántas en bajo stock (1-3). Ayuda a Mari
+   *  a tener visibilidad inmediata desde el listado. */
+  const headerStats = useMemo(() => {
+    let outOfStock = 0
+    let lowStock = 0
+    for (const p of products) {
+      for (const v of p.variants ?? []) {
+        if ((v as any).is_active === false) continue
+        const s = Number((v as any).stock) || 0
+        if (s === 0) outOfStock++
+        else if (s <= 3) lowStock++
+      }
+    }
+    return { total: products.length, outOfStock, lowStock }
+  }, [products])
+
   /* ─────────── Aperturas del Drawer ─────────── */
   function openCreate() {
     setDrawerMode("create")
@@ -190,6 +208,15 @@ export default function ProductList() {
         icon={Boxes}
         title="Catálogo"
         subtitle={`${filtered.length} productos`}
+        stats={[
+          { label: "Total", value: headerStats.total, tone: "primary", icon: Package },
+          ...(headerStats.outOfStock > 0
+            ? [{ label: "Agotados", value: headerStats.outOfStock, tone: "rose" as const, icon: AlertTriangle }]
+            : []),
+          ...(headerStats.lowStock > 0
+            ? [{ label: "Bajo stock", value: headerStats.lowStock, tone: "amber" as const, icon: TrendingDown }]
+            : []),
+        ]}
         right={
           <button
             onClick={openCreate}

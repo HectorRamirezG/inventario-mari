@@ -25,7 +25,7 @@ import {
   updateMyPassword,
   type UserProfileDetail,
 } from "../../features/profile/profileService"
-import ProductImageUploader from "./ProductImageUploader"
+import ImageUploader from "./ImageUploader"
 import SmartLocationInput from "./SmartLocationInput"
 import Skeleton from "./Skeleton"
 import RfmBadge from "./RfmBadge"
@@ -299,7 +299,7 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                   </div>
 
                   {/* Uploader avatar */}
-                  <ProductImageUploader
+                  <ImageUploader
                     value={avatarUrl}
                     onChange={setAvatarUrl}
                     folder={`avatars/${user?.id ?? "anon"}`}
