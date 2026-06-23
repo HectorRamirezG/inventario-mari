@@ -107,6 +107,48 @@ export default function ProductList() {
     return () => window.removeEventListener("products:focus", handler)
   }, [products])
 
+  // Listener `catalog:highlight-variant` desde NotificationBell — abre
+  // el ProductDrawer del producto que contiene la variante reportada
+  // (stock bajo / repuesto). Si el catálogo aún no terminó de cargar,
+  // guardamos el id pendiente y lo aplicamos en el siguiente refresh.
+  const pendingVariantHighlightRef = useRef<string | null>(null)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const variantId = (e as CustomEvent).detail?.variant_id as
+        | string
+        | undefined
+      if (!variantId) return
+      const owner = products.find((p) =>
+        (p.variants ?? []).some((v) => v.id === variantId),
+      )
+      if (owner) {
+        openEdit(owner)
+        toast.success("Abriendo producto con stock bajo")
+      } else {
+        pendingVariantHighlightRef.current = variantId
+        refresh()
+      }
+    }
+    window.addEventListener("catalog:highlight-variant", handler)
+    return () =>
+      window.removeEventListener("catalog:highlight-variant", handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products])
+
+  // Si tenemos un variant_id pendiente y llega el catálogo, lo aplicamos.
+  useEffect(() => {
+    if (!pendingVariantHighlightRef.current) return
+    const variantId = pendingVariantHighlightRef.current
+    const owner = products.find((p) =>
+      (p.variants ?? []).some((v) => v.id === variantId),
+    )
+    if (owner) {
+      pendingVariantHighlightRef.current = null
+      openEdit(owner)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products])
+
   // Re-mapea el drawerProduct cuando se refresca el catálogo (para que
   // las variantes editadas/agregadas se vean reflejadas inmediatamente
   // dentro del Drawer abierto).

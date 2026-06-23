@@ -141,9 +141,33 @@ export default function ClientHero({ customerName, isLogged }: Props) {
     rules.pinned_banner_enabled && rules.pinned_banner_message.trim().length > 0
 
   return (
-    <div className="mb-4">
+    <div className="relative mb-4">
+      {/* Aurora editorial detrás del greeting — sutil, decorativa. */}
+      <div className="absolute -top-6 -left-4 -right-4 h-32 -z-10 pointer-events-none overflow-hidden">
+        <motion.div
+          animate={{ scale: [1, 1.15, 1], x: [0, 18, 0] }}
+          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -top-8 left-1/4 w-40 h-40 rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(236,72,153,0.22), transparent 65%)",
+            filter: "blur(36px)",
+          }}
+        />
+        <motion.div
+          animate={{ scale: [1.1, 1, 1.1], x: [0, -22, 0] }}
+          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -top-6 right-1/4 w-44 h-44 rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, rgba(168,85,247,0.20), transparent 65%)",
+            filter: "blur(40px)",
+          }}
+        />
+      </div>
+
       {/* Modo festivo + greeting line */}
-      <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black flex items-center gap-1.5">
+      <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500 font-black flex items-center gap-1.5">
         {rules.holiday_mode_enabled && rules.holiday_mode_emoji && (
           <span aria-hidden>{rules.holiday_mode_emoji}</span>
         )}
@@ -154,9 +178,26 @@ export default function ClientHero({ customerName, isLogged }: Props) {
           </span>
         )}
       </p>
-      <h1 className="text-2xl font-black tracking-tight flex items-center gap-2">
-        {firstName}
-        <Sparkles size={18} className="text-primary" />
+      <h1 className="text-[28px] font-black tracking-tight leading-[1.05] flex items-end gap-2 mt-0.5">
+        <span className="relative">
+          {firstName}
+          {/* Subrayado de gradiente debajo del nombre */}
+          <span
+            aria-hidden
+            className="absolute -bottom-0.5 left-0 right-2 h-1 rounded-full opacity-90"
+            style={{
+              background:
+                "linear-gradient(90deg, var(--brand-from), var(--brand-to))",
+            }}
+          />
+        </span>
+        <motion.span
+          animate={{ rotate: [0, 14, -8, 14, 0], scale: [1, 1.15, 1, 1.1, 1] }}
+          transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 5, ease: "easeInOut" }}
+          className="inline-flex"
+        >
+          <Sparkles size={20} className="text-primary" />
+        </motion.span>
       </h1>
 
       {/* Banner anclado configurable desde Reglas */}

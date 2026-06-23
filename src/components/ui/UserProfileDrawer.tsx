@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
+import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence, PanInfo } from "framer-motion"
 import {
   X,
@@ -16,6 +17,9 @@ import {
   Sparkles,
   ChevronDown,
   Camera,
+  ShoppingBag,
+  Heart,
+  Trophy,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -53,6 +57,8 @@ interface Props {
  */
 export default function UserProfileDrawer({ open, onClose }: Props) {
   const { user, session, role, email, fullName, signOut } = useAuth()
+  const navigate = useNavigate()
+  const bRules = useBusinessRules()
   const [profile, setProfile] = useState<UserProfileDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -71,6 +77,9 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
   // Secciones colapsables (todo cerrado al abrir = vista limpia)
   const [securityOpen, setSecurityOpen] = useState(false)
   const [photoOpen, setPhotoOpen] = useState(false)
+  // LoyaltyDrawer abierto desde el chip "Premios" (solo si la regla
+  // está activa y el cliente no es admin/staff)
+  const [loyaltyDrawerOpen, setLoyaltyDrawerOpen] = useState(false)
 
   // Cargar perfil cuando se abre
   useEffect(() => {
@@ -335,6 +344,50 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                     )}
                   </AnimatePresence>
 
+                  {/* Quick access chips: atajos a Mis pedidos, Mis deseos
+                      y Premios (loyalty). Solo para clientes — admin/staff
+                      ya tiene sidebar dedicado. */}
+                  {!isStaffOrAdmin(role) && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <QuickChip
+                        icon={ShoppingBag}
+                        label="Mis pedidos"
+                        tone="primary"
+                        onClick={() => {
+                          navigate("/mis-pedidos")
+                          onClose()
+                        }}
+                      />
+                      <QuickChip
+                        icon={Heart}
+                        label="Mis deseos"
+                        tone="rose"
+                        onClick={() => {
+                          navigate("/mis-deseos")
+                          onClose()
+                        }}
+                      />
+                      {bRules.loyalty_enabled ? (
+                        <QuickChip
+                          icon={Trophy}
+                          label="Premios"
+                          tone="amber"
+                          onClick={() => setLoyaltyDrawerOpen(true)}
+                        />
+                      ) : (
+                        <QuickChip
+                          icon={Sparkles}
+                          label="Tienda"
+                          tone="violet"
+                          onClick={() => {
+                            navigate("/")
+                            onClose()
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
+
                   {email && <MyShoppingStatsCard email={email} />}
 
                   {/* Card de puntos del programa de premios (solo si la
@@ -527,10 +580,55 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
               )}
             </div>
           </motion.div>
+
+          {/* LoyaltyDrawer montado adentro del portal del UserProfileDrawer
+              para que herede el z-index correcto. Se abre desde el chip
+              "Premios" en la fila de quick-access. */}
+          <LoyaltyDrawer
+            open={loyaltyDrawerOpen}
+            onClose={() => setLoyaltyDrawerOpen(false)}
+          />
         </div>
       )}
     </AnimatePresence>,
     document.body
+  )
+}
+
+/**
+ * Chip-tarjeta para la fila de acceso rápido (Mis pedidos / Mis deseos /
+ * Premios). Diseño tipo "icon + label" con tono pastel + press feedback.
+ */
+function QuickChip({
+  icon: Icon,
+  label,
+  tone,
+  onClick,
+}: {
+  icon: typeof UserIcon
+  label: string
+  tone: "primary" | "rose" | "amber" | "violet"
+  onClick: () => void
+}) {
+  const toneCls = {
+    primary: "bg-primary/10 text-primary dark:bg-primary/15",
+    rose: "bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300",
+    amber:
+      "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+    violet:
+      "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+  }[tone]
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`press flex flex-col items-center justify-center gap-1.5 rounded-2xl py-3 px-2 ${toneCls} active:scale-95 transition-transform`}
+    >
+      <Icon size={18} strokeWidth={2.2} />
+      <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+        {label}
+      </span>
+    </button>
   )
 }
 

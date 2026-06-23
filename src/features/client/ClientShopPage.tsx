@@ -73,6 +73,7 @@ import {
   spendLoyaltyPoints,
 } from "../loyalty/loyaltyService"
 import { useMonthlySpent } from "../../lib/useMonthlySpent"
+import { fireConfetti } from "../../lib/confetti"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { preloadOnIdle } from "../../lib/preloadOnIdle"
@@ -612,6 +613,45 @@ export default function ClientShopPage() {
   // El descuento NO puede superar el subtotal+envío.
   const { balance: myLoyalty } = useMyLoyaltyBalance()
   const [useLoyalty, setUseLoyalty] = useState(false)
+
+  // Confeti en hitos del cliente:
+  //  - Cruzar 100 puntos por primera vez → dorado.
+  //  - Activarse como VIP automático por primera vez → morado.
+  // Tracked en localStorage por email para no repetir.
+  useEffect(() => {
+    if (!authEmail || !bRules.loyalty_enabled) return
+    const pts = myLoyalty?.points ?? 0
+    if (pts < 100) return
+    const key = `mari:milestone-100pts:${authEmail.toLowerCase()}`
+    if (localStorage.getItem(key)) return
+    localStorage.setItem(key, new Date().toISOString())
+    // Confeti dorado + toast celebratorio
+    fireConfetti({
+      count: 90,
+      colors: ["#fbbf24", "#f59e0b", "#fde047", "#fcd34d", "#ffffff"],
+      duration: 1500,
+    })
+    toast.success("¡Cruzaste 100 puntos! 🏆 Sigue ganando premios.", {
+      duration: 4200,
+    })
+  }, [authEmail, bRules.loyalty_enabled, myLoyalty?.points])
+
+  useEffect(() => {
+    if (!authEmail || !isAutoVip) return
+    const key = `mari:milestone-vip:${authEmail.toLowerCase()}`
+    if (localStorage.getItem(key)) return
+    localStorage.setItem(key, new Date().toISOString())
+    // Confeti violeta/rosa + toast premium
+    fireConfetti({
+      count: 110,
+      colors: ["#a855f7", "#ec4899", "#c084fc", "#f9a8d4", "#fbbf24"],
+      duration: 1700,
+    })
+    toast.success("✨ Eres VIP — desde ahora aplica precio mayoreo automático.", {
+      duration: 5000,
+    })
+  }, [authEmail, isAutoVip])
+
   const loyaltyAvailable = bRules.loyalty_enabled
     ? Math.max(0, myLoyalty?.points ?? 0)
     : 0

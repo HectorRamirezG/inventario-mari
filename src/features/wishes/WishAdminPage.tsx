@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles,
@@ -71,6 +71,10 @@ export default function WishAdminPage() {
   const [filter, setFilter] = useState<FilterStatus>("pending")
   const [q, setQ] = useState("")
   const [loading, setLoading] = useState(true)
+  // Highlight desde notif: cuando llega `wishes:highlight-wish` con un
+  // wish_id, marcamos esa card 3.5s con ring animado + scrollIntoView.
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const pendingHighlightRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -93,6 +97,50 @@ export default function WishAdminPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  // Listener `wishes:highlight-wish` desde NotificationBell. Si el wish
+  // ya está en el listado, lo marcamos al instante. Si no (filtro
+  // distinto o aún no se ha refrescado), guardamos el id en pendingRef
+  // y lo aplicamos cuando `items` se actualice.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const wishId = (e as CustomEvent).detail?.wish_id as string | undefined
+      if (!wishId) return
+      const exists = items.some((w) => w.id === wishId)
+      if (exists) {
+        applyHighlight(wishId)
+      } else {
+        pendingHighlightRef.current = wishId
+        // Si el filtro actual no es 'all', cambiamos a 'all' para que
+        // aparezca; de lo contrario un refresh debería traerlo.
+        if (filter !== "all") setFilter("all")
+        else load()
+      }
+    }
+    window.addEventListener("wishes:highlight-wish", handler)
+    return () => window.removeEventListener("wishes:highlight-wish", handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, filter])
+
+  // Cuando llega un wish pendiente vía refresh, lo aplicamos.
+  useEffect(() => {
+    if (!pendingHighlightRef.current) return
+    const id = pendingHighlightRef.current
+    if (items.some((w) => w.id === id)) {
+      pendingHighlightRef.current = null
+      applyHighlight(id)
+    }
+  }, [items])
+
+  function applyHighlight(id: string) {
+    setHighlightedId(id)
+    setTimeout(() => {
+      document
+        .getElementById(`wish-${id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" })
+    }, 80)
+    setTimeout(() => setHighlightedId((cur) => (cur === id ? null : cur)), 3600)
+  }
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase()
@@ -374,14 +422,20 @@ export default function WishAdminPage() {
                   {rows.map((w, i) => {
                     const tone = WISH_STATUS_TONE[w.status]
                     const wa = whatsappLink(w)
+                    const isHighlighted = highlightedId === w.id
                     return (
                       <motion.article
                         key={w.id}
+                        id={`wish-${w.id}`}
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.96 }}
                         transition={{ delay: Math.min(i * 0.03, 0.2) }}
-                        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden"
+                        className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden transition-all ${
+                          isHighlighted
+                            ? "ring-4 ring-primary/40 ring-offset-2 dark:ring-offset-slate-950 animate-pulse"
+                            : ""
+                        }`}
                       >
                         <div className="flex gap-3 p-3">
                           {/* Imagen */}

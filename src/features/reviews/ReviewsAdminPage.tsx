@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Star,
@@ -62,6 +62,10 @@ export default function ReviewsAdminPage() {
   const [filter, setFilter] = useState<FilterStatus>("pending")
   const [q, setQ] = useState("")
   const [loading, setLoading] = useState(true)
+  // Highlight desde notif: cuando llega `reviews:highlight-review` con
+  // un review_id, marcamos esa card 3.5s con ring animado + scroll.
+  const [highlightedId, setHighlightedId] = useState<string | null>(null)
+  const pendingHighlightRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -96,6 +100,45 @@ export default function ReviewsAdminPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  // Listener `reviews:highlight-review` desde NotificationBell.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const reviewId = (e as CustomEvent).detail?.review_id as string | undefined
+      if (!reviewId) return
+      const exists = items.some((r) => r.id === reviewId)
+      if (exists) {
+        applyHighlight(reviewId)
+      } else {
+        pendingHighlightRef.current = reviewId
+        if (filter !== "all") setFilter("all")
+        else load()
+      }
+    }
+    window.addEventListener("reviews:highlight-review", handler)
+    return () =>
+      window.removeEventListener("reviews:highlight-review", handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, filter])
+
+  useEffect(() => {
+    if (!pendingHighlightRef.current) return
+    const id = pendingHighlightRef.current
+    if (items.some((r) => r.id === id)) {
+      pendingHighlightRef.current = null
+      applyHighlight(id)
+    }
+  }, [items])
+
+  function applyHighlight(id: string) {
+    setHighlightedId(id)
+    setTimeout(() => {
+      document
+        .getElementById(`review-${id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" })
+    }, 80)
+    setTimeout(() => setHighlightedId((cur) => (cur === id ? null : cur)), 3600)
+  }
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase()
@@ -318,14 +361,20 @@ export default function ReviewsAdminPage() {
               const tone = REVIEW_STATUS_TONE[r.status]
               const productName =
                 productNames.get(r.product_id) ?? "Producto eliminado"
+              const isHighlighted = highlightedId === r.id
               return (
                 <motion.article
                   key={r.id}
+                  id={`review-${r.id}`}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96 }}
                   transition={{ delay: Math.min(i * 0.03, 0.2) }}
-                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden"
+                  className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden transition-all ${
+                    isHighlighted
+                      ? "ring-4 ring-primary/40 ring-offset-2 dark:ring-offset-slate-950 animate-pulse"
+                      : ""
+                  }`}
                 >
                   {/* Header */}
                   <header className="p-3 flex items-start gap-3 border-b border-slate-100 dark:border-slate-800">
