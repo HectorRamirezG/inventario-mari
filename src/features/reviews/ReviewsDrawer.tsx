@@ -193,7 +193,7 @@ export default function ReviewsDrawer({
       {open && (
         <div
           key="reviews-drawer-root"
-          className="fixed inset-0 z-[160] flex items-end justify-center"
+          className="fixed inset-0 z-[230] flex items-end justify-center"
           style={{ isolation: "isolate" }}
         >
           <motion.div

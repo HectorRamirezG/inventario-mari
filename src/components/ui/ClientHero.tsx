@@ -142,72 +142,57 @@ export default function ClientHero({ customerName, isLogged }: Props) {
 
   return (
     <div className="relative mb-4">
-      {/* Aurora editorial detrás del greeting — sutil, decorativa. */}
-      <div className="absolute -top-6 -left-4 -right-4 h-32 -z-10 pointer-events-none overflow-hidden">
+      {/* Aurora MUY sutil detrás del bloque — decoración. Reducida en
+          opacidad para no competir con el slide colorido de abajo. */}
+      <div className="absolute -top-4 -left-4 -right-4 h-28 -z-10 pointer-events-none overflow-hidden">
         <motion.div
-          animate={{ scale: [1, 1.15, 1], x: [0, 18, 0] }}
-          transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -top-8 left-1/4 w-40 h-40 rounded-full"
+          animate={{ scale: [1, 1.12, 1], x: [0, 14, 0] }}
+          transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute -top-6 left-1/3 w-44 h-44 rounded-full"
           style={{
             background:
-              "radial-gradient(circle, rgba(236,72,153,0.22), transparent 65%)",
-            filter: "blur(36px)",
-          }}
-        />
-        <motion.div
-          animate={{ scale: [1.1, 1, 1.1], x: [0, -22, 0] }}
-          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -top-6 right-1/4 w-44 h-44 rounded-full"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(168,85,247,0.20), transparent 65%)",
+              "radial-gradient(circle, rgba(236,72,153,0.14), transparent 65%)",
             filter: "blur(40px)",
           }}
         />
       </div>
 
-      {/* Modo festivo + greeting line */}
-      <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500 font-black flex items-center gap-1.5">
-        {rules.holiday_mode_enabled && rules.holiday_mode_emoji && (
-          <span aria-hidden>{rules.holiday_mode_emoji}</span>
-        )}
-        {greeting}
+      {/* GREETING — 1 sola línea limpia. Caption mini + nombre + sparkle.
+          Antes el caption iba arriba y el nombre debajo (2 alturas). */}
+      <div className="flex items-baseline gap-2 mb-1">
+        <p className="text-[10px] uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500 font-black shrink-0">
+          {rules.holiday_mode_enabled && rules.holiday_mode_emoji ? (
+            <span aria-hidden className="mr-1">{rules.holiday_mode_emoji}</span>
+          ) : null}
+          {greeting},
+        </p>
         {rules.holiday_mode_enabled && rules.holiday_mode_name && (
-          <span className="text-primary normal-case tracking-tight italic">
+          <span className="text-[10px] font-bold text-primary italic">
             · {rules.holiday_mode_name}
           </span>
         )}
-      </p>
-      <h1 className="text-[28px] font-black tracking-tight leading-[1.05] flex items-end gap-2 mt-0.5">
-        <span className="relative">
-          {firstName}
-          {/* Subrayado de gradiente debajo del nombre */}
-          <span
-            aria-hidden
-            className="absolute -bottom-0.5 left-0 right-2 h-1 rounded-full opacity-90"
-            style={{
-              background:
-                "linear-gradient(90deg, var(--brand-from), var(--brand-to))",
-            }}
-          />
-        </span>
+      </div>
+      <h1 className="text-[26px] font-black tracking-tight leading-[1.05] flex items-center gap-1.5">
+        <span className="text-slate-900 dark:text-slate-50">{firstName}</span>
         <motion.span
           animate={{ rotate: [0, 14, -8, 14, 0], scale: [1, 1.15, 1, 1.1, 1] }}
-          transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 5, ease: "easeInOut" }}
+          transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 6, ease: "easeInOut" }}
           className="inline-flex"
         >
-          <Sparkles size={20} className="text-primary" />
+          <Sparkles size={18} className="text-primary" />
         </motion.span>
       </h1>
 
-      {/* Banner anclado configurable desde Reglas */}
+      {/* PRIORIDAD 1: Banner anclado (info urgente del negocio).
+          Sube ARRIBA del slide porque es lo más importante operativamente. */}
       {showBanner && (
         <motion.div
-          initial={{ opacity: 0, y: -6 }}
+          initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`mt-3 rounded-2xl border-2 px-3 py-2 flex items-center gap-2 ${BANNER_TONE}`}
+          transition={{ duration: 0.25 }}
+          className={`mt-3 rounded-2xl border px-3 py-2 flex items-center gap-2 ${BANNER_TONE}`}
         >
-          <span className="text-base shrink-0" aria-hidden>
+          <span className="text-base shrink-0 leading-none" aria-hidden>
             {rules.pinned_banner_tone === "warn"
               ? "⚠️"
               : rules.pinned_banner_tone === "success"
@@ -222,44 +207,60 @@ export default function ClientHero({ customerName, isLogged }: Props) {
         </motion.div>
       )}
 
+      {/* PRIORIDAD 2: Slide rotativo — card con accent en lugar de full
+          gradient (menos saturado). El icono en círculo conserva el color
+          del slide para mantener identidad visual; el resto es neutro. */}
       <AnimatePresence mode="wait">
         <motion.button
           key={`${slide.title}-${idx}`}
           type="button"
           onClick={() => setIdx((i) => (i + 1) % slides.length)}
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-          className={`mt-3 w-full text-left rounded-2xl p-4 bg-gradient-to-br ${slide.accent} text-white shadow-bloom flex items-center gap-3`}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          className="relative mt-3 w-full text-left rounded-2xl p-3 bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow flex items-center gap-3 overflow-hidden press"
+          aria-label="Cambiar mensaje"
         >
-          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center shrink-0">
+          {/* Accent en el borde izquierdo + glow sutil */}
+          <span
+            aria-hidden
+            className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${slide.accent}`}
+          />
+          <div
+            className={`w-10 h-10 rounded-xl bg-gradient-to-br ${slide.accent} text-white flex items-center justify-center shrink-0 shadow-sm`}
+          >
             {slide.icon}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-black leading-tight line-clamp-2">
+            <p className="text-[13px] font-black text-slate-900 dark:text-slate-100 leading-tight line-clamp-1">
               {slide.title}
             </p>
-            <p className="text-[11px] opacity-90 leading-snug line-clamp-2 mt-0.5">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug line-clamp-1 mt-0.5">
               {slide.subtitle}
             </p>
           </div>
-          <ChevronRight size={16} className="opacity-80 shrink-0" />
+          <ChevronRight
+            size={14}
+            className="text-slate-300 dark:text-slate-600 shrink-0"
+          />
         </motion.button>
       </AnimatePresence>
 
+      {/* Dots minimalistas — solo si hay >1 slide. Antes ocupaban su
+          propia línea pesada; ahora son micro-dots casi imperceptibles. */}
       {slides.length > 1 && (
-        <div className="mt-2 flex justify-center gap-1.5 flex-wrap">
+        <div className="mt-2 flex justify-center gap-1">
           {slides.map((_, i) => (
             <button
               key={i}
               type="button"
               onClick={() => setIdx(i)}
               aria-label={`Slide ${i + 1}`}
-              className={`h-1.5 rounded-full transition-all ${
+              className={`h-1 rounded-full transition-all ${
                 i === idx
-                  ? "w-6 bg-primary"
-                  : "w-1.5 bg-slate-300 dark:bg-slate-700"
+                  ? "w-5 bg-primary"
+                  : "w-1 bg-slate-300 dark:bg-slate-700"
               }`}
             />
           ))}
