@@ -129,6 +129,12 @@ export default function BuySheet({
     })
   }
 
+  /** Limpia esta variante del selector (Quitar todo). Útil cuando el
+   *  cliente está atMax y quiere descartar todo de un tap. */
+  function clearVariant(variantId: string) {
+    setQty((q) => ({ ...q, [variantId]: 0 }))
+  }
+
   const totalUnits = useMemo(
     () => Object.values(qty).reduce((a, b) => a + (b || 0), 0),
     [qty]
@@ -237,6 +243,27 @@ export default function BuySheet({
       .filter(([, q]) => q > 0)
       .map(([variantId, q]) => ({ variantId, qty: q }))
     if (lines.length === 0) return
+    // Mini-celebración la PRIMERA VEZ del día que el cliente agrega
+    // algo al carrito. Engagement positivo. Guard localStorage para
+    // no disparar más de una vez por día por dispositivo.
+    try {
+      if (typeof window !== "undefined") {
+        const today = new Date().toISOString().slice(0, 10)
+        const key = "mari:first-add-of-day"
+        if (localStorage.getItem(key) !== today) {
+          localStorage.setItem(key, today)
+          import("../../lib/confetti")
+            .then(({ fireConfetti }) =>
+              fireConfetti({ duration: 1200, count: 40 }),
+            )
+            .catch(() => {
+              /* noop */
+            })
+        }
+      }
+    } catch {
+      /* noop */
+    }
     onConfirm(lines)
   }
 
@@ -444,11 +471,24 @@ export default function BuySheet({
                       {atMax && (
                         <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-black">
                           <AlertTriangle size={11} className="shrink-0" />
-                          <span>
+                          <span className="flex-1">
                             {allowPreorder
                               ? `Máximo ${PREORDER_CAP} en pre-orden. Pregúntanos por mayoreo.`
                               : `Ya llevas las ${v.stock} piezas disponibles de este tono.${v.stock <= 3 ? " Aprovéchalas." : ""}`}
                           </span>
+                          {/* Quitar variante completa en 1 tap — antes el
+                              cliente tenía que hacer N taps en el botón -.
+                              Solo si lleva 2+ piezas para que tenga sentido. */}
+                          {q >= 2 && (
+                            <button
+                              type="button"
+                              onClick={() => clearVariant(v.id)}
+                              className="shrink-0 px-2 h-6 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-800 dark:text-amber-200 text-[9px] font-black uppercase tracking-widest press"
+                              aria-label="Quitar todas las piezas de esta variante"
+                            >
+                              Quitar todo
+                            </button>
+                          )}
                         </div>
                       )}
                       {/* Cliente puede pedir que le avisemos cuando vuelva
