@@ -663,6 +663,15 @@ export default function BusinessRulesPage() {
         />
 
         <RuleRow
+          icon={Sun}
+          title="Forzar modo claro"
+          description="La app aparece SIEMPRE en claro. Si también prendes el modo oscuro, gana ese último (más restrictivo). Útil para eventos diurnos, lanzamientos primaverales o si tu marca es muy color-dependiente."
+          affects="todos"
+          enabled={form.force_light_mode}
+          onToggle={(v) => patch({ force_light_mode: v })}
+        />
+
+        <RuleRow
           icon={Sparkles}
           title="Modo festivo"
           description="Aparecen confettis en el header de la tienda + el nombre del evento al lado del logo. Para Navidad, Buen Fin, San Valentín, etc."

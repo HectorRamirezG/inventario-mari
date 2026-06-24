@@ -90,7 +90,7 @@ import { registerPushSW } from "./lib/pushNative"
 import { useMyAvatar } from "./lib/useMyAvatar"
 import { useSidebarCounts } from "./lib/useSidebarCounts"
 import { preloadBusinessRules, useBusinessRules } from "./features/settings/businessRulesService"
-import { applyAccent, applyForceDark } from "./lib/applyTheme"
+import { applyAccent, applyForceDark, applyForceLight } from "./lib/applyTheme"
 import { useVisitorTracking } from "./lib/useVisitorTracking"
 import { applyMotionLevel } from "./lib/applyMotion"
 import { useUserPrefs, isDarkScheduleNow } from "./lib/userPrefs"
@@ -218,6 +218,10 @@ function ThemeMount() {
   useEffect(() => {
     applyForceDark(rules.force_dark_mode)
   }, [rules.force_dark_mode])
+  useEffect(() => {
+    // Light gana solo si dark NO está forzado. La función ya lo respeta.
+    applyForceLight(rules.force_light_mode && !rules.force_dark_mode)
+  }, [rules.force_light_mode, rules.force_dark_mode])
   // Intensidad de animación — atributo data-motion en <html>.
   useEffect(() => {
     applyMotionLevel(prefs.motion)

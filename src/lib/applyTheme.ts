@@ -169,3 +169,28 @@ export function applyForceDark(force: boolean): void {
     delete document.documentElement.dataset.themeForced
   }
 }
+
+/**
+ * Forzar/quitar light mode globalmente (regla `force_light_mode`).
+ * Si force=true, fuerza light y deshabilita el toggle individual.
+ * NOTA: si `force_dark_mode` también está activo, ESE gana — esta
+ * función solo aplica si dark NO está forzado.
+ */
+export function applyForceLight(force: boolean): void {
+  if (typeof document === "undefined") return
+  // Si dark ya está forzado, no pisar.
+  if (document.documentElement.dataset.themeForced === "1") return
+  if (force) {
+    document.documentElement.dataset.theme = "light"
+    document.documentElement.style.colorScheme = "light"
+    document.documentElement.dataset.themeForced = "1"
+  } else {
+    // Solo limpiamos si el forzado actual era light (no tocamos dark).
+    if (
+      document.documentElement.dataset.themeForced === "1" &&
+      document.documentElement.dataset.theme === "light"
+    ) {
+      delete document.documentElement.dataset.themeForced
+    }
+  }
+}

@@ -154,6 +154,11 @@ export interface BusinessRules {
    *  y el toggle individual. Útil para fechas especiales (Halloween). */
   force_dark_mode: boolean
 
+  /** Forzar light mode a TODOS los usuarios. Espejo de `force_dark_mode`.
+   *  Si ambos están en true, gana `force_dark_mode` (más restrictivo).
+   *  Útil para eventos diurnos / Día de las Madres / etc. */
+  force_light_mode: boolean
+
   /** Modo festivo: pinta confetti en el header y un banner con el nombre
    *  del evento. Activa banderines de colores y emoji junto al logo. */
   holiday_mode_enabled: boolean
@@ -368,6 +373,7 @@ export const DEFAULT_RULES: BusinessRules = {
   // Apariencia
   theme_accent: "pink",
   force_dark_mode: false,
+  force_light_mode: false,
   holiday_mode_enabled: false,
   holiday_mode_name: "",
   holiday_mode_emoji: "🎉",
@@ -498,6 +504,7 @@ function merge(raw: any): BusinessRules {
       return (ok.has(t) ? t : DEFAULT_RULES.theme_accent) as BusinessRules["theme_accent"]
     })(),
     force_dark_mode: !!raw.force_dark_mode,
+    force_light_mode: !!raw.force_light_mode,
     holiday_mode_enabled: !!raw.holiday_mode_enabled,
     holiday_mode_name:
       typeof raw.holiday_mode_name === "string" ? raw.holiday_mode_name : "",
