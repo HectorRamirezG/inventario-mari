@@ -1,6 +1,7 @@
 import { supabase } from "../../lib/supabase"
 import { notifyClient, notifyAdmins } from "../notifications/notificationsService"
 import { getBusinessRules } from "../settings/businessRulesService"
+import { compressImage } from "../../lib/imageCompress"
 
 /**
  * Delivery Notes (Comandas de entrega) — service.
@@ -286,10 +287,16 @@ export async function deleteDeliveryNote(id: string): Promise<void> {
 export async function updateDeliveryStatusByToken(
   token: string,
   next: "picked_up" | "delivered",
+  evidence?: {
+    proofImageUrl?: string | null
+    proofNote?: string | null
+  },
 ): Promise<void> {
   const { data, error } = await supabase.rpc("update_delivery_status_by_token", {
     p_token: token,
     p_status: next,
+    p_proof_image: evidence?.proofImageUrl ?? null,
+    p_proof_note: evidence?.proofNote ?? null,
   })
   if (error) throw error
   const result = (data ?? {}) as {
@@ -618,5 +625,38 @@ export function rememberDriver(name: string, phone: string): void {
     localStorage.setItem(DRIVERS_KEY, JSON.stringify(list.slice(0, 8)))
   } catch {
     /* noop */
+  }
+}
+
+/**
+ * Sube una foto de evidencia de entrega al bucket `product-images`.
+ * Path: `delivery-proofs/{token}/{uuid}.{ext}`. Comprime client-side
+ * para no saturar (max 1280px, quality 0.7).
+ *
+ * Devuelve URL público o null si falla. Best-effort: si el bucket o
+ * las policies no están listas, retorna null y el caller decide si
+ * confirmar entrega sin foto.
+ */
+export async function uploadDeliveryProof(
+  token: string,
+  file: File,
+): Promise<string | null> {
+  try {
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error("La foto pesa más de 8MB")
+    }
+    const compact = await compressImage(file, { maxWidth: 1280, quality: 0.7 })
+    const ext = (compact.name.split(".").pop() || "jpg").toLowerCase()
+    const path = `delivery-proofs/${token}/${crypto.randomUUID()}.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from("product-images")
+      .upload(path, compact, { cacheControl: "31536000", upsert: false })
+    if (upErr) throw upErr
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("product-images").getPublicUrl(path)
+    return publicUrl
+  } catch {
+    return null
   }
 }

@@ -108,6 +108,10 @@ export default function ClientOrdersPage() {
   }, [])
   const rules = useBusinessRules()
   const aliveRef = useRef(true)
+  // Trackea qué deliveries el cliente ya vio en estado 'delivered' para
+  // disparar confetti SOLO en la transición (no en cada refetch). Ignoramos
+  // el primer render para no celebrar pedidos viejos al montar la página.
+  const deliveredKnownRef = useRef<Set<string> | null>(null)
 
   const loadOrders = useCallback(async () => {
     if (!email) return
@@ -184,6 +188,36 @@ export default function ClientOrdersPage() {
       aliveRef.current = false
     }
   }, [email, loadOrders])
+
+  // Confetti al detectar transición a 'delivered'. Si es el PRIMER load
+  // ya delivered (pedido viejo), inicializa el set sin disparar — el
+  // confetti es solo para el momento de la entrega real, no para revisitar
+  // pedidos viejos. Best-effort: lazy import para no inflar el bundle.
+  useEffect(() => {
+    const currentDelivered = new Set<string>()
+    for (const [saleId, d] of Object.entries(deliveryBySale)) {
+      if (d.status === "delivered") currentDelivered.add(saleId)
+    }
+    if (deliveredKnownRef.current === null) {
+      deliveredKnownRef.current = currentDelivered
+      return
+    }
+    const before = deliveredKnownRef.current
+    const newlyDelivered: string[] = []
+    for (const id of currentDelivered) {
+      if (!before.has(id)) newlyDelivered.push(id)
+    }
+    deliveredKnownRef.current = currentDelivered
+    if (newlyDelivered.length === 0) return
+    ;(async () => {
+      try {
+        const { fireConfetti } = await import("../../lib/confetti")
+        fireConfetti({ duration: 1800, count: 80 })
+      } catch {
+        /* noop */
+      }
+    })()
+  }, [deliveryBySale])
 
   // Realtime via hub multiplex. Filtramos por customer_email del lado
   // cliente para evitar abrir un canal con filtro por usuario.

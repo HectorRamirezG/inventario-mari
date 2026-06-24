@@ -1,10 +1,12 @@
 import { useEffect, useState, useRef } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles, Receipt, CheckCircle2, Clock, ArrowRight,
   CreditCard, MessageCircle, ArrowLeft, Home, LifeBuoy,
+  Share2, Download, QrCode, X, Copy, Printer,
 } from "lucide-react"
+import toast from "react-hot-toast"
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
@@ -17,6 +19,12 @@ import OrderProgressTracker, {
   type OrderProgressDelivery,
 } from "../../components/ui/OrderProgressTracker"
 import TicketTotalsDetailed from "../../components/ui/TicketTotalsDetailed"
+import { shareUrl } from "../../lib/share"
+import { shareTicketPdf } from "../../lib/shareImage"
+import { copyToClipboard } from "../../lib/clipboard"
+import OverlayShell from "../../components/ui/OverlayShell"
+import { useBodyScrollLock } from "../../lib/bodyScrollLock"
+import { useFeedback } from "../../lib/useFeedback"
 interface TicketItem {
   id: string
   product_name: string
@@ -63,16 +71,44 @@ export default function PublicTicketPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [openSupport, setOpenSupport] = useState(false)
+  const [openQR, setOpenQR] = useState(false)
   /** Status de la comanda más reciente asociada a esta venta. */
   const [deliveryStatus, setDeliveryStatus] = useState<string | null>(null)
   const [deliveryFull, setDeliveryFull] = useState<OrderProgressDelivery | null>(null)
   const store = getStoreInfo()
+  /** Ref al card principal — lo capturamos para generar el PDF. */
+  const ticketCardRef = useRef<HTMLDivElement | null>(null)
 
   /** Vuelve a un home contextual según el usuario logueado. */
   const goHome = () => {
     if (session && isStaffOrAdmin(role)) navigate("/admin")
     else if (session) navigate("/mis-pedidos")
     else navigate("/")
+  }
+
+  /** URL público del ticket actual — base para Compartir y QR. */
+  const publicUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/ticket/${token}`
+      : ""
+
+  async function handleShare() {
+    const r = await shareUrl({
+      title: "Mi ticket de Beauty's Me",
+      text: ticket
+        ? `Ticket ${shortId(ticket.id)} · Total ${formatMoney(ticket.total)}`
+        : undefined,
+      url: publicUrl,
+    })
+    if (r === "copied") toast.success("Link copiado al portapapeles")
+  }
+
+  async function handlePdf() {
+    if (!ticket) return
+    await shareTicketPdf({
+      node: ticketCardRef.current,
+      filename: `ticket-${shortId(ticket.id)}.pdf`,
+    })
   }
 
   useEffect(() => {
@@ -303,14 +339,36 @@ export default function PublicTicketPage() {
             <h1 className="text-lg font-black tracking-tight leading-none">
               {store.name}
             </h1>
-            <p className="text-[9px] uppercase tracking-widest text-slate-500">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500">
               Ticket digital
             </p>
           </div>
         </motion.div>
 
+        {/* Toolbar acciones rápidas: Compartir / PDF / QR. Solo aparece
+            cuando el ticket cargó. Va FUERA del card principal para
+            no aparecer en la captura del PDF. */}
+        {ticket && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.03 }}
+            className="flex items-center justify-center gap-2 mb-3 flex-wrap"
+          >
+            <ToolbarBtn label="Compartir" icon={Share2} onClick={handleShare} />
+            <ToolbarBtn label="PDF" icon={Download} onClick={handlePdf} />
+            <ToolbarBtn
+              label="Imprimir"
+              icon={Printer}
+              onClick={() => window.print()}
+            />
+            <ToolbarBtn label="QR" icon={QrCode} onClick={() => setOpenQR(true)} />
+          </motion.div>
+        )}
+
         {/* Card principal */}
         <motion.div
+          ref={ticketCardRef}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
@@ -328,7 +386,7 @@ export default function PublicTicketPage() {
 
           <div className="flex items-start justify-between mb-4">
             <div>
-              <p className="text-[9px] uppercase tracking-widest text-slate-400">
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
                 Folio
               </p>
               <p className="text-base font-black tracking-tight">
@@ -336,7 +394,7 @@ export default function PublicTicketPage() {
               </p>
             </div>
             <div className="text-right">
-              <p className="text-[9px] uppercase tracking-widest text-slate-400">
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
                 Fecha
               </p>
               <p className="text-xs font-bold">{formatDateTime(ticket.created_at)}</p>
@@ -345,7 +403,7 @@ export default function PublicTicketPage() {
 
           {ticket.customer_name && (
             <div className="mb-4">
-              <p className="text-[9px] uppercase tracking-widest text-slate-400">
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">
                 Cliente
               </p>
               <p className="text-base font-black">{ticket.customer_name}</p>
@@ -366,7 +424,7 @@ export default function PublicTicketPage() {
                   <p className="text-[10px] text-slate-400 mt-0.5">
                     {it.qty} × {formatMoney(it.unit_price)}
                     {it.tier !== "menudeo" && (
-                      <span className="ml-1 inline-flex px-1.5 py-0 rounded-full bg-primary/10 text-primary font-black uppercase tracking-widest text-[8px]">
+                      <span className="ml-1 inline-flex px-1.5 py-0 rounded-full bg-primary/10 text-primary font-black uppercase tracking-widest text-[9px]">
                         {it.tier}
                       </span>
                     )}
@@ -451,7 +509,7 @@ export default function PublicTicketPage() {
                 pulseInTransit
               />
               <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-300">
+                <p className="text-[10px] font-black uppercase tracking-widest text-sky-600 dark:text-sky-300">
                   Entrega
                 </p>
                 <p className="text-[11px] font-bold text-slate-700 dark:text-slate-200 leading-tight">
@@ -552,7 +610,106 @@ export default function PublicTicketPage() {
         customerName={ticket.customer_name}
         onClose={() => setOpenSupport(false)}
       />
+
+      {/* Modal QR del ticket — usa generador público qrserver.com (sin
+          dependencias nuevas). El cliente lo muestra al repartidor o a
+          quien necesite verificarlo. */}
+      <QRModal open={openQR} onClose={() => setOpenQR(false)} url={publicUrl} />
     </div>
+  )
+}
+
+/** Botón circular de la toolbar (Compartir / PDF / QR). Estilo flat
+ *  blanco con icon arriba y label corto debajo. Incluye haptic feedback
+ *  sutil en mobile. */
+function ToolbarBtn({
+  label,
+  icon: Icon,
+  onClick,
+}: {
+  label: string
+  icon: typeof Share2
+  onClick: () => void
+}) {
+  const { tap } = useFeedback()
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        tap()
+        onClick()
+      }}
+      className="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl bg-white/80 backdrop-blur border border-slate-200 hover:bg-white hover:border-primary/40 hover:text-primary transition-colors shadow-sm press"
+    >
+      <Icon size={14} className="text-slate-700" />
+      <span className="text-[10px] font-black uppercase tracking-widest text-slate-700">
+        {label}
+      </span>
+    </button>
+  )
+}
+
+/** Modal sencillo con el QR del ticket público. Usa
+ *  `api.qrserver.com` (libre, sin auth). Si no hay internet, el `<img>`
+ *  no carga y mostramos el URL como fallback copiable. */
+function QRModal({
+  open,
+  onClose,
+  url,
+}: {
+  open: boolean
+  onClose: () => void
+  url: string
+}) {
+  useBodyScrollLock(open)
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=${encodeURIComponent(
+    url,
+  )}`
+
+  return (
+    <OverlayShell
+      open={open}
+      onClose={onClose}
+      variant="modal"
+      zIndex={200}
+      panelClassName="w-full max-w-xs rounded-3xl bg-white dark:bg-slate-900 shadow-premium overflow-hidden"
+    >
+      <div className="px-5 pt-5 pb-4 flex items-center justify-between">
+        <h3 className="text-sm font-black tracking-tight flex items-center gap-1.5">
+          <QrCode size={14} className="text-primary" /> Tu ticket en QR
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar"
+          className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 flex items-center justify-center"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <div className="px-5 pb-5 flex flex-col items-center gap-3">
+        <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+          <img
+            src={qrSrc}
+            alt="QR del ticket"
+            width={240}
+            height={240}
+            className="w-60 h-60 object-contain"
+            loading="lazy"
+          />
+        </div>
+        <p className="text-[11px] font-bold text-slate-500 text-center leading-snug">
+          Escanea o comparte el link para que alguien más vea este ticket.
+        </p>
+        <button
+          type="button"
+          onClick={() => copyToClipboard(url, "Link copiado")}
+          className="w-full h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 press"
+        >
+          <Copy size={11} /> Copiar link
+        </button>
+      </div>
+    </OverlayShell>
   )
 }
 

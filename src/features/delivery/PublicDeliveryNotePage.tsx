@@ -19,6 +19,7 @@ import {
 import { formatMoney, formatDateTime, shortId } from "../../lib/format"
 import { getStoreInfo } from "../../lib/useStoreInfo"
 import Skeleton from "../../components/ui/Skeleton"
+import DeliveryProofModal from "../../components/ui/DeliveryProofModal"
 
 const PAY_LABEL: Record<string, string> = {
   efectivo: "Efectivo",
@@ -41,6 +42,9 @@ export default function PublicDeliveryNotePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [updating, setUpdating] = useState(false)
+  // El modal de evidencia se abre cuando el repartidor pulsa "Entregado".
+  // Permite (opcionalmente) foto + nota corta antes de confirmar.
+  const [proofModalOpen, setProofModalOpen] = useState(false)
   const store = getStoreInfo()
 
   useEffect(() => {
@@ -70,13 +74,34 @@ export default function PublicDeliveryNotePage() {
     }
   }, [token])
 
-  async function handleMarkStatus(next: "picked_up" | "delivered") {
+  async function handleMarkStatus(
+    next: "picked_up" | "delivered",
+    evidence?: { imageUrl: string | null; note: string },
+  ) {
     if (!note || !token) return
     setUpdating(true)
     const tid = toast.loading("Actualizando...")
     try {
-      await updateDeliveryStatusByToken(token, next)
-      setNote((prev) => (prev ? { ...prev, status: next } : prev))
+      await updateDeliveryStatusByToken(token, next, {
+        proofImageUrl: evidence?.imageUrl ?? null,
+        proofNote: evidence?.note ?? null,
+      })
+      setNote((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: next,
+              ...(next === "delivered"
+                ? {
+                    proof_image_url:
+                      evidence?.imageUrl ?? (prev as any).proof_image_url ?? null,
+                    proof_note:
+                      evidence?.note || (prev as any).proof_note || null,
+                  }
+                : {}),
+            }
+          : prev,
+      )
       toast.success(
         next === "delivered" ? "¡Entregado! Gracias 💖" : "Estatus actualizado",
         { id: tid },
@@ -171,7 +196,7 @@ export default function PublicDeliveryNotePage() {
               />
             )}
             {note.delivery_address && (
-              <Row label="Dir" value={note.delivery_address} />
+              <Row label="Dir" value={note.delivery_address} wrap />
             )}
             {mapUrl && (
               <Row
@@ -208,7 +233,7 @@ export default function PublicDeliveryNotePage() {
                   <Row label="Hora" value={note.delivery_time_target} />
                 )}
                 {note.meeting_point && (
-                  <Row label="Punto" value={note.meeting_point} />
+                  <Row label="Punto" value={note.meeting_point} wrap />
                 )}
                 {note.driver_name && (
                   <Row label="Lleva" value={note.driver_name} />
@@ -333,35 +358,44 @@ export default function PublicDeliveryNotePage() {
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-2 gap-2 print:hidden"
+            className="print:hidden space-y-2"
           >
-            <button
-              type="button"
-              onClick={() => handleMarkStatus("picked_up")}
-              disabled={updating || !canMarkPickedUp}
-              className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {updating && note.status !== "picked_up" ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Truck size={12} />
-              )}
-              {note.status === "picked_up" ? "Ya en camino ✓" : "Voy en camino"}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleMarkStatus("delivered")}
-              disabled={updating || !canMarkDelivered}
-              className="h-12 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50 disabled:cursor-not-allowed"
-              title={
-                canMarkDelivered
-                  ? "Marcar como entregado"
-                  : "Primero marca 'Voy en camino'"
-              }
-            >
-              <CheckCircle2 size={12} />
-              Entregado
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleMarkStatus("picked_up")}
+                disabled={updating || !canMarkPickedUp}
+                className="h-12 rounded-2xl bg-sky-500 hover:bg-sky-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updating && note.status !== "picked_up" ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Truck size={12} />
+                )}
+                {note.status === "picked_up" ? "Ya en camino ✓" : "Voy en camino"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setProofModalOpen(true)}
+                disabled={updating || !canMarkDelivered}
+                className="h-12 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press disabled:opacity-50 disabled:cursor-not-allowed"
+                title={
+                  canMarkDelivered
+                    ? "Marcar como entregado"
+                    : "Primero marca 'Voy en camino'"
+                }
+              >
+                <CheckCircle2 size={12} />
+                Entregado
+              </button>
+            </div>
+            {/* Helper text VISIBLE cuando "Entregado" está bloqueado.
+                Antes solo vivía en title= que en mobile no aparece. */}
+            {!canMarkDelivered && (
+              <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl px-3 py-2 text-center leading-snug">
+                ⚠️ Primero marca «Voy en camino» para poder confirmar la entrega.
+              </p>
+            )}
           </motion.div>
         )}
 
@@ -376,9 +410,33 @@ export default function PublicDeliveryNotePage() {
             <p className="text-[11px] font-black uppercase tracking-widest text-emerald-700">
               Entrega completada
             </p>
-            <p className="text-[9px] font-bold text-emerald-700/70 mt-0.5">
+            <p className="text-[10px] font-bold text-emerald-700/70 mt-0.5">
               Gracias por tu trabajo
             </p>
+
+            {/* Evidencia opcional: si el repartidor subió foto y/o nota
+                cuando confirmó, las mostramos aquí como respaldo visible
+                de la entrega. */}
+            {(note as any).proof_image_url && (
+              <a
+                href={(note as any).proof_image_url}
+                target="_blank"
+                rel="noreferrer"
+                className="block mt-3 rounded-xl overflow-hidden border-2 border-emerald-300 hover:border-emerald-500 transition-colors"
+              >
+                <img
+                  src={(note as any).proof_image_url}
+                  alt="Evidencia de entrega"
+                  className="w-full h-32 object-cover"
+                  loading="lazy"
+                />
+              </a>
+            )}
+            {(note as any).proof_note && (
+              <p className="mt-2 text-[11px] font-bold text-emerald-900 italic bg-white/60 rounded-xl px-3 py-2 border border-emerald-200/60 text-left">
+                "{(note as any).proof_note}"
+              </p>
+            )}
           </motion.div>
         )}
 
@@ -397,6 +455,18 @@ export default function PublicDeliveryNotePage() {
           </a>
         )}
       </div>
+
+      {/* Modal de evidencia opcional (foto + nota) antes de confirmar. */}
+      {token && (
+        <DeliveryProofModal
+          open={proofModalOpen}
+          onClose={() => setProofModalOpen(false)}
+          token={token}
+          onConfirm={async (proof) => {
+            await handleMarkStatus("delivered", proof)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -415,14 +485,24 @@ function Divider() {
 function Row({
   label,
   value,
+  wrap = false,
 }: {
   label: string
   value: React.ReactNode
+  /** Si true, el valor puede ocupar varias líneas (para direcciones
+   *  largas y notas críticas). Default false = truncado en 1 línea. */
+  wrap?: boolean
 }) {
   return (
     <div className="flex gap-2">
       <span className="font-black uppercase w-14 shrink-0">{label}:</span>
-      <span className="flex-1 truncate">{value}</span>
+      <span
+        className={`flex-1 ${
+          wrap ? "break-words whitespace-pre-line" : "truncate"
+        }`}
+      >
+        {value}
+      </span>
     </div>
   )
 }

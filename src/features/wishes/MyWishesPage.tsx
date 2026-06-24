@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Plus,
@@ -7,12 +8,17 @@ import {
   Heart,
   MessageCircle,
   Clock,
+  Trash2,
+  ShoppingBag,
+  Loader2,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
 import { useAuth } from "../../lib/useAuth"
+import { useFeedback } from "../../lib/useFeedback"
 import {
   listWishesByEmail,
+  cancelMyWish,
   WISH_STATUS_LABEL,
   WISH_STATUS_TONE,
   type Wish,
@@ -21,6 +27,7 @@ import WishesDrawer from "./WishesDrawer"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import PageHeader from "../../components/ui/PageHeader"
 import { WishCardSkeleton } from "../../components/ui/Skeletons"
+import { confirmAction } from "../../lib/confirm"
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString("es-MX", {
@@ -31,9 +38,13 @@ const fmtDate = (iso: string) =>
 
 export default function MyWishesPage() {
   const { email } = useAuth()
+  const navigate = useNavigate()
+  const { strong, success, error } = useFeedback()
   const [items, setItems] = useState<Wish[]>([])
   const [loading, setLoading] = useState(true)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  // Tracking de cancelaciones en curso para deshabilitar el botón.
+  const [cancelingId, setCancelingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!email) {
@@ -55,6 +66,35 @@ export default function MyWishesPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  // Cliente cancela su propio deseo. UI optimista — quitamos de la lista
+  // al instante; si falla, restauramos. La policy DELETE viene de
+  // `supabase/fix_wishes_client_cancel.sql`. Sin esa policy, falla con
+  // mensaje claro y restauramos.
+  async function handleCancel(w: Wish) {
+    const ok = await confirmAction({
+      title: "¿Cancelar este deseo?",
+      description: `Quitaremos «${w.title}» de tu lista. Beauty's Me ya no recibirá tu petición.`,
+      confirmLabel: "Sí, cancelar",
+      tone: "danger",
+    })
+    if (!ok) return
+    strong()
+    setCancelingId(w.id)
+    const prev = items
+    setItems((cur) => cur.filter((x) => x.id !== w.id))
+    try {
+      await cancelMyWish(w.id)
+      success()
+      toast.success("Deseo cancelado")
+    } catch (e: any) {
+      error()
+      setItems(prev) // revert
+      toast.error(e?.message ?? "No se pudo cancelar")
+    } finally {
+      setCancelingId(null)
+    }
+  }
 
   const pendingCount = items.filter(
     (w) => w.status === "pending" || w.status === "reviewing",
@@ -100,17 +140,24 @@ export default function MyWishesPage() {
           animate={{ opacity: 1, y: 0 }}
           className="rounded-2xl border border-emerald-200 dark:border-emerald-500/30 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-500/10 dark:to-teal-500/10 px-4 py-3 flex items-center gap-3"
         >
-          <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-base">
+          <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-base shrink-0">
             ✨
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-black text-emerald-900 dark:text-emerald-100 leading-tight">
+            <p className="text-[12px] font-black text-emerald-900 dark:text-emerald-100 leading-tight">
               ¡Beauty's Me ya tiene {readyCount} de tus deseos!
             </p>
-            <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 leading-tight mt-0.5">
-              Pasa a buscarlos o pídelos por WhatsApp.
+            <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 leading-tight mt-0.5">
+              Pásalo a tu carrito antes de que se acabe.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/")}
+            className="shrink-0 h-9 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom press-hard"
+          >
+            <ShoppingBag size={12} /> Ver en tienda
+          </button>
         </motion.div>
       )}
 
@@ -220,12 +267,34 @@ export default function MyWishesPage() {
                         size={12}
                         className="text-primary shrink-0 mt-0.5"
                       />
-                      <p className="text-[10px] font-bold text-primary leading-snug">
-                        <span className="font-black uppercase tracking-widest text-[8px] block mb-0.5">
+                      <p className="text-[11px] font-bold text-primary leading-snug">
+                        <span className="font-black uppercase tracking-widest text-[9px] block mb-0.5">
                           Mensaje de Beauty's Me
                         </span>
                         {w.admin_note}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Footer con acciones — solo cancelar mientras esté
+                      pendiente o en revisión. Si ya se resolvió, no tiene
+                      sentido cancelarlo. */}
+                  {(w.status === "pending" || w.status === "reviewing") && (
+                    <div className="mx-3 mb-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleCancel(w)}
+                        disabled={cancelingId === w.id}
+                        aria-label="Ya no lo quiero"
+                        className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/20 text-[10px] font-black uppercase tracking-widest press disabled:opacity-50"
+                      >
+                        {cancelingId === w.id ? (
+                          <Loader2 size={10} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={10} />
+                        )}
+                        Ya no lo quiero
+                      </button>
                     </div>
                   )}
                 </motion.article>

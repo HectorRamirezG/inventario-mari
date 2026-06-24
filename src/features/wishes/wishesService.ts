@@ -237,6 +237,25 @@ export async function deleteWish(id: string): Promise<void> {
   if (error) throw error
 }
 
+/** Cliente cancela su propio wish (lo borra). Requiere policy DELETE
+ *  para "owner" sobre `wishes` (ver `supabase/fix_wishes_client_cancel.sql`).
+ *  Si la policy no existe, falla con mensaje claro para que Mari sepa
+ *  qué SQL correr.
+ *
+ *  No usamos `deleteWish` directo porque su error es genérico — aquí
+ *  lo traducimos a algo que el cliente entiende. */
+export async function cancelMyWish(id: string): Promise<void> {
+  const { error } = await supabase.from("wishes").delete().eq("id", id)
+  if (error) {
+    if (/row-level security|permission denied|policy/i.test(error.message)) {
+      throw new Error(
+        "Aún no puedes cancelar tu deseo desde aquí. Pídele a Beauty's Me que lo cancele.",
+      )
+    }
+    throw error
+  }
+}
+
 /** Sube una imagen para un wish al bucket `product-images/wishes/...`.
  *  Reusa el bucket existente para no proliferar buckets nuevos. */
 export async function uploadWishImage(
