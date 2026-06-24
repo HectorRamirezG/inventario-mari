@@ -21,6 +21,8 @@ import {
   Sun,
   Moon,
   Monitor,
+  QrCode,
+  Copy,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -42,6 +44,8 @@ import { useBusinessRules } from "../../features/settings/businessRulesService"
 import { fetchMyShoppingStats, type MyShoppingStats } from "../../features/profile/myShoppingStatsService"
 import { formatMoney } from "../../lib/format"
 import { useUserPrefs } from "../../lib/userPrefs"
+import { copyToClipboard } from "../../lib/clipboard"
+import OverlayShell from "./OverlayShell"
 import { useTheme, type Theme } from "../../lib/useTheme"
 import {
   ACCENT_NAMES,
@@ -85,6 +89,9 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
   // Secciones colapsables (todo cerrado al abrir = vista limpia)
   const [securityOpen, setSecurityOpen] = useState(false)
   const [photoOpen, setPhotoOpen] = useState(false)
+  // QR de cuenta: modal con el email del cliente codificado. Mari puede
+  // escanearlo desde caja para identificar al cliente sin teclear email.
+  const [qrOpen, setQrOpen] = useState(false)
 
   // Cargar perfil cuando se abre
   useEffect(() => {
@@ -324,6 +331,19 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                           )}
                         </div>
                       </div>
+                      {/* QR de cuenta — el cliente lo muestra y Mari lo
+                          escanea en caja para no teclear email manualmente. */}
+                      {email && (
+                        <button
+                          type="button"
+                          onClick={() => setQrOpen(true)}
+                          aria-label="Mi código QR"
+                          title="Mostrar mi QR para identificarme en caja"
+                          className="shrink-0 w-9 h-9 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur-md text-white flex items-center justify-center press transition-colors"
+                        >
+                          <QrCode size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -561,10 +581,93 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
           {/* MyReviewsDrawer ELIMINADO: TODOS los accesos rapidos (incluido
               Resenas) viven ahora en el bot\u00f3n + del dock (ClientActionHub).
               Aqu\u00ed solo cuenta personal. */}
+
+          {/* Modal QR de cuenta — Mari escanea para identificar al
+              cliente en caja sin teclear email. */}
+          {email && (
+            <AccountQRModal
+              open={qrOpen}
+              onClose={() => setQrOpen(false)}
+              email={email}
+              name={name || fullName || ""}
+            />
+          )}
         </div>
       )}
     </AnimatePresence>,
     document.body
+  )
+}
+
+/**
+ * Modal con el QR de la cuenta del cliente. El QR codifica el email.
+ * Sin dependencias nuevas — usa api.qrserver.com (mismo patrón que el
+ * QR del ticket público).
+ */
+function AccountQRModal({
+  open,
+  onClose,
+  email,
+  name,
+}: {
+  open: boolean
+  onClose: () => void
+  email: string
+  name: string
+}) {
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=${encodeURIComponent(
+    email,
+  )}`
+  return (
+    <OverlayShell
+      open={open}
+      onClose={onClose}
+      variant="modal"
+      zIndex={250}
+      panelClassName="w-full max-w-xs rounded-3xl bg-white dark:bg-slate-900 shadow-premium overflow-hidden"
+    >
+      <div className="px-5 pt-5 pb-4 flex items-center justify-between">
+        <h3 className="text-sm font-black tracking-tight flex items-center gap-1.5">
+          <QrCode size={14} className="text-primary" /> Mi código QR
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar"
+          className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-700 flex items-center justify-center"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <div className="px-5 pb-5 flex flex-col items-center gap-3">
+        <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+          <img
+            src={qrSrc}
+            alt="QR de mi cuenta"
+            width={240}
+            height={240}
+            className="w-60 h-60 object-contain"
+            loading="lazy"
+          />
+        </div>
+        {name && (
+          <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 leading-tight text-center">
+            {name}
+          </p>
+        )}
+        <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 text-center leading-snug">
+          Muestra este código en caja para identificarte sin escribir tu
+          correo. Mari lo escanea con la cámara y listo.
+        </p>
+        <button
+          type="button"
+          onClick={() => copyToClipboard(email, "Email copiado")}
+          className="w-full h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 press"
+        >
+          <Copy size={11} /> Copiar mi email
+        </button>
+      </div>
+    </OverlayShell>
   )
 }
 
