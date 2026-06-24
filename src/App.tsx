@@ -385,23 +385,76 @@ function DailyLoginAwardMount() {
   return null
 }
 
-/** Captura `?ref=email` del URL al mount UNA vez y lo guarda en
- *  localStorage para que LoginPage lo lea durante el signup. */
+/** Captura `?ref=email` del URL al mount UNA vez. Comportamiento:
+ *  - Si HAY sesión con otra cuenta: toast informativo, NO guarda ref.
+ *  - Si HAY sesión con el MISMO email: ignoramos silenciosamente.
+ *  - Si NO hay sesión: guardamos en localStorage + toast con CTA
+ *    "Iniciar sesión / Crear cuenta" que navega a /login (donde
+ *    LoginPage detecta el ref y muestra el chip + pasa a modo signup).
+ */
 function ReferralCaptureMount() {
+  const { email: sessionEmail, session } = useAuth()
+  // Solo capturamos UNA vez por mount, después de que la sesión cargó
+  // (para saber si hay email o no). Si cambia la sesión, no re-captura.
+  const triedRef = useRef(false)
   useEffect(() => {
+    if (triedRef.current) return
+    // Espera a que el flag `session` resuelva (puede ser null inicial).
+    // Si tarda mucho, igual disparamos sin sesión.
+    triedRef.current = true
     let cancelled = false
     ;(async () => {
       try {
         const { captureReferralFromUrl } = await import("./lib/referral")
-        if (!cancelled) captureReferralFromUrl()
+        const result = captureReferralFromUrl(sessionEmail ?? null)
+        if (cancelled) return
+        if (result.kind === "captured") {
+          // Importamos toast lazy para no inflar bundle inicial.
+          const { default: toast } = await import("react-hot-toast")
+          toast(
+            (t) => (
+              <div className="flex items-center gap-3">
+                <span className="text-lg">💌</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-black leading-tight">
+                    Te invitó {result.email.split("@")[0]}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500 leading-tight">
+                    Crea tu cuenta y ambas ganan puntos
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.dismiss(t.id)
+                    window.location.assign("/login")
+                  }}
+                  className="shrink-0 h-8 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest"
+                >
+                  Crear cuenta
+                </button>
+              </div>
+            ),
+            { duration: 12_000 },
+          )
+        } else if (result.kind === "ignored_logged_in") {
+          const { default: toast } = await import("react-hot-toast")
+          toast(
+            `💜 ${result.refEmail.split("@")[0]} te invitó — pero ya tienes cuenta`,
+            { duration: 4000 },
+          )
+        }
+        // 'ignored_self' y 'none' → silencio total.
       } catch {
-        /* noop */
+        /* best-effort */
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [])
+    // session puede cambiar de undefined a null/email; lo escuchamos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session])
   return null
 }
 

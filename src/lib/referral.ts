@@ -59,24 +59,74 @@ export function clearReferredBy(): void {
   }
 }
 
+/** Resultado de la captura de referido en la URL. */
+export type ReferralCaptureResult =
+  /** No había `?ref=` en la URL. */
+  | { kind: "none" }
+  /** Se capturó, guardó y limpió el URL. El cliente NO está logueado
+   *  o lo está con un email distinto al del referido. */
+  | { kind: "captured"; email: string }
+  /** Se ignoró: el cliente ya tiene sesión activa con otra cuenta,
+   *  así que el ref NO le aplica (no puede ser referido a sí mismo
+   *  desde otra cuenta). El URL igual se limpia. */
+  | { kind: "ignored_logged_in"; refEmail: string; sessionEmail: string }
+  /** Se ignoró: el cliente abrió SU PROPIO link de referido (auto-ref).
+   *  Aplica solo si estás logueado con el mismo email. */
+  | { kind: "ignored_self"; email: string }
+
 /**
- * Lee `?ref=email` de la URL actual. Si existe y es válido lo guarda
- * y limpia el query string del location (sin recargar) para que un
- * refresh no re-dispare. Best-effort: silencioso si falla.
+ * Lee `?ref=email` de la URL actual.
+ *  - Si NO hay sesión: guarda en localStorage para que LoginPage lo lea.
+ *  - Si HAY sesión con email distinto: NO guarda (no aplica para esta
+ *    persona, que ya tiene cuenta).
+ *  - Si HAY sesión con MISMO email (auto-ref): NO guarda y se ignora.
+ *  - Siempre limpia el query `?ref=` del URL para que un refresh no
+ *    re-dispare ni se exponga el email del referrer en la barra.
+ *
+ * `sessionEmail` es opcional para no requerir que la función conozca
+ * useAuth — el caller (App.tsx) lo pasa.
  */
-export function captureReferralFromUrl(): void {
-  if (typeof window === "undefined") return
+export function captureReferralFromUrl(
+  sessionEmail?: string | null,
+): ReferralCaptureResult {
+  if (typeof window === "undefined") return { kind: "none" }
+  let refEmail: string | null = null
   try {
     const url = new URL(window.location.href)
-    const ref = url.searchParams.get("ref")
-    if (!ref) return
-    setReferredBy(ref)
-    // Limpia el query del URL para que un refresh no re-capture y para
-    // no exponer el email del referrer en la barra del navegador.
+    refEmail = url.searchParams.get("ref")
+    if (!refEmail) return { kind: "none" }
+    // Limpia el query SIEMPRE (incluso si no aplica el ref) para no
+    // exponer el email del referrer en la barra del navegador.
     url.searchParams.delete("ref")
     const cleaned = url.pathname + (url.search ? url.search : "") + url.hash
     window.history.replaceState(null, "", cleaned)
   } catch {
-    /* noop */
+    return { kind: "none" }
   }
+
+  const cleanRef = refEmail.trim().toLowerCase()
+  if (!cleanRef || !cleanRef.includes("@")) return { kind: "none" }
+
+  const cleanSession = sessionEmail?.trim().toLowerCase() ?? ""
+
+  // Auto-ref: el cliente compartió su propio link y lo abrió logueado
+  // (caso típico: prueba el link). No aplicamos pero no es bug.
+  if (cleanSession && cleanSession === cleanRef) {
+    return { kind: "ignored_self", email: cleanRef }
+  }
+
+  // Ya logueado con otra cuenta: no aplica (no podemos otorgarle puntos
+  // a alguien que ya tiene cuenta), pero sí avisamos.
+  if (cleanSession && cleanSession !== cleanRef) {
+    return {
+      kind: "ignored_logged_in",
+      refEmail: cleanRef,
+      sessionEmail: cleanSession,
+    }
+  }
+
+  // Sin sesión: lo persistimos para que LoginPage muestre el chip y
+  // bonifique al admin con el origen del nuevo registro.
+  setReferredBy(cleanRef)
+  return { kind: "captured", email: cleanRef }
 }
