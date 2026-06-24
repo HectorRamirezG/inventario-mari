@@ -236,6 +236,37 @@ export interface BusinessRules {
   /** Mínimo de puntos para poder canjear en una compra. Evita micro-
    *  canjeos (ej. canjear 5 puntos por $5 no vale la pena). Default 50. */
   loyalty_min_redeem: number
+
+  /* ══════════════════════ AVISOS GLOBALES ══════════════════════
+   * A diferencia de `pinned_banner_*` (que vive solo en el hero del
+   * cliente), el AVISO global aparece como banner sticky arriba de TODA
+   * la app: admin, cliente, tickets públicos. Útil para anunciar
+   * mantenimiento, cierres parciales, problemas con un proveedor. */
+
+  /** Master switch del aviso global. */
+  announcement_enabled: boolean
+  /** Texto del aviso. Máximo ~140 chars para que quepa en mobile. */
+  announcement_text: string
+  /** Tono visual: info (azul), warn (ámbar), success (verde), promo (rosa). */
+  announcement_tone: "info" | "warn" | "success" | "promo"
+  /** A quién se muestra. `all` = ambos, `client` = solo tienda pública,
+   *  `admin` = solo admin/staff (recordatorios internos). */
+  announcement_audience: "all" | "client" | "admin"
+  /** Si true, el cliente NO puede descartarlo (siempre visible). Por
+   *  defecto false: el cliente puede cerrarlo con × (localStorage 24h). */
+  announcement_force_visible: boolean
+
+  /* ═════════════════════ MODO VACACIONES ═════════════════════
+   * Cuando Mari se ausenta. El catálogo sigue visible para que el
+   * cliente vea productos, pero el botón de apartar/comprar queda
+   * deshabilitado y aparece un mensaje con la fecha de retorno. */
+
+  /** Master switch del modo vacaciones / tienda cerrada. */
+  shop_closed_enabled: boolean
+  /** Mensaje custom (ej. "Volvemos el 5 de enero"). Si vacío usa default. */
+  shop_closed_message: string
+  /** Fecha tentativa de retorno (YYYY-MM-DD). Opcional, se muestra si está. */
+  shop_closed_until: string | null
 }
 
 /**
@@ -364,6 +395,18 @@ export const DEFAULT_RULES: BusinessRules = {
   loyalty_enabled: false,
   loyalty_peso_por_punto: 1,
   loyalty_min_redeem: 50,
+
+  // Avisos globales (OFF por defecto)
+  announcement_enabled: false,
+  announcement_text: "",
+  announcement_tone: "info",
+  announcement_audience: "all",
+  announcement_force_visible: false,
+
+  // Modo vacaciones (OFF por defecto)
+  shop_closed_enabled: false,
+  shop_closed_message: "",
+  shop_closed_until: null,
 }
 
 let cache: BusinessRules | null = null
@@ -552,6 +595,36 @@ function merge(raw: any): BusinessRules {
       Number(raw.loyalty_min_redeem) >= 0
         ? Math.floor(Number(raw.loyalty_min_redeem))
         : DEFAULT_RULES.loyalty_min_redeem,
+
+    // Avisos globales
+    announcement_enabled: !!raw.announcement_enabled,
+    announcement_text:
+      typeof raw.announcement_text === "string"
+        ? raw.announcement_text.slice(0, 240)
+        : "",
+    announcement_tone: ["info", "warn", "success", "promo"].includes(
+      raw.announcement_tone,
+    )
+      ? raw.announcement_tone
+      : DEFAULT_RULES.announcement_tone,
+    announcement_audience: ["all", "client", "admin"].includes(
+      raw.announcement_audience,
+    )
+      ? raw.announcement_audience
+      : DEFAULT_RULES.announcement_audience,
+    announcement_force_visible: !!raw.announcement_force_visible,
+
+    // Modo vacaciones
+    shop_closed_enabled: !!raw.shop_closed_enabled,
+    shop_closed_message:
+      typeof raw.shop_closed_message === "string"
+        ? raw.shop_closed_message.slice(0, 240)
+        : "",
+    shop_closed_until:
+      typeof raw.shop_closed_until === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(raw.shop_closed_until)
+        ? raw.shop_closed_until
+        : null,
   }
 }
 

@@ -373,8 +373,16 @@ function resolveTarget(
       case "wish_status":
       case "wish_available":
         return { kind: "route", path: "/mis-deseos" }
-      case "stock_back":
+      case "stock_back": {
+        // Cliente: si tenemos variant_id, abrimos el catálogo con la
+        // variante pre-seleccionada (ClientShopPage reacciona a ?variant=).
+        // Si no, simplemente al catálogo general.
+        const variantId = n.metadata?.variant_id as string | undefined
+        if (variantId) {
+          return { kind: "route", path: `/?variant=${variantId}` }
+        }
         return { kind: "route", path: "/" }
+      }
     }
   }
 

@@ -15,6 +15,7 @@ import {
   Sparkles,
   Check,
   ChevronDown,
+  Bell,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
@@ -25,6 +26,8 @@ import { supabase } from "../../lib/supabase"
 import { debug } from "../../lib/debug"
 import { formatMoney } from "../../lib/format"
 import { useSubmitShortcut } from "../../lib/useSubmitShortcut"
+import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
+import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { suggestedPrices, money } from "../pricing/suggest"
 import { getPricingConfig } from "../pricing/pricingConfigService"
 import {
@@ -35,6 +38,8 @@ import {
   updateVariant,
 } from "./productService"
 import { applyMovement } from "../movements/movementService"
+import { getPendingStockAlertsByProduct } from "../client/stockAlertsService"
+import StockSubscribersDrawer from "../../components/ui/StockSubscribersDrawer"
 import type { Product, Variant } from "../../types/database"
 import type { PricingConfig } from "../pricing/pricingTypes"
 
@@ -645,11 +650,49 @@ function VariantsTab({
   const [openId, setOpenId] = useState<string | null>(focusVariantId)
   const [showNew, setShowNew] = useState(false)
   const [bulkInheriting, setBulkInheriting] = useState(false)
+  // Conteo de suscriptores "Avísame cuando llegue" por variante. Solo
+  // pinta un chip cuando hay 1+ esperando — para que Mari sepa qué
+  // reponer primero.
+  const [alertsByVariant, setAlertsByVariant] = useState<Record<string, number>>(
+    {},
+  )
+  // Drawer que muestra la lista de suscriptores cuando Mari toca un chip.
+  const [subsDrawer, setSubsDrawer] = useState<{
+    variantId: string
+    variantName: string
+  } | null>(null)
 
   // Si recibimos focusVariantId, abrimos esa fila al montar
   useEffect(() => {
     if (focusVariantId) setOpenId(focusVariantId)
   }, [focusVariantId])
+
+  // Carga conteo de alertas pendientes (best-effort: si la tabla no
+  // existe aún, devuelve {} y el chip no aparece).
+  useEffect(() => {
+    let alive = true
+    getPendingStockAlertsByProduct(product.id)
+      .then((m) => {
+        if (alive) setAlertsByVariant(m)
+      })
+      .catch(() => {
+        /* noop */
+      })
+    return () => {
+      alive = false
+    }
+  }, [product.id])
+
+  // Refresca cuando llega un cambio realtime en `stock_alerts` (alguien
+  // se suscribió/canceló). Debounce 600ms para no martillar la BD.
+  const refreshAlerts = useDebouncedCallback(() => {
+    getPendingStockAlertsByProduct(product.id)
+      .then((m) => setAlertsByVariant(m))
+      .catch(() => {})
+  }, 600)
+  useRealtimeSubscription("stock_alerts" as any, refreshAlerts, {
+    enabled: true,
+  })
 
   // Variantes sin foto propia (ni image_url ni image_urls con elementos).
   // Si el producto tiene foto principal, ofrecemos heredarla con 1 click.
@@ -815,6 +858,13 @@ function VariantsTab({
               isOpen={openId === v.id}
               onToggle={() => setOpenId((id) => (id === v.id ? null : v.id))}
               onSaved={onSaved}
+              pendingAlerts={alertsByVariant[v.id] ?? 0}
+              onShowSubscribers={() =>
+                setSubsDrawer({
+                  variantId: v.id,
+                  variantName: v.variant_name ?? "Variante",
+                })
+              }
             />
           ))}
         </div>
@@ -826,6 +876,14 @@ function VariantsTab({
           </p>
         </div>
       )}
+
+      <StockSubscribersDrawer
+        open={!!subsDrawer}
+        onClose={() => setSubsDrawer(null)}
+        variantId={subsDrawer?.variantId ?? null}
+        variantName={subsDrawer?.variantName}
+        productName={product.name}
+      />
     </div>
   )
 }
@@ -1107,6 +1165,8 @@ function VariantAccordion({
   isOpen,
   onToggle,
   onSaved,
+  pendingAlerts = 0,
+  onShowSubscribers,
 }: {
   variant: Variant
   productId: string
@@ -1115,6 +1175,11 @@ function VariantAccordion({
   isOpen: boolean
   onToggle: () => void
   onSaved: () => void
+  /** Conteo de suscriptores a "Avísame cuando llegue" para esta variante.
+   *  Solo informativo: aparece como chip ámbar cuando es ≥ 1. */
+  pendingAlerts?: number
+  /** Callback al tocar el chip para abrir el drawer de suscriptores. */
+  onShowSubscribers?: () => void
 }) {
   const [vName, setVName] = useState(variant.variant_name ?? "")
   const [sku, setSku] = useState(variant.sku ?? "")
@@ -1275,6 +1340,30 @@ function VariantAccordion({
             {!hasOwnPhoto && (
               <span className="px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[8px] font-black uppercase tracking-widest shrink-0">
                 Sin foto
+              </span>
+            )}
+            {pendingAlerts > 0 && stock <= 0 && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onShowSubscribers?.()
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onShowSubscribers?.()
+                  }
+                }}
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-[8px] font-black uppercase tracking-widest shrink-0 animate-pulse cursor-pointer hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors"
+                title={`${pendingAlerts} ${
+                  pendingAlerts === 1 ? "clienta espera" : "clientas esperan"
+                } stock — toca para ver y contactar`}
+              >
+                <Bell size={8} />
+                {pendingAlerts} {pendingAlerts === 1 ? "espera" : "esperan"}
               </span>
             )}
           </p>

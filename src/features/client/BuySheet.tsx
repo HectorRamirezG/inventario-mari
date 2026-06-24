@@ -10,7 +10,11 @@ import Package from "lucide-react/dist/esm/icons/package"
 import Sparkles from "lucide-react/dist/esm/icons/sparkles"
 import AlertTriangle from "lucide-react/dist/esm/icons/alert-triangle"
 import Target from "lucide-react/dist/esm/icons/target"
+import Bell from "lucide-react/dist/esm/icons/bell"
+import BellRing from "lucide-react/dist/esm/icons/bell-ring"
+import toast from "react-hot-toast"
 
+import { useAuth } from "../../lib/useAuth"
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"
 import ProductConversation from "../../components/ui/ProductConversation"
@@ -447,6 +451,16 @@ export default function BuySheet({
                           </span>
                         </div>
                       )}
+                      {/* Cliente puede pedir que le avisemos cuando vuelva
+                          a haber stock — útil cuando está agotado de verdad
+                          (no pre-orden). El SQL fix_stock_alerts.sql crea
+                          el trigger que dispara la notif al reponer. */}
+                      {out && (
+                        <NotifyOnStockButton
+                          variantId={v.id}
+                          variantName={v.variant_name}
+                        />
+                      )}
                     </div>
                   )
                 })
@@ -623,5 +637,165 @@ function TierBanner({
         )}
       </div>
     </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Notify-on-stock — botón inline en variante agotada.
+ * Persiste subscripción en tabla `stock_alerts` via RPC. Si el
+ * cliente está logueado, usa su email; si no, le pide el email
+ * con un input inline. Best-effort: si la tabla/RPC no existe,
+ * muestra toast amigable sin romperse.
+ * ───────────────────────────────────────────────────────────── */
+
+function NotifyOnStockButton({
+  variantId,
+  variantName,
+}: {
+  variantId: string
+  variantName: string
+}) {
+  const { email: authEmail, fullName } = useAuth()
+  const [subscribed, setSubscribed] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [showEmailInput, setShowEmailInput] = useState(false)
+  const [emailInput, setEmailInput] = useState("")
+  const [checked, setChecked] = useState(false)
+
+  // Si está logueado, chequeamos si ya está suscrito al montar.
+  useEffect(() => {
+    if (!authEmail || checked) return
+    let alive = true
+    ;(async () => {
+      try {
+        const { isSubscribedToStock } = await import("./stockAlertsService")
+        const sub = await isSubscribedToStock(variantId, authEmail)
+        if (alive) {
+          setSubscribed(sub)
+          setChecked(true)
+        }
+      } catch {
+        if (alive) setChecked(true)
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [authEmail, variantId, checked])
+
+  async function handleSubscribe(emailToUse: string) {
+    const clean = emailToUse.trim().toLowerCase()
+    if (!clean || !clean.includes("@")) {
+      toast.error("Pon un email válido")
+      return
+    }
+    setBusy(true)
+    try {
+      const { subscribeStockAlert } = await import("./stockAlertsService")
+      const ok = await subscribeStockAlert(
+        variantId,
+        clean,
+        fullName ?? null,
+      )
+      if (ok) {
+        setSubscribed(true)
+        setShowEmailInput(false)
+        toast.success("Te avisaremos cuando vuelva 💜")
+      } else {
+        toast.error("Aún no podemos suscribirte. Intenta más tarde.")
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleUnsubscribe() {
+    if (!authEmail) return
+    setBusy(true)
+    try {
+      const { unsubscribeStockAlert } = await import("./stockAlertsService")
+      const ok = await unsubscribeStockAlert(variantId, authEmail)
+      if (ok) {
+        setSubscribed(false)
+        toast.success("Cancelamos tu aviso")
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Estado 1: ya suscrito → chip verde
+  if (subscribed) {
+    return (
+      <button
+        type="button"
+        onClick={handleUnsubscribe}
+        disabled={busy}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-black disabled:opacity-50"
+      >
+        <BellRing size={11} className="shrink-0" />
+        Te avisaremos · cancelar
+      </button>
+    )
+  }
+
+  // Estado 2: input de email visible (cliente anónimo)
+  if (showEmailInput) {
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          handleSubscribe(emailInput)
+        }}
+        className="flex items-center gap-1.5"
+      >
+        <input
+          type="email"
+          value={emailInput}
+          onChange={(e) => setEmailInput(e.target.value)}
+          placeholder="tu@email.com"
+          autoFocus
+          disabled={busy}
+          className="flex-1 h-8 px-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold focus:outline-none focus:ring-2 focus:ring-primary/40"
+        />
+        <button
+          type="submit"
+          disabled={busy || !emailInput.trim()}
+          className="h-8 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest disabled:opacity-50"
+        >
+          OK
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setShowEmailInput(false)
+            setEmailInput("")
+          }}
+          className="h-8 w-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center"
+          aria-label="Cancelar"
+        >
+          <X size={12} />
+        </button>
+      </form>
+    )
+  }
+
+  // Estado 3: idle → botón "Avísame cuando llegue"
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (authEmail) {
+          handleSubscribe(authEmail)
+        } else {
+          setShowEmailInput(true)
+        }
+      }}
+      disabled={busy}
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-violet-50 dark:bg-violet-500/15 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 text-[10px] font-black hover:bg-violet-100 dark:hover:bg-violet-500/25 transition-colors disabled:opacity-50"
+    >
+      <Bell size={11} className="shrink-0" />
+      Avísame cuando llegue
+    </button>
   )
 }
