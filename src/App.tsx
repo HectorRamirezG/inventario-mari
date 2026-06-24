@@ -65,6 +65,7 @@ import KeyboardHelpDialog from "./components/ui/KeyboardHelpDialog"
 import ActionHub, { type HubAction } from "./components/ui/ActionHub"
 import NotificationBell from "./components/ui/NotificationBell"
 import ConnectionBanner from "./components/ui/ConnectionBanner"
+import AnnouncementBanner from "./components/ui/AnnouncementBanner"
 import CriticalStockBanner from "./components/ui/CriticalStockBanner"
 import UserProfileDrawer from "./components/ui/UserProfileDrawer"
 import ReviewProofDrawer from "./components/ui/ReviewProofDrawer"
@@ -74,6 +75,7 @@ import ErrorBoundary from "./components/ui/ErrorBoundary"
 import PwaUpdatePrompt from "./components/ui/PwaUpdatePrompt"
 import PullToRefresh from "./components/ui/PullToRefresh"
 import ScrollToTopButton from "./components/ui/ScrollToTopButton"
+import ScrollToTopOnRoute from "./components/ui/ScrollToTopOnRoute"
 import SignOutOverlay from "./components/ui/SignOutOverlay"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
@@ -168,11 +170,15 @@ export default function App() {
         />
         <ThemeMount />
         <ConnectionBanner />
+        <AnnouncementBanner />
         <InstallPrompt />
         <PwaUpdatePrompt />
         <KeyboardHelpMount />
         <VisitorTrackingMount />
+        <DailyLoginAwardMount />
+        <ReferralCaptureMount />
         <ScrollToTopButton />
+        <ScrollToTopOnRoute />
         <SignOutOverlay />
         <Routes>
           {/* Públicas (sin login) */}
@@ -204,9 +210,11 @@ function ThemeMount() {
   // Aplica accent color + force dark cada vez que las reglas cambian.
   // Estos efectos viven aquí porque deben correr ANTES de que cualquier
   // componente decida su estilo (CSS vars son globales en :root).
+  // El cliente puede tener un accentOverride personal que pisa al global
+  // del admin solo en SU sesión (vive en localStorage).
   useEffect(() => {
-    applyAccent(rules.theme_accent)
-  }, [rules.theme_accent])
+    applyAccent(prefs.accentOverride ?? rules.theme_accent)
+  }, [rules.theme_accent, prefs.accentOverride])
   useEffect(() => {
     applyForceDark(rules.force_dark_mode)
   }, [rules.force_dark_mode])
@@ -282,6 +290,118 @@ function KeyboardHelpMount() {
  *  Best-effort: si la RPC no existe, silencia. */
 function VisitorTrackingMount() {
   useVisitorTracking()
+  return null
+}
+
+/** Otorga 1 punto del programa de premios por abrir la app una vez al día.
+ *  Solo dispara si: (a) hay sesión con email, (b) loyalty_enabled, y
+ *  (c) localStorage no tiene el award de hoy ya marcado. Best-effort:
+ *  si el RPC falla por permisos o regla apagada, silencia.
+ *
+ *  Además mantiene un STREAK de días consecutivos. Si llegas a múltiplos
+ *  de 7 (o 30), dispara un bonus extra (`streak_7days` / `streak_30days`)
+ *  cuyo monto controla el admin desde el editor de reglas. */
+function DailyLoginAwardMount() {
+  const { email, session } = useAuth()
+  const rules = useBusinessRules()
+  const { prefs, set } = useUserPrefs()
+  useEffect(() => {
+    if (!session || !email || !rules.loyalty_enabled) return
+    const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+    if (prefs.lastDailyLoginAt === today) return
+
+    // Calcula nuevo streak: si ayer = lastDailyLoginAt → +1; si más
+    // viejo o nunca → reinicia a 1.
+    const yesterday = new Date(Date.now() - 24 * 3600 * 1000)
+      .toISOString()
+      .slice(0, 10)
+    const nextStreak =
+      prefs.lastDailyLoginAt === yesterday
+        ? Math.max(1, prefs.dailyLoginStreak) + 1
+        : 1
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { awardLoyaltyPoints } = await import(
+          "./features/loyalty/loyaltyService"
+        )
+        const { toast } = await import("react-hot-toast")
+
+        // Award diario base.
+        const got = await awardLoyaltyPoints(email, "daily_login")
+        if (cancelled) return
+
+        // Marca el día como ya otorgado (siempre, gane o no — evita
+        // reintentar si la regla está apagada).
+        set("lastDailyLoginAt", today)
+        set("dailyLoginStreak", nextStreak)
+
+        if (got > 0) {
+          toast.success(
+            nextStreak > 1
+              ? `+${got} pts · racha de ${nextStreak} días 🔥`
+              : `+${got} pts por visitarnos hoy ✨`,
+            { duration: 2800, icon: "🎁" },
+          )
+        }
+
+        // Bonus de streak: cada múltiplo de 7 dispara `streak_7days`.
+        // Cada múltiplo de 30 dispara `streak_30days` (ENCIMA del de 7).
+        // Best-effort: si las reglas no existen el RPC retorna 0.
+        if (nextStreak > 1 && nextStreak % 7 === 0) {
+          const bonus7 = await awardLoyaltyPoints(email, "streak_7days")
+          if (!cancelled && bonus7 > 0) {
+            toast.success(`+${bonus7} pts · ¡bonus de 7 días!`, {
+              duration: 3500,
+              icon: "🔥",
+            })
+          }
+        }
+        if (nextStreak > 1 && nextStreak % 30 === 0) {
+          const bonus30 = await awardLoyaltyPoints(email, "streak_30days")
+          if (!cancelled && bonus30 > 0) {
+            toast.success(`+${bonus30} pts · ¡un MES sin faltar!`, {
+              duration: 4500,
+              icon: "👑",
+            })
+          }
+        }
+      } catch {
+        /* best-effort, silencioso */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    session,
+    email,
+    rules.loyalty_enabled,
+    prefs.lastDailyLoginAt,
+    prefs.dailyLoginStreak,
+    set,
+  ])
+  return null
+}
+
+/** Captura `?ref=email` del URL al mount UNA vez y lo guarda en
+ *  localStorage para que LoginPage lo lea durante el signup. */
+function ReferralCaptureMount() {
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { captureReferralFromUrl } = await import("./lib/referral")
+        if (!cancelled) captureReferralFromUrl()
+      } catch {
+        /* noop */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
   return null
 }
 

@@ -16,6 +16,11 @@ import {
   Sparkles,
   ChevronDown,
   Camera,
+  Palette,
+  CheckCircle2,
+  Sun,
+  Moon,
+  Monitor,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -36,6 +41,13 @@ import { useMyLoyaltyBalance } from "../../features/loyalty/loyaltyService"
 import { useBusinessRules } from "../../features/settings/businessRulesService"
 import { fetchMyShoppingStats, type MyShoppingStats } from "../../features/profile/myShoppingStatsService"
 import { formatMoney } from "../../lib/format"
+import { useUserPrefs } from "../../lib/userPrefs"
+import { useTheme, type Theme } from "../../lib/useTheme"
+import {
+  ACCENT_NAMES,
+  ACCENT_LABELS,
+  ACCENT_PREVIEW,
+} from "../../lib/applyTheme"
 import {
   OVERLAY_BACKDROP_TRANSITION,
   OVERLAY_PANEL_STYLE,
@@ -54,6 +66,7 @@ interface Props {
 export default function UserProfileDrawer({ open, onClose }: Props) {
   const { user, session, role, email, fullName, signOut } = useAuth()
   const bRules = useBusinessRules()
+  const { prefs } = useUserPrefs()
   const [profile, setProfile] = useState<UserProfileDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -278,8 +291,8 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                             className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white/40 shadow-sm"
                           />
                         ) : (
-                          <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-xl font-black ring-2 ring-white/40">
-                            {initials || "👤"}
+                          <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-2xl font-black ring-2 ring-white/40">
+                            {prefs.clientEmoji || initials || "👤"}
                           </div>
                         )}
                         {/* Overlay con cámara — visible siempre como hint */}
@@ -349,6 +362,11 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                       regla está activa). Abre el LoyaltyDrawer con la
                       lista plana de movimientos. */}
                   {email && <MyLoyaltyMiniCard />}
+
+                  {/* Mi estilo: cliente elige color personal + emoji.
+                      Funciona como override del theme global del admin
+                      (solo afecta a SU sesión). Persiste en localStorage. */}
+                  <MyStyleSection />
 
                   {/* Datos básicos */}
                   <section className="space-y-3">
@@ -562,12 +580,23 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
 function MyLoyaltyMiniCard() {
   const bRules = useBusinessRules()
   const { balance, loading } = useMyLoyaltyBalance()
+  const { prefs } = useUserPrefs()
   const [open, setOpen] = useState(false)
 
   if (!bRules.loyalty_enabled || loading) return null
 
   const pts = balance?.points ?? 0
   const valueMx = pts * (bRules.loyalty_peso_por_punto || 1)
+  const minRedeem = bRules.loyalty_min_redeem || 0
+  // Si aún no puede canjear pero ya tiene >0, mostramos barra de
+  // progreso al primer canje (psicológico: ver el avance motiva).
+  const showProgress = minRedeem > 0 && pts > 0 && pts < minRedeem
+  const progressPct = showProgress
+    ? Math.min(100, Math.round((pts / minRedeem) * 100))
+    : 0
+  // Chip de streak: aparece solo si la racha es >= 2 días.
+  const streak = prefs.dailyLoginStreak
+  const showStreak = streak >= 2
 
   return (
     <>
@@ -582,9 +611,16 @@ function MyLoyaltyMiniCard() {
             🏆
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-widest text-amber-700/80 dark:text-amber-300/80">
-              Mis premios
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700/80 dark:text-amber-300/80">
+                Mis premios
+              </p>
+              {showStreak && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-orange-500/15 text-orange-600 dark:text-orange-300 text-[9px] font-black tabular-nums">
+                  🔥 {streak} días
+                </span>
+              )}
+            </div>
             <p className="text-xl font-black tabular-nums leading-tight text-slate-900 dark:text-slate-100">
               {pts} <span className="text-xs opacity-80">pts</span>
             </p>
@@ -598,9 +634,220 @@ function MyLoyaltyMiniCard() {
             Ver →
           </span>
         </div>
+        {showProgress && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-[9px] font-bold mb-1">
+              <span className="text-amber-700 dark:text-amber-300">
+                Te faltan {minRedeem - pts} pts para canjear
+              </span>
+              <span className="text-slate-500 tabular-nums">
+                {pts}/{minRedeem}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-amber-200/60 dark:bg-amber-500/20 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+        )}
       </button>
       <LoyaltyDrawer open={open} onClose={() => setOpen(false)} />
     </>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Mi estilo — cliente personaliza color + emoji + tema de su sesión.
+ * El color sobreescribe el theme_accent del admin SOLO en su
+ * dispositivo (localStorage); el admin sigue mandando el global
+ * para clientes que no eligieron nada. El emoji aparece en el
+ * identity card y futuros lugares (chat bubble, avatar fallback).
+ * El selector de tema reutiliza `useTheme` (mari-theme localStorage).
+ * Incluye preview en vivo: un mini botón demo que se pinta con el
+ * color elegido para que el cliente vea cómo se verá.
+ * ───────────────────────────────────────────────────────────── */
+
+const CLIENT_EMOJIS = ["✨", "💖", "🛍️", "🌸", "🎀", "🦋", "☀️", "🌙", "🌷", "💎", "🍓", "👑"]
+
+const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
+  { value: "light", label: "Claro", icon: Sun },
+  { value: "dark", label: "Oscuro", icon: Moon },
+  { value: "system", label: "Auto", icon: Monitor },
+]
+
+function MyStyleSection() {
+  const { prefs, set } = useUserPrefs()
+  const bRules = useBusinessRules()
+  const { theme, setTheme } = useTheme()
+  const currentAccent = prefs.accentOverride ?? bRules.theme_accent
+  const usingGlobal = prefs.accentOverride === null
+  // Si el admin forzó dark mode, los botones de tema se deshabilitan
+  // (no podemos pelearnos con esa regla del negocio).
+  const themeLocked = bRules.force_dark_mode
+
+  return (
+    <section className="rounded-3xl p-4 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <Palette size={11} className="text-primary" /> Mi estilo
+        </h4>
+        {!usingGlobal && (
+          <button
+            type="button"
+            onClick={() => {
+              set("accentOverride", null)
+              toast.success("Usando el color de la tienda")
+            }}
+            className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 press"
+          >
+            Quitar color
+          </button>
+        )}
+      </div>
+
+      {/* Grid de 7 colores — mismo que el admin, reutiliza constantes. */}
+      <div>
+        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5">
+          Color de acento
+          {usingGlobal && (
+            <span className="ml-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">
+              · de la tienda
+            </span>
+          )}
+        </p>
+        <div className="grid grid-cols-7 gap-1.5">
+          {ACCENT_NAMES.map((color) => {
+            const isActive = currentAccent === color
+            const isMyChoice = prefs.accentOverride === color
+            return (
+              <button
+                key={color}
+                type="button"
+                onClick={() => set("accentOverride", color)}
+                aria-label={ACCENT_LABELS[color]}
+                title={ACCENT_LABELS[color]}
+                className={`relative h-10 rounded-xl ring-2 transition-all ${
+                  isActive
+                    ? "ring-slate-900 dark:ring-white scale-105"
+                    : "ring-transparent hover:ring-slate-300"
+                }`}
+                style={{ background: ACCENT_PREVIEW[color] }}
+              >
+                {isMyChoice && (
+                  <CheckCircle2
+                    size={12}
+                    className="absolute inset-0 m-auto text-white drop-shadow"
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Selector emoji personal. */}
+      <div>
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+            Mi emoji
+          </p>
+          {prefs.clientEmoji && (
+            <button
+              type="button"
+              onClick={() => {
+                set("clientEmoji", null)
+                toast.success("Emoji quitado")
+              }}
+              className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 press"
+            >
+              Quitar
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-6 gap-1.5">
+          {CLIENT_EMOJIS.map((emoji) => {
+            const isActive = prefs.clientEmoji === emoji
+            return (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => set("clientEmoji", emoji)}
+                aria-label={`Emoji ${emoji}`}
+                className={`h-10 rounded-xl text-xl flex items-center justify-center transition-all ${
+                  isActive
+                    ? "bg-primary/15 ring-2 ring-primary scale-110"
+                    : "bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700"
+                }`}
+              >
+                {emoji}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Selector de tema — claro/oscuro/auto. Usa useTheme directo. */}
+      <div>
+        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5">
+          Tema de la app
+          {themeLocked && (
+            <span className="ml-1.5 text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
+              · forzado por la tienda
+            </span>
+          )}
+        </p>
+        <div className="grid grid-cols-3 gap-1.5">
+          {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
+            const isActive = theme === value
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => !themeLocked && setTheme(value)}
+                disabled={themeLocked}
+                className={`h-10 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all ${
+                  isActive
+                    ? "bg-primary text-white shadow-bloom"
+                    : "bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                } ${themeLocked ? "opacity-40 cursor-not-allowed" : ""}`}
+              >
+                <Icon size={12} /> {label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Preview en vivo del color elegido — un mini botón demo + chip
+          que reaccionan al `--color-primary` / `--brand-from/to` actuales. */}
+      <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 p-3">
+        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
+          Vista previa
+        </p>
+        <div className="flex items-center gap-2">
+          <span
+            className="h-9 px-3 rounded-xl text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-bloom"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+            }}
+          >
+            <Sparkles size={11} /> Apartar
+          </span>
+          <span className="h-9 px-3 rounded-xl bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest flex items-center justify-center">
+            +25 pts
+          </span>
+          <span className="ml-auto text-2xl">{prefs.clientEmoji ?? "🛍️"}</span>
+        </div>
+      </div>
+
+      <p className="text-[9px] text-slate-400 italic leading-snug">
+        Tu color, emoji y tema solo se aplican en este dispositivo. El
+        admin mantiene su propio color para toda la tienda.
+      </p>
+    </section>
   )
 }
 

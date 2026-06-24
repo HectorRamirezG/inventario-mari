@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { ACCENT_NAMES, type AccentName } from "./applyTheme"
 
 /**
  * Preferencias del usuario persistidas en localStorage.
@@ -30,6 +31,21 @@ export interface UserPrefs {
   darkEnd: string // "07:00"
   /** Mood emoji que ve Mari arriba del sidebar (😎🔥💪🌸✨🌙🎀) */
   moodEmoji: string
+  /** Acento PERSONAL del cliente: sobrescribe el `theme_accent` del admin
+   *  solo en SU sesión (no afecta a otros usuarios). `null` = usa el global. */
+  accentOverride: AccentName | null
+  /** Emoji personal del cliente: aparece en su identity card del perfil y
+   *  en pills de personalización. `null` = usa iniciales o fallback. */
+  clientEmoji: string | null
+  /** Fecha YYYY-MM-DD del último daily_login otorgado. Evita doble award
+   *  el mismo día aunque el usuario abra la app 10 veces. Es defensa
+   *  client-side; el server también debería chequear ref_id si Mari
+   *  agrega trigger DB. */
+  lastDailyLoginAt: string | null
+  /** Días consecutivos abriendo la app (racha). Se incrementa cuando
+   *  hoy = lastDailyLoginAt + 1 día. Se resetea a 1 cuando hay hueco.
+   *  Usado para premiar streaks (7, 30 días). */
+  dailyLoginStreak: number
   /** Quiet hours: las notificaciones siguen llegando pero SIN sonido ni
    *  vibración entre estas horas. Útil para no molestar de madrugada. */
   quietHoursEnabled: boolean
@@ -51,6 +67,10 @@ const DEFAULTS: UserPrefs = {
   darkStart: "20:00",
   darkEnd: "07:00",
   moodEmoji: "✨",
+  accentOverride: null,
+  clientEmoji: null,
+  lastDailyLoginAt: null,
+  dailyLoginStreak: 0,
   quietHoursEnabled: false,
   quietStart: "22:00",
   quietEnd: "07:00",
@@ -73,6 +93,7 @@ function readPrefs(): UserPrefs {
 /** Normaliza valores fuera de rango / strings inválidos. */
 function sanitize(p: UserPrefs): UserPrefs {
   const TIME_RE = /^\d{2}:\d{2}$/
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
   const VALID_PACKS: SoundPack[] = ["default", "vintage", "arcade", "premium"]
   const VALID_MOTION: MotionLevel[] = ["off", "low", "normal", "high"]
   return {
@@ -89,6 +110,20 @@ function sanitize(p: UserPrefs): UserPrefs {
       typeof p.moodEmoji === "string" && p.moodEmoji.trim().length > 0
         ? p.moodEmoji.slice(0, 6)
         : DEFAULTS.moodEmoji,
+    accentOverride: ACCENT_NAMES.includes(p.accentOverride as AccentName)
+      ? (p.accentOverride as AccentName)
+      : null,
+    clientEmoji:
+      typeof p.clientEmoji === "string" && p.clientEmoji.trim().length > 0
+        ? p.clientEmoji.slice(0, 6)
+        : null,
+    lastDailyLoginAt: DATE_RE.test(p.lastDailyLoginAt ?? "")
+      ? p.lastDailyLoginAt
+      : null,
+    dailyLoginStreak: Math.max(
+      0,
+      Math.min(9999, Math.floor(p.dailyLoginStreak ?? 0)),
+    ),
     quietHoursEnabled: !!p.quietHoursEnabled,
     quietStart: TIME_RE.test(p.quietStart ?? "") ? p.quietStart : DEFAULTS.quietStart,
     quietEnd: TIME_RE.test(p.quietEnd ?? "") ? p.quietEnd : DEFAULTS.quietEnd,

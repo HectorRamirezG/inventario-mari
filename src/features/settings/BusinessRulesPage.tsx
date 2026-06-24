@@ -44,6 +44,8 @@ import {
   Trash2,
   Plus,
   GripVertical,
+  MoonStar,
+  Bell,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -59,6 +61,11 @@ import {
   type WelcomeSlide,
 } from "./businessRulesService"
 import LoyaltyRulesEditor from "../loyalty/LoyaltyRulesEditor"
+import {
+  ACCENT_NAMES,
+  ACCENT_LABELS,
+  ACCENT_PREVIEW,
+} from "../../lib/applyTheme"
 
 
 export default function BusinessRulesPage() {
@@ -614,7 +621,7 @@ export default function BusinessRulesPage() {
             </div>
           </div>
           <div className="grid grid-cols-7 gap-1.5">
-            {(["pink", "violet", "rose", "amber", "emerald", "sky", "indigo"] as const).map(
+            {ACCENT_NAMES.map(
               (color) => (
                 <button
                   key={color}
@@ -866,6 +873,117 @@ export default function BusinessRulesPage() {
               patch({ welcome_slides: slides })
             }
           />
+        </RuleRow>
+
+        <RuleRow
+          icon={Bell}
+          title="Aviso global (banner superior)"
+          description="Aparece como franja sticky arriba de TODA la app (catálogo, ticket, panel). A diferencia del banner anclado del hero, este es para alertas urgentes."
+          affects="todos"
+          enabled={form.announcement_enabled}
+          onToggle={(v) => patch({ announcement_enabled: v })}
+        >
+          <TextField
+            label="Texto del aviso"
+            value={form.announcement_text}
+            onChange={(v) => patch({ announcement_text: v })}
+            placeholder="📦 Pedidos del lunes salen el martes por feriado"
+            maxLength={240}
+          />
+          <div className="flex items-center gap-1.5 pt-2 flex-wrap">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mr-1">
+              Tono:
+            </span>
+            {(
+              [
+                ["info", "Info", "bg-sky-500"],
+                ["warn", "Aviso", "bg-amber-500"],
+                ["success", "Éxito", "bg-emerald-500"],
+                ["promo", "Promo", "bg-fuchsia-500"],
+              ] as const
+            ).map(([id, label, bg]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => patch({ announcement_tone: id })}
+                className={`h-6 px-2.5 rounded-full text-[9px] font-black uppercase tracking-widest text-white ${bg} ${
+                  form.announcement_tone === id
+                    ? "ring-2 ring-offset-1 ring-slate-700 dark:ring-white"
+                    : "opacity-60"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 pt-2 flex-wrap">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 mr-1">
+              Quién lo ve:
+            </span>
+            {(
+              [
+                ["all", "Todos"],
+                ["client", "Solo cliente"],
+                ["admin", "Solo panel"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => patch({ announcement_audience: id })}
+                className={`h-6 px-2.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                  form.announcement_audience === id
+                    ? "bg-primary text-white border-primary"
+                    : "bg-white dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none pt-2">
+            <input
+              type="checkbox"
+              checked={form.announcement_force_visible}
+              onChange={(e) =>
+                patch({ announcement_force_visible: e.target.checked })
+              }
+              className="w-4 h-4 accent-primary"
+            />
+            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">
+              No permitir que el cliente lo descarte
+            </span>
+          </label>
+        </RuleRow>
+
+        <RuleRow
+          icon={MoonStar}
+          title="Modo vacaciones (tienda cerrada)"
+          description="El cliente sigue viendo el catálogo pero NO puede apartar. Aparece un banner morado con tu mensaje. Admin opera normal."
+          affects="cliente"
+          enabled={form.shop_closed_enabled}
+          onToggle={(v) => patch({ shop_closed_enabled: v })}
+        >
+          <TextField
+            label="Mensaje al cliente"
+            value={form.shop_closed_message}
+            onChange={(v) => patch({ shop_closed_message: v })}
+            placeholder="Volvemos el 5 de enero. Mientras tanto, déjanos tus deseos 💜"
+            maxLength={200}
+          />
+          <label className="block pt-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 block">
+              Fecha tentativa de retorno (opcional)
+            </span>
+            <input
+              type="date"
+              value={form.shop_closed_until ?? ""}
+              onChange={(e) =>
+                patch({ shop_closed_until: e.target.value || null })
+              }
+              className="settings-input"
+            />
+          </label>
         </RuleRow>
       </Section>
 
@@ -1196,26 +1314,10 @@ function Hint({ children }: { children: React.ReactNode }) {
  *
  * Cada accent es un BI-COLOR: el preview muestra los dos tonos del
  * gradient real para que Mari elija con confianza.
+ *
+ * Las paletas (ACCENT_PREVIEW + ACCENT_LABELS + ACCENT_NAMES) viven en
+ * lib/applyTheme.ts para que el cliente las reutilice desde su perfil.
  */
-const ACCENT_PREVIEW: Record<BusinessRules["theme_accent"], string> = {
-  pink: "linear-gradient(135deg,#e6007e,#a855f7)",
-  violet: "linear-gradient(135deg,#7c3aed,#ec4899)",
-  rose: "linear-gradient(135deg,#e11d48,#f97316)",
-  amber: "linear-gradient(135deg,#f59e0b,#dc2626)",
-  emerald: "linear-gradient(135deg,#10b981,#0ea5e9)",
-  sky: "linear-gradient(135deg,#0ea5e9,#6366f1)",
-  indigo: "linear-gradient(135deg,#4f46e5,#06b6d4)",
-}
-
-const ACCENT_LABELS: Record<BusinessRules["theme_accent"], string> = {
-  pink: "Rosa · Violeta",
-  violet: "Violeta · Rosa",
-  rose: "Rojo · Naranja",
-  amber: "Ámbar · Rojo",
-  emerald: "Verde · Azul",
-  sky: "Azul · Índigo",
-  indigo: "Índigo · Cian",
-}
 
 /**
  * Campo de texto genérico para reglas (mensaje, etiqueta, banner).

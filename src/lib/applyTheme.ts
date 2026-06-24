@@ -5,9 +5,24 @@
  *
  * Si el admin elige "pink" (default), restaura los valores originales
  * del index.css para no degradar el branding base de Beauty's Me.
+ *
+ * Exporta también `ACCENT_NAMES`, `ACCENT_PREVIEW` y `ACCENT_LABELS`
+ * para que admin y cliente reutilicen el mismo grid de colores sin
+ * duplicar constantes (lo usa BusinessRulesPage y UserProfileDrawer).
  */
 
-import type { BusinessRules } from "../features/settings/businessRulesService"
+/** Nombres canónicos de las paletas disponibles. */
+export const ACCENT_NAMES = [
+  "pink",
+  "violet",
+  "rose",
+  "amber",
+  "emerald",
+  "sky",
+  "indigo",
+] as const
+
+export type AccentName = (typeof ACCENT_NAMES)[number]
 
 export type AccentPalette = {
   base: string
@@ -23,7 +38,7 @@ export type AccentPalette = {
   to: string
 }
 
-const PALETTES: Record<BusinessRules["theme_accent"], AccentPalette> = {
+const PALETTES: Record<AccentName, AccentPalette> = {
   pink: {
     base: "#e6007e",
     hover: "#c4006b",
@@ -96,7 +111,7 @@ const PALETTES: Record<BusinessRules["theme_accent"], AccentPalette> = {
   },
 }
 
-export function applyAccent(accent: BusinessRules["theme_accent"]): void {
+export function applyAccent(accent: AccentName): void {
   if (typeof document === "undefined") return
   const p = PALETTES[accent] ?? PALETTES.pink
   const root = document.documentElement.style
@@ -115,6 +130,28 @@ export function applyAccent(accent: BusinessRules["theme_accent"]): void {
     const meta = document.querySelector('meta[name="theme-color"]')
     if (meta) meta.setAttribute("content", p.meta)
   }
+}
+
+/** Etiqueta legible bilingüe del acento — se usa en pickers (admin + cliente). */
+export const ACCENT_LABELS: Record<AccentName, string> = {
+  pink: "Rosa · Violeta",
+  violet: "Violeta · Rosa",
+  rose: "Rojo · Naranja",
+  amber: "Ámbar · Rojo",
+  emerald: "Verde · Azul",
+  sky: "Azul · Índigo",
+  indigo: "Índigo · Cian",
+}
+
+/** Gradient CSS listo para `background:` — preview del color en pickers. */
+export const ACCENT_PREVIEW: Record<AccentName, string> = {
+  pink: "linear-gradient(135deg,#e6007e,#a855f7)",
+  violet: "linear-gradient(135deg,#7c3aed,#ec4899)",
+  rose: "linear-gradient(135deg,#e11d48,#f97316)",
+  amber: "linear-gradient(135deg,#f59e0b,#dc2626)",
+  emerald: "linear-gradient(135deg,#10b981,#0ea5e9)",
+  sky: "linear-gradient(135deg,#0ea5e9,#6366f1)",
+  indigo: "linear-gradient(135deg,#4f46e5,#06b6d4)",
 }
 
 /**

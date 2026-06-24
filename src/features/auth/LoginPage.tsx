@@ -12,11 +12,13 @@ import {
   KeyRound,
   ArrowLeft,
   User as UserIcon,
+  Gift,
 } from "lucide-react"
 import toast from "react-hot-toast"
 import { useAuth } from "../../lib/useAuth"
 import { supabase } from "../../lib/supabase"
 import { getLastSession, clearLastSession } from "../../lib/lastSession"
+import { getReferredBy, clearReferredBy } from "../../lib/referral"
 import Avatar from "../../components/ui/Avatar"
 import {
   notifyAdmins,
@@ -38,6 +40,10 @@ export default function LoginPage() {
   // para revelar el form completo.
   const [last, setLast] = useState(() => getLastSession())
   const [quickMode, setQuickMode] = useState(() => !!getLastSession())
+  // Referido: si la URL traía ?ref=email, lo mostramos como chip cuando
+  // el modo es signup. Después del registro exitoso se incluye en la
+  // notificación a admins para que Mari pueda otorgar los puntos.
+  const [referredBy] = useState(() => getReferredBy())
 
   // Si el user prellena email desde quick login, lo sincronizamos.
   useEffect(() => {
@@ -45,6 +51,15 @@ export default function LoginPage() {
       setEmail(last.email)
     }
   }, [quickMode, last?.email, email])
+
+  // Si la URL traía un referido y no hay sesión previa, mostramos signup
+  // directamente — venimos de un link de invitación.
+  useEffect(() => {
+    if (referredBy && !last) {
+      setMode("signup")
+      setQuickMode(false)
+    }
+  }, [referredBy, last])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,10 +90,19 @@ export default function LoginPage() {
         notifyAdmins({
           type: "new_customer",
           title: `Nueva clienta: ${displayName}`,
-          body: cleanEmail,
+          body: referredBy
+            ? `${cleanEmail}\n👯 Referida por: ${referredBy}`
+            : cleanEmail,
           link: "/apartados",
-          metadata: { email: cleanEmail, name: displayName },
+          metadata: {
+            email: cleanEmail,
+            name: displayName,
+            referred_by: referredBy ?? null,
+          },
         }).catch(() => {})
+        // Si vino con referido, lo limpiamos del storage para que no
+        // se aplique a futuros signups del mismo dispositivo.
+        if (referredBy) clearReferredBy()
       } else if (mode === "magic") {
         await sendMagicLink(email.trim())
         toast.success("Te enviamos un enlace mágico ✨")
@@ -216,6 +240,31 @@ export default function LoginPage() {
             </button>
           )}
         </div>
+
+        {/* Chip de referido: visible cuando vino una invitación por URL
+            y el modo es signup. Se borra del state al hacer signup OK. */}
+        {referredBy && mode === "signup" && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 rounded-2xl border border-emerald-200 dark:border-emerald-500/30 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-500/15 dark:to-teal-500/10 p-3 flex items-center gap-3"
+          >
+            <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-bloom">
+              <Gift size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+                Te invitó una amiga
+              </p>
+              <p className="text-[11px] font-black text-emerald-800 dark:text-emerald-200 truncate">
+                {referredBy}
+              </p>
+              <p className="text-[9px] font-bold text-emerald-700/80 dark:text-emerald-300/80 leading-snug">
+                Al registrarte y comprar, ambas ganan puntos extra
+              </p>
+            </div>
+          </motion.div>
+        )}
 
         {/* Smart Login: identity card del último user logueado.
             Aparece solo en modo signin si tenemos lastSession. */}

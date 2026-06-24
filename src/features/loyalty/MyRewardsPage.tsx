@@ -26,13 +26,16 @@ import {
   History,
   Zap,
   Lock,
+  Share2,
 } from "lucide-react"
+import toast from "react-hot-toast"
 
 import { useAuth } from "../../lib/useAuth"
 import { useBusinessRules } from "../settings/businessRulesService"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { useMonthlySpent } from "../../lib/useMonthlySpent"
+import { useUserPrefs } from "../../lib/userPrefs"
 import { useMyLoyaltyBalance, listLoyaltyRules } from "./loyaltyService"
 import type { LoyaltyRule } from "./loyaltyService"
 import { supabase } from "../../lib/supabase"
@@ -246,7 +249,13 @@ export default function MyRewardsPage() {
         points={points}
         lifetimeEarned={lifetimeEarned}
         valuePesos={valuePesos}
+        minRedeem={bRules.loyalty_min_redeem || 0}
       />
+
+      {/* Botón compartir mi link de referido. Cuando un amigo se
+          registra usando ?ref=miemail, Mari ve la fuente y dispara
+          manualmente el award `referral` desde el editor de reglas. */}
+      {email && <ReferralShareCard email={email} />}
 
       {/* PROGRESO VIP (si auto_vip activo) */}
       {vipThreshold > 0 && stats && (
@@ -332,11 +341,24 @@ function RewardsHero({
   points,
   lifetimeEarned,
   valuePesos,
+  minRedeem,
 }: {
   points: number
   lifetimeEarned: number
   valuePesos: number
+  minRedeem: number
 }) {
+  const { prefs } = useUserPrefs()
+  const streak = prefs.dailyLoginStreak
+  const showStreak = streak >= 2
+  // Si aún no puede canjear pero ya tiene >0, mostramos barra de
+  // progreso al primer canje. Si ya puede, mostramos "¡Listo para canjear!"
+  const canRedeem = minRedeem > 0 && points >= minRedeem
+  const showProgress = minRedeem > 0 && points > 0 && points < minRedeem
+  const progressPct = showProgress
+    ? Math.min(100, Math.round((points / minRedeem) * 100))
+    : 0
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
@@ -353,6 +375,11 @@ function RewardsHero({
           <p className="text-[10px] font-black uppercase tracking-[0.25em] opacity-90">
             Tus puntos
           </p>
+          {showStreak && (
+            <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 backdrop-blur text-[9px] font-black tabular-nums">
+              🔥 {streak} días seguidos
+            </span>
+          )}
         </div>
         <p className="text-5xl font-black tabular-nums leading-none">
           {points}
@@ -363,6 +390,34 @@ function RewardsHero({
         {lifetimeEarned > points && (
           <p className="text-[10px] font-bold opacity-75 mt-1 flex items-center gap-1">
             <Sparkles size={10} /> {lifetimeEarned} ganados de toda la vida
+          </p>
+        )}
+
+        {/* Barra de progreso al primer canje. */}
+        {showProgress && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-[10px] font-bold mb-1">
+              <span className="opacity-90">
+                Te faltan {minRedeem - points} pts para canjear
+              </span>
+              <span className="opacity-80 tabular-nums">
+                {points}/{minRedeem}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/25 overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${progressPct}%` }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="h-full bg-white rounded-full"
+              />
+            </div>
+          </div>
+        )}
+
+        {canRedeem && (
+          <p className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/25 backdrop-blur text-[10px] font-black uppercase tracking-widest">
+            ✨ ¡Listos para canjear!
           </p>
         )}
       </div>
@@ -500,5 +555,56 @@ function AchievementCard({
         </span>
       )}
     </motion.div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Tarjeta de referido: cliente comparte un link con su email
+ * embebido como ?ref=. Cuando una amiga se registra usando ese
+ * link, Mari ve el origen y otorga manualmente los puntos vía
+ * el editor de reglas (regla `referral`).
+ * ───────────────────────────────────────────────────────────── */
+
+function ReferralShareCard({ email }: { email: string }) {
+  const handleShare = async () => {
+    const origin =
+      typeof window !== "undefined" ? window.location.origin : "https://beautysme.app"
+    const ref = encodeURIComponent(email.toLowerCase())
+    const url = `${origin}/?ref=${ref}`
+    const text = `¡Compra en Beauty's Me! Yo ya soy clienta y te lo recomiendo 💖\n${url}`
+    try {
+      const { shareText } = await import("../../lib/share")
+      const r = await shareText({ title: "Beauty's Me", text })
+      if (r === "copied") {
+        toast.success("Tu link de invitación se copió al portapapeles")
+      } else if (r === "shared") {
+        toast.success("¡Compartido! Cuando tu amiga compre, gana puntos 💎")
+      }
+    } catch {
+      toast.error("No se pudo compartir")
+    }
+  }
+
+  return (
+    <motion.button
+      type="button"
+      onClick={handleShare}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full rounded-2xl p-3 flex items-center gap-3 bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-bloom press-hard"
+    >
+      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+        <Share2 size={16} />
+      </div>
+      <div className="flex-1 min-w-0 text-left">
+        <p className="text-[11px] font-black uppercase tracking-widest opacity-90">
+          Invita a una amiga
+        </p>
+        <p className="text-[10px] font-bold opacity-90 leading-snug">
+          Comparte tu link · cuando compre, ambas ganan puntos
+        </p>
+      </div>
+      <span className="shrink-0 text-[10px] font-black opacity-80">→</span>
+    </motion.button>
   )
 }
