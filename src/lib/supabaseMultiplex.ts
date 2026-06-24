@@ -29,6 +29,7 @@ const TABLES = [
   "loyalty_rules",
   "loyalty_balance",
   "loyalty_events",
+  "stock_alerts",
 ] as const
 
 export type RealtimeTable = (typeof TABLES)[number]

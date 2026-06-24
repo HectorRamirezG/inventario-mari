@@ -39,6 +39,7 @@ export type ResetCategory =
   | "pricing_ops"
   | "ciclos"
   | "catalogo"
+  | "loyalty"
 
 export interface ResetReport {
   tables: Record<string, number>
@@ -58,7 +59,10 @@ export const CATEGORY_TABLES: Record<ResetCategory, string[]> = {
     "sales",
   ],
   soporte: ["support_tickets"],
-  notifs: ["notifications"],
+  notifs: [
+    "notifications",
+    "stock_alerts", // alertas pendientes de reposición son notifs
+  ],
   deseos: ["wishes"],
   stories: ["stories"],
   resenias: ["reviews"],
@@ -72,6 +76,15 @@ export const CATEGORY_TABLES: Record<ResetCategory, string[]> = {
     "movements", // referencia variant_id — borrar antes que variants
     "variants",
     "products",
+  ],
+  loyalty: [
+    // Hijas primero (FKs hacia loyalty_balance no existen, pero por
+    // claridad las eventos antes que el balance).
+    "loyalty_events",
+    "loyalty_balance",
+    // loyalty_rules NO se borra aquí — son la configuración del
+    // programa (similar a business_rules). Solo borramos data del
+    // cliente: balance e historial.
   ],
 }
 
@@ -125,6 +138,12 @@ export const CATEGORY_INFO: Record<
     description: "Productos, variantes y fotos. ⚠ Acción más destructiva.",
     tone: "rose",
   },
+  loyalty: {
+    label: "Programa de premios (data)",
+    description:
+      "Balance de puntos de cada cliente y su historial. Las REGLAS del programa NO se borran (eso se hace desde el editor de reglas).",
+    tone: "amber",
+  },
 }
 
 /** Etiquetas legibles para el reporte y la UI por tabla. */
@@ -146,6 +165,9 @@ export const TABLE_LABEL: Record<string, string> = {
   inventory_cycles: "Ciclos de inventario",
   capital_injections: "Inyecciones de capital",
   operating_expenses: "Gastos operativos",
+  stock_alerts: "Alertas «Avísame cuando llegue»",
+  loyalty_events: "Eventos del programa de premios",
+  loyalty_balance: "Saldos de puntos de clientes",
 }
 
 async function deleteAllRows(
