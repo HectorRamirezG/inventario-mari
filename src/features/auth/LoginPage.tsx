@@ -44,6 +44,14 @@ export default function LoginPage() {
   // el modo es signup. Después del registro exitoso se incluye en la
   // notificación a admins para que Mari pueda otorgar los puntos.
   const [referredBy] = useState(() => getReferredBy())
+  // Wave login polish:
+  //  - capsLockOn: warning visible cuando el usuario tiene mayúsculas en
+  //    el password input (común causa de "credenciales inválidas").
+  //  - magicSentAt: timestamp del último magic link enviado para mostrar
+  //    botón "Reenviar" con cooldown de 60s.
+  const [capsLockOn, setCapsLockOn] = useState(false)
+  const [magicSentAt, setMagicSentAt] = useState<number | null>(null)
+  const [magicResendIn, setMagicResendIn] = useState(0)
 
   // Si el user prellena email desde quick login, lo sincronizamos.
   useEffect(() => {
@@ -60,6 +68,69 @@ export default function LoginPage() {
       setQuickMode(false)
     }
   }, [referredBy, last])
+
+  // Cooldown del botón "Reenviar magic link" — 60s desde el último envío.
+  // Decrementa cada segundo. Si no hay envío reciente, valor 0.
+  useEffect(() => {
+    if (!magicSentAt) return
+    const tick = () => {
+      const elapsedMs = Date.now() - magicSentAt
+      const remaining = Math.max(0, Math.ceil((60_000 - elapsedMs) / 1000))
+      setMagicResendIn(remaining)
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [magicSentAt])
+
+  // Detecta Caps Lock en cualquier input para mostrar warning visible.
+  // Modifies state SOLO si cambia (evita re-renders innecesarios).
+  function handleCapsCheck(e: React.KeyboardEvent<HTMLInputElement>) {
+    try {
+      const isOn = e.getModifierState && e.getModifierState("CapsLock")
+      if (isOn !== capsLockOn) setCapsLockOn(!!isOn)
+    } catch {
+      /* navegador viejo: ignorar */
+    }
+  }
+
+  // Reenvía el magic link y reinicia el cooldown.
+  async function resendMagic() {
+    if (!email.trim() || magicResendIn > 0 || loading) return
+    setLoading(true)
+    try {
+      await sendMagicLink(email.trim())
+      toast.success("Te reenviamos el enlace ✨")
+      setMagicSentAt(Date.now())
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo reenviar")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Calcula la fuerza del password (0..4) para el meter visual.
+  // Cuenta: longitud, mayúsculas, minúsculas, números, símbolos.
+  function passwordStrength(p: string): {
+    score: 0 | 1 | 2 | 3 | 4
+    label: string
+    tone: string
+  } {
+    if (!p) return { score: 0, label: "", tone: "" }
+    let s = 0
+    if (p.length >= 6) s++
+    if (p.length >= 10) s++
+    if (/[A-Z]/.test(p) && /[a-z]/.test(p)) s++
+    if (/[0-9]/.test(p) && /[^A-Za-z0-9]/.test(p)) s++
+    const map = [
+      { label: "Muy débil", tone: "bg-rose-500" },
+      { label: "Débil", tone: "bg-rose-400" },
+      { label: "Aceptable", tone: "bg-amber-400" },
+      { label: "Fuerte", tone: "bg-emerald-500" },
+      { label: "Muy fuerte", tone: "bg-emerald-600" },
+    ]
+    return { score: s as 0 | 1 | 2 | 3 | 4, ...map[s] }
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -106,6 +177,7 @@ export default function LoginPage() {
       } else if (mode === "magic") {
         await sendMagicLink(email.trim())
         toast.success("Te enviamos un enlace mágico ✨")
+        setMagicSentAt(Date.now())
       } else if (mode === "reset") {
         if (!email.trim()) {
           toast.error("Escribe tu correo primero")
@@ -362,6 +434,8 @@ export default function LoginPage() {
                   }
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={handleCapsCheck}
+                  onKeyUp={handleCapsCheck}
                   placeholder={
                     mode === "signin" ? "Contraseña" : "Mínimo 6 caracteres"
                   }
@@ -379,6 +453,61 @@ export default function LoginPage() {
                   {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </motion.label>
+            )}
+          </AnimatePresence>
+
+          {/* Caps Lock warning — aparece solo cuando hay tecla CAPS Y
+              el usuario está escribiendo contraseña. Causa común de
+              fallos en signin. */}
+          <AnimatePresence>
+            {capsLockOn && (mode === "signin" || mode === "signup") && (
+              <motion.div
+                key="capslock"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-[10px] font-black text-amber-700 dark:text-amber-300"
+              >
+                <span className="text-base">⚠️</span>
+                <span>Mayúsculas activadas (Caps Lock)</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Password strength meter — solo en signup, cuando hay algo
+              escrito. Visual: 4 barritas que se llenan + label. */}
+          <AnimatePresence>
+            {mode === "signup" && password.length > 0 && (
+              <motion.div
+                key="pwd-strength"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-1 overflow-hidden"
+              >
+                <div className="flex gap-1">
+                  {[0, 1, 2, 3].map((i) => {
+                    const s = passwordStrength(password)
+                    const active = i < s.score
+                    return (
+                      <div
+                        key={i}
+                        className={`flex-1 h-1.5 rounded-full transition-colors ${
+                          active ? s.tone : "bg-slate-200 dark:bg-slate-700"
+                        }`}
+                      />
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                  {passwordStrength(password).label}
+                  {passwordStrength(password).score < 3 && password.length >= 6 && (
+                    <span className="opacity-70 ml-1">
+                      · agrega mayúsculas, números o símbolos
+                    </span>
+                  )}
+                </p>
+              </motion.div>
             )}
           </AnimatePresence>
 
@@ -426,6 +555,34 @@ export default function LoginPage() {
             )}
           </motion.button>
         </form>
+
+        {/* Reenviar magic link con cooldown 60s. Visible solo si ya hubo
+            un envío reciente. Si el correo no llegó, evita pánico. */}
+        <AnimatePresence>
+          {mode === "magic" && magicSentAt && (
+            <motion.div
+              key="resend-magic"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="mt-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 px-3 py-2.5 text-center"
+            >
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5">
+                ¿No te llegó el correo? Revisa tu spam.
+              </p>
+              <button
+                type="button"
+                onClick={resendMagic}
+                disabled={magicResendIn > 0 || loading}
+                className="h-8 px-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-[10px] font-black uppercase tracking-widest text-primary disabled:opacity-50 disabled:cursor-not-allowed press"
+              >
+                {magicResendIn > 0
+                  ? `Reenviar en ${magicResendIn}s`
+                  : "Reenviar enlace"}
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Cambiar de modo */}
         {(mode === "signin" || mode === "signup" || mode === "magic") && (
