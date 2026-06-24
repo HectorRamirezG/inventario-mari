@@ -62,6 +62,10 @@ interface ClientStats {
   lifetimePoints: number
   monthlySpent: number
   pendingReviews: number
+  /** Días consecutivos abriendo la app (de userPrefs). */
+  loginStreak: number
+  /** Total de wishes que el cliente ha pedido. */
+  totalWishes: number
 }
 
 function buildAchievements(s: ClientStats, vipThreshold: number): DerivedAchievement[] {
@@ -123,6 +127,45 @@ function buildAchievements(s: ClientStats, vipThreshold: number): DerivedAchieve
       unlocked: s.totalOrders >= 10,
       progress: Math.min(1, s.totalOrders / 10),
     },
+    /* ─── Logros nuevos basados en data existente ─── */
+    {
+      id: "streak_week",
+      emoji: "🔥",
+      title: "Semana sin faltar",
+      caption: "7 días seguidos visitando",
+      unlocked: s.loginStreak >= 7,
+      progress: Math.min(1, s.loginStreak / 7),
+    },
+    {
+      id: "streak_month",
+      emoji: "👑",
+      title: "Constante",
+      caption: "30 días seguidos visitando",
+      unlocked: s.loginStreak >= 30,
+      progress: Math.min(1, s.loginStreak / 30),
+    },
+    {
+      id: "first_wish",
+      emoji: "💌",
+      title: "Pediste tu primer deseo",
+      caption: "Mari te escucha — sigue contándole qué buscas",
+      unlocked: s.totalWishes >= 1,
+    },
+    {
+      id: "social_butterfly",
+      emoji: "🦋",
+      title: "Social butterfly",
+      caption: "3 reseñas + 1 deseo + 1 compra",
+      unlocked: s.totalReviews >= 3 && s.totalWishes >= 1 && s.totalOrders >= 1,
+    },
+    {
+      id: "five_hundred_points",
+      emoji: "🌟",
+      title: "500 puntos lifetime",
+      caption: "Coleccionista pro",
+      unlocked: s.lifetimePoints >= 500,
+      progress: Math.min(1, s.lifetimePoints / 500),
+    },
   ]
 }
 
@@ -132,6 +175,7 @@ export default function MyRewardsPage() {
   const bRules = useBusinessRules()
   const { balance } = useMyLoyaltyBalance()
   const { spent: monthlySpent } = useMonthlySpent(email, 30)
+  const { prefs } = useUserPrefs()
 
   const [stats, setStats] = useState<ClientStats | null>(null)
   const [rules, setRules] = useState<LoyaltyRule[]>([])
@@ -142,8 +186,8 @@ export default function MyRewardsPage() {
     if (!email) return
     setLoading(true)
     try {
-      // Stats del cliente: pedidos, reseñas, etc. Best-effort en parallel.
-      const [salesRes, reviewsRes, rulesRes] = await Promise.all([
+      // Stats del cliente: pedidos, reseñas, deseos. Best-effort en parallel.
+      const [salesRes, reviewsRes, wishesRes, rulesRes] = await Promise.all([
         supabase
           .from("sales")
           .select("id", { count: "exact", head: true })
@@ -151,6 +195,10 @@ export default function MyRewardsPage() {
           .neq("status", "cancelled"),
         supabase
           .from("reviews")
+          .select("id", { count: "exact", head: true })
+          .ilike("customer_email", email.trim()),
+        supabase
+          .from("wishes")
           .select("id", { count: "exact", head: true })
           .ilike("customer_email", email.trim()),
         listLoyaltyRules().catch(() => []),
@@ -162,12 +210,14 @@ export default function MyRewardsPage() {
         lifetimePoints: balance?.lifetime_earned ?? 0,
         monthlySpent,
         pendingReviews: 0, // calculado solo si Mari lo necesita despues
+        loginStreak: prefs.dailyLoginStreak ?? 0,
+        totalWishes: wishesRes.count ?? 0,
       })
       setRules(rulesRes.filter((r) => r.enabled))
     } finally {
       setLoading(false)
     }
-  }, [email, balance?.lifetime_earned, monthlySpent])
+  }, [email, balance?.lifetime_earned, monthlySpent, prefs.dailyLoginStreak])
 
   useEffect(() => {
     refresh()
