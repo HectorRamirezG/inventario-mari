@@ -130,26 +130,30 @@ export function StockRowSkeleton({ count = 5 }: CountProps) {
 
 /**
  * Esqueleto del card de un wish/pedido futuro (WishAdminPage / MyWishesPage).
+ * Refleja la card real: thumbnail 24x24, padding p-3, info-flow vertical.
  */
 export function WishCardSkeleton({ count = 3 }: CountProps) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-2xl border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800/60 p-4 space-y-3"
+          className="rounded-2xl border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-800/60 p-3"
         >
-          <div className="flex items-start gap-3">
-            <Skeleton className="h-12 w-12 shrink-0" rounded="lg" />
-            <div className="flex-1 min-w-0 space-y-1.5">
-              <Skeleton className="h-4 w-40" rounded="full" />
-              <Skeleton className="h-2.5 w-24" rounded="full" />
+          <div className="flex gap-3">
+            <Skeleton className="h-24 w-24 shrink-0" rounded="lg" />
+            <div className="flex-1 min-w-0 space-y-1.5 py-1">
+              <div className="flex items-start justify-between gap-2">
+                <Skeleton className="h-4 w-32" rounded="full" />
+                <Skeleton className="h-5 w-16 shrink-0" rounded="full" />
+              </div>
+              <div className="flex gap-1.5 mt-1">
+                <Skeleton className="h-4 w-12" rounded="md" />
+                <Skeleton className="h-4 w-14" rounded="md" />
+              </div>
+              <Skeleton className="h-2.5 w-40" rounded="full" />
+              <Skeleton className="h-2 w-24" rounded="full" />
             </div>
-            <Skeleton className="h-5 w-14" rounded="full" />
-          </div>
-          <div className="flex gap-2">
-            <Skeleton className="h-8 flex-1" rounded="xl" />
-            <Skeleton className="h-8 flex-1" rounded="xl" />
           </div>
         </div>
       ))}

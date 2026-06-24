@@ -25,7 +25,6 @@ import {
   MessageCircle,
 } from "lucide-react"
 import toast from "react-hot-toast"
-import { toastWithAction } from "../../lib/toastAction"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney } from "../../lib/format"
@@ -440,6 +439,10 @@ export default function ClientShopPage() {
               : `${added} productos al carrito · listos para apartar`,
             { duration: 3200 },
           )
+          // Abrir el carrito automáticamente para que el cliente vea
+          // todo cargado y proceda. Pequeño delay para que el toast
+          // alcance a renderizar antes de que el drawer lo tape.
+          setTimeout(() => setOpenCart(true), 250)
         } else if (missing > 0) {
           toast.error("Esos productos ya no están disponibles")
         }
@@ -457,9 +460,15 @@ export default function ClientShopPage() {
   // Si llegamos con `?variant=VARIANT_ID` (desde notif de stock_back, por
   // ejemplo), abrimos el BuySheet con esa variante pre-seleccionada. Si
   // no existe, silenciosamente limpiamos el query.
+  //
+  // PRIORIDAD: si también hay `?reorder=`, ese gana — significa que el
+  // cliente quiere recargar un pedido entero, no ver un solo producto.
+  // Esperamos a que reorder termine (limpia su query) antes de procesar
+  // este. Sin esta guarda se abrían BuySheet + carrito a la vez.
   useEffect(() => {
     const requestedVariant = searchParams.get("variant")
     if (!requestedVariant) return
+    if (searchParams.has("reorder")) return
     if (products.length === 0) return
     const product = products.find((p) =>
       p.variants.some((v) => v.id === requestedVariant),
@@ -852,6 +861,25 @@ export default function ClientShopPage() {
       return
     }
 
+    // Modo vacaciones: tienda cerrada por decisión del admin. Mensaje
+    // amigable con fecha de retorno si la configuró.
+    if (bRules.shop_closed_enabled) {
+      let msg = bRules.shop_closed_message?.trim() || "Estamos cerrados temporalmente"
+      if (bRules.shop_closed_until) {
+        try {
+          const d = new Date(bRules.shop_closed_until + "T00:00:00")
+          msg += ` · volvemos el ${d.toLocaleDateString("es-MX", {
+            day: "numeric",
+            month: "long",
+          })}`
+        } catch {
+          /* noop */
+        }
+      }
+      toast.error(msg, { duration: 4800 })
+      return
+    }
+
     // Regla de negocio: bloquear checkout fuera de horario comercial
     if (!isWithinBusinessHours(bRules)) {
       toast.error(
@@ -1062,17 +1090,19 @@ export default function ClientShopPage() {
       })
 
       sound.success()
-      // Dismissamos el loading y mostramos un toast con CTA: el cliente
-      // decide si quiere ver su ticket de inmediato o seguir comprando.
-      // Antes esto era un `toast.success` plano y forzaba ir a /mis-pedidos.
+      // Toast simple — sin botón "Ver ticket" arriba. El cliente ya va
+      // directo a /mis-pedidos (logueado) o /  (invitado). Si quiere
+      // abrir el ticket lo hace desde su lista o el WhatsApp que Mari
+      // le mande con el link público. Antes mostrábamos `toastWithAction`
+      // con CTA "Ver ticket" pero Mari pidió quitarlo.
+      //
+      // Duración 5s + delay 280ms antes del navigate: el navigate
+      // desmonta este componente y el toast top-right vivía con él. Si
+      // navegamos al instante, el toast aparece menos de 100ms (parece
+      // que no salió). Con 280ms le da tiempo a aparecer ANTES del cambio
+      // de página, y la duración garantiza que se vea en la siguiente.
       toast.dismiss(tid)
-      const ticketPath = `/ticket/${(sale as any).public_token ?? sale.id}`
-      toastWithAction({
-        message: "✨ ¡Apartado creado! Te enviamos los detalles.",
-        actionLabel: "Ver ticket",
-        onAction: () => navigate(ticketPath),
-        duration: 5500,
-      })
+      toast.success("¡Listo! Tu pedido está apartado ✨", { duration: 5000 })
       setCart([])
       clearPersistedCart()
       setOpenGuestForm(false)
@@ -1082,17 +1112,18 @@ export default function ClientShopPage() {
       setGiftRecipient("")
       setGiftMessage("")
       // UX: ya NO redirigimos al ticket. El cliente queda en su lista de
-      // pedidos para que vea TODO su historial (no solo el último). Si
-      // quiere abrir el ticket, lo hace desde el CTA del toast ↑. Si está
-      // sin login, mandamos al home con el toast claro.
-      if (authEmail) {
-        navigate("/mis-pedidos")
-      } else {
-        // Cliente invitado: mantiene contexto en la tienda. El toast con
-        // "Apartado creado" es la confirmación. Si quiere ver el ticket,
-        // el WhatsApp que Mari le mande tendrá el link público.
-        navigate("/")
+      // pedidos para que vea TODO su historial (no solo el último).
+      const goNext = () => {
+        if (authEmail) {
+          navigate("/mis-pedidos")
+        } else {
+          // Cliente invitado: mantiene contexto en la tienda. El toast con
+          // "Apartado creado" es la confirmación. Si quiere ver el ticket,
+          // el WhatsApp que Mari le mande tendrá el link público.
+          navigate("/")
+        }
       }
+      window.setTimeout(goNext, 280)
     } catch (e: any) {
       sound.error()
       // Mensajes amigables para errores comunes (sin exponer detalles internos).
@@ -1278,6 +1309,19 @@ export default function ClientShopPage() {
               url: window.location.origin + "/",
             })
             if (r === "copied") toast.success("Link copiado al portapapeles")
+            // Premio: si está logueado, gana puntos por compartir.
+            // Best-effort, silencioso si la regla está apagada.
+            if (authEmail && (r === "shared" || r === "copied")) {
+              try {
+                const { awardLoyaltyPoints } = await import(
+                  "../loyalty/loyaltyService"
+                )
+                const got = await awardLoyaltyPoints(authEmail, "share_product")
+                if (got > 0) toast.success(`+${got} pts por compartir ✨`)
+              } catch {
+                /* noop */
+              }
+            }
           }}
           aria-label="Compartir tienda"
           title="Compartir tienda"
@@ -1837,13 +1881,20 @@ export default function ClientShopPage() {
 
                 <button
                   onClick={startCheckout}
-                  disabled={submitting}
+                  disabled={submitting || bRules.shop_closed_enabled}
                   className="bg-brand w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50 press-hard"
                 >
                   <Receipt size={16} />
-                  Apartar ahora
-                  <ArrowRight size={14} />
+                  {bRules.shop_closed_enabled ? "Tienda cerrada" : "Apartar ahora"}
+                  {!bRules.shop_closed_enabled && <ArrowRight size={14} />}
                 </button>
+
+                {bRules.shop_closed_enabled && (
+                  <p className="text-[10px] font-bold text-violet-600 dark:text-violet-300 text-center mt-2 leading-snug">
+                    {bRules.shop_closed_message?.trim() ||
+                      "Volvemos pronto, tu carrito se queda guardado 💜"}
+                  </p>
+                )}
 
                 {/* Compartir carrito por WhatsApp — útil cuando el cliente
                     quiere mostrar su carrito a otra persona antes de apartar. */}
@@ -2447,8 +2498,12 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           <FakeViewersBadge productId={product.id} />
         )}
         {onToggleFavorite && (
-          <div className="absolute top-2 right-2 z-10">
+          <div className="absolute top-2 right-2 z-10 flex flex-col gap-1.5">
             <WishlistHeart active={isFavorite} onClick={onToggleFavorite} />
+            <ProductShareButton
+              productId={product.id}
+              productName={product.name}
+            />
           </div>
         )}
       </motion.div>
@@ -2712,3 +2767,68 @@ function CartTierBanner({
    (al elegir variante) y en el CartTierBanner del drawer carrito
    con barra de progreso. Catalogo = vitrina limpia.
 */
+
+/**
+ * Mini botón de compartir individual en cada ProductCard. Genera un
+ * link al catálogo con el filtro `?q=<nombre>` para que el receptor
+ * caiga directo en ese producto (el universal search reacciona a `q`).
+ * Si el cliente está logueado y la regla `share_product` está activa,
+ * gana puntos. Best-effort y silencioso.
+ *
+ * Vive como sub-componente para usar useAuth sin invalidar el memo del
+ * padre `ProductCardClient`.
+ */
+function ProductShareButton({
+  productId: _productId,
+  productName,
+}: {
+  productId: string
+  productName: string
+}) {
+  const { email: authEmail } = useAuth()
+  const [busy, setBusy] = useState(false)
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      aria-label={`Compartir ${productName}`}
+      title="Compartir producto"
+      onClick={async (e) => {
+        e.stopPropagation()
+        if (busy) return
+        setBusy(true)
+        try {
+          const { shareUrl } = await import("../../lib/share")
+          const origin = window.location.origin
+          const url = `${origin}/?q=${encodeURIComponent(productName)}`
+          const r = await shareUrl({
+            title: productName,
+            text: `Mira esto en Beauty's Me: ${productName} 💖`,
+            url,
+          })
+          if (r === "copied") {
+            toast.success("Link copiado al portapapeles")
+          }
+          if (authEmail && (r === "shared" || r === "copied")) {
+            try {
+              const { awardLoyaltyPoints } = await import(
+                "../loyalty/loyaltyService"
+              )
+              const got = await awardLoyaltyPoints(authEmail, "share_product")
+              if (got > 0) toast.success(`+${got} pts por compartir ✨`)
+            } catch {
+              /* noop */
+            }
+          }
+        } finally {
+          setBusy(false)
+        }
+      }}
+      className="w-8 h-8 rounded-full bg-white/90 dark:bg-slate-900/85 backdrop-blur border border-slate-200/60 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 flex items-center justify-center shadow-sm active:scale-90 hover:text-primary transition-colors disabled:opacity-50"
+    >
+      <Share2 size={13} />
+    </button>
+  )
+}
+

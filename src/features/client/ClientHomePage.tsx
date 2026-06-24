@@ -26,6 +26,11 @@ import {
   MessageSquare,
   Bell,
   ChevronRight,
+  Wallet,
+  Truck,
+  Gift,
+  AlertCircle,
+  X,
 } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -35,6 +40,8 @@ import { useBusinessRules } from "../settings/businessRulesService"
 import { useNotifications } from "../notifications/notificationsService"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
+import { useFeedback } from "../../lib/useFeedback"
+import { formatMoney, formatRelative } from "../../lib/format"
 
 import ClientHero from "../../components/ui/ClientHero"
 import StoriesBar from "../stories/StoriesBar"
@@ -137,6 +144,12 @@ export default function ClientHomePage() {
       {/* CLIENTE LOGUEADO: info personal ARRIBA. Mensajes + saldos.
           Premios y Reseñas FUERON QUITADOS de aqui (Mari: 'lo que ya
           hay atajo en el +, quitalo'). Ya viven en el ActionHub Mi cuenta. */}
+
+      {/* Acciones pendientes (PRIORIDAD MÁXIMA) — saldos por pagar,
+          deseos disponibles, pedidos en camino. Solo aparece si hay
+          algo accionable. Reduce fricción: lo importante PRIMERO. */}
+      {isLogged && <PriorityActionsSection />}
+
       {isLogged && <MyMessagesSection />}
       {isLogged && <MySavingsSection />}
 
@@ -182,8 +195,65 @@ export default function ClientHomePage() {
 function MyMessagesSection() {
   // Las notificaciones del cliente ya viven en `useNotifications`. Aquí
   // mostramos un resumen visual + acceso rápido al bell del header.
-  const { items, unread } = useNotifications()
+  const { items, unread, markAsRead } = useNotifications()
+  const navigate = useNavigate()
+  const { tap } = useFeedback()
   const latest = items.slice(0, 3)
+
+  /** Misma lógica que `NotificationBell.resolveTarget` para cliente —
+   *  resumido en un helper local para no duplicar el switch enorme.
+   *  Si una notif no matchea ningún caso, fallback a /mis-pedidos si
+   *  hay sale_id; si no, no hace nada (mejor que tap muerto). */
+  function routeFor(n: typeof latest[number]): string | null {
+    const meta = (n.metadata ?? {}) as Record<string, any>
+    const saleId = meta.sale_id as string | undefined
+    const publicToken = meta.public_token as string | undefined
+    const variantId = meta.variant_id as string | undefined
+
+    switch (n.type) {
+      case "payment_approved":
+      case "payment_rejected":
+      case "proof_rejected":
+      case "payment_proof_rejected":
+      case "sale_cancelled":
+      case "price_adjusted":
+      case "layaway_extension":
+      case "payment_proof_reminder":
+        return "/mis-pedidos"
+      case "sale_paid":
+      case "payment_added":
+      case "new_layaway":
+      case "delivery_picked_up":
+      case "delivery_delivered":
+        if (publicToken) return `/ticket/${publicToken}`
+        if (saleId) return `/ticket/${saleId}`
+        return "/mis-pedidos"
+      case "support_ticket":
+      case "support_resolved":
+        return "/mis-reportes"
+      case "wish_created":
+      case "wish_status":
+      case "wish_available":
+        return "/mis-deseos"
+      case "stock_back":
+        if (variantId) return `/?variant=${variantId}`
+        if (saleId) return "/mis-pedidos"
+        return "/"
+      default:
+        // Fallback: si trae sale_id, vale ir a la lista de pedidos.
+        // Mejor que un tap muerto que confunde al cliente.
+        if (publicToken) return `/ticket/${publicToken}`
+        if (saleId) return "/mis-pedidos"
+        return null
+    }
+  }
+
+  function handleClick(n: typeof latest[number]) {
+    const route = routeFor(n)
+    tap()
+    if (!n.read_at) markAsRead(n.id).catch(() => {})
+    if (route) navigate(route)
+  }
 
   if (items.length === 0) {
     return (
@@ -196,10 +266,10 @@ function MyMessagesSection() {
         }}
       >
         <MessageSquare className="mx-auto mb-1 text-primary/60" size={20} />
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+        <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">
           Sin mensajes nuevos
         </p>
-        <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+        <p className="text-[11px] font-bold text-slate-400 mt-0.5">
           Aquí verás las novedades de tus pedidos.
         </p>
       </section>
@@ -209,37 +279,335 @@ function MyMessagesSection() {
   return (
     <section className="my-3">
       <header className="flex items-center justify-between mb-2 px-1">
-        <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+        <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
           <Bell size={12} className="text-primary" />
           Mensajes
           {unread > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-white text-[8px] font-black">
+            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-white text-[9px] font-black">
               {unread}
             </span>
           )}
         </h2>
+        {items.length > 3 && (
+          <button
+            type="button"
+            onClick={() => {
+              // El bell vive en el header del shell. Disparamos un evento
+              // para que se abra (handler global ya existe en App.tsx).
+              window.dispatchEvent(new CustomEvent("notif:open-bell"))
+            }}
+            className="text-[10px] font-black uppercase tracking-widest text-primary hover:opacity-80 flex items-center gap-1 press"
+          >
+            Ver todos <ChevronRight size={11} />
+          </button>
+        )}
       </header>
       <div className="space-y-2">
-        {latest.map((n) => (
-          <motion.div
-            key={n.id}
-            layout
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`rounded-2xl p-3 border ${
-              n.read_at
-                ? "bg-white dark:bg-slate-800/60 border-slate-100 dark:border-slate-700"
-                : "bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/30"
-            }`}
-          >
-            <p className="text-[11px] font-black leading-tight">{n.title}</p>
-            {n.body && (
-              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
-                {n.body}
-              </p>
-            )}
-          </motion.div>
-        ))}
+        {latest.map((n) => {
+          const routeable = !!routeFor(n)
+          return (
+            <motion.button
+              key={n.id}
+              layout
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              type="button"
+              onClick={() => handleClick(n)}
+              disabled={!routeable}
+              className={`nudge-on-hover w-full text-left rounded-2xl p-3 border transition-colors press ${
+                n.read_at
+                  ? "bg-white dark:bg-slate-800/60 border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  : "bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/30 hover:bg-primary/10"
+              } ${!routeable ? "cursor-default opacity-90" : ""}`}
+            >
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-black leading-tight">{n.title}</p>
+                  {n.body && (
+                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+                      {n.body}
+                    </p>
+                  )}
+                </div>
+                {routeable && (
+                  <ChevronRight
+                    size={14}
+                    className="nudge-arrow text-slate-400 shrink-0 mt-0.5"
+                  />
+                )}
+              </div>
+            </motion.button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+/* ============================================================== */
+/* PriorityActionsSection                                          */
+/* ============================================================== */
+
+interface PriorityItem {
+  id: string
+  icon: typeof Wallet
+  tone: "amber" | "violet" | "emerald"
+  title: string
+  caption: string
+  href: string
+}
+
+const TONE_CARD: Record<PriorityItem["tone"], string> = {
+  amber:
+    "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-900 dark:text-amber-100",
+  violet:
+    "bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30 text-violet-900 dark:text-violet-100",
+  emerald:
+    "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-100",
+}
+
+const TONE_ICON_BG: Record<PriorityItem["tone"], string> = {
+  amber: "bg-amber-500 text-white",
+  violet: "bg-violet-500 text-white",
+  emerald: "bg-emerald-500 text-white",
+}
+
+/**
+ * Acciones pendientes del cliente (lo MÁS importante hoy). Aparece
+ * arriba del feed cuando hay:
+ *  - Saldos por pagar (pedidos con balance > 0 y no cancelados)
+ *  - Pedidos "en camino" (delivery_notes.status='picked_up')
+ *  - Deseos disponibles (wishes.status='available')
+ *
+ * Si no hay nada urgente, no renderiza nada (silent). Refresh
+ * realtime al cambiar sales/wishes/delivery_notes.
+ *
+ * Cada card puede dismissarse con × — se oculta por 24h via
+ * localStorage. Útil cuando "ya sé que tengo saldo, pago mañana".
+ * Tras 24h reaparece para que no se olvide.
+ */
+const DISMISS_KEY = "mari:priority-dismissed:v1"
+const DISMISS_TTL_MS = 24 * 3600 * 1000
+
+function readDismissed(): Record<string, number> {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = localStorage.getItem(DISMISS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, number>
+    // Limpia los expirados al leer para que el storage no crezca infinito.
+    const now = Date.now()
+    const cleaned: Record<string, number> = {}
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === "number" && now - v < DISMISS_TTL_MS) {
+        cleaned[k] = v
+      }
+    }
+    return cleaned
+  } catch {
+    return {}
+  }
+}
+
+function writeDismissed(map: Record<string, number>) {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.setItem(DISMISS_KEY, JSON.stringify(map))
+  } catch {
+    /* noop */
+  }
+}
+
+function PriorityActionsSection() {
+  const { email } = useAuth()
+  const [items, setItems] = useState<PriorityItem[]>([])
+  const [dismissed, setDismissed] = useState<Record<string, number>>(() =>
+    readDismissed(),
+  )
+
+  function dismissItem(id: string) {
+    const next = { ...dismissed, [id]: Date.now() }
+    setDismissed(next)
+    writeDismissed(next)
+  }
+
+  const load = useCallback(async () => {
+    if (!email) {
+      setItems([])
+      return
+    }
+    const out: PriorityItem[] = []
+
+    // 1) Saldos por pagar. Limit 5 para no saturar.
+    const { data: salesPending } = await supabase
+      .from("sales")
+      .select("id,balance,public_token,created_at,status")
+      .eq("customer_email", email.toLowerCase())
+      .gt("balance", 0)
+      .neq("status", "cancelled")
+      .order("balance", { ascending: false })
+      .limit(5)
+    for (const s of (salesPending ?? []) as any[]) {
+      const bal = Number(s.balance) || 0
+      if (bal <= 0) continue
+      const token = s.public_token ?? s.id
+      out.push({
+        id: `saldo-${s.id}`,
+        icon: Wallet,
+        tone: "amber",
+        title: `Saldo pendiente: ${formatMoney(bal)}`,
+        caption: "Liquida tu pedido o reporta un pago",
+        href: `/ticket/${token}`,
+      })
+    }
+
+    // 2) Pedidos en camino. Best-effort: si la tabla no existe la
+    // query falla silenciosamente y no agregamos nada.
+    try {
+      const { data: salesIdsRes } = await supabase
+        .from("sales")
+        .select("id,public_token")
+        .eq("customer_email", email.toLowerCase())
+      const map = new Map<string, string>(
+        ((salesIdsRes ?? []) as any[]).map((r) => [r.id, r.public_token ?? r.id]),
+      )
+      const ids = Array.from(map.keys())
+      if (ids.length > 0) {
+        const { data: notes } = await supabase
+          .from("delivery_notes")
+          .select("id,sale_id,status,driver_name,picked_up_at")
+          .in("sale_id", ids)
+          .eq("status", "picked_up")
+          .limit(3)
+        for (const n of (notes ?? []) as any[]) {
+          const token = map.get(n.sale_id)
+          if (!token) continue
+          out.push({
+            id: `delivery-${n.id}`,
+            icon: Truck,
+            tone: "violet",
+            title: `${n.driver_name ? n.driver_name + " va " : "Va "}en camino a tu domicilio`,
+            caption: n.picked_up_at
+              ? `Salió ${formatRelative(n.picked_up_at)}`
+              : "Sigue el progreso en tu pedido",
+            href: `/ticket/${token}`,
+          })
+        }
+      }
+    } catch {
+      /* tabla delivery_notes puede no estar */
+    }
+
+    // 3) Deseos disponibles — el admin marcó "available" para algo
+    // que pediste. Acción: ir al catálogo a buscarlo.
+    try {
+      const { data: wishes } = await supabase
+        .from("wishes")
+        .select("id,title")
+        .eq("customer_email", email.toLowerCase())
+        .eq("status", "available")
+        .order("resolved_at", { ascending: false })
+        .limit(3)
+      for (const w of (wishes ?? []) as any[]) {
+        out.push({
+          id: `wish-${w.id}`,
+          icon: Gift,
+          tone: "emerald",
+          title: `Llegó: ${w.title}`,
+          caption: "Tu deseo ya está en la tienda — pásalo a tu carrito",
+          href: "/mis-deseos",
+        })
+      }
+    } catch {
+      /* noop */
+    }
+
+    // Clamp a 6 totales para no saturar la home con 11 cards
+    // (5 saldos + 3 deliveries + 3 wishes en el peor caso).
+    setItems(out.slice(0, 6))
+  }, [email])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const debouncedReload = useDebouncedCallback(load, 800)
+  useRealtimeSubscription("sales", debouncedReload, {
+    enabled: !!email,
+    match: (row: any) =>
+      row?.customer_email?.toLowerCase() === email?.toLowerCase(),
+  })
+  useRealtimeSubscription("wishes", debouncedReload, {
+    enabled: !!email,
+    match: (row: any) =>
+      row?.customer_email?.toLowerCase() === email?.toLowerCase(),
+  })
+  useRealtimeSubscription("delivery_notes" as any, debouncedReload, {
+    enabled: !!email,
+  })
+
+  // Filtra items dismissed que aún están dentro del TTL. Si el TTL
+  // venció (24h), reaparece para que el cliente no se olvide.
+  const visible = items.filter((it) => !dismissed[it.id])
+
+  if (visible.length === 0) return null
+
+  return (
+    <section className="my-3">
+      <header className="flex items-center gap-1.5 mb-2 px-1">
+        <AlertCircle size={12} className="text-primary" />
+        <h2 className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
+          Pendientes ({visible.length})
+        </h2>
+      </header>
+      <div className="space-y-2">
+        {visible.map((it) => {
+          const Icon = it.icon
+          return (
+            <div
+              key={it.id}
+              className={`relative nudge-on-hover flex items-center gap-3 rounded-2xl border p-3 ${TONE_CARD[it.tone]}`}
+            >
+              <a
+                href={it.href}
+                className="absolute inset-0 z-0 press rounded-2xl"
+                aria-label={it.title}
+              />
+              <div
+                className={`relative z-10 w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${TONE_ICON_BG[it.tone]}`}
+              >
+                <Icon size={16} />
+              </div>
+              <div className="relative z-10 flex-1 min-w-0 pointer-events-none">
+                <p className="text-[12px] font-black leading-tight truncate">
+                  {it.title}
+                </p>
+                <p className="text-[11px] font-bold opacity-80 leading-tight truncate mt-0.5">
+                  {it.caption}
+                </p>
+              </div>
+              <ChevronRight
+                size={14}
+                className="relative z-10 nudge-arrow shrink-0 opacity-60 pointer-events-none"
+              />
+              {/* Botón X dismiss — fuera del flujo principal pero
+                  encima del link, con stopPropagation. */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  dismissItem(it.id)
+                }}
+                aria-label="Ocultar por 24 horas"
+                title="Recordarme mañana"
+                className="relative z-20 shrink-0 w-7 h-7 -mr-1 rounded-full bg-black/5 hover:bg-black/15 text-current opacity-40 hover:opacity-100 flex items-center justify-center transition-opacity press"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          )
+        })}
       </div>
     </section>
   )
