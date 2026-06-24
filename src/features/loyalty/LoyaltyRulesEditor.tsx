@@ -13,6 +13,7 @@ import {
   type CustomerSuggestion,
 } from "./loyaltyService"
 import Modal from "../../components/ui/Modal"
+import Toggle from "../../components/ui/Toggle"
 import { confirmAction } from "../../lib/confirm"
 import { useDebouncedValue } from "../../lib/useDebouncedValue"
 
@@ -109,75 +110,96 @@ export default function LoyaltyRulesEditor() {
         return (
           <div
             key={r.action_key}
-            className={`flex items-center gap-3 p-2.5 rounded-xl border transition-colors ${
-              r.enabled
-                ? "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
-                : "bg-slate-50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800 opacity-60"
-            }`}
+            className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 p-3 hover:border-primary/30 dark:hover:border-primary/40 transition-colors"
           >
-            <span className="text-xl shrink-0" aria-hidden>
-              {r.emoji ?? "✨"}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-black text-slate-800 dark:text-slate-100 truncate">
-                {r.label}
-                {isCustom && (
-                  <span className="ml-1.5 text-[8px] font-black uppercase tracking-widest px-1 py-0.5 rounded bg-primary/15 text-primary align-middle">
-                    custom
+            <div className="flex items-start gap-3">
+              {/* Icono chip (emoji centrado) — espeja el icono de RuleRow. */}
+              <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0 text-base">
+                <span aria-hidden>{r.emoji ?? "✨"}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 leading-tight truncate">
+                    {r.label}
+                  </p>
+                  {/* Chip Activo/Pausado igual al de RuleRow. */}
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest leading-none ${
+                      r.enabled
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                        : "bg-slate-200 text-slate-500 dark:bg-slate-700/60 dark:text-slate-400"
+                    }`}
+                  >
+                    {r.enabled ? "Activo" : "Pausado"}
                   </span>
-                )}
-              </p>
-              {r.description && (
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug truncate">
-                  {r.description}
-                  {r.one_time && (
-                    <span className="ml-1 text-amber-600 dark:text-amber-400 font-black">
-                      · 1 sola vez
+                  {isCustom && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest leading-none bg-primary/15 text-primary">
+                      Custom
                     </span>
                   )}
-                </p>
-              )}
-            </div>
-            <input
-              type="number"
-              min={0}
-              max={9999}
-              value={r.points}
-              disabled={isSaving}
-              onChange={(e) => {
-                const next = Math.max(0, Math.min(9999, Number(e.target.value) || 0))
-                if (next === r.points) return
-                handleUpdate(r, { points: next })
-              }}
-              className="w-16 text-center text-[12px] font-black tabular-nums rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-1 focus:outline-none focus:ring-2 focus:ring-primary/40"
-              aria-label={`Puntos para ${r.label}`}
-            />
-            <button
-              type="button"
-              onClick={() => handleUpdate(r, { enabled: !r.enabled })}
-              disabled={isSaving}
-              className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${
-                r.enabled ? "bg-primary" : "bg-slate-300 dark:bg-slate-700"
-              }`}
-              aria-label={r.enabled ? "Desactivar" : "Activar"}
-            >
-              <span
-                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                  r.enabled ? "translate-x-[18px]" : "translate-x-0.5"
-                }`}
-              />
-            </button>
-            {isCustom && (
-              <button
-                type="button"
-                onClick={() => handleDelete(r)}
+                  {r.one_time && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest leading-none bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+                      1 sola vez
+                    </span>
+                  )}
+                </div>
+                {r.description && (
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-1">
+                    {r.description}
+                  </p>
+                )}
+              </div>
+              {/* Toggle unificado (mismo componente que el resto de la página). */}
+              <Toggle
+                checked={r.enabled}
+                onChange={(v) => handleUpdate(r, { enabled: v })}
                 disabled={isSaving}
-                aria-label="Borrar regla"
-                title="Borrar esta regla custom"
-                className="shrink-0 w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 flex items-center justify-center press disabled:opacity-50"
-              >
-                <Trash2 size={12} />
-              </button>
+                label={r.enabled ? "Desactivar" : "Activar"}
+              />
+            </div>
+
+            {/* Controles de puntos y borrar — solo cuando la regla está activa,
+                igual que RuleRow expande sus hijos solo al estar prendida. */}
+            {r.enabled && (
+              <div className="pt-3 pl-12 flex items-center gap-2 flex-wrap">
+                <label className="inline-flex items-center gap-2">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    Puntos
+                  </span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={9999}
+                    value={r.points}
+                    disabled={isSaving}
+                    onChange={(e) => {
+                      const next = Math.max(0, Math.min(9999, Number(e.target.value) || 0))
+                      if (next === r.points) return
+                      handleUpdate(r, { points: next })
+                    }}
+                    className="h-9 w-24 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[12px] font-black tabular-nums text-center outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 text-slate-900 dark:text-slate-100 px-2"
+                    aria-label={`Puntos para ${r.label}`}
+                  />
+                </label>
+                {isSaving && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-slate-400">
+                    <Loader2 size={10} className="animate-spin" /> guardando
+                  </span>
+                )}
+                {isCustom && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(r)}
+                    disabled={isSaving}
+                    aria-label="Borrar regla"
+                    title="Borrar esta regla custom"
+                    className="ml-auto inline-flex items-center gap-1 h-8 px-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 text-[9px] font-black uppercase tracking-widest press disabled:opacity-50"
+                  >
+                    <Trash2 size={11} /> Borrar
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )
