@@ -24,3 +24,55 @@ dist-ssr
 *.sw?
 
 buildlog.txt
+
+# ─── SECRETOS (defensa en profundidad) ─────────────────────────
+# Variables de entorno (todas excepto .env.example).
+# `*.local` arriba ya cubre `.env.local`, pero agregamos
+# patrones específicos por si alguien crea variantes.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Llaves SSH / TLS / firmas
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.ppk
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Credenciales conocidas (OAuth, Google, AWS, Firebase, etc.)
+credentials.json
+client_secret*.json
+service-account*.json
+token.json
+.aws/
+.azure/
+
+# Dumps / backups locales que NO deberían viajar al repo
+*.dump
+*.sql.gz
+*.bak
+backup/
+backups/
+
+# Artefactos / outputs generados (datos reales del negocio)
+artifact/
+artefactos/
+artefactos/historico/
+*.xlsx
+*.xls
+*.csv
+*.dat
+# Excepción: si en docs/ hay un .csv de ejemplo intencional, sobrescribe acá.
+
+# OS / sistema
+Thumbs.db
+desktop.ini
+
