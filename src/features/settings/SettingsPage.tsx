@@ -29,7 +29,8 @@ import {
   Database,
   ShoppingBag,
   Sliders,
-} from "lucide-react"import { toast } from "react-hot-toast"
+} from "lucide-react"
+import { toast } from "react-hot-toast"
 
 import { useStoreInfo } from "../../lib/useStoreInfo"
 import { useAuth } from "../../lib/useAuth"
