@@ -16,9 +16,9 @@ import {
   extractLatLng,
   reverseGeocode,
   searchAddress,
-  staticMapUrl,
   type PlaceSuggestion,
 } from "../../lib/geocoding"
+import { MapThumbnail } from "./MapThumbnail"
 import { useDebouncedValue } from "../../lib/useDebouncedValue"
 import { debug } from "../../lib/debug"
 
@@ -325,22 +325,17 @@ export default function SmartLocationInput({
 
       {/* Preview del mapa cuando hay coordenadas */}
       {coords && (
-        <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800">
-          <img
-            src={staticMapUrl(coords.lat, coords.lng, { width: 600, height: 200, zoom: 16 })}
-            alt={`Ubicación seleccionada en ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}
-            loading="lazy"
-            className="w-full h-32 object-cover"
-            onError={(e) => {
-              // Si el servicio público falla, ocultamos sin romper la UI
-              ;(e.currentTarget as HTMLImageElement).style.display = "none"
-            }}
-          />
-          <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-white/85 dark:bg-slate-900/85 backdrop-blur text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-1 shadow-sm">
+        <MapThumbnail
+          lat={coords.lat}
+          lng={coords.lng}
+          alt={`Ubicación seleccionada en ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}
+          className="w-full h-32"
+        >
+          <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-white/85 dark:bg-slate-900/85 backdrop-blur text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-1 shadow-sm pointer-events-none">
             <MapPin size={10} className="text-primary" />
             {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
           </div>
-        </div>
+        </MapThumbnail>
       )}
 
       {/* Caja para pegar link de Maps */}

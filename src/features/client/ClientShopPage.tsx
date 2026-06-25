@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useMemo, useDeferredValue, memo, lazy, Suspense } from "react"
+import { useEffect, useRef, useState, useMemo, useDeferredValue, memo, lazy, Suspense } from "react"
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Fuse from "fuse.js"
@@ -22,7 +22,6 @@ import {
   Star,
   Share2,
   Eye,
-  MessageCircle,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -43,7 +42,7 @@ import WishlistHeart from "../../components/ui/WishlistHeart"
 import Toggle from "../../components/ui/Toggle"
 import OnboardingTour from "../../components/ui/OnboardingTour"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
-import CategoryIcon, { getCategoryVisual } from "../../components/ui/CategoryIcon"
+import { getCategoryVisual } from "../../components/ui/CategoryIcon"
 import AbandonedCartBanner from "../../components/ui/AbandonedCartBanner"
 import QuickGlance from "../../components/ui/QuickGlance"
 import { useCartPersist, clearPersistedCart, type PersistedCartLine } from "../../lib/useCartPersist"
@@ -285,10 +284,14 @@ export default function ClientShopPage() {
   const bRules = useBusinessRules()
   const shopOpen = isWithinBusinessHours(bRules)
 
-  // Bottom Sheet de compra (estilo Shein): se abre con el botón "+" de la card
+  // Bottom Sheet de compra (estilo Shein): se abre con el botón "+" de la card.
+  // `preselectedVariant` se mantiene en una ref para no causar re-renders
+  // (sólo lo lee el `onConfirm` del sheet para hacer reset al cerrar).
   const [buySheetProduct, setBuySheetProduct] = useState<PublicProduct | null>(null)
-  const [buySheetPreselectedVariant, setBuySheetPreselectedVariant] =
-    useState<string | null>(null)
+  const buySheetPreselectedVariantRef = useRef<string | null>(null)
+  const setBuySheetPreselectedVariant = (id: string | null) => {
+    buySheetPreselectedVariantRef.current = id
+  }
 
   // Wizard de paquetes: lo abre el cliente al tocar un bundle.
   const { bundles: activeBundles } = useActiveBundles()
@@ -553,9 +556,9 @@ export default function ClientShopPage() {
     }
 
     if (needle.length >= 2) {
-      const results = fuse.search(needle).map((r) => r.item)
+      const results = fuse.search(needle).map((r: { item: PublicProduct }) => r.item)
       const idSet = new Set(out.map((p) => p.id))
-      out = results.filter((p) => idSet.has(p.id))
+      out = results.filter((p: PublicProduct) => idSet.has(p.id))
     }
 
     const minPrice = (p: PublicProduct) => {
@@ -777,41 +780,10 @@ export default function ClientShopPage() {
     return v.price_menudeo ?? v.price ?? v.price_medio ?? v.price_mayoreo ?? 0
   }
 
-  function addToCart(p: PublicProduct, v: PublicVariant) {
-    if (v.stock <= 0) {
-      toast.error("Sin stock")
-      return
-    }
-    setCart((prev) => {
-      const ix = prev.findIndex((c) => c.variant_id === v.id)
-      if (ix >= 0) {
-        const next = [...prev]
-        next[ix] = {
-          ...next[ix],
-          qty: Math.min(next[ix].qty + 1, v.stock),
-        }
-        return next
-      }
-      return [
-        ...prev,
-        {
-          variant_id: v.id,
-          product_id: p.id,
-          product_name: p.name,
-          variant_name: v.variant_name,
-          image_url:
-            (v.image_urls && v.image_urls[0]) ??
-            v.image_url ??
-            p.image_url,
-          unit_price: priceOf(v),
-          cost: Number(v.cost) || 0,
-          qty: 1,
-          stock: v.stock,
-        },
-      ]
-    })
-    toast.success(`+ ${p.name}`, { duration: 1500 })
-  }
+  // NOTA: hubo una funci\u00f3n `addToCart(p, v)` legacy que agregaba una
+  // variante de a una. Quedaba muerta desde que migramos al BuySheet con
+  // `addBatchToCart` (que es el que usan todos los botones del cat\u00e1logo).
+  // Eliminada para no confundir y bajar peso del bundle.
 
   /** Recibe el batch del BuySheet (varias variantes con sus cantidades).
    *  Si una línea viene con `isPreorder=true`, la aceptamos aunque no
@@ -1754,23 +1726,67 @@ export default function ClientShopPage() {
                 <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
               </div>
 
-              {/* Header limpio: título + cantidad de piezas + cerrar */}
+              {/* Header limpio: t\u00edtulo + cantidad de piezas + acciones.
+                  Compartir movido al header (icon) para liberar espacio
+                  vertical del footer y darle m\u00e1s scroll a la lista. */}
               <div className="flex items-center justify-between px-5 pb-3 shrink-0">
                 <div className="min-w-0">
                   <h3 className="text-lg font-black tracking-tight">Tu carrito</h3>
                   <p className="text-[10px] font-bold text-slate-500 mt-0.5">
-                    {totalQty} {totalQty === 1 ? "pieza" : "piezas"} ·{" "}
+                    {totalQty} {totalQty === 1 ? "pieza" : "piezas"} \u00b7{" "}
                     {repricedCart.length}{" "}
                     {repricedCart.length === 1 ? "producto" : "productos"}
                   </p>
                 </div>
-                <button
-                  onClick={() => setOpenCart(false)}
-                  aria-label="Cerrar carrito"
-                  className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 press"
-                >
-                  <X size={14} />
-                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (repricedCart.length === 0) return
+                      const { shareText } = await import("../../lib/share")
+                      const lines = repricedCart.map(
+                        (c) =>
+                          `- ${c.qty}x ${c.product_name}${c.variant_name ? ` (${c.variant_name})` : ""} = ${formatMoney(c.qty * c.unit_price)}`,
+                      )
+                      const tierLabel =
+                        cartTier === "menudeo"
+                          ? "Precio menudeo"
+                          : cartTier === "medio"
+                          ? "Precio medio mayoreo"
+                          : "Precio mayoreo"
+                      const text = [
+                        `Mi carrito en Beauty's Me`,
+                        ``,
+                        ...lines,
+                        ``,
+                        `${tierLabel}`,
+                        `Total: ${formatMoney(totalAmt)}`,
+                        ``,
+                        `Ver cat\u00e1logo: ${window.location.origin}/`,
+                      ].join("\n")
+                      const r = await shareText({
+                        title: "Mi carrito Beauty's Me",
+                        text,
+                      })
+                      if (r === "copied") {
+                        toast.success("Carrito copiado al portapapeles")
+                      }
+                    }}
+                    disabled={repricedCart.length === 0}
+                    aria-label="Compartir carrito"
+                    title="Compartir carrito"
+                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-primary press disabled:opacity-40"
+                  >
+                    <Share2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => setOpenCart(false)}
+                    aria-label="Cerrar carrito"
+                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 press"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
               </div>
 
               {/* Lista de items: imagen + datos + qty stepper + subtotal */}
@@ -1880,9 +1896,9 @@ export default function ClientShopPage() {
                             <button
                               onClick={() => changeQty(c.variant_id, -1)}
                               aria-label="Disminuir"
-                              className="w-6 h-6 rounded-full text-slate-500 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-600"
+                              className="relative w-8 h-8 rounded-full text-slate-500 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-600 before:absolute before:-inset-1.5 before:content-['']"
                             >
-                              <Minus size={11} />
+                              <Minus size={12} />
                             </button>
                             <span className="text-xs font-black w-5 text-center tabular-nums">
                               {c.qty}
@@ -1891,7 +1907,7 @@ export default function ClientShopPage() {
                               onClick={() => changeQty(c.variant_id, 1)}
                               aria-label="Aumentar"
                               disabled={!canIncrement}
-                              className="w-6 h-6 rounded-full text-primary flex items-center justify-center hover:bg-primary/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="relative w-8 h-8 rounded-full text-primary flex items-center justify-center hover:bg-primary/10 disabled:opacity-30 disabled:cursor-not-allowed before:absolute before:-inset-1.5 before:content-['']"
                               title={
                                 c.is_preorder
                                   ? `Máximo ${lineCap} en preventa`
@@ -1924,55 +1940,56 @@ export default function ClientShopPage() {
                 })}
               </div>
 
-              {/* Footer sticky: envío + desglose + CTAs */}
-              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 space-y-3 shrink-0 bg-white dark:bg-slate-900">
-                {/* Switch envío foráneo — usa Toggle homologado con el
-                    resto de la app (Reglas, Settings) para que la
-                    pastilla y el puntito sean consistentes. */}
-                <div
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-colors ${
-                    isForeign
-                      ? "border-amber-300 bg-amber-50 dark:bg-amber-500/10"
-                      : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-                  }`}
-                >
-                  <div className="text-left min-w-0 flex-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
-                      Envío foráneo
-                    </p>
-                    <p className="text-[9px] text-slate-500 truncate">
-                      {isForeign
-                        ? shippingCalc.free
-                          ? "Te toca gratis"
-                          : `Cargo: ${formatMoney(shippingCalc.amount)}`
-                        : "Fuera de CDMX / EdoMex"}
-                    </p>
-                  </div>
-                  <Toggle
-                    checked={isForeign}
-                    onChange={setIsForeign}
-                    label="Envío foráneo"
-                  />
-                </div>
-
-                {/* Switch modo regalo + inputs cuando está activo. */}
-                <div>
+              {/* Footer sticky: opciones (envío + regalo) + desglose + CTA.
+                  Diseño compacto para que la LISTA de items tenga el
+                  máximo espacio posible. Subt\u00edtulos solo cuando est\u00e1n
+                  activos para no robar verticales \u00fatiles. */}
+              <div className="px-5 py-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2 shrink-0 bg-white dark:bg-slate-900">
+                {/* Switches en una sola l\u00ednea (1 fila c/u, sin descripci\u00f3n
+                    fija). Cuando el switch est\u00e1 prendido, el texto se
+                    convierte en l\u00ednea informativa real. */}
+                <div className="flex items-center gap-2">
                   <div
-                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-colors ${
+                    className={`flex-1 flex items-center justify-between gap-2 px-3 h-10 rounded-xl border transition-colors ${
+                      isForeign
+                        ? "border-amber-300 bg-amber-50 dark:bg-amber-500/10"
+                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    }`}
+                  >
+                    <div className="text-left min-w-0 flex-1">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-tight">
+                        Env\u00edo for\u00e1neo
+                      </p>
+                      {isForeign && (
+                        <p className="text-[9px] text-slate-500 truncate leading-tight">
+                          {shippingCalc.free
+                            ? "Te toca gratis"
+                            : `Cargo: ${formatMoney(shippingCalc.amount)}`}
+                        </p>
+                      )}
+                    </div>
+                    <Toggle
+                      checked={isForeign}
+                      onChange={setIsForeign}
+                      label="Env\u00edo for\u00e1neo"
+                    />
+                  </div>
+                  <div
+                    className={`flex-1 flex items-center justify-between gap-2 px-3 h-10 rounded-xl border transition-colors ${
                       giftMode
                         ? "border-fuchsia-300 bg-fuchsia-50 dark:bg-fuchsia-500/10"
                         : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                     }`}
                   >
                     <div className="text-left min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
-                        Es un regalo
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-tight">
+                        Regalo
                       </p>
-                      <p className="text-[9px] text-slate-500 truncate">
-                        {giftMode
-                          ? "Mari preparará envoltorio + tarjeta"
-                          : "Marca para personalizar dedicatoria"}
-                      </p>
+                      {giftMode && (
+                        <p className="text-[9px] text-slate-500 truncate leading-tight">
+                          Con tarjeta
+                        </p>
+                      )}
                     </div>
                     <Toggle
                       checked={giftMode}
@@ -1980,39 +1997,40 @@ export default function ClientShopPage() {
                       label="Modo regalo"
                     />
                   </div>
-
-                  <AnimatePresence initial={false}>
-                    {giftMode && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="space-y-2 pt-2">
-                          <input
-                            type="text"
-                            value={giftRecipient}
-                            onChange={(e) => setGiftRecipient(e.target.value.slice(0, 60))}
-                            placeholder="Para: (nombre del afortunado)"
-                            className="w-full h-9 px-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-fuchsia-400"
-                          />
-                          <textarea
-                            value={giftMessage}
-                            onChange={(e) => setGiftMessage(e.target.value.slice(0, 240))}
-                            placeholder="Mensaje en la tarjeta (opcional, máx 240)"
-                            rows={2}
-                            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-fuchsia-400 resize-none"
-                          />
-                          <p className="text-[8px] text-slate-400 text-right">
-                            {giftMessage.length}/240
-                          </p>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
+
+                {/* Inputs de regalo (s\u00f3lo cuando est\u00e1 activo). */}
+                <AnimatePresence initial={false}>
+                  {giftMode && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="space-y-2 pt-1">
+                        <input
+                          type="text"
+                          value={giftRecipient}
+                          onChange={(e) => setGiftRecipient(e.target.value.slice(0, 60))}
+                          placeholder="Para: (nombre del afortunado)"
+                          className="w-full h-9 px-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-fuchsia-400"
+                        />
+                        <textarea
+                          value={giftMessage}
+                          onChange={(e) => setGiftMessage(e.target.value.slice(0, 240))}
+                          placeholder="Mensaje en la tarjeta (opcional, m\u00e1x 240)"
+                          rows={2}
+                          className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-fuchsia-400 resize-none"
+                        />
+                        <p className="text-[8px] text-slate-400 text-right">
+                          {giftMessage.length}/240
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 {/* Desglose: subtotal, envío, ahorro tier, total */}
                 <div className="space-y-1 text-xs">
@@ -2110,53 +2128,9 @@ export default function ClientShopPage() {
                 {bRules.shop_closed_enabled && (
                   <p className="text-[10px] font-bold text-violet-600 dark:text-violet-300 text-center mt-2 leading-snug">
                     {bRules.shop_closed_message?.trim() ||
-                      "Volvemos pronto, tu carrito se queda guardado 💜"}
+                      "Volvemos pronto, tu carrito se queda guardado \ud83d\udc9c"}
                   </p>
                 )}
-
-                {/* Compartir carrito por WhatsApp — útil cuando el cliente
-                    quiere mostrar su carrito a otra persona antes de apartar. */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const { shareText } = await import("../../lib/share")
-                    const lines = repricedCart.map(
-                      (c) =>
-                        `- ${c.qty}x ${c.product_name}${c.variant_name ? ` (${c.variant_name})` : ""} = ${formatMoney(c.qty * c.unit_price)}`,
-                    )
-                    const tierLabel =
-                      cartTier === "menudeo"
-                        ? "Precio menudeo"
-                        : cartTier === "medio"
-                        ? "Precio medio mayoreo"
-                        : "Precio mayoreo"
-                    const text = [
-                      `Mi carrito en Beauty's Me`,
-                      ``,
-                      ...lines,
-                      ``,
-                      `${tierLabel}`,
-                      `Total: ${formatMoney(totalAmt)}`,
-                      ``,
-                      `Ver catálogo: ${window.location.origin}/`,
-                    ].join("\n")
-                    const r = await shareText({
-                      title: "Mi carrito Beauty's Me",
-                      text,
-                    })
-                    if (r === "copied") {
-                      toast.success("Carrito copiado al portapapeles")
-                    }
-                  }}
-                  className="w-full h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 press"
-                >
-                  <MessageCircle size={11} />
-                  Compartir carrito
-                </button>
-
-                <p className="text-[10px] text-center text-slate-400 dark:text-slate-500">
-                  Te contactaremos por WhatsApp para coordinar pago y entrega.
-                </p>
               </div>
             </motion.div>
           </motion.div>
@@ -2291,20 +2265,11 @@ export default function ClientShopPage() {
           }
           initialQty={
             buySheetProduct
-              ? (() => {
-                  const fromCart = Object.fromEntries(
-                    cart
-                      .filter((c) => c.product_id === buySheetProduct.id)
-                      .map((c) => [c.variant_id, c.qty])
-                  )
-                  if (
-                    buySheetPreselectedVariant &&
-                    fromCart[buySheetPreselectedVariant] === undefined
-                  ) {
-                    fromCart[buySheetPreselectedVariant] = 1
-                  }
-                  return fromCart
-                })()
+              ? Object.fromEntries(
+                  cart
+                    .filter((c) => c.product_id === buySheetProduct.id)
+                    .map((c) => [c.variant_id, c.qty])
+                )
               : undefined
           }
           onClose={() => {
@@ -2593,10 +2558,10 @@ const ProductCardClient = memo(function ProductCardClientImpl({
     }
   })
 
-  // ¿Hay AL MENOS una foto real en alguna variante o legacy?
-  const hasAnyPhoto = carouselSafe.some((v) => v.images.length > 0)
+  // (Anteriormente calcul\u00e1bamos `hasAnyPhoto` para un fallback que
+  // ya no se usa; se elimin\u00f3 para no dejar vars muertas.)
 
-  // ¿Hay diferenciación real entre variantes a nivel de imagen?
+  // \u00bfHay diferenciaci\u00f3n real entre variantes a nivel de imagen?
   // Si todas terminan con exactamente la misma primera URL (caso típico:
   // ninguna variante subió foto, todas heredan la del producto), la pill
   // "Canela / Negro / Cafe..." sobre la imagen solo confunde porque la
@@ -2684,7 +2649,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                   <span className="ml-1 text-[9px] font-bold text-slate-400 line-through tabular-nums">
                     {formatMoney(price)}
                   </span>
-                  <span className="ml-1 text-[8px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">
+                  <span className="ml-1 text-[10px] font-black uppercase tracking-wide text-violet-600 dark:text-violet-400">
                     📦 Preventa {preorderPct}% OFF
                   </span>
                 </>
@@ -2694,7 +2659,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                   {/* Respeta show_stock_to_client + low_stock_label custom. */}
                   {!out && rules.show_stock_to_client && variant.stock <= 2 && (
                     <span
-                      className={`ml-1.5 text-[8px] font-black uppercase ${
+                      className={`ml-1.5 text-[10px] font-black uppercase tracking-wide ${
                         variant.stock === 1
                           ? "text-rose-600 dark:text-rose-400 animate-pulse"
                           : "text-amber-600"
@@ -2706,7 +2671,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                     </span>
                   )}
                   {out && (
-                    <span className="ml-1.5 text-[8px] text-rose-500 font-black uppercase">
+                    <span className="ml-1.5 text-[10px] text-rose-500 font-black uppercase tracking-wide">
                       Agotado
                     </span>
                   )}
@@ -2722,7 +2687,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                 allowPreorder
                   ? "bg-violet-500 hover:bg-violet-600"
                   : "bg-brand disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
-              } w-8 h-8 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform shrink-0`}
+              } w-10 h-10 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform shrink-0`}
               aria-label={
                 out
                   ? "Producto agotado"
@@ -2983,7 +2948,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
         variants={product.variants.map((v) => ({
           id: v.id,
           variant_name: v.variant_name,
-          price: v.price,
+          price: Number(v.price ?? v.price_menudeo) || 0,
           price_menudeo: v.price_menudeo,
           stock: v.stock,
           image_url:

@@ -47,6 +47,8 @@ export type ResetCategory =
   | "tickets_resueltos"
   | "notifs_leidas"
   | "ventas_canceladas"
+  | "visitas_viejas"
+  | "audit_viejo"
 
 export interface ResetReport {
   tables: Record<string, number>
@@ -80,7 +82,11 @@ export const CATEGORY_TABLES: Record<ResetCategory, string[]> = {
     "inventory_cycles",
   ],
   catalogo: [
-    "movements", // referencia variant_id — borrar antes que variants
+    // Hijos del catálogo que apuntan a products/variants. Si no se
+    // borran antes, quedan huérfanos (cards rotas, FK violations).
+    "product_questions", // FK a products
+    "bundles",           // referencia productos/variantes vía json
+    "movements",         // referencia variant_id — borrar antes que variants
     "variants",
     "products",
   ],
@@ -106,7 +112,13 @@ export const CATEGORY_TABLES: Record<ResetCategory, string[]> = {
     "sale_items",
     "sales",
   ],
+  visitas_viejas: ["site_visitors"],
+  audit_viejo: ["audit_log"],
 }
+
+/** Días de antigüedad usados por las limpiezas selectivas por fecha. */
+const VISITAS_DIAS = 30
+const AUDIT_DIAS = 90
 
 /** UI-friendly label + descripción corta. */
 export const CATEGORY_INFO: Record<
@@ -182,6 +194,16 @@ export const CATEGORY_INFO: Record<
       "Limpieza selectiva: borra ventas con status=cancelled y todos sus dependientes (items, pagos, comprobantes, comandas, movimientos).",
     tone: "amber",
   },
+  visitas_viejas: {
+    label: "Visitas anónimas viejas",
+    description: `Limpieza selectiva: borra el tracking de visitantes con más de ${VISITAS_DIAS} días. Útil para no acumular gigas de telemetría que ya no consultas.`,
+    tone: "slate",
+  },
+  audit_viejo: {
+    label: "Bitácora de admin vieja",
+    description: `Limpieza selectiva: borra entradas del audit log con más de ${AUDIT_DIAS} días. Las recientes (para investigar incidentes) se conservan.`,
+    tone: "slate",
+  },
 }
 
 /** Etiquetas legibles para el reporte y la UI por tabla. */
@@ -206,16 +228,33 @@ export const TABLE_LABEL: Record<string, string> = {
   stock_alerts: "Alertas «Avísame cuando llegue»",
   loyalty_events: "Eventos del programa de premios",
   loyalty_balance: "Saldos de puntos de clientes",
+  bundles: "Combos / paquetes",
+  product_questions: "Preguntas de productos (Q&A)",
+  site_visitors: "Visitantes anónimos",
+  audit_log: "Bitácora del admin",
+}
+
+/**
+ * Algunas tablas no tienen columna `id` (su PK es otra). Para que el
+ * DELETE de Supabase requiera siempre un WHERE (PostgREST exige
+ * filtro), mapeamos aquí la columna "siempre presente" a usar como
+ * filtro `is not null`.
+ *
+ * - loyalty_balance: PK = customer_email
+ */
+const TABLE_FILTER_COLUMN: Record<string, string> = {
+  loyalty_balance: "customer_email",
 }
 
 async function deleteAllRows(
   table: string,
   report: ResetReport,
 ): Promise<void> {
+  const filterCol = TABLE_FILTER_COLUMN[table] ?? "id"
   const { error, count } = await supabase
     .from(table)
     .delete({ count: "exact" })
-    .not("id", "is", null)
+    .not(filterCol, "is", null)
 
   if (error) {
     if (/relation .* does not exist/i.test(error.message) || error.code === "42P01") {
@@ -318,11 +357,21 @@ export async function resetAppData(
   }
 
   const ALL = Object.keys(CATEGORY_TABLES) as ResetCategory[]
-  // Las selectivas (tickets_resueltos, notifs_leidas, ventas_canceladas)
-  // NO entran en "borrar TODO" porque ya están cubiertas por sus
-  // categorías padre genéricas (soporte, notifs, ventas).
+  // Las selectivas NO entran en "borrar TODO":
+  //  - tickets_resueltos / notifs_leidas / ventas_canceladas → ya las
+  //    cubre la categoría padre (soporte / notifs / ventas).
+  //  - visitas_viejas / audit_viejo → son históricos, NO se borran en
+  //    un reset completo aunque el admin pida "todo". Mari debe pedir
+  //    explícitamente la selectiva si quiere limpiar telemetría.
   const FULL_RESET_SET = ALL.filter(
-    (c) => !["tickets_resueltos", "notifs_leidas", "ventas_canceladas"].includes(c),
+    (c) =>
+      ![
+        "tickets_resueltos",
+        "notifs_leidas",
+        "ventas_canceladas",
+        "visitas_viejas",
+        "audit_viejo",
+      ].includes(c),
   )
   const selected: ResetCategory[] =
     categories && categories.length > 0 ? categories : FULL_RESET_SET
@@ -345,9 +394,6 @@ export async function resetAppData(
   }
 
   // Método selectivo: borra cada categoría en orden FK-safe.
-  // Las tablas compartidas (movements en ventas Y catalogo) se intentan
-  // dos veces pero `deleteAllRows` es idempotente.
-  //
   // Las categorías SELECTIVAS (tickets_resueltos, notifs_leidas,
   // ventas_canceladas) tienen su propio handler con filtro — NO usan
   // deleteAllRows porque ese borra TODA la tabla.
@@ -355,13 +401,23 @@ export async function resetAppData(
     "tickets_resueltos",
     "notifs_leidas",
     "ventas_canceladas",
+    "visitas_viejas",
+    "audit_viejo",
   ]
+  // Dedupe de tablas compartidas (ej. `movements` está en `ventas` y
+  // `catalogo`). Antes se borraba dos veces — era idempotente pero
+  // gastaba round-trips y el reporte ya contaba el total real en la
+  // primera pasada. Preservamos el orden de aparición para mantener
+  // la garantía FK-safe (hijas antes que padres).
+  const seenTables = new Set<string>()
   for (const cat of selected) {
     if (SELECTIVE.includes(cat)) {
       await runSelectiveCleanup(cat, report)
       continue
     }
     for (const t of CATEGORY_TABLES[cat]) {
+      if (seenTables.has(t)) continue
+      seenTables.add(t)
       await deleteAllRows(t, report)
     }
   }
@@ -480,6 +536,54 @@ async function runSelectiveCleanup(
       report.tables["sales"] = 0
     } else {
       report.tables["sales"] = (salesDel ?? []).length
+    }
+    return
+  }
+
+  if (cat === "visitas_viejas") {
+    // Borra tracking anónimo más viejo que VISITAS_DIAS. Usa `created_at`
+    // como referencia (toda fila de site_visitors lo tiene por default).
+    const cutoff = new Date(Date.now() - VISITAS_DIAS * 86_400_000).toISOString()
+    const { data, error } = await supabase
+      .from("site_visitors")
+      .delete()
+      .lt("created_at", cutoff)
+      .select("id")
+    if (error) {
+      // Si la tabla no existe o la RLS no permite delete, lo registramos
+      // sin tirar el flujo completo.
+      if (!/relation .* does not exist/i.test(error.message) && error.code !== "42P01") {
+        report.errors.push({
+          where: "selective:visitas_viejas",
+          message: error.message,
+        })
+      }
+      report.tables["site_visitors"] = 0
+    } else {
+      report.tables["site_visitors"] = (data ?? []).length
+    }
+    return
+  }
+
+  if (cat === "audit_viejo") {
+    // Borra entradas del audit_log con más de AUDIT_DIAS días. Las
+    // recientes (las que sirven para investigar incidentes) se quedan.
+    const cutoff = new Date(Date.now() - AUDIT_DIAS * 86_400_000).toISOString()
+    const { data, error } = await supabase
+      .from("audit_log")
+      .delete()
+      .lt("created_at", cutoff)
+      .select("id")
+    if (error) {
+      if (!/relation .* does not exist/i.test(error.message) && error.code !== "42P01") {
+        report.errors.push({
+          where: "selective:audit_viejo",
+          message: error.message,
+        })
+      }
+      report.tables["audit_log"] = 0
+    } else {
+      report.tables["audit_log"] = (data ?? []).length
     }
     return
   }

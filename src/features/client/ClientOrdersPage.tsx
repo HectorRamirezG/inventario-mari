@@ -736,10 +736,10 @@ export default function ClientOrdersPage() {
                   <button
                     type="button"
                     onClick={() => openRateOrder(o.id)}
-                    className="h-8 px-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
+                    className="h-10 px-3.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
                     title="Calificar los productos de este pedido"
                   >
-                    <Star size={11} />
+                    <Star size={12} />
                     Calificar productos
                   </button>
                 )}
@@ -747,10 +747,10 @@ export default function ClientOrdersPage() {
                   <button
                     type="button"
                     onClick={() => handleReorder(o.id)}
-                    className="h-8 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
+                    className="h-10 px-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
                     title="Repetir esta compra"
                   >
-                    <RotateCcw size={11} />
+                    <RotateCcw size={12} />
                     Reordenar
                   </button>
                 )}
@@ -959,7 +959,7 @@ function OrderStatusBanner({
         <p className="text-[13px] font-black leading-tight tracking-tight">
           {title}
         </p>
-        <p className="text-[11px] font-bold opacity-80 leading-snug truncate mt-0.5">
+        <p className="text-[11px] font-bold opacity-80 leading-snug line-clamp-2 mt-0.5">
           {subtitle}
         </p>
       </div>

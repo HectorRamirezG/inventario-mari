@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   Settings as SettingsIcon,
   Store,
@@ -25,8 +25,11 @@ import {
   BellOff,
   Moon as MoonIcon,
   CheckCircle2,
-} from "lucide-react"
-import { toast } from "react-hot-toast"
+  ChevronRight,
+  Database,
+  ShoppingBag,
+  Sliders,
+} from "lucide-react"import { toast } from "react-hot-toast"
 
 import { useStoreInfo } from "../../lib/useStoreInfo"
 import { useAuth } from "../../lib/useAuth"
@@ -1299,15 +1302,91 @@ function NotifPrefsSection() {
    usuarios ni configuración. Si selecciona todo, equivalente a reset
    total. Doble confirmación: checklist + escribir RESETEAR.
    ════════════════════════════════════════════════════════════════════ */
+
+/** Categorías que NO borran toda la tabla, solo aplican un filtro
+ *  (status=resolved, read_at not null, created_at antiguo). Las
+ *  mostramos con badge "Selectiva" para que Mari sepa distinguirlas
+ *  visualmente de las que borran TODO. */
+const SELECTIVE_CATEGORIES: ResetCategory[] = [
+  "tickets_resueltos",
+  "notifs_leidas",
+  "ventas_canceladas",
+  "visitas_viejas",
+  "audit_viejo",
+]
+
+/** Agrupación visual del checklist por severidad/dominio.
+ *  Antes era una lista plana de 15 cards que abrumaba a Mari y
+ *  hacía difícil ver "qué afecta qué". Ahora 3 secciones colapsables:
+ *  - Operativo: lo de día a día (ventas, soporte, etc.)
+ *  - Catálogo: lo más destructivo, aislado
+ *  - Selectivas: limpiezas finas opt-in */
+const GROUPS: Array<{
+  id: string
+  label: string
+  hint: string
+  icon: typeof Database
+  iconBgCls: string
+  borderCls: string
+  cats: ResetCategory[]
+}> = [
+  {
+    id: "operativo",
+    label: "Datos operativos",
+    hint: "Ventas, soporte, notifs, deseos, stories, reseñas, ciclos, loyalty",
+    icon: Database,
+    iconBgCls: "bg-amber-500",
+    borderCls: "border-amber-200/70 dark:border-amber-500/30",
+    cats: [
+      "ventas",
+      "soporte",
+      "notifs",
+      "deseos",
+      "stories",
+      "resenias",
+      "pricing_ops",
+      "ciclos",
+      "loyalty",
+    ],
+  },
+  {
+    id: "catalogo",
+    label: "Catálogo completo",
+    hint: "Productos, variantes, bundles, Q&A y fotos. ⚠ Lo más destructivo.",
+    icon: ShoppingBag,
+    iconBgCls: "bg-rose-500",
+    borderCls: "border-rose-200/70 dark:border-rose-500/30",
+    cats: ["catalogo"],
+  },
+  {
+    id: "selectivas",
+    label: "Limpiezas selectivas",
+    hint: "Filtran por estado o fecha. Útiles sin borrar todo.",
+    icon: Sliders,
+    iconBgCls: "bg-sky-500",
+    borderCls: "border-sky-200/70 dark:border-sky-500/30",
+    cats: SELECTIVE_CATEGORIES,
+  },
+]
+
 function DangerZoneSection() {
   const ALL_CATEGORIES = Object.keys(CATEGORY_INFO) as ResetCategory[]
   const [open, setOpen] = useState(false)
   const [confirmText, setConfirmText] = useState("")
   const [busy, setBusy] = useState(false)
   const [report, setReport] = useState<ResetReport | null>(null)
-  // Por default proponemos TODO menos catálogo (lo más conservador).
+  // Por default: operativo expandido (lo más usado); catálogo y
+  // selectivas colapsadas para no asustar a Mari de entrada.
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(["operativo"])
+  // Por default proponemos TODO menos:
+  //  - catálogo (lo más destructivo)
+  //  - limpiezas selectivas de históricos (visitas/audit) — son opt-in
+  //    porque borran data útil para análisis a largo plazo, no son
+  //    parte del reset operativo típico.
   const [selected, setSelected] = useState<ResetCategory[]>(
-    ALL_CATEGORIES.filter((c) => c !== "catalogo"),
+    ALL_CATEGORIES.filter(
+      (c) => c !== "catalogo" && c !== "visitas_viejas" && c !== "audit_viejo",
+    ),
   )
 
   const canRun =
@@ -1456,49 +1535,126 @@ function DangerZoneSection() {
             </button>
           </div>
 
-          {/* Checklist de categorías */}
-          <div className="space-y-1.5">
-            {ALL_CATEGORIES.map((cat) => {
-              const info = CATEGORY_INFO[cat]
-              const isOn = selected.includes(cat)
-              const toneRing =
-                info.tone === "rose"
-                  ? "border-rose-300/60 dark:border-rose-500/30"
-                  : info.tone === "amber"
-                  ? "border-amber-300/60 dark:border-amber-500/30"
-                  : info.tone === "sky"
-                  ? "border-sky-300/60 dark:border-sky-500/30"
-                  : "border-slate-300/60 dark:border-slate-600/40"
-              return (
-                <label
-                  key={cat}
-                  className={`flex items-start gap-2.5 p-2.5 rounded-xl border bg-white dark:bg-slate-900/60 cursor-pointer hover:border-rose-400/60 transition-colors ${
-                    isOn ? "ring-2 ring-rose-400/40 " + toneRing : toneRing + " opacity-70"
-                  }`}
+          {/* Checklist agrupado por severidad para no abrumar.
+              Cada grupo es colapsable; el badge muestra cuántos están
+              marcados sobre el total del grupo para que Mari sepa de
+              un vistazo qué tan agresivo va su reset. */}
+          {GROUPS.map((g) => {
+            const isExpanded = expandedGroups.includes(g.id)
+            const groupCount = g.cats.filter((c) => selected.includes(c)).length
+            const total = g.cats.length
+            const allOn = groupCount === total
+            const noneOn = groupCount === 0
+            return (
+              <div
+                key={g.id}
+                className={`rounded-2xl border ${g.borderCls} bg-white/70 dark:bg-slate-900/40 overflow-hidden`}
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedGroups((prev) =>
+                      prev.includes(g.id)
+                        ? prev.filter((x) => x !== g.id)
+                        : [...prev, g.id],
+                    )
+                  }
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left press"
+                  aria-expanded={isExpanded}
                 >
-                  <input
-                    type="checkbox"
-                    checked={isOn}
-                    onChange={() => toggle(cat)}
-                    disabled={busy}
-                    className="mt-1 w-4 h-4 accent-rose-500"
-                  />
+                  <span
+                    className={`w-7 h-7 rounded-lg ${g.iconBgCls} text-white flex items-center justify-center shrink-0`}
+                  >
+                    <g.icon size={13} />
+                  </span>
                   <div className="flex-1 min-w-0">
-                    <p
-                      className={`text-[11px] font-black ${
-                        isOn ? "text-slate-900 dark:text-slate-100" : "text-slate-500"
-                      }`}
-                    >
-                      {info.label}
+                    <p className="text-[11px] font-black text-slate-900 dark:text-slate-100 leading-tight">
+                      {g.label}
                     </p>
-                    <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 leading-tight">
-                      {info.description}
+                    <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 leading-tight truncate">
+                      {g.hint}
                     </p>
                   </div>
-                </label>
-              )
-            })}
-          </div>
+                  <span
+                    className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full tabular-nums ${
+                      allOn
+                        ? "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300"
+                        : noneOn
+                        ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                        : "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+                    }`}
+                  >
+                    {groupCount}/{total}
+                  </span>
+                  <ChevronRight
+                    size={14}
+                    className={`text-slate-400 transition-transform ${
+                      isExpanded ? "rotate-90" : ""
+                    }`}
+                  />
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                      className="overflow-hidden"
+                    >
+                      <div className="px-2 pb-2 space-y-1.5">
+                        {g.cats.map((cat) => {
+                          const info = CATEGORY_INFO[cat]
+                          const isOn = selected.includes(cat)
+                          const isSelective = SELECTIVE_CATEGORIES.includes(cat)
+                          return (
+                            <label
+                              key={cat}
+                              className={`flex items-start gap-2.5 p-2.5 rounded-xl border bg-white dark:bg-slate-900/60 cursor-pointer transition-colors ${
+                                isOn
+                                  ? "border-rose-400/60 ring-1 ring-rose-400/30"
+                                  : "border-slate-200/70 dark:border-slate-700/60 opacity-70 hover:opacity-100"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isOn}
+                                onChange={() => toggle(cat)}
+                                disabled={busy}
+                                className="mt-0.5 w-4 h-4 accent-rose-500 shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p
+                                    className={`text-[11px] font-black ${
+                                      isOn
+                                        ? "text-slate-900 dark:text-slate-100"
+                                        : "text-slate-600 dark:text-slate-400"
+                                    }`}
+                                  >
+                                    {info.label}
+                                  </p>
+                                  {isSelective && (
+                                    <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-300">
+                                      Selectiva
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+                                  {info.description}
+                                </p>
+                              </div>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )
+          })}
 
           <label className="text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 block pt-1">
             Escribe <span className="font-mono">RESETEAR</span> para confirmar

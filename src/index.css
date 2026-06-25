@@ -994,14 +994,23 @@ html[data-motion="high"] *::after {
     padding-top: max(0.25rem, env(safe-area-inset-top));
   }
 
-  /* Scroll suave + inercia iOS + capa GPU dedicada para evitar tearing
-     y parpadeo del contenido durante el momentum scroll en mobile. */
+  /* Contenedor scrollable principal.
+     Historial:
+       - Antes ten\u00eda `transform: translateZ(0)` + `will-change: scroll-position`
+         como "optimizaci\u00f3n GPU". En m\u00f3vil moderno (Chrome Android, Safari iOS 16+)
+         eso hac\u00eda que el browser calculara mal el `scrollHeight` cuando dentro
+         hab\u00eda elementos con transforms propios (framer-motion). S\u00edntoma: el
+         scroll "rebotaba" al top despu\u00e9s de bajar 1-2 dedos y la barra
+         se ve\u00eda enorme. Quitarlos arregla el problema sin perder fluidez:
+         los browsers ya optimizan scroll por defecto cuando hay overflow.
+       - `scroll-behavior: smooth` tambi\u00e9n se quit\u00f3: solo afecta scrolls
+         programados (scrollTo()) y hac\u00eda visible un "rebote" cuando algo
+         reseteaba scrollTop. Si necesitas smooth scroll puntual, p\u00e1sale
+         { behavior: "smooth" } directo al scrollTo().
+     -webkit-overflow-scrolling: touch sigue por compat con iOS viejos. */
   .scroll-container-ios {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
-    scroll-behavior: smooth;
-    transform: translateZ(0);
-    will-change: scroll-position;
   }
 
   /* Scrollbar minimalista para listas dentro de tarjetas */

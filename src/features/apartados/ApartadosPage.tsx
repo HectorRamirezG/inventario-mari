@@ -42,7 +42,8 @@ import {
   cleanPhone,
   intlPhone,
 } from "../../lib/format";
-import { extractLatLng, staticMapUrl } from "../../lib/geocoding";
+import { extractLatLng } from "../../lib/geocoding";
+import { MapThumbnail } from "../../components/ui/MapThumbnail";
 import { imageAvatar } from "../../lib/imageTransform";
 import {
   fetchProfilesByEmails,
@@ -675,25 +676,17 @@ const SaleCard = memo(function SaleCardImpl({
               const ll = extractLatLng(sale.customer_location ?? "")
               if (!ll) return null
               return (
-                <a
+                <MapThumbnail
+                  lat={ll.lat}
+                  lng={ll.lng}
                   href={sale.customer_location!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700"
+                  alt="Ubicación del cliente"
+                  className="w-full h-20 rounded-xl"
                 >
-                  <img
-                    src={staticMapUrl(ll.lat, ll.lng, { width: 600, height: 120, zoom: 16 })}
-                    alt="Ubicación del cliente"
-                    loading="lazy"
-                    className="w-full h-20 object-cover"
-                    onError={(e) => {
-                      ;(e.currentTarget as HTMLImageElement).style.display = "none"
-                    }}
-                  />
-                  <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-white/85 dark:bg-slate-900/85 backdrop-blur text-[8px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                  <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-white/85 dark:bg-slate-900/85 backdrop-blur text-[8px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-1 pointer-events-none">
                     <MapPin size={8} className="text-primary" /> Abrir en Maps
                   </span>
-                </a>
+                </MapThumbnail>
               )
             })()}
 

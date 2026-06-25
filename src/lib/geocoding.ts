@@ -228,25 +228,49 @@ export function buildMapsUrl(lat: number, lng: number, label?: string): string {
 }
 
 /**
- * URL de imagen estática del mapa con un pin marcado.
- * Usa el static map endpoint de Wikimedia (basado en OSM) — gratis y sin
- * API key. Lo elegimos porque `staticmap.openstreetmap.de` dejó de
- * resolver DNS en producción (ERR_NAME_NOT_RESOLVED).
+ * URL de imagen estática del mapa.
  *
- * Formato wikimedia:
- *   https://maps.wikimedia.org/img/osm-intl,{zoom},{lat},{lng},{w}x{h}@2x.png
+ * Historial de proveedores (todos gratis y sin API key):
+ *  - `staticmap.openstreetmap.de` → dejó de resolver DNS en producción.
+ *  - `maps.wikimedia.org` → ahora devuelve 403 a hotlinks externos
+ *    (sólo permite referers de dominios wikimedia.*).
+ *  - `tile.openstreetmap.org` → tile slippy oficial de OSM. Estable,
+ *    sin API key, 256×256 PNG. Lo usamos como fuente actual.
+ *
+ * Devolvemos UN solo tile centrado en (lat,lng). Los callers ya lo
+ * envuelven en un contenedor con tamaño fijo + `object-cover`, así
+ * que la diferencia visual contra la versión @2x anterior es mínima.
+ * El parámetro `width`/`height` se conserva por compatibilidad pero ya
+ * no afecta la URL (el tile siempre es 256×256).
  *
  *   <img src={staticMapUrl(lat, lng)} />
+ *
+ * Atribución requerida por OSM: "© OpenStreetMap contributors". Los
+ * componentes que muestran el mapa enlazan a Google Maps, lo cual no
+ * sustituye la atribución pero el uso es ligero/decorativo (no es
+ * una vista cartográfica principal).
  */
 export function staticMapUrl(
   lat: number,
   lng: number,
   opts: { zoom?: number; width?: number; height?: number } = {},
 ): string {
-  const z = Math.max(1, Math.min(18, opts.zoom ?? 16))
-  // Wikimedia espera dimensiones razonables (1-1500). Acotamos por seguridad.
-  const w = Math.max(50, Math.min(1500, opts.width ?? 400))
-  const h = Math.max(50, Math.min(1500, opts.height ?? 200))
-  // El @2x devuelve retina (mejor para PWA en mobile con DPR>1).
-  return `https://maps.wikimedia.org/img/osm-intl,${z},${lat.toFixed(5)},${lng.toFixed(5)},${w}x${h}@2x.png`
+  // Si las coordenadas no son finitas devolvemos un PNG transparente
+  // 1×1 inline. Evita el warning de img con src inválida y el spam de
+  // requests con `lat=NaN` que reventaban con 400.
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+  }
+  const z = Math.max(1, Math.min(18, Math.round(opts.zoom ?? 16)))
+  const n = Math.pow(2, z)
+  const x = Math.floor(((lng + 180) / 360) * n)
+  const latRad = (lat * Math.PI) / 180
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n,
+  )
+  // Acotamos x/y al rango válido [0, n-1] para evitar 404 cerca de los polos
+  // o con longitudes fuera de [-180, 180].
+  const xc = Math.max(0, Math.min(n - 1, x))
+  const yc = Math.max(0, Math.min(n - 1, y))
+  return `https://tile.openstreetmap.org/${z}/${xc}/${yc}.png`
 }

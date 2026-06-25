@@ -185,9 +185,9 @@ export default function BuySheet({
     }
     return priceForTier(
       {
-        price_menudeo: v.price_menudeo ?? v.price,
-        price_medio: v.price_medio ?? null,
-        price_mayoreo: v.price_mayoreo ?? null,
+        price_menudeo: (Number(v.price_menudeo ?? v.price) || 0) as number,
+        price_medio: (Number(v.price_medio) || 0) as number,
+        price_mayoreo: (Number(v.price_mayoreo) || 0) as number,
       },
       projectedTier,
     )
@@ -230,9 +230,9 @@ export default function BuySheet({
       const currentEff = effectivePrice(v)
       const nextPriceRaw = priceForTier(
         {
-          price_menudeo: v.price_menudeo ?? v.price,
-          price_medio: v.price_medio ?? null,
-          price_mayoreo: v.price_mayoreo ?? null,
+          price_menudeo: (Number(v.price_menudeo ?? v.price) || 0) as number,
+          price_medio: (Number(v.price_medio) || 0) as number,
+          price_mayoreo: (Number(v.price_mayoreo) || 0) as number,
         },
         nextStep.tier,
       )
@@ -553,7 +553,6 @@ export default function BuySheet({
                       {out && (
                         <NotifyOnStockButton
                           variantId={v.id}
-                          variantName={v.variant_name}
                         />
                       )}
                     </div>
@@ -745,10 +744,8 @@ function TierBanner({
 
 function NotifyOnStockButton({
   variantId,
-  variantName,
 }: {
   variantId: string
-  variantName: string
 }) {
   const { email: authEmail, fullName } = useAuth()
   const [subscribed, setSubscribed] = useState(false)

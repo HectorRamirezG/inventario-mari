@@ -6,7 +6,7 @@ import { memo, useEffect, useRef, useState } from "react"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { supabase } from "../../lib/supabase"
-import { staticMapUrl } from "../../lib/geocoding"
+import { MapThumbnail } from "./MapThumbnail"
 
 /**
  * Tracker dinámico para tarjetas de pedido del cliente.
@@ -203,37 +203,32 @@ function DeliveryStepperBlock({
       {expanded && (
         <AnimatePresence initial={false}>
           {isInRoute && lastPosFresh && livePos && (
-            <motion.a
+            <motion.div
               key="map"
-              href={`https://www.google.com/maps?q=${livePos.lat},${livePos.lng}`}
-              target="_blank"
-              rel="noopener noreferrer"
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="block relative rounded-xl overflow-hidden border border-sky-200 dark:border-sky-500/30 shadow-sm"
             >
-              <img
-                src={staticMapUrl(livePos.lat, livePos.lng, {
-                  width: 600,
-                  height: 140,
-                  zoom: 15,
-                })}
-                alt="Ubicación del repartidor"
-                loading="lazy"
-                className="w-full h-28 object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/30 via-transparent to-transparent" />
-              <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/95 dark:bg-slate-900/95 text-[9px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300 shadow-sm">
-                  <MapPin size={9} /> Repartidor en vivo
-                </span>
-                <span className="text-[9px] font-bold text-white drop-shadow">
-                  {formatRelative(livePos.at)}
-                </span>
-              </div>
-            </motion.a>
+              <MapThumbnail
+                lat={livePos.lat}
+                lng={livePos.lng}
+                zoom={15}
+                href={`https://www.google.com/maps?q=${livePos.lat},${livePos.lng}`}
+                alt="Ubicación del repartidor en tiempo real"
+                className="w-full h-28 border-sky-200 dark:border-sky-500/30 shadow-sm rounded-xl"
+              >
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/30 via-transparent to-transparent pointer-events-none" />
+                <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/95 dark:bg-slate-900/95 text-[9px] font-black uppercase tracking-widest text-sky-700 dark:text-sky-300 shadow-sm">
+                    <MapPin size={9} /> Repartidor en vivo
+                  </span>
+                  <span className="text-[9px] font-bold text-white drop-shadow">
+                    {formatRelative(livePos.at)}
+                  </span>
+                </div>
+              </MapThumbnail>
+            </motion.div>
           )}
 
           {/* SUB-BANNERS REMOVIDOS — duplicaban informacion del

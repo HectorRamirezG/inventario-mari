@@ -246,7 +246,20 @@ export default function ClientActionHub({ open, onClose }: Props) {
     <AnimatePresence>
       {open && (
         <div
-          className="fixed inset-0 z-[218] flex items-end justify-center"
+          // Cuando hay sub-drawer abierto, ocultamos backdrop+panel del
+          // hub pero el wrapper sigue montado (porque envuelve a los
+          // sub-drawers como WishesDrawer/SupportModal/MyReviewsDrawer
+          // y permite usar AnimatePresence con su animaci\u00f3n de exit).
+          // PROBLEMA: el wrapper es fixed inset-0 y por default tiene
+          // pointer-events:auto \u2192 capturaba TODOS los clicks de la
+          // pantalla cuando estaba "vac\u00edo" (sub-drawer abierto), lo
+          // que dejaba al usuario sin poder cerrar ni interactuar con
+          // el sub-drawer (que vive en otro portal a document.body).
+          // FIX: pointer-events-none cuando est\u00e1 vac\u00edo; los hijos
+          // (backdrop/panel del hub) reactivan auto cuando son visibles.
+          className={`fixed inset-0 z-[218] flex items-end justify-center ${
+            subDrawerOpen ? "pointer-events-none" : ""
+          }`}
           style={{ isolation: "isolate" }}
         >
           {/* Backdrop principal — oculto cuando hay sub-drawer (el sub

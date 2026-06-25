@@ -38,6 +38,21 @@ export default function PullToRefresh({
   const [refreshing, setRefreshing] = useState(false)
   const startY = useRef<number | null>(null)
   const pullingRef = useRef(0)
+  // Guardamos `onRefresh` y `refreshing` en refs para que el efecto NO
+  // dependa de ellos. Antes el efecto se re-ejecutaba en cada render
+  // (porque el caller pasa una arrow function nueva cada vez), lo que
+  // hac\u00eda detach+attach de listeners constantemente. Combinado con
+  // re-renders frecuentes del shell por realtime, durante el scroll
+  // mobile el listener desaparec\u00eda a la mitad del gesto y el browser
+  // interpretaba como overscroll \u2192 rebote al top.
+  const refreshingRef = useRef(false)
+  const onRefreshRef = useRef(onRefresh)
+  useEffect(() => {
+    refreshingRef.current = refreshing
+  }, [refreshing])
+  useEffect(() => {
+    onRefreshRef.current = onRefresh
+  }, [onRefresh])
 
   useEffect(() => {
     if (disabled) return
@@ -53,7 +68,7 @@ export default function PullToRefresh({
     }
 
     const onMove = (e: TouchEvent) => {
-      if (startY.current === null || refreshing) return
+      if (startY.current === null || refreshingRef.current) return
       const dy = e.touches[0].clientY - startY.current
       if (dy > 0) {
         const dist = Math.min(threshold * 1.6, dy * 0.45)
@@ -71,9 +86,9 @@ export default function PullToRefresh({
         return
       }
       startY.current = null
-      if (pullingRef.current >= threshold && !refreshing) {
+      if (pullingRef.current >= threshold && !refreshingRef.current) {
         setRefreshing(true)
-        try { await onRefresh() }
+        try { await onRefreshRef.current() }
         finally {
           setRefreshing(false)
           pullingRef.current = 0
@@ -96,7 +111,9 @@ export default function PullToRefresh({
       el.removeEventListener("touchend", onEnd)
       el.removeEventListener("touchcancel", onEnd)
     }
-  }, [disabled, threshold, refreshing, onRefresh])
+    // \u26a0\ufe0f Deps a prop\u00f3sito m\u00ednimos: solo lo que afecta el setup real.
+    // refreshing/onRefresh se leen via ref dentro de los handlers.
+  }, [disabled, threshold])
 
   const triggered = pulling >= threshold
   const showIndicator = pulling > 0 || refreshing

@@ -20,6 +20,15 @@ export function usePullToRefresh(
   const [pulling, setPulling] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const startY = useRef<number | null>(null)
+  // Refs para no re-ejecutar el efecto cuando cambian `pulling`,
+  // `refreshing` o `onRefresh`. Antes se hacía detach+attach en cada
+  // setPulling (1 por touchmove) y se perdían eventos a mitad de gesto.
+  const pullingRef = useRef(0)
+  const refreshingRef = useRef(false)
+  const onRefreshRef = useRef(onRefresh)
+  useEffect(() => { pullingRef.current = pulling }, [pulling])
+  useEffect(() => { refreshingRef.current = refreshing }, [refreshing])
+  useEffect(() => { onRefreshRef.current = onRefresh }, [onRefresh])
 
   useEffect(() => {
     if (!enabled) return
@@ -35,11 +44,12 @@ export function usePullToRefresh(
     }
 
     const onMove = (e: TouchEvent) => {
-      if (startY.current === null || refreshing) return
+      if (startY.current === null || refreshingRef.current) return
       const dy = e.touches[0].clientY - startY.current
       if (dy > 0) {
         // Resistencia: cuesta más jalar mientras más se jala
         const dist = Math.min(threshold * 1.5, dy * 0.5)
+        pullingRef.current = dist
         setPulling(dist)
       }
     }
@@ -47,15 +57,17 @@ export function usePullToRefresh(
     const onEnd = async () => {
       if (startY.current === null) return
       startY.current = null
-      if (pulling >= threshold && !refreshing) {
+      if (pullingRef.current >= threshold && !refreshingRef.current) {
         setRefreshing(true)
         try {
-          await onRefresh()
+          await onRefreshRef.current()
         } finally {
           setRefreshing(false)
+          pullingRef.current = 0
           setPulling(0)
         }
       } else {
+        pullingRef.current = 0
         setPulling(0)
       }
     }
@@ -71,7 +83,9 @@ export function usePullToRefresh(
       el.removeEventListener("touchend", onEnd)
       el.removeEventListener("touchcancel", onEnd)
     }
-  }, [enabled, threshold, pulling, refreshing, onRefresh])
+    // Deps mínimos: solo lo que cambia el setup. Los handlers leen
+    // el resto desde refs.
+  }, [enabled, threshold])
 
   return { containerRef, pulling, refreshing, threshold }
 }
