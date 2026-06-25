@@ -29,7 +29,7 @@ import { useDebouncedValue } from "../../lib/useDebouncedValue"
  *  - Otorgar puntos manualmente a un cliente por email.
  */
 export default function LoyaltyRulesEditor() {
-  const { rules, loading } = useLoyaltyRules()
+  const { rules, loading, refresh } = useLoyaltyRules()
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [grantOpen, setGrantOpen] = useState(false)
@@ -41,6 +41,10 @@ export default function LoyaltyRulesEditor() {
     setSavingKey(rule.action_key)
     try {
       await updateLoyaltyRule(rule.action_key, patch)
+      // Forzamos refresh local: el realtime de loyalty_rules puede tardar
+      // o no estar habilitado en la publication. Sin esto el toggle se
+      // sentía "muerto" para Mari.
+      await refresh()
       toast.success("Regla actualizada", { duration: 1500 })
     } catch (e: any) {
       toast.error(e?.message ?? "No se pudo guardar")
@@ -60,6 +64,7 @@ export default function LoyaltyRulesEditor() {
     setSavingKey(rule.action_key)
     try {
       await deleteLoyaltyRule(rule.action_key)
+      await refresh()
       toast.success("Regla eliminada")
     } catch (e: any) {
       toast.error(e?.message ?? "No se pudo borrar")

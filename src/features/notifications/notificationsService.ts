@@ -239,7 +239,13 @@ export function useNotifications(opts: {
     "notifications",
     (payload) => {
       const n = payload.new as AppNotification
-      setItems((prev) => [n, ...prev].slice(0, 50))
+      // Dedup por id: si el INSERT realtime llega DESPUÉS de que el
+      // refresh() ya trajo esa fila, evitamos duplicar la notif en la
+      // lista. Mari reportaba ver casi-duplicados al recargar la app.
+      setItems((prev) => {
+        if (prev.some((x) => x.id === n.id)) return prev
+        return [n, ...prev].slice(0, 50)
+      })
       if (isDocumentVisible()) playForType(n.type)
       triggerLocalNotification({ title: n.title, body: n.body, tag: n.id })
       opts.onNew?.(n)

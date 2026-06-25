@@ -256,24 +256,11 @@ function MyMessagesSection() {
   }
 
   if (items.length === 0) {
-    return (
-      <section
-        className="my-3 rounded-3xl border p-4 text-center"
-        style={{
-          background:
-            "linear-gradient(135deg, color-mix(in srgb, var(--brand-from) 8%, white), color-mix(in srgb, var(--brand-to) 8%, white))",
-          borderColor: "color-mix(in srgb, var(--brand-from) 20%, transparent)",
-        }}
-      >
-        <MessageSquare className="mx-auto mb-1 text-primary/60" size={20} />
-        <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-          Sin mensajes nuevos
-        </p>
-        <p className="text-[11px] font-bold text-slate-400 mt-0.5">
-          Aquí verás las novedades de tus pedidos.
-        </p>
-      </section>
-    )
+    // Cuando no hay mensajes, NO mostramos el placeholder. Mari pidió
+    // quitar la repetición: si arriba ya hay PriorityActions, mostrar
+    // además "Sin mensajes nuevos" se siente redundante. Si genuinamente
+    // no hay nada accionable, el cliente ya ve el catálogo abajo.
+    return null
   }
 
   return (
@@ -451,12 +438,16 @@ function PriorityActionsSection() {
       const bal = Number(s.balance) || 0
       if (bal <= 0) continue
       const token = s.public_token ?? s.id
+      const folio = String(s.id).slice(0, 8).toUpperCase()
       out.push({
         id: `saldo-${s.id}`,
         icon: Wallet,
         tone: "amber",
         title: `Saldo pendiente: ${formatMoney(bal)}`,
-        caption: "Liquida tu pedido o reporta un pago",
+        // Antes esta copy se repetía en cada saldo "Liquida tu pedido o
+        // reporta un pago" — cuando había 3 saldos se leían idénticas.
+        // Ahora cada card muestra su folio para diferenciarse.
+        caption: `Folio #${folio} · toca para abonar`,
         href: `/ticket/${token}`,
       })
     }
@@ -708,15 +699,35 @@ function MySavingsSection() {
           <PiggyBank size={20} strokeWidth={2.5} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
-            Invertido en ti
-          </p>
-          <p className="text-xl font-black tabular-nums leading-tight">
-            ${stats.totalGastado.toFixed(2)}
-          </p>
-          <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
-            En {stats.pedidos} {stats.pedidos === 1 ? "pedido" : "pedidos"}
-          </p>
+          {/* Si el cliente tiene pedidos pero aún no ha pagado nada (todos
+              son apartados con paid=0), mostrar "$0 invertido en N pedidos"
+              se sentía contradictorio. Detectamos el caso y mostramos
+              copy distinto para no engañar. */}
+          {stats.totalGastado <= 0 ? (
+            <>
+              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+                Pedidos en curso
+              </p>
+              <p className="text-xl font-black tabular-nums leading-tight">
+                {stats.pedidos} {stats.pedidos === 1 ? "pedido" : "pedidos"}
+              </p>
+              <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+                Cuando liquides aparecerá tu inversión total
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+                Invertido en ti
+              </p>
+              <p className="text-xl font-black tabular-nums leading-tight">
+                ${stats.totalGastado.toFixed(2)}
+              </p>
+              <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+                En {stats.pedidos} {stats.pedidos === 1 ? "pedido" : "pedidos"}
+              </p>
+            </>
+          )}
         </div>
       </div>
     </section>

@@ -40,6 +40,7 @@ import ProductLightbox, { type LightboxSlide } from "../../components/ui/Product
 import Skeleton from "../../components/ui/Skeleton"
 import BarcodeScanner from "../../components/ui/BarcodeScanner"
 import WishlistHeart from "../../components/ui/WishlistHeart"
+import Toggle from "../../components/ui/Toggle"
 import OnboardingTour from "../../components/ui/OnboardingTour"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import CategoryIcon, { getCategoryVisual } from "../../components/ui/CategoryIcon"
@@ -1889,11 +1890,11 @@ export default function ClientShopPage() {
 
               {/* Footer sticky: envío + desglose + CTAs */}
               <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 space-y-3 shrink-0 bg-white dark:bg-slate-900">
-                {/* Switch envío foráneo */}
-                <button
-                  type="button"
-                  onClick={() => setIsForeign((v) => !v)}
-                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all active:scale-[0.99] ${
+                {/* Switch envío foráneo — usa Toggle homologado con el
+                    resto de la app (Reglas, Settings) para que la
+                    pastilla y el puntito sean consistentes. */}
+                <div
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-colors ${
                     isForeign
                       ? "border-amber-300 bg-amber-50 dark:bg-amber-500/10"
                       : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
@@ -1911,25 +1912,17 @@ export default function ClientShopPage() {
                         : "Fuera de CDMX / EdoMex"}
                     </p>
                   </div>
-                  <span
-                    className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
-                      isForeign ? "bg-amber-500" : "bg-slate-300"
-                    }`}
-                  >
-                    <motion.span
-                      animate={{ x: isForeign ? 20 : 2 }}
-                      transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                      className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow"
-                    />
-                  </span>
-                </button>
+                  <Toggle
+                    checked={isForeign}
+                    onChange={setIsForeign}
+                    label="Envío foráneo"
+                  />
+                </div>
 
                 {/* Switch modo regalo + inputs cuando está activo. */}
                 <div>
-                  <button
-                    type="button"
-                    onClick={() => setGiftMode((v) => !v)}
-                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-all active:scale-[0.99] ${
+                  <div
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border transition-colors ${
                       giftMode
                         ? "border-fuchsia-300 bg-fuchsia-50 dark:bg-fuchsia-500/10"
                         : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
@@ -1945,18 +1938,12 @@ export default function ClientShopPage() {
                           : "Marca para personalizar dedicatoria"}
                       </p>
                     </div>
-                    <span
-                      className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
-                        giftMode ? "bg-fuchsia-500" : "bg-slate-300"
-                      }`}
-                    >
-                      <motion.span
-                        animate={{ x: giftMode ? 20 : 2 }}
-                        transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                        className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow"
-                      />
-                    </span>
-                  </button>
+                    <Toggle
+                      checked={giftMode}
+                      onChange={setGiftMode}
+                      label="Modo regalo"
+                    />
+                  </div>
 
                   <AnimatePresence initial={false}>
                     {giftMode && (

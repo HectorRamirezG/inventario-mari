@@ -132,41 +132,50 @@ export default function DashboardPage() {
       <span className="deco-orb deco-orb-pink top-0 -left-20 w-72 h-72" />
       <span className="deco-orb deco-orb-violet top-40 -right-24 w-80 h-80" />
 
-      {/* HEADER */}
-      <div className="flex items-end justify-between gap-3 px-2 flex-wrap relative">
-        <div className="min-w-0">
-          <p className="text-[9px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-black leading-none mb-1">
-            Centro financiero
-          </p>
-          <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">
-            Resumen <span className="text-gradient-brand">Pro</span>
-          </h2>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-            Tus números reales — ingresos, costo, ganancia y por cobrar.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <PeriodSwitcher value={period} onChange={setPeriod} />
-          <GenerateReportButton
-            targetId="dashboard-report-area"
-            periodLabel={periodLabelFor(period)}
-          />
-          <DailyReportShareButton />
-          <button
-            onClick={() => setDayCloseOpen(true)}
-            className="h-10 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom active:scale-95 transition-transform"
-            title="Reporte resumen del día (imprimible). No bloquea ventas, solo genera el corte."
-          >
-            <Sun size={12} /> Cierre del día
-          </button>
+      {/* HEADER — responsive: en mobile, título arriba y acciones
+          en barra inferior compacta. En desktop sigue side-by-side. */}
+      <div className="flex flex-col gap-3 px-2 relative">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-black leading-none mb-1">
+              Centro financiero
+            </p>
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100 truncate">
+              Resumen <span className="text-gradient-brand">Pro</span>
+            </h2>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+              Tus números reales — ingresos, costo, ganancia y por cobrar.
+            </p>
+          </div>
+          {/* Refresh siempre visible (es la acción más usada) */}
           <button
             onClick={refresh}
-            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-primary active:scale-90"
+            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-primary active:scale-90 shrink-0"
             aria-label="Refrescar"
           >
             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
           </button>
+        </div>
+
+        {/* Barra de acciones: en mobile se hace scroll horizontal; en
+            desktop queda alineada inline. Evita el overflow off-screen
+            que reportaba Mari en celular. */}
+        <div className="flex items-center gap-2 -mx-2 px-2 overflow-x-auto scroll-container-ios sm:overflow-visible">
+          <PeriodSwitcher value={period} onChange={setPeriod} />
+          <div className="flex items-center gap-2 shrink-0">
+            <GenerateReportButton
+              targetId="dashboard-report-area"
+              periodLabel={periodLabelFor(period)}
+            />
+            <DailyReportShareButton />
+            <button
+              onClick={() => setDayCloseOpen(true)}
+              className="h-10 px-3 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-bloom active:scale-95 transition-transform whitespace-nowrap"
+              title="Reporte resumen del día (imprimible). No bloquea ventas, solo genera el corte."
+            >
+              <Sun size={12} /> Cierre del día
+            </button>
+          </div>
         </div>
       </div>
 

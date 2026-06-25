@@ -44,7 +44,7 @@ export default function ConfirmDialog({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[250] flex items-end sm:items-center justify-center">
 
           {/* BACKDROP */}
           <motion.div
