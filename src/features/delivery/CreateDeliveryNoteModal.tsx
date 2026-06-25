@@ -87,6 +87,10 @@ export default function CreateDeliveryNoteModal({
   const [paymentMethod, setPaymentMethod] = useState("efectivo")
   const [amountToCollect, setAmountToCollect] = useState(0)
   const [notes, setNotes] = useState("")
+  // Campo dedicado para número de guía/tracking. Se concatena al inicio
+  // de notes con prefijo "Guía: <num>" para que el regex del backend lo
+  // detecte cuando la regla force_tracking_foraneo está activa.
+  const [tracking, setTracking] = useState("")
   /** Toggle para mostrar el bloque "modificar dirección" (oculto por
    *  default porque heredamos la del cliente). */
   const [editAddress, setEditAddress] = useState(false)
@@ -130,6 +134,7 @@ export default function CreateDeliveryNoteModal({
     setEditAddress(false)
     setPaymentMethod(Number(sale.balance) > 0 ? "efectivo" : "ya_pagado")
     setNotes("")
+    setTracking("")
     setDeletingId(null)
     loadExisting()
   }, [open, sale, loadExisting])
@@ -171,6 +176,12 @@ export default function CreateDeliveryNoteModal({
     setSubmitting(true)
     const tid = toast.loading("Creando comanda...")
     try {
+      // Construimos las notas finales: si capturaron tracking, va arriba
+      // con prefijo explícito para que el regex de deliveryService lo
+      // reconozca al avanzar el estatus en pedidos foráneos.
+      const finalNotes = tracking.trim()
+        ? `Guía: ${tracking.trim()}${notes.trim() ? `\n${notes.trim()}` : ""}`
+        : notes
       const note = await createDeliveryNote({
         sale_id: sale.id,
         driver_name: driverName,
@@ -183,7 +194,7 @@ export default function CreateDeliveryNoteModal({
         amount_to_collect: amountToCollect,
         payment_method_expected:
           paymentMethod === "ya_pagado" ? "ya pagado" : paymentMethod,
-        notes,
+        notes: finalNotes,
       })
       // Guarda repartidor recurrente
       if (driverPhone.trim()) {
@@ -609,6 +620,28 @@ export default function CreateDeliveryNoteModal({
                       maxLength={400}
                     />
                   </Field>
+
+                  {/* Campo dedicado de guía — si la venta es foránea y la
+                      regla force_tracking_foraneo está activa, sin este
+                      número no se puede avanzar el estatus a 'enviado'.
+                      Lo ponemos opcional en general pero con etiqueta
+                      visible "obligatorio para foráneos". */}
+                  {sale?.is_foreign_shipping && (
+                    <Field
+                      label="Número de guía (obligatorio foráneos)"
+                      icon={<Truck size={11} />}
+                    >
+                      <input
+                        type="text"
+                        value={tracking}
+                        onChange={(e) => setTracking(e.target.value.trim())}
+                        placeholder="Ej. 7891234567890 · DHL2024XYZ"
+                        className="settings-input tabular-nums"
+                        maxLength={60}
+                        autoCapitalize="characters"
+                      />
+                    </Field>
+                  )}
 
                   <button
                     type="submit"

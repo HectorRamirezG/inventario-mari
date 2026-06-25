@@ -541,8 +541,10 @@ function FinanceHero({
           />
         </div>
 
-        {/* Aclaración crítica: "por cobrar" NO es pérdida */}
-        {pending > 0 && (
+        {/* Aclaración crítica: "por cobrar" NO es pérdida.
+            La ocultamos cuando ya estamos disparando la alerta roja
+            (regla daily_pending_alert) — no queremos repetir info. */}
+        {pending > 0 && !pendingAlertActive && (
           <div className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 p-3">
             <HelpCircle
               size={14}

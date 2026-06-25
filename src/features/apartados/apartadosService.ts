@@ -276,9 +276,18 @@ export async function cancelSale(saleId: string, reason?: string | null) {
 
   if (prev && customerEmail) {
     const reasonTxt = reason && reason.trim() ? `\n\nMotivo: ${reason.trim()}` : "";
+    // Detectamos si la intención del admin era convertir a puntos pero
+    // no se pudo (loyalty apagado, peso=0, etc). Avisamos al cliente
+    // que el reembolso queda pendiente de coordinación en lugar de
+    // fingir que todo está OK.
+    const rulesNow = getBusinessRules();
+    const intendedRefundToPoints =
+      rulesNow.no_refund && paid > 0 && pointsAwarded === 0;
     const body =
       pointsAwarded > 0
         ? `Tu abono de ${formatMoney(paid)} se convirtió en ${pointsAwarded} puntos para tu próxima compra.${reasonTxt}`
+        : intendedRefundToPoints
+        ? `canceló este pedido. Tu abono de ${formatMoney(paid)} queda pendiente — te contactaremos para coordinar la devolución.${reasonTxt}`
         : `canceló este pedido. Si tenías un abono pagado, te contactaremos para devolverlo.${reasonTxt}`;
     await notifyClient(customerEmail, {
       type: pointsAwarded > 0 ? "payment_added" : "sale_cancelled",
