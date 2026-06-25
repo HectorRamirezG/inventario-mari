@@ -281,6 +281,17 @@ function UserRow({ user }: { user: RegisteredUser }) {
             initials
           )}
         </div>
+        {/* Emoji personal elegido por el cliente — overlay esquinero
+            izquierdo para no chocar con VipBadge (que va a la derecha). */}
+        {user.emoji && (
+          <span
+            className="absolute -bottom-1 -left-1 w-5 h-5 rounded-full bg-white dark:bg-slate-900 ring-2 ring-white dark:ring-slate-900 text-xs flex items-center justify-center shadow-sm pointer-events-none"
+            aria-hidden
+            title={`Emoji personal de ${user.full_name || user.email}`}
+          >
+            {user.emoji}
+          </span>
+        )}
         {isVip && (
           <span className="absolute -top-1 -right-1 pointer-events-none">
             <VipBadge size={12} title={`${user.full_name || user.email} es VIP`} />

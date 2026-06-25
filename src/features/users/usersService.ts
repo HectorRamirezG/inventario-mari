@@ -9,6 +9,9 @@ export interface RegisteredUser {
   role: "admin" | "staff" | "client" | string
   phone: string | null
   avatar_url: string | null
+  /** Emoji personal del cliente (se enriquece tras la RPC). Optional
+   *  porque puede no existir en BD si Mari aún no corrió el migration. */
+  emoji?: string | null
   orders: number
   total_spent: number
   last_purchase_at: string | null
@@ -96,6 +99,36 @@ export async function listAllUsers(limit = 200, offset = 0): Promise<RegisteredU
       }
     } catch {
       /* tabla puede no existir todavía: SQL fix_loyalty_system pendiente */
+    }
+  }
+
+  // Emoji personal: la RPC list_all_users no lo devuelve, así que lo
+  // enriquecemos aparte. Tolerante: si la columna `emoji` no existe en
+  // user_profiles (Mari no corrió add_user_emoji.sql), silenciamos.
+  if (emails.length > 0) {
+    try {
+      const { data: emojiRows, error: emojiErr } = await supabase
+        .from("user_profiles")
+        .select("email,emoji")
+        .in("email", emails)
+      if (!emojiErr && emojiRows) {
+        const byEmail = new Map<string, string>(
+          (emojiRows as any[])
+            .filter((r) => r.email && r.emoji)
+            .map((r) => [
+              String(r.email).toLowerCase(),
+              String(r.emoji),
+            ]),
+        )
+        for (const u of users) {
+          const k = u.email?.toLowerCase()
+          if (!k) continue
+          const emoji = byEmail.get(k)
+          if (emoji) u.emoji = emoji
+        }
+      }
+    } catch {
+      /* columna emoji puede no existir todavía: add_user_emoji.sql pendiente */
     }
   }
 

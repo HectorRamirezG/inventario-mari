@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { useBusinessRules } from "../../features/settings/businessRulesService"
 import type { WelcomeSlide as RuleSlide } from "../../features/settings/businessRulesService"
+import { useUserPrefs } from "../../lib/userPrefs"
 
 interface Slide {
   title: string
@@ -87,6 +88,7 @@ interface Props {
 
 export default function ClientHero({ customerName, isLogged }: Props) {
   const rules = useBusinessRules()
+  const { prefs } = useUserPrefs()
   const [idx, setIdx] = useState(0)
 
   // Filtra slides según reglas activas. Cuando apaga un módulo
@@ -174,13 +176,27 @@ export default function ClientHero({ customerName, isLogged }: Props) {
       </div>
       <h1 className="text-[26px] font-black tracking-tight leading-[1.05] flex items-center gap-1.5">
         <span className="text-slate-900 dark:text-slate-50">{firstName}</span>
-        <motion.span
-          animate={{ rotate: [0, 14, -8, 14, 0], scale: [1, 1.15, 1, 1.1, 1] }}
-          transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 6, ease: "easeInOut" }}
-          className="inline-flex"
-        >
-          <Sparkles size={18} className="text-primary" />
-        </motion.span>
+        {/* Emoji personal del cliente — si lo eligió en su perfil, lo
+            mostramos junto a su nombre. Aporta identidad visual y rompe
+            la monotonía del saludo. Si no eligió, ponemos el sparkle
+            clásico como fallback animado. */}
+        {prefs.clientEmoji ? (
+          <span
+            className="inline-flex text-[22px] leading-none"
+            aria-hidden
+            title="Tu emoji personal"
+          >
+            {prefs.clientEmoji}
+          </span>
+        ) : (
+          <motion.span
+            animate={{ rotate: [0, 14, -8, 14, 0], scale: [1, 1.15, 1, 1.1, 1] }}
+            transition={{ duration: 1.6, repeat: Infinity, repeatDelay: 6, ease: "easeInOut" }}
+            className="inline-flex"
+          >
+            <Sparkles size={18} className="text-primary" />
+          </motion.span>
+        )}
       </h1>
 
       {/* PRIORIDAD 1: Banner anclado (info urgente del negocio).

@@ -10,15 +10,34 @@ export interface UserProfileDetail {
   phone: string | null
   address: string | null
   location_url: string | null
+  /** Emoji personal del cliente (único carácter o secuencia corta).
+   *  Se muestra en el saludo del hero y en su avatar dentro de la lista
+   *  de usuarios admin. Si la columna no existe en BD aún, queda null. */
+  emoji?: string | null
 }
 
 export async function fetchMyProfile(userId: string): Promise<UserProfileDetail | null> {
+  // Intentamos primero con emoji incluido. Si la columna no existe
+  // (Mari no ha corrido add_user_emoji.sql), reintentamos sin emoji
+  // para no romper la app antes del migration.
   const { data, error } = await supabase
     .from("user_profiles")
-    .select("id,email,full_name,role,avatar_url,phone,address,location_url")
+    .select("id,email,full_name,role,avatar_url,phone,address,location_url,emoji")
     .eq("id", userId)
     .maybeSingle()
   if (error) {
+    if (/emoji/.test(error.message)) {
+      const retry = await supabase
+        .from("user_profiles")
+        .select("id,email,full_name,role,avatar_url,phone,address,location_url")
+        .eq("id", userId)
+        .maybeSingle()
+      if (retry.error) {
+        debug.warn("[profile] fetch error:", retry.error.message)
+        return null
+      }
+      return (retry.data as UserProfileDetail) ?? null
+    }
     debug.warn("[profile] fetch error:", error.message)
     return null
   }
@@ -28,7 +47,7 @@ export async function fetchMyProfile(userId: string): Promise<UserProfileDetail 
 export async function updateMyProfile(
   userId: string,
   patch: Partial<
-    Pick<UserProfileDetail, "full_name" | "avatar_url" | "phone" | "address" | "location_url">
+    Pick<UserProfileDetail, "full_name" | "avatar_url" | "phone" | "address" | "location_url" | "emoji">
   >
 ) {
   const { error } = await supabase
@@ -87,13 +106,29 @@ export async function fetchProfilesByEmails(
 ): Promise<Record<string, UserProfileDetail>> {
   const unique = Array.from(new Set(emails.filter(Boolean)))
   if (unique.length === 0) return {}
-  const { data, error } = await supabase
+  // Intentamos con emoji; si la columna no existe, reintentamos sin ella.
+  let data: any[] | null = null
+  const first = await supabase
     .from("user_profiles")
-    .select("id,email,full_name,avatar_url,phone,address,location_url,role")
+    .select("id,email,full_name,avatar_url,phone,address,location_url,role,emoji")
     .in("email", unique)
-  if (error) {
-    debug.warn("[profile] batch fetch error:", error.message)
-    return {}
+  if (first.error) {
+    if (/emoji/.test(first.error.message)) {
+      const retry = await supabase
+        .from("user_profiles")
+        .select("id,email,full_name,avatar_url,phone,address,location_url,role")
+        .in("email", unique)
+      if (retry.error) {
+        debug.warn("[profile] batch fetch error:", retry.error.message)
+        return {}
+      }
+      data = retry.data ?? []
+    } else {
+      debug.warn("[profile] batch fetch error:", first.error.message)
+      return {}
+    }
+  } else {
+    data = first.data ?? []
   }
   const map: Record<string, UserProfileDetail> = {}
   ;(data ?? []).forEach((p: any) => {

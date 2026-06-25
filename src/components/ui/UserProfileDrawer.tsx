@@ -43,7 +43,7 @@ import { useMyLoyaltyBalance } from "../../features/loyalty/loyaltyService"
 import { useBusinessRules } from "../../features/settings/businessRulesService"
 import { fetchMyShoppingStats, type MyShoppingStats } from "../../features/profile/myShoppingStatsService"
 import { formatMoney } from "../../lib/format"
-import { useUserPrefs } from "../../lib/userPrefs"
+import { useUserPrefs, setPref } from "../../lib/userPrefs"
 import { copyToClipboard } from "../../lib/clipboard"
 import { confirmAction } from "../../lib/confirm"
 import OverlayShell from "./OverlayShell"
@@ -108,12 +108,18 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
       setLocationUrl(p?.location_url ?? "")
       setAvatarUrl(p?.avatar_url ?? null)
       setNewEmail(p?.email ?? email ?? "")
+      // Hidratar emoji local desde BD si tengo guardado uno en mi perfil
+      // y NO hay nada en localStorage (caso: cambio de dispositivo o
+      // localStorage limpiado). Si ya hay uno local, el local manda.
+      if (p?.emoji && !prefs.clientEmoji) {
+        setPref("clientEmoji", p.emoji)
+      }
       setLoading(false)
     })
     return () => {
       alive = false
     }
-  }, [open, user, fullName, email])
+  }, [open, user, fullName, email, prefs.clientEmoji])
 
   // Bloquear scroll body
   useEffect(() => {
@@ -794,6 +800,10 @@ function MyStyleSection() {
   const { prefs, set } = useUserPrefs()
   const bRules = useBusinessRules()
   const { theme, setTheme } = useTheme()
+  // useAuth aquí para poder persistir el emoji elegido en BD (no solo
+  // en localStorage). Así Mari ve el emoji del cliente en su lista de
+  // usuarios. Si no hay sesión (modo invitado), solo persiste local.
+  const { user: authUser } = useAuth()
   const currentAccent = prefs.accentOverride ?? bRules.theme_accent
   const usingGlobal = prefs.accentOverride === null
   // Si la tienda forzó un modo (dark u light), bloqueamos el selector
@@ -879,6 +889,11 @@ function MyStyleSection() {
               type="button"
               onClick={() => {
                 set("clientEmoji", null)
+                // Limpiar también en BD si el usuario tiene sesión.
+                // Best-effort: si falla (columna no existe), no rompemos.
+                if (authUser?.id) {
+                  updateMyProfile(authUser.id, { emoji: null }).catch(() => {})
+                }
                 toast.success("Emoji quitado")
               }}
               className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-rose-500 press"
@@ -894,7 +909,14 @@ function MyStyleSection() {
               <button
                 key={emoji}
                 type="button"
-                onClick={() => set("clientEmoji", emoji)}
+                onClick={() => {
+                  set("clientEmoji", emoji)
+                  // Persistir en BD para que Mari lo vea en lista admin.
+                  // Si la columna emoji no existe aún en BD, fallback silencioso.
+                  if (authUser?.id) {
+                    updateMyProfile(authUser.id, { emoji }).catch(() => {})
+                  }
+                }}
                 aria-label={`Emoji ${emoji}`}
                 className={`h-10 rounded-xl text-xl flex items-center justify-center transition-all ${
                   isActive
