@@ -15,6 +15,7 @@ import {
   Printer,
   SlidersHorizontal,
   Truck,
+  MoreHorizontal,
 } from "lucide-react";
 
 import { useApartados, type ApartadosFilter } from "./useApartados";
@@ -716,16 +717,18 @@ const SaleCard = memo(function SaleCardImpl({
         )}
       </AnimatePresence>
 
-      {/* Acciones */}
+      {/* Acciones — botón principal + menú overflow.
+          Antes había 6 botones lado a lado que saturaban la card. Mari
+          pidió aprovechar los módulos existentes (Comanda vive en su
+          propio drawer) y dejar solo lo crítico al frente: ABONAR. El
+          resto entra en un menú "···" que mantiene todo accesible. */}
       {!isCancelled && (
         <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
           {balance > 0 && (
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={onPay}
-              className={`flex-1 h-10 rounded-xl text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom ${
-                urgent ? "" : ""
-              }`}
+              className="flex-1 h-10 rounded-xl text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom"
               style={{
                 background: urgent
                   ? "linear-gradient(135deg,#ef4444,#f43f5e)"
@@ -735,47 +738,28 @@ const SaleCard = memo(function SaleCardImpl({
               <Wallet size={12} /> {urgent ? "Cobrar urgente" : "Abonar"}
             </motion.button>
           )}
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={onAdjust}
-            className="h-10 px-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
-            title="Forzar tier / aplicar descuento → notifica al cliente"
-          >
-            <SlidersHorizontal size={12} />
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={onTicket}
-            className="h-10 px-3 rounded-xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
-            title="Ver ticket / imprimir / enviar"
-          >
-            <Printer size={12} /> Ticket
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={onDelivery}
-            className="h-10 px-3 rounded-xl bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
-            title="Crear comanda de entrega para el repartidor"
-          >
-            <Truck size={12} /> Comanda
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={() => sendReceiptByWhatsApp(sale, profile?.avatar_url)}
-            className="h-10 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5"
-            title="Enviar recibo por WhatsApp (incluye foto del cliente)"
-          >
-            <Receipt size={12} />
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={onCancel}
-            disabled={cancelGuard ? !cancelGuard.allowed : false}
-            className="h-10 px-3 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-            title={cancelGuard?.reason ?? "Cancelar venta"}
-          >
-            <XCircle size={12} />
-          </motion.button>
+          {balance <= 0 && (
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={onTicket}
+              className="flex-1 h-10 rounded-xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
+              title="Ver ticket completo"
+            >
+              <Receipt size={12} /> Ver ticket
+            </motion.button>
+          )}
+          {/* Menú overflow: agrupa Tier, Ticket, Comanda, Recibo WA, Cancelar.
+              Posicionado relativo al botón para alinear el dropdown. */}
+          <SaleCardOverflowMenu
+            onAdjust={onAdjust}
+            onTicket={onTicket}
+            onDelivery={onDelivery}
+            onSendReceipt={() => sendReceiptByWhatsApp(sale, profile?.avatar_url)}
+            onCancel={onCancel}
+            cancelDisabled={cancelGuard ? !cancelGuard.allowed : false}
+            cancelReason={cancelGuard?.reason}
+            balance={balance}
+          />
         </div>
       )}
 
@@ -817,3 +801,160 @@ const SaleCard = memo(function SaleCardImpl({
     </motion.div>
   );
 });
+
+/* ────────────────────────────────────────────────────────────────────
+ * Menú overflow de acciones de la card.
+ * Antes la card tenía 6 botones lado a lado (Abonar, Tier, Ticket,
+ * Comanda, Recibo WA, Cancelar) y se veía saturada. Ahora solo Abonar
+ * queda al frente y el resto vive aquí, accesible con un toque.
+ * Cierre por click fuera, ESC o tras ejecutar acción.
+ * ──────────────────────────────────────────────────────────────────── */
+function SaleCardOverflowMenu({
+  onAdjust,
+  onTicket,
+  onDelivery,
+  onSendReceipt,
+  onCancel,
+  cancelDisabled,
+  cancelReason,
+  balance,
+}: {
+  onAdjust: () => void;
+  onTicket: () => void;
+  onDelivery: () => void;
+  onSendReceipt: () => void;
+  onCancel: () => void;
+  cancelDisabled: boolean;
+  cancelReason?: string;
+  balance: number;
+}) {
+  const [open, setOpen] = useState(false);
+
+  // Cierre por click fuera + ESC. No usamos createPortal porque el
+  // dropdown es chico y queda bien posicionado relativo a la card.
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      const el = e.target as HTMLElement;
+      if (!el.closest("[data-overflow-menu]")) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  type Item = {
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    tone?: "default" | "danger";
+    disabled?: boolean;
+    title?: string;
+    /** Si false, el item se oculta (p.ej. ticket cuando balance>0 ya está al frente). */
+    show?: boolean;
+  };
+
+  const items: Item[] = [
+    {
+      label: "Forzar precio / descuento",
+      icon: <SlidersHorizontal size={13} />,
+      onClick: onAdjust,
+      title: "Aplicar descuento o forzar tier — notifica al cliente",
+    },
+    {
+      label: "Ver / imprimir ticket",
+      icon: <Printer size={13} />,
+      onClick: onTicket,
+      title: "Abre el ticket completo",
+      show: balance > 0, // si balance=0, ya hay botón "Ver ticket" al frente
+    },
+    {
+      label: "Crear comanda de entrega",
+      icon: <Truck size={13} />,
+      onClick: onDelivery,
+      title: "Genera la comanda para el repartidor",
+    },
+    {
+      label: "Enviar recibo por WhatsApp",
+      icon: <Receipt size={13} />,
+      onClick: onSendReceipt,
+      title: "Manda el recibo formateado al cliente",
+    },
+    {
+      label: "Cancelar venta",
+      icon: <XCircle size={13} />,
+      onClick: onCancel,
+      tone: "danger",
+      disabled: cancelDisabled,
+      title: cancelReason ?? "Cancelar este apartado",
+    },
+  ];
+
+  const visibleItems = items.filter((it) => it.show !== false);
+
+  return (
+    <div className="relative" data-overflow-menu>
+      <motion.button
+        whileTap={{ scale: 0.96 }}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Más acciones"
+        className="h-10 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center justify-center"
+      >
+        <MoreHorizontal size={14} />
+      </motion.button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -4 }}
+            transition={{ duration: 0.15 }}
+            role="menu"
+            className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden z-20"
+          >
+            <ul className="py-1">
+              {visibleItems.map((it, i) => (
+                <li key={i}>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      if (it.disabled) return;
+                      it.onClick();
+                      setOpen(false);
+                    }}
+                    disabled={it.disabled}
+                    title={it.title}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[11px] font-bold text-left transition-colors ${
+                      it.tone === "danger"
+                        ? "text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                        : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                    } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent`}
+                  >
+                    <span
+                      className={`shrink-0 ${
+                        it.tone === "danger" ? "text-rose-500" : "text-slate-400"
+                      }`}
+                    >
+                      {it.icon}
+                    </span>
+                    <span className="flex-1">{it.label}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
