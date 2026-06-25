@@ -40,6 +40,13 @@ export type ResetCategory =
   | "ciclos"
   | "catalogo"
   | "loyalty"
+  // Limpiezas SELECTIVAS (no borran toda la tabla, solo lo "cerrado").
+  // Mari pidió estas porque la versión anterior solo permitía "borrar
+  // TODO" — y ella quería limpiar solo tickets ya resueltos, notifs
+  // ya leídas y ventas canceladas residuales.
+  | "tickets_resueltos"
+  | "notifs_leidas"
+  | "ventas_canceladas"
 
 export interface ResetReport {
   tables: Record<string, number>
@@ -85,6 +92,19 @@ export const CATEGORY_TABLES: Record<ResetCategory, string[]> = {
     // loyalty_rules NO se borra aquí — son la configuración del
     // programa (similar a business_rules). Solo borramos data del
     // cliente: balance e historial.
+  ],
+  // Las selectivas no usan el borrado genérico por tabla; tienen su
+  // propio handler dentro de runSelectiveCleanup() que filtra antes
+  // del DELETE. Aquí dejamos la lista informativa para el reporte.
+  tickets_resueltos: ["support_tickets"],
+  notifs_leidas: ["notifications"],
+  ventas_canceladas: [
+    "movements",
+    "payment_proofs",
+    "payments",
+    "delivery_notes",
+    "sale_items",
+    "sales",
   ],
 }
 
@@ -142,6 +162,24 @@ export const CATEGORY_INFO: Record<
     label: "Programa de premios (data)",
     description:
       "Balance de puntos de cada cliente y su historial. Las REGLAS del programa NO se borran (eso se hace desde el editor de reglas).",
+    tone: "amber",
+  },
+  tickets_resueltos: {
+    label: "Solo tickets resueltos",
+    description:
+      "Limpieza selectiva: borra tickets de soporte ya resueltos. Los abiertos NO se tocan.",
+    tone: "sky",
+  },
+  notifs_leidas: {
+    label: "Solo notifs leídas",
+    description:
+      "Limpieza selectiva: borra notificaciones que ya marcaste como leídas. Las no leídas permanecen.",
+    tone: "sky",
+  },
+  ventas_canceladas: {
+    label: "Solo ventas canceladas",
+    description:
+      "Limpieza selectiva: borra ventas con status=cancelled y todos sus dependientes (items, pagos, comprobantes, comandas, movimientos).",
     tone: "amber",
   },
 }
@@ -280,10 +318,18 @@ export async function resetAppData(
   }
 
   const ALL = Object.keys(CATEGORY_TABLES) as ResetCategory[]
+  // Las selectivas (tickets_resueltos, notifs_leidas, ventas_canceladas)
+  // NO entran en "borrar TODO" porque ya están cubiertas por sus
+  // categorías padre genéricas (soporte, notifs, ventas).
+  const FULL_RESET_SET = ALL.filter(
+    (c) => !["tickets_resueltos", "notifs_leidas", "ventas_canceladas"].includes(c),
+  )
   const selected: ResetCategory[] =
-    categories && categories.length > 0 ? categories : ALL
+    categories && categories.length > 0 ? categories : FULL_RESET_SET
 
-  const isFullReset = selected.length === ALL.length
+  const isFullReset =
+    selected.length === FULL_RESET_SET.length &&
+    FULL_RESET_SET.every((c) => selected.includes(c))
 
   // Si es reset completo Y la RPC `reset_app_data` existe, la usamos:
   // bypasea RLS y es más eficiente. Si falla o el set es parcial,
@@ -301,7 +347,20 @@ export async function resetAppData(
   // Método selectivo: borra cada categoría en orden FK-safe.
   // Las tablas compartidas (movements en ventas Y catalogo) se intentan
   // dos veces pero `deleteAllRows` es idempotente.
+  //
+  // Las categorías SELECTIVAS (tickets_resueltos, notifs_leidas,
+  // ventas_canceladas) tienen su propio handler con filtro — NO usan
+  // deleteAllRows porque ese borra TODA la tabla.
+  const SELECTIVE: ResetCategory[] = [
+    "tickets_resueltos",
+    "notifs_leidas",
+    "ventas_canceladas",
+  ]
   for (const cat of selected) {
+    if (SELECTIVE.includes(cat)) {
+      await runSelectiveCleanup(cat, report)
+      continue
+    }
     for (const t of CATEGORY_TABLES[cat]) {
       await deleteAllRows(t, report)
     }
@@ -312,6 +371,118 @@ export async function resetAppData(
   }
 
   return report
+}
+
+/**
+ * Handlers de limpiezas selectivas. Cada uno hace un DELETE con WHERE
+ * específico para tocar solo lo "cerrado" sin afectar lo activo.
+ * Mari reportó que la versión anterior decía "borra tickets resueltos"
+ * pero borraba TODOS los tickets (lo que era mentira en el copy).
+ */
+async function runSelectiveCleanup(
+  cat: ResetCategory,
+  report: ResetReport,
+): Promise<void> {
+  if (cat === "tickets_resueltos") {
+    const { data, error } = await supabase
+      .from("support_tickets")
+      .delete()
+      .eq("status", "resolved")
+      .select("id")
+    if (error) {
+      report.errors.push({
+        where: "selective:tickets_resueltos",
+        message: error.message,
+      })
+      report.tables["support_tickets"] = 0
+    } else {
+      report.tables["support_tickets"] = (data ?? []).length
+    }
+    return
+  }
+
+  if (cat === "notifs_leidas") {
+    const { data, error } = await supabase
+      .from("notifications")
+      .delete()
+      .not("read_at", "is", null)
+      .select("id")
+    if (error) {
+      report.errors.push({
+        where: "selective:notifs_leidas",
+        message: error.message,
+      })
+      report.tables["notifications"] = 0
+    } else {
+      report.tables["notifications"] = (data ?? []).length
+    }
+    return
+  }
+
+  if (cat === "ventas_canceladas") {
+    // 1) Buscamos los IDs de sales canceladas
+    const { data: cancelledSales, error: idsErr } = await supabase
+      .from("sales")
+      .select("id")
+      .eq("status", "cancelled")
+    if (idsErr) {
+      report.errors.push({
+        where: "selective:ventas_canceladas:lookup",
+        message: idsErr.message,
+      })
+      return
+    }
+    const ids = (cancelledSales ?? []).map((r: any) => r.id as string)
+    if (ids.length === 0) {
+      report.tables["sales"] = 0
+      return
+    }
+    // 2) Borramos en orden FK-safe (hijas primero, luego sales).
+    // Cada tabla intenta solo las filas asociadas a las sales seleccionadas.
+    const childTables = [
+      "movements",
+      "payment_proofs",
+      "payments",
+      "delivery_notes",
+      "sale_items",
+    ]
+    for (const t of childTables) {
+      const { data, error } = await supabase
+        .from(t)
+        .delete()
+        .in("sale_id", ids)
+        .select("id")
+      if (error) {
+        // movements puede no tener sale_id (es por variant_id) — ignoramos
+        // ese caso específico para no contaminar el reporte.
+        if (!/column .* does not exist/i.test(error.message)) {
+          report.errors.push({
+            where: `selective:ventas_canceladas:${t}`,
+            message: error.message,
+          })
+        }
+        report.tables[t] = 0
+      } else {
+        report.tables[t] = (data ?? []).length
+      }
+    }
+    // 3) Finalmente las sales
+    const { data: salesDel, error: salesErr } = await supabase
+      .from("sales")
+      .delete()
+      .in("id", ids)
+      .select("id")
+    if (salesErr) {
+      report.errors.push({
+        where: "selective:ventas_canceladas:sales",
+        message: salesErr.message,
+      })
+      report.tables["sales"] = 0
+    } else {
+      report.tables["sales"] = (salesDel ?? []).length
+    }
+    return
+  }
 }
 
 /**
