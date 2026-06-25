@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useDeferredValue, memo, lazy, Suspense } from "react"
+import { createPortal } from "react-dom"
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom"
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion"
 import Fuse from "fuse.js"
@@ -860,8 +861,16 @@ export default function ClientShopPage() {
     })
     if (added > 0) {
       sound.success()
+      // Toast en bottom-center con margen sobre el dock para NO tapar el
+      // botón del carrito (que vive en el header arriba) ni el dock inferior.
       toast.success(`✨ +${added} ${added === 1 ? "pieza" : "piezas"} al carrito`, {
         duration: 1600,
+        position: "bottom-center",
+        style: {
+          marginBottom: "calc(4.25rem + env(safe-area-inset-bottom))",
+          padding: "6px 12px",
+          fontSize: "11.5px",
+        },
       })
     }
     if (skipped > 0 && added === 0) {
@@ -1699,26 +1708,29 @@ export default function ClientShopPage() {
           se superponían con el de WhatsApp. Movimos "Pídelo" al header y
           quitamos LifeBuoy porque ya hay WhatsApp + botón soporte en header. */}
 
-      {/* Drawer carrito */}
-      <AnimatePresence>
-        {openCart && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[160]"
-          >
-            <div
-              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
-              onClick={() => setOpenCart(false)}
-            />
+      {/* Drawer carrito — portal a body para escapar de cualquier
+          stacking context del layout cliente (dock inferior z-50 lo
+          tapaba). z-[200] queda por encima de nav, header y FAB. */}
+      {createPortal(
+        <AnimatePresence>
+          {openCart && (
             <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 28 }}
-              className="absolute left-0 right-0 bottom-0 bg-white dark:bg-slate-900 rounded-t-[2rem] pb-safe max-h-[88vh] flex flex-col shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.45)]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200]"
             >
+              <div
+                className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+                onClick={() => setOpenCart(false)}
+              />
+              <motion.div
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
+                transition={{ type: "spring", damping: 28 }}
+                className="absolute left-0 right-0 bottom-0 bg-white dark:bg-slate-900 rounded-t-[2rem] pb-safe max-h-[88vh] flex flex-col shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.45)]"
+              >
               {/* Handle drag visual */}
               <div className="flex justify-center pt-2 pb-1 shrink-0">
                 <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
@@ -1727,9 +1739,9 @@ export default function ClientShopPage() {
               {/* Header limpio: t\u00edtulo + cantidad de piezas + acciones.
                   Compartir movido al header (icon) para liberar espacio
                   vertical del footer y darle m\u00e1s scroll a la lista. */}
-              <div className="flex items-center justify-between px-5 pb-3 shrink-0">
+              <div className="flex items-center justify-between px-5 pb-2.5 shrink-0">
                 <div className="min-w-0">
-                  <h3 className="text-lg font-black tracking-tight">Tu carrito</h3>
+                  <h3 className="text-base font-black tracking-tight">Tu carrito</h3>
                   <p className="text-[10px] font-bold text-slate-500 mt-0.5">
                     {totalQty} {totalQty === 1 ? "pieza" : "piezas"} \u00b7{" "}
                     {repricedCart.length}{" "}
@@ -2121,7 +2133,7 @@ export default function ClientShopPage() {
               {/* Footer mínimo sticky: SOLO Total + CTA. Antes vivían aquí
                   switches + desglose y comían 250px del sheet. Ahora todo
                   eso bajó al scroll → la lista de items gana ~150px. */}
-              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900 space-y-2">
+              <div className="px-5 py-2.5 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900 space-y-2">
                 <div className="flex items-end justify-between">
                   <div>
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">
@@ -2129,7 +2141,7 @@ export default function ClientShopPage() {
                     </p>
                     <p
                       aria-live="polite"
-                      className="font-black text-2xl text-primary tabular-nums leading-none"
+                      className="font-black text-xl text-primary tabular-nums leading-none"
                     >
                       {formatMoney(totalAmt)}
                     </p>
@@ -2140,11 +2152,11 @@ export default function ClientShopPage() {
                   <button
                     onClick={startCheckout}
                     disabled={submitting || bRules.shop_closed_enabled || repricedCart.length === 0}
-                    className="bg-brand h-12 px-5 rounded-2xl text-white text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50 press-hard"
+                    className="bg-brand h-11 px-4 rounded-2xl text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-bloom disabled:opacity-50 press-hard"
                   >
-                    <Receipt size={14} />
+                    <Receipt size={13} />
                     {bRules.shop_closed_enabled ? "Cerrada" : "Apartar"}
-                    {!bRules.shop_closed_enabled && <ArrowRight size={13} />}
+                    {!bRules.shop_closed_enabled && <ArrowRight size={12} />}
                   </button>
                 </div>
 
@@ -2158,7 +2170,9 @@ export default function ClientShopPage() {
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body,
+      )}
 
       {/* Formulario de invitada */}
       <AnimatePresence>
