@@ -10,6 +10,9 @@ export interface PersistedCartLine {
   unit_price: number
   qty: number
   stock: number
+  /** Costo unitario congelado al agregar. Permite calcular profit en
+   *  el checkout aún cuando el carrito se hidrata desde localStorage. */
+  cost?: number
   /** Marca esta línea como compra de preventa (stock=0 al apartar).
    *  Si está true, el precio NO se reprice por tier; ya viene con el
    *  descuento preventa aplicado. */

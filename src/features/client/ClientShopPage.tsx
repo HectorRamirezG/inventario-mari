@@ -103,6 +103,9 @@ interface PublicVariant {
   price: number | null
   image_url: string | null
   image_urls: string[] | null
+  /** Costo por unidad para calcular profit al insertar sale_items.
+   *  cost_override de la variante o, si no, cost del producto padre. */
+  cost?: number
 }
 
 interface PublicProduct {
@@ -127,6 +130,9 @@ interface CartLine {
   unit_price: number
   qty: number
   stock: number
+  /** Costo unitario congelado al agregar al carrito. Necesario para
+   *  que sale_items.cost_snapshot/profit reflejen la realidad. */
+  cost: number
   /** True si esta línea es preventa (stock=0 al apartar). Se respeta
    *  el `unit_price` original (no se reprice por tier ni por volumen). */
   is_preorder?: boolean
@@ -324,13 +330,13 @@ export default function ClientShopPage() {
       const [{ data: prods }, { data: vars }, { data: reviewsRaw }] = await Promise.all([
         supabase
           .from("products")
-          .select("id,name,category,image_url,created_at")
+          .select("id,name,category,image_url,created_at,cost")
           .eq("is_active", true)
           .order("name"),
         supabase
           .from("variants")
           .select(
-            "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls",
+            "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls,cost_override",
           )
           .eq("is_active", true),
         // Stats de reseñas publicadas para enriquecer las cards del catálogo.
@@ -342,13 +348,23 @@ export default function ClientShopPage() {
           .limit(5000),
       ])
       if (!alive) return
+      // Mapa product.id → cost para resolver el costo de cada variante.
+      // Variante sin cost_override hereda el cost del producto padre.
+      const productCost = new Map<string, number>(
+        ((prods ?? []) as any[]).map((p) => [p.id, Number(p.cost) || 0]),
+      )
       const byProduct: Record<string, PublicVariant[]> = {}
       ;(vars ?? []).forEach((v: any) => {
         if (!byProduct[v.product_id]) byProduct[v.product_id] = []
+        const cost =
+          v.cost_override != null && Number(v.cost_override) > 0
+            ? Number(v.cost_override)
+            : productCost.get(v.product_id) ?? 0
         byProduct[v.product_id].push({
           ...v,
           image_url: v.image_url ?? null,
           image_urls: v.image_urls ?? null,
+          cost,
         } as PublicVariant)
       })
       // Agregamos count + sum por product_id (1 pase, O(n)).
@@ -788,6 +804,7 @@ export default function ClientShopPage() {
             v.image_url ??
             p.image_url,
           unit_price: priceOf(v),
+          cost: Number(v.cost) || 0,
           qty: 1,
           stock: v.stock,
         },
@@ -850,6 +867,7 @@ export default function ClientShopPage() {
             qty: safeQty,
             stock: realStock,
             unit_price: finalPrice,
+            cost: Number(fresh.cost) || next[ix].cost || 0,
             is_preorder: isPreorderLine,
           }
         } else {
@@ -861,6 +879,7 @@ export default function ClientShopPage() {
             image_url:
               (fresh.image_urls && fresh.image_urls[0]) ?? fresh.image_url ?? p.image_url,
             unit_price: finalPrice,
+            cost: Number(fresh.cost) || 0,
             qty: safeQty,
             stock: realStock,
             is_preorder: isPreorderLine,
@@ -946,6 +965,7 @@ export default function ClientShopPage() {
             ...next[ix],
             qty: next[ix].qty + qty,
             unit_price: unitPrice,
+            cost: Number(variant.cost) || next[ix].cost || 0,
             product_name: tag,
           }
         } else {
@@ -959,6 +979,7 @@ export default function ClientShopPage() {
               variant.image_url ??
               product.image_url,
             unit_price: unitPrice,
+            cost: Number(variant.cost) || 0,
             qty,
             stock: Math.max(0, Number(variant.stock) || 0),
           })
@@ -1141,9 +1162,10 @@ export default function ClientShopPage() {
       createdSaleId = sale.id
 
       // Si el cliente eligió usar puntos, los gastamos AHORA que ya
-      // tenemos el saleId. Si falla (race condition, balance insuficiente),
-      // toast best-effort pero NO abortamos el flujo: el sale ya existe
-      // y el cliente puede pagar el monto normal sin descuento.
+      // tenemos el saleId. Si falla (race condition, balance insuficiente,
+      // expiraron), restauramos el total al precio sin descuento para
+      // no regalar el descuento sin cobrar los puntos. Mari reportaba
+      // pérdida de dinero exactamente por este flujo.
       if (loyaltyPointsToSpend > 0 && guest.email) {
         const ok = await spendLoyaltyPoints(
           guest.email.trim().toLowerCase(),
@@ -1152,8 +1174,16 @@ export default function ClientShopPage() {
           sale.id,
         )
         if (!ok) {
+          // Rollback del descuento: subimos total y balance al monto
+          // sin puntos. Si esto también falla, registramos warning pero
+          // ya el cliente recibió el mensaje, así que mejor no abortar.
+          const newTotal = totalAmt + loyaltyDiscount
+          await supabase
+            .from("sales")
+            .update({ total: newTotal, balance: newTotal })
+            .eq("id", sale.id)
           toast(
-            "No pudimos aplicar tus puntos (sin saldo o expiraron). El pedido se creó al precio normal.",
+            "No pudimos aplicar tus puntos (sin saldo o expiraron). El pedido quedó al precio normal.",
             { icon: "⚠️", duration: 3500 },
           )
         }
@@ -1162,7 +1192,13 @@ export default function ClientShopPage() {
       // Insertar items + descontar stock + registrar movement por cada uno.
       // Patrón canónico (mismo que `salesService.createSale`): asegura que el
       // inventario refleje la realidad en el instante que el cliente aparta.
+      // FIX CRÍTICO: antes guardábamos cost_snapshot=0 y profit=0, lo que
+      // destruía el cálculo de ganancia/COGS del dashboard cada vez que un
+      // cliente compraba online. Ahora usamos el costo real congelado al
+      // momento del carrito.
       for (const c of repricedCart) {
+        const unitCost = Math.max(0, Number(c.cost) || 0)
+        const profitTotal = Math.max(0, (c.unit_price - unitCost) * c.qty)
         const { error: itemErr } = await supabase.from("sale_items").insert({
           sale_id: sale.id,
           variant_id: c.variant_id,
@@ -1172,8 +1208,8 @@ export default function ClientShopPage() {
           qty: c.qty,
           tier: cartTier,
           unit_price: c.unit_price,
-          cost_snapshot: 0,
-          profit: 0,
+          cost_snapshot: unitCost,
+          profit: profitTotal,
         })
         if (itemErr) throw new Error(itemErr.message)
 
