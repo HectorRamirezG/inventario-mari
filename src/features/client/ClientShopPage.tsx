@@ -76,12 +76,19 @@ import { fireConfetti } from "../../lib/confetti"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { preloadOnIdle } from "../../lib/preloadOnIdle"
+import {
+  useActiveBundles,
+  type Bundle,
+} from "../bundles/bundlesService"
 
 // Loader único del BuySheet — se reutiliza para el lazy() y para el
 // preload-on-hover/idle desde los botones "+" de cada tarjeta.
 const loadBuySheet = () => import("./BuySheet")
 const BuySheet = lazy(loadBuySheet)
 const preloadBuySheet = () => preloadOnIdle(loadBuySheet)
+
+// Lazy del wizard de paquetes: solo carga si el cliente toca un paquete.
+const BundleWizard = lazy(() => import("../bundles/BundleWizard"))
 
 // Estructura mínima del catálogo público
 interface PublicVariant {
@@ -275,6 +282,10 @@ export default function ClientShopPage() {
   const [buySheetProduct, setBuySheetProduct] = useState<PublicProduct | null>(null)
   const [buySheetPreselectedVariant, setBuySheetPreselectedVariant] =
     useState<string | null>(null)
+
+  // Wizard de paquetes: lo abre el cliente al tocar un bundle.
+  const { bundles: activeBundles } = useActiveBundles()
+  const [activeBundle, setActiveBundle] = useState<Bundle | null>(null)
 
   // Lightbox fullscreen (clic en imagen de la card)
   const [lightboxProduct, setLightboxProduct] = useState<PublicProduct | null>(null)
@@ -905,6 +916,59 @@ export default function ClientShopPage() {
     )
   }
 
+  /** Agrega al carrito las líneas que produjo el wizard de paquete.
+   *  Cada línea ya viene con `unitPrice` que incluye el descuento del
+   *  bundle distribuido proporcionalmente. Marcamos las líneas con
+   *  product_name `[Paquete: X] · Producto` para que el cliente las
+   *  identifique fácil en su carrito. */
+  function addBundleToCart(
+    lines: { variantId: string; qty: number; unitPrice: number }[],
+    meta: { bundleName: string },
+  ) {
+    if (lines.length === 0) return
+    setCart((prev) => {
+      const next = [...prev]
+      for (const { variantId, qty, unitPrice } of lines) {
+        const variant = products
+          .flatMap((p) => p.variants)
+          .find((v) => v.id === variantId)
+        if (!variant) continue
+        const product = products.find((p) => p.id === variant.product_id)
+        if (!product) continue
+        const tag = `[${meta.bundleName}] ${product.name}`
+        // Si ya existe la misma variante en carrito, sumamos qty pero
+        // dejamos el unit_price del bundle (más bajo) para no penalizar
+        // al cliente que ya había agregado la pieza.
+        const ix = next.findIndex((c) => c.variant_id === variantId)
+        if (ix >= 0) {
+          next[ix] = {
+            ...next[ix],
+            qty: next[ix].qty + qty,
+            unit_price: unitPrice,
+            product_name: tag,
+          }
+        } else {
+          next.push({
+            variant_id: variant.id,
+            product_id: variant.product_id,
+            product_name: tag,
+            variant_name: variant.variant_name,
+            image_url:
+              (variant.image_urls && variant.image_urls[0]) ??
+              variant.image_url ??
+              product.image_url,
+            unit_price: unitPrice,
+            qty,
+            stock: Math.max(0, Number(variant.stock) || 0),
+          })
+        }
+      }
+      return next
+    })
+    sound.success()
+    setOpenCart(true)
+  }
+
   /** Inicia el proceso de apartado. Si faltan datos del invitado, abre el modal. */
   function startCheckout() {
     if (cart.length === 0) return
@@ -1529,6 +1593,15 @@ export default function ClientShopPage() {
         />
       ) : (
         <LayoutGroup id="shop-catalog">
+          {/* Carrusel de PAQUETES — visible solo si hay bundles activos.
+              Mari los administra desde /admin → Paquetes. Cliente tap →
+              wizard de armado con slots. */}
+          {activeBundles.length > 0 && !q && (
+            <BundlesCarousel
+              bundles={activeBundles}
+              onOpen={(b) => setActiveBundle(b)}
+            />
+          )}
           <motion.div
             layout
             className={
@@ -2224,6 +2297,18 @@ export default function ClientShopPage() {
         />
       </Suspense>
 
+      {/* Wizard de paquetes: el cliente eligió un bundle del carrusel.
+          Lazy + Suspense: solo se carga al primer tap. */}
+      <Suspense fallback={null}>
+        <BundleWizard
+          open={!!activeBundle}
+          bundle={activeBundle}
+          products={products}
+          onClose={() => setActiveBundle(null)}
+          onConfirm={(lines, meta) => addBundleToCart(lines, meta)}
+        />
+      </Suspense>
+
       {/* Lightbox fullscreen: se abre al tocar la imagen de una card */}
       <ProductLightbox
         open={!!lightboxProduct}
@@ -2885,6 +2970,70 @@ const ProductCardClient = memo(function ProductCardClientImpl({
     </>
   )
 })
+
+/* ────────────────────────────────────────────────────────────────────
+ * Carrusel horizontal de PAQUETES (bundles).
+ * Solo visible cuando hay bundles activos en BD. Cada card abre el
+ * BundleWizard donde el cliente arma su set eligiendo una variante por
+ * slot. Los bundles dan descuento del N% sobre el total armado.
+ * ──────────────────────────────────────────────────────────────────── */
+function BundlesCarousel({
+  bundles,
+  onOpen,
+}: {
+  bundles: Bundle[]
+  onOpen: (b: Bundle) => void
+}) {
+  return (
+    <div className="mb-4">
+      <div className="flex items-baseline justify-between mb-2 px-0.5">
+        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+          <Package size={12} className="text-primary" />
+          Paquetes que puedes armar
+        </h3>
+        <span className="text-[9px] font-bold text-slate-400">
+          {bundles.length} disponible{bundles.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-2 scroll-container-ios -mx-1 px-1 snap-x snap-mandatory">
+        {bundles.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => onOpen(b)}
+            className="snap-start shrink-0 w-44 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-primary/40 hover:shadow-md transition-all text-left press"
+          >
+            <div className="relative aspect-[4/3] bg-gradient-to-br from-primary/10 via-violet-500/10 to-fuchsia-500/10 flex items-center justify-center text-primary">
+              {b.image_url ? (
+                <img
+                  src={b.image_url}
+                  alt={b.name}
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <Package size={32} strokeWidth={1.5} />
+              )}
+              {b.discount_percent > 0 && (
+                <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-fuchsia-500 text-white text-[8px] font-black uppercase tracking-widest shadow-sm">
+                  -{b.discount_percent}%
+                </span>
+              )}
+            </div>
+            <div className="p-2.5">
+              <p className="text-[11px] font-black leading-tight line-clamp-2">
+                {b.name}
+              </p>
+              <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                {b.slots.length} producto{b.slots.length === 1 ? "" : "s"} a tu elección
+              </p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 /**
  * Mini-chip "X personas viendo esto ahora" — prueba social light.

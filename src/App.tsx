@@ -45,6 +45,7 @@ const DeliveriesAdminPage = lazy(() => import("./features/delivery/DeliveriesAdm
 const SettingsPage = lazy(() => import("./features/settings/SettingsPage"))
 const BusinessRulesPage = lazy(() => import("./features/settings/BusinessRulesPage"))
 const UsersPage = lazy(() => import("./features/users/UsersPage"))
+const BundlesAdminPage = lazy(() => import("./features/bundles/BundlesAdminPage"))
 const ClientOrdersPage = lazy(() => import("./features/client/ClientOrdersPage"))
 const MyReportsPage = lazy(() => import("./features/client/MyReportsPage"))
 const MyWishesPage = lazy(() => import("./features/wishes/MyWishesPage"))
@@ -1409,6 +1410,7 @@ function AdminShell() {
                     {section === "ciclos" && isAdmin && <CyclesPage />}
                     {section === "calculadora" && isAdmin && <PricingPage />}
                     {section === "usuarios" && isAdmin && <UsersPage />}
+                    {section === "paquetes" && isAdmin && <BundlesAdminPage />}
                     {section === "reglas" && isAdmin && <BusinessRulesPage />}
                     {section === "ajustes" && <SettingsPage />}
                   </Suspense>

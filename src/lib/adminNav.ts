@@ -43,6 +43,7 @@ export type AdminSection =
   | "stories"
   | "resenias"
   | "usuarios"
+  | "paquetes"
   | "reglas"
   | "ajustes"
 
@@ -181,6 +182,15 @@ export const ADMIN_SECTIONS: AdminSectionEntry[] = [
     adminOnly: true,
     accent: "linear-gradient(135deg,#0ea5e9,#6366f1)",
     hint: "Ver clientes y visitantes",
+  },
+  {
+    id: "paquetes",
+    label: "Paquetes",
+    caption: "Sets / kits armables por el cliente",
+    icon: Package,
+    adminOnly: true,
+    accent: "linear-gradient(135deg,#a855f7,#ec4899)",
+    hint: "Crear paquetes con slots",
   },
   {
     id: "reglas",
