@@ -341,7 +341,27 @@ export default function BusinessRulesPage() {
           affects="todos"
           enabled={form.no_refund}
           onToggle={(v) => patch({ no_refund: v })}
-        />
+        >
+          {/* Aviso de dependencia: la regla NECESITA que el programa
+              de premios esté activo para poder convertir. Si no, al
+              cancelar simplemente no se hace nada y el cliente queda
+              esperando devolución manual. Le avisamos a Mari en sitio
+              para evitar confusión cuando reporte "no se regresaron
+              los puntos". */}
+          {!form.loyalty_enabled && (
+            <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
+              <AlertCircle
+                size={12}
+                className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
+              />
+              <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-snug">
+                <strong>Requiere Programa de Premios activo</strong> (más abajo).
+                Sin él, al cancelar no se otorgan puntos y el cliente queda
+                esperando una devolución manual.
+              </p>
+            </div>
+          )}
+        </RuleRow>
 
         <RuleRow
           icon={CalendarClock}
@@ -482,7 +502,7 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={PackageX}
           title="Bloquear venta sin stock"
-          description="Si una variante está en 0, el cliente no puede agregarla al carrito. Si lo apagas, permite pre-orden (vende sin tener físicamente la pieza)."
+          description="Si una variante está en 0, el cliente no puede agregarla al carrito. Si lo apagas, permite preventa (vende sin tener físicamente la pieza)."
           affects="cliente"
           enabled={form.block_oversell}
           onToggle={(v) => patch({ block_oversell: v })}
@@ -533,8 +553,9 @@ export default function BusinessRulesPage() {
 
         <RuleRow
           icon={Star}
-          title="Reseñar al pagar (no esperar entrega)"
-          description="Por default el cliente reseña hasta que su pedido se marca como entregado. Con esto activado, también puede reseñar tan pronto liquide el saldo — útil cuando lo recoge en tienda o se lo lleva en el momento."
+          title="Reseñar al pagar (sin esperar entrega)"
+          description="Por default el cliente solo puede dejar reseña cuando su pedido se marca como ENTREGADO. Con esta regla activa, también puede reseñar en cuanto LIQUIDA el saldo — útil cuando recoge en tienda o se lo lleva al momento (no hay 'entrega' que esperar)."
+          example="Cliente paga completo en mostrador → le aparece el botón 'Dejar reseña' sin tener que esperar a que tú marques 'Entregado'."
           affects="cliente"
           enabled={form.reviews_on_paid_enabled}
           onToggle={(v) => patch({ reviews_on_paid_enabled: v })}

@@ -689,8 +689,31 @@ export default function ClientShopPage() {
     return Math.round(loyaltyDiscount / peso)
   }, [loyaltyDiscount, bRules.loyalty_peso_por_punto])
 
-  // TOTAL = subtotal + envío − descuento por puntos
-  const totalAmt = Math.max(0, subtotalAmt + shippingCalc.amount - loyaltyDiscount)
+  // Descuento automático por volumen (regla auto_discount_*).
+  // Mari decidió que este descuento se aplique TAMBIÉN al carrito del
+  // cliente — antes solo se veía en el carrito admin, pero el cliente
+  // se quejaba de que en realidad no existía al pagar.
+  // Se aplica sobre el subtotal y solo si totalQty supera el umbral.
+  // No afecta envío ni puntos: es un descuento sobre items.
+  const volumeDiscount = useMemo(() => {
+    if (!bRules.auto_discount_enabled) return 0
+    if (totalQty < (bRules.auto_discount_min_items || 0)) return 0
+    const pct = Math.max(0, Math.min(50, bRules.auto_discount_percent || 0))
+    if (pct <= 0) return 0
+    return Math.round(subtotalAmt * (pct / 100) * 100) / 100
+  }, [
+    bRules.auto_discount_enabled,
+    bRules.auto_discount_min_items,
+    bRules.auto_discount_percent,
+    totalQty,
+    subtotalAmt,
+  ])
+
+  // TOTAL = subtotal + envío − volumen − descuento por puntos
+  const totalAmt = Math.max(
+    0,
+    subtotalAmt + shippingCalc.amount - volumeDiscount - loyaltyDiscount,
+  )
 
   // Ahorro vs menudeo (motivacional)
   const savingsVsMenudeo = useMemo(() => {
@@ -1846,6 +1869,22 @@ export default function ClientShopPage() {
                     </div>
                   )}
 
+                  {/* Línea de descuento por volumen — solo visible si la
+                      regla se activa y el carrito califica. Mari pedía
+                      verlo explícito en el desglose porque antes era
+                      invisible al cliente. */}
+                  {volumeDiscount > 0 && (
+                    <div className="flex justify-between text-fuchsia-600 dark:text-fuchsia-400 font-bold">
+                      <span className="flex items-center gap-1">
+                        <Sparkles size={11} />
+                        Descuento por volumen ({bRules.auto_discount_percent}%)
+                      </span>
+                      <span className="tabular-nums">
+                        -{formatMoney(volumeDiscount)}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Toggle de canje de puntos. Solo aparece si la regla
                       está activa Y el cliente cumple el mínimo. Si se
                       activa, descuenta automáticamente el máximo posible
@@ -2535,11 +2574,12 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                     e.stopPropagation()
                     setSelected(v.id)
                   }}
-                  className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-colors max-w-[80px] truncate ${
+                  className={`px-2 py-0.5 rounded-full text-[9px] font-bold transition-colors max-w-[140px] truncate ${
                     v.id === selected
                       ? "bg-primary text-white shadow-sm"
                       : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300"
                   }`}
+                  title={v.variant_name}
                 >
                   {v.variant_name}
                 </button>
@@ -2591,13 +2631,15 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                 </span>
               </button>
             )}
-            {/* Stock urgente: SOLO ultimas 1-2 piezas. Antes mostrabamos
-                'solo 8' que no era urgente — saturaba. */}
+            {/* Stock urgente: respeta la regla `show_stock_to_client`.
+                Si está apagada, el cliente solo ve "Agotado" cuando no
+                hay stock. Si está encendida, usamos el `low_stock_label`
+                custom que Mari haya definido (ej. "Apúrate, solo quedan"). */}
             {out ? (
               <span className="inline-block text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 mt-1">
                 Agotado
               </span>
-            ) : variant.stock <= 2 ? (
+            ) : rules.show_stock_to_client && variant.stock <= 2 ? (
               <span
                 className={`inline-block text-[9px] font-black uppercase tracking-widest mt-1 ${
                   variant.stock === 1
@@ -2605,7 +2647,9 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                     : "text-amber-600 dark:text-amber-400"
                 }`}
               >
-                {variant.stock === 1 ? "¡ÚLTIMA!" : "Últimas 2"}
+                {variant.stock === 1
+                  ? `¡ÚLTIMA!`
+                  : `${rules.low_stock_label || "Solo quedan"} ${variant.stock}`}
               </span>
             ) : null}
           </div>

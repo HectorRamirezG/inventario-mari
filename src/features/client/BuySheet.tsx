@@ -71,8 +71,8 @@ interface Props {
   thresholds?: { medio_min_qty: number; mayoreo_min_qty: number }
   /**
    * Si `true` (default), bloquear agregar al carrito variantes con
-   * stock=0. Si `false`, permite pre-orden: el cliente puede comprar
-   * sin existencia y verá una etiqueta clara "Pre-orden — entrega luego".
+   * stock=0. Si `false`, permite preventa: el cliente puede comprar
+   * sin existencia y verá una etiqueta clara "Preventa — entrega luego".
    * Controlado por la regla `block_oversell` de business_rules.
    */
   blockOversell?: boolean
@@ -364,17 +364,17 @@ export default function BuySheet({
                 product.variants.map((v) => {
                   const q = qty[v.id] ?? 0
                   const outOfStock = v.stock <= 0
-                  // Si la tienda permite pre-orden (regla block_oversell=false),
+                  // Si la tienda permite preventa (regla block_oversell=false),
                   // el botón + sigue activo aunque stock=0 con un tope holgado
                   // (5 piezas para no abrir la puerta a abusos). El cliente
-                  // recibe un aviso visual de "Pre-orden".
+                  // recibe un aviso visual de "Preventa".
                   const PREORDER_CAP = 5
                   const allowPreorder = !blockOversell && outOfStock
                   const effectiveStock = allowPreorder
                     ? PREORDER_CAP
                     : v.stock
                   // `out` controla el bloqueo duro de +/-. Solo bloquea cuando
-                  // está agotado Y NO se permite pre-orden.
+                  // está agotado Y NO se permite preventa.
                   const out = outOfStock && !allowPreorder
                   const atMax = !out && q >= effectiveStock
                   const menudeoPrice = v.price_menudeo ?? v.price
@@ -426,7 +426,7 @@ export default function BuySheet({
                             </p>
                           ) : allowPreorder ? (
                             <p className="text-[9px] font-black uppercase text-violet-600 dark:text-violet-400">
-                              📦 Pre-orden · entrega luego
+                              📦 Preventa · entrega luego
                             </p>
                           ) : v.stock <= 3 ? (
                             <p
@@ -445,27 +445,44 @@ export default function BuySheet({
                           )}
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => change(v.id, -1, effectiveStock)}
-                            disabled={q === 0 || out}
-                            aria-label="Restar"
-                            className="w-9 h-9 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-sm border border-slate-200 dark:border-slate-600 disabled:opacity-40 active:scale-90 transition-transform"
-                          >
-                            <Minus size={14} />
-                          </button>
-                          <span className="w-7 text-center text-sm font-black tabular-nums">
-                            {q}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => change(v.id, 1, effectiveStock)}
-                            disabled={out || q >= effectiveStock}
-                            aria-label="Sumar"
-                            className="bg-brand w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom disabled:opacity-30 active:scale-90 transition-transform"
-                          >
-                            <Plus size={14} strokeWidth={3} />
-                          </button>
+                          {/* Caso especial: preventa con q=0. En vez de mostrar
+                              −/+ pelados (que subían a 1 de un toque sin avisar
+                              que era preventa), pintamos un botón explícito
+                              "Pedir en preventa" que requiere clic consciente. */}
+                          {allowPreorder && q === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => change(v.id, 1, effectiveStock)}
+                              aria-label="Pedir en preventa"
+                              className="h-9 px-3 rounded-full bg-violet-500 hover:bg-violet-600 text-white text-[9px] font-black uppercase tracking-widest shadow-bloom active:scale-95 transition-transform flex items-center gap-1"
+                            >
+                              📦 Preventa
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => change(v.id, -1, effectiveStock)}
+                                disabled={q === 0 || out}
+                                aria-label="Restar"
+                                className="w-9 h-9 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-sm border border-slate-200 dark:border-slate-600 disabled:opacity-40 active:scale-90 transition-transform"
+                              >
+                                <Minus size={14} />
+                              </button>
+                              <span className="w-7 text-center text-sm font-black tabular-nums">
+                                {q}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => change(v.id, 1, effectiveStock)}
+                                disabled={out || q >= effectiveStock}
+                                aria-label="Sumar"
+                                className="bg-brand w-9 h-9 rounded-full text-white flex items-center justify-center shadow-bloom disabled:opacity-30 active:scale-90 transition-transform"
+                              >
+                                <Plus size={14} strokeWidth={3} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                       {atMax && (
@@ -473,7 +490,7 @@ export default function BuySheet({
                           <AlertTriangle size={11} className="shrink-0" />
                           <span className="flex-1">
                             {allowPreorder
-                              ? `Máximo ${PREORDER_CAP} en pre-orden. Pregúntanos por mayoreo.`
+                              ? `Máximo ${PREORDER_CAP} en preventa. Pregunta por mayoreo.`
                               : `Ya llevas las ${v.stock} piezas disponibles de este tono.${v.stock <= 3 ? " Aprovéchalas." : ""}`}
                           </span>
                           {/* Quitar variante completa en 1 tap — antes el
