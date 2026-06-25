@@ -12,19 +12,31 @@ function getSystemTheme(): "light" | "dark" {
 }
 
 function applyTheme(theme: Theme) {
-  // Si el admin forzó dark mode desde BusinessRules, ignoramos la
-  // preferencia individual y mantenemos dark hasta que se apague el flag.
+  // Si el admin forzó un modo desde BusinessRules (dark O light), el
+  // forzado manda y la preferencia individual queda visualmente ignorada.
+  // Detectamos el modo realmente forzado leyendo dataset.theme (lo setean
+  // applyForceDark/applyForceLight) en lugar de asumir dark, que era el
+  // bug anterior (forzar claro acababa aplicando oscuro).
   if (
     typeof document !== "undefined" &&
     document.documentElement.dataset.themeForced === "1"
   ) {
-    document.documentElement.dataset.theme = "dark"
-    document.documentElement.style.colorScheme = "dark"
+    const forced =
+      document.documentElement.dataset.theme === "light" ? "light" : "dark"
+    document.documentElement.dataset.theme = forced
+    document.documentElement.style.colorScheme = forced
+    if (forced === "dark") document.documentElement.classList.add("dark")
+    else document.documentElement.classList.remove("dark")
     return
   }
   const effective = theme === "system" ? getSystemTheme() : theme
   document.documentElement.dataset.theme = effective
   document.documentElement.style.colorScheme = effective
+  // Mantenemos `.dark` en <html> para que Tailwind v4 (con @custom-variant
+  // dark) resuelva los utilitarios `dark:*` según la preferencia del
+  // usuario, no según prefers-color-scheme del SO.
+  if (effective === "dark") document.documentElement.classList.add("dark")
+  else document.documentElement.classList.remove("dark")
   // Refresca <meta name="theme-color"> para barra del navegador móvil.
   // En modo claro usa el color del tema actual desde --brand-from para
   // que la barra del SO se mantenga sincronizada con el accent elegido.

@@ -21,6 +21,43 @@
     <link rel="dns-prefetch" href="https://wnnmugdynldfglabaajk.supabase.co" />
 
     <title>Beauty's Me</title>
+
+    <!--
+      ANTI-FOUC: aplicamos el tema (dark/light) al <html> ANTES de que el
+      browser pinte la primera vez. Sin esto, la página flashea blanca
+      hasta que React monta y ejecuta applyTheme(). Lee la misma key
+      `mari-theme` que useTheme.ts. Si vale "system", consulta el SO.
+      Si el admin forzó un modo desde BusinessRules, App.tsx lo aplicará
+      después; eso ya no flashea porque el primer paint ya respetó la
+      última preferencia que el usuario vio.
+
+      Fallback hidden si JS está bloqueado: la app no funciona sin JS
+      de todas formas, así que sólo es de adorno.
+    -->
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem("mari-theme");
+          var prefersDark = window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var dark =
+            pref === "dark" ||
+            (pref !== "light" && prefersDark);
+          var html = document.documentElement;
+          html.dataset.theme = dark ? "dark" : "light";
+          html.style.colorScheme = dark ? "dark" : "light";
+          if (dark) html.classList.add("dark");
+        } catch (e) {
+          /* localStorage bloqueado: el default light está bien. */
+        }
+      })();
+    </script>
+    <style>
+      /* Mientras React monta, el fondo coincide con el tema aplicado
+         por el script de arriba — evita el flash blanco→oscuro. */
+      html[data-theme="dark"] { background-color: #020617; color: #f1f5f9; }
+      html[data-theme="light"] { background-color: #f8fafc; color: #0f172a; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

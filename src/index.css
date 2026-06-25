@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Tailwind v4: hacer que `dark:*` respete el toggle del usuario
+   (clase `.dark` en <html>) en vez de únicamente `prefers-color-scheme`.
+   Sin esta línea, el toggle de tema en Settings sólo afectaba a unas
+   pocas clases parcheadas con `:root[data-theme="dark"]` y el resto
+   seguía la preferencia del SO. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* --- 1. CORE IDENTIDAD INTERSTELLAR --- */
   --color-primary: #e6007e;

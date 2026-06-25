@@ -165,6 +165,7 @@ export function applyForceDark(force: boolean): void {
     document.documentElement.dataset.theme = "dark"
     document.documentElement.style.colorScheme = "dark"
     document.documentElement.dataset.themeForced = "1"
+    document.documentElement.classList.add("dark")
   } else {
     delete document.documentElement.dataset.themeForced
   }
@@ -184,6 +185,7 @@ export function applyForceLight(force: boolean): void {
     document.documentElement.dataset.theme = "light"
     document.documentElement.style.colorScheme = "light"
     document.documentElement.dataset.themeForced = "1"
+    document.documentElement.classList.remove("dark")
   } else {
     // Solo limpiamos si el forzado actual era light (no tocamos dark).
     if (
