@@ -423,7 +423,7 @@ export default function ClientOrdersPage() {
 
   if (loading) {
     return (
-      <div className="space-y-3 pb-24">
+      <div className="space-y-3 pb-[calc(6rem+env(safe-area-inset-bottom))]">
         <div>
           <Skeleton className="h-7 w-40 mb-2" rounded="lg" />
           <Skeleton className="h-3 w-64" rounded="full" />
@@ -454,7 +454,7 @@ export default function ClientOrdersPage() {
   }
 
   return (
-    <div className="space-y-3 pb-24">
+    <div className="space-y-3 pb-[calc(6rem+env(safe-area-inset-bottom))]">
       <PageHeader
         icon={ShoppingBag}
         iconTone="primary"

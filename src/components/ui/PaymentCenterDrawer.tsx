@@ -314,7 +314,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                 </div>
 
                 {/* Contenido */}
-                <div className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios">
+                <div className="flex-1 overflow-y-auto px-5 pb-[calc(2rem+env(safe-area-inset-bottom))] scroll-container-ios">
                   <AnimatePresence mode="wait">
                     {tab === "send" && (
                       <motion.div
