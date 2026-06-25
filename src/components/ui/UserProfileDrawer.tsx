@@ -45,6 +45,7 @@ import { fetchMyShoppingStats, type MyShoppingStats } from "../../features/profi
 import { formatMoney } from "../../lib/format"
 import { useUserPrefs } from "../../lib/userPrefs"
 import { copyToClipboard } from "../../lib/clipboard"
+import { confirmAction } from "../../lib/confirm"
 import OverlayShell from "./OverlayShell"
 import { useTheme, type Theme } from "../../lib/useTheme"
 import {
@@ -562,6 +563,15 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                   <button
                     type="button"
                     onClick={async () => {
+                      const ok = await confirmAction({
+                        title: "¿Cerrar sesión?",
+                        description:
+                          "Tendrás que volver a iniciar sesión para entrar de nuevo.",
+                        confirmLabel: "Sí, salir",
+                        cancelLabel: "Cancelar",
+                        tone: "danger",
+                      })
+                      if (!ok) return
                       await signOut()
                       onClose()
                     }}
@@ -786,9 +796,17 @@ function MyStyleSection() {
   const { theme, setTheme } = useTheme()
   const currentAccent = prefs.accentOverride ?? bRules.theme_accent
   const usingGlobal = prefs.accentOverride === null
-  // Si el admin forzó dark mode, los botones de tema se deshabilitan
-  // (no podemos pelearnos con esa regla del negocio).
-  const themeLocked = bRules.force_dark_mode
+  // Si la tienda forzó un modo (dark u light), bloqueamos el selector
+  // personal: aplicar la regla del admin manda. Mostramos al cliente
+  // exactamente CUÁL modo está activo para que no se confunda.
+  const forcedDark = bRules.force_dark_mode
+  const forcedLight = bRules.force_light_mode && !forcedDark
+  const themeLocked = forcedDark || forcedLight
+  const lockedLabel = forcedDark
+    ? "forzado en modo oscuro"
+    : forcedLight
+    ? "forzado en modo claro"
+    : null
 
   return (
     <section className="rounded-3xl p-4 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 space-y-4">
@@ -895,9 +913,9 @@ function MyStyleSection() {
       <div>
         <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1.5">
           Tema de la app
-          {themeLocked && (
+          {lockedLabel && (
             <span className="ml-1.5 text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
-              · forzado por la tienda
+              · {lockedLabel}
             </span>
           )}
         </p>

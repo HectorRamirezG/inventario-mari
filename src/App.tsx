@@ -95,6 +95,24 @@ import { useVisitorTracking } from "./lib/useVisitorTracking"
 import { applyMotionLevel } from "./lib/applyMotion"
 import { useUserPrefs, isDarkScheduleNow } from "./lib/userPrefs"
 import { prefetchSection } from "./lib/useNavPrefetch"
+import { confirmAction } from "./lib/confirm"
+
+/**
+ * Pide confirmación antes de cerrar sesión. Evita que un tap por error
+ * (sobre todo en el sidebar colapsado) saque al usuario y le obligue a
+ * volver a loguearse / recibir magic link de nuevo.
+ */
+async function confirmSignOut(doSignOut: () => Promise<void>) {
+  const ok = await confirmAction({
+    title: "¿Cerrar sesión?",
+    description:
+      "Tendrás que volver a iniciar sesión para entrar de nuevo.",
+    confirmLabel: "Sí, salir",
+    cancelLabel: "Cancelar",
+    tone: "danger",
+  })
+  if (ok) await doSignOut()
+}
 
 // ──────────────────────────────────────────────────────────────────
 // Menús del shell admin/staff. Etiquetas más cortas y orientadas a acción.
@@ -1188,7 +1206,7 @@ function AdminShell() {
           >
             <ThemeToggle />
             <button
-              onClick={() => signOut()}
+              onClick={() => confirmSignOut(signOut)}
               className={`flex items-center rounded-2xl bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 transition-colors ${
                 sidebarExpanded
                   ? "px-3 py-2 gap-3 flex-1"

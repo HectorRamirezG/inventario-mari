@@ -451,7 +451,17 @@ export default function SettingsPage() {
         </div>
 
         <button
-          onClick={() => signOut()}
+          onClick={async () => {
+            const ok = await confirmAction({
+              title: "¿Cerrar sesión?",
+              description:
+                "Tendrás que volver a iniciar sesión para entrar de nuevo.",
+              confirmLabel: "Sí, salir",
+              cancelLabel: "Cancelar",
+              tone: "danger",
+            })
+            if (ok) await signOut()
+          }}
           className="w-full h-11 mt-3 rounded-xl bg-rose-50 text-rose-600 text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-100"
         >
           <LogOut size={14} /> Cerrar sesión
