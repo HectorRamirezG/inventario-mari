@@ -945,6 +945,21 @@ export default function BusinessRulesPage() {
         </RuleRow>
 
         <RuleRow
+          icon={CalendarClock}
+          title="Calendario de promociones"
+          description="Activa la sección /promociones donde el cliente ve las fechas especiales (Black Friday, cierres por inventario, lanzamientos). Si lo apagas, la ruta sigue accesible pero muestra un placeholder vacío."
+          affects="cliente"
+          enabled={form.promo_calendar_enabled}
+          onToggle={(v) => patch({ promo_calendar_enabled: v })}
+        >
+          <Hint>
+            {form.promo_events.length === 0
+              ? "Aún no hay eventos cargados. Edítalos desde el código (próxima versión incluirá un editor visual)."
+              : `${form.promo_events.length} evento${form.promo_events.length === 1 ? "" : "s"} configurado${form.promo_events.length === 1 ? "" : "s"}.`}
+          </Hint>
+        </RuleRow>
+
+        <RuleRow
           icon={Bell}
           title="Aviso global (banner superior)"
           description="Aparece como franja sticky arriba de TODA la app (catálogo, ticket, panel). A diferencia del banner anclado del hero, este es para alertas urgentes."

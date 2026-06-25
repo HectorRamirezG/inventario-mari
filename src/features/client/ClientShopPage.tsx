@@ -2421,18 +2421,30 @@ const ProductCardClient = memo(function ProductCardClientImpl({
     : price
   const showPreorderPrice = allowPreorder && preorderPct > 0 && preorderPrice < price
 
-  // Badges automáticos: NUEVO (producto creado dentro de la ventana
-  // Badge 'Nuevo' (solo Últimos 3 días para que no sea perpetuo). El
-  // umbral configurable de `new_badge_days` ya no se usa: Mari prefirió
-  // un threshold fijo bajo. La promo de oferta porcentual (-X%) también
-  // se eliminó — generaba confusión entre 'oferta real' y 'precio
-  // medio por volumen'. Ese contexto vive en el carrito.
+  // Badge automático NUEVO: respeta la regla `new_badge_days` (default
+  // 7 según businessRulesService). El admin puede subirlo/bajarlo desde
+  // la sección "Etiquetas automáticas en cards". Si el valor llega mal
+  // (0 o negativo), cae a 7 días para no perder el badge.
   const isNew = (() => {
     if (!product.created_at) return false
     const created = Date.parse(product.created_at)
     if (!created) return false
-    return Date.now() - created < 3 * 24 * 3600 * 1000
+    const days = Math.max(1, Number(rules.new_badge_days) || 7)
+    return Date.now() - created < days * 24 * 3600 * 1000
   })()
+
+  // Badge OFERTA: se reactiva. La card muestra "-X%" cuando el precio
+  // efectivo cae bajo el menudeo y el descuento supera el umbral
+  // configurable (`offer_min_discount_pct`). Mari pidió volver a verlo
+  // para que las ofertas reales destaquen sobre el resto del catálogo.
+  const offerPctActual = (() => {
+    const menudeo = variant.price_menudeo ?? variant.price ?? 0
+    if (menudeo <= 0 || price >= menudeo) return 0
+    return Math.round(((menudeo - price) / menudeo) * 100)
+  })()
+  const offerMinPct = Math.max(0, Math.min(50, Number(rules.offer_min_discount_pct) || 0))
+  const showOfferBadge =
+    !showPreorderPrice && offerPctActual >= offerMinPct && offerMinPct > 0
 
   // Slices para VariantImageCarousel. REGLA CRÍTICA:
   // toda variante DEBE existir en este array, aunque no tenga fotos propias,
@@ -2521,13 +2533,20 @@ const ProductCardClient = memo(function ProductCardClientImpl({
               <Package size={22} />
             </div>
           )}
-          {/* Modo list: badge 'Nuevo' SOLO si el producto es de los
-              ultimos 3 dias (calculado en `isNew` arriba). */}
+          {/* Modo list: badges 'Nuevo' y 'Oferta' — respetan reglas
+              new_badge_days y offer_min_discount_pct configurables. */}
           {isNew && (
             <div className="absolute top-1 left-1">
               <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-md bg-white/90 dark:bg-slate-900/90 backdrop-blur text-[7px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 shadow-sm">
                 <span className="w-1 h-1 rounded-full bg-emerald-500" />
                 Nuevo
+              </span>
+            </div>
+          )}
+          {showOfferBadge && (
+            <div className={`absolute ${isNew ? "top-1 right-1" : "top-1 left-1"}`}>
+              <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-md bg-rose-500/95 text-white text-[7px] font-black uppercase tracking-widest shadow-sm">
+                -{offerPctActual}%
               </span>
             </div>
           )}
@@ -2642,15 +2661,25 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           showVariantBadge={showVariantBadge}
           priority={priority}
         />
-        {/* Badge UNICO discreto SOLO si el producto es de los ultimos
-            3 dias (calculado arriba en `isNew`). Sin chip de oferta
-            porcentual: Mari argumenta que confunde y que la promo se
-            ve en el carrito. */}
+        {/* Badges automáticos: NUEVO (regla new_badge_days) y OFERTA
+            (regla offer_min_discount_pct). Si ambos aplican, NUEVO va a
+            la izquierda y OFERTA un poco más a la derecha para no chocar. */}
         {isNew && (
           <div className="absolute top-2 left-2 z-10">
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-white/90 dark:bg-slate-900/90 backdrop-blur text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 shadow-sm">
               <span className="w-1 h-1 rounded-full bg-emerald-500" />
               Nuevo
+            </span>
+          </div>
+        )}
+        {showOfferBadge && (
+          <div
+            className={`absolute z-10 ${
+              isNew ? "top-2 right-12" : "top-2 left-2"
+            }`}
+          >
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-500/95 text-white text-[9px] font-black uppercase tracking-widest shadow-sm">
+              -{offerPctActual}%
             </span>
           </div>
         )}
