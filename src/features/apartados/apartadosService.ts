@@ -198,7 +198,10 @@ export async function cancelSale(saleId: string, reason?: string | null) {
   // Si escribió un motivo, lo guardamos en notes para que quede
   // en el historial. No tenemos columna dedicada `cancellation_reason`
   // en sales, así que lo concatenamos.
-  const patch: Record<string, unknown> = { status: "cancelled" };
+  // FIX: también reseteamos `balance` a 0 al cancelar. Antes la fila
+  // quedaba con su balance original y los KPIs de "por cobrar" del
+  // dashboard la incluían como deuda fantasma.
+  const patch: Record<string, unknown> = { status: "cancelled", balance: 0 };
   if (reason && reason.trim()) {
     const tag = `[Cancelado: ${reason.trim()}]`;
     patch.notes = tag;

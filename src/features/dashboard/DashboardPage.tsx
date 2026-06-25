@@ -96,6 +96,7 @@ export default function DashboardPage() {
 
   // ── Derivados financieros claros ────────────────────────────────
   const revenue = stats?.revenue ?? 0
+  const collected = stats?.collected ?? 0
   const profit = stats?.profit ?? 0
   const pending = stats?.pending ?? 0
   const operations = stats?.operations ?? 0
@@ -192,13 +193,14 @@ export default function DashboardPage() {
           </p>
           <p className="text-[10px] font-bold text-slate-600 dark:text-slate-300 leading-snug mt-0.5">
             Tus números del periodo seleccionado:{" "}
-            <span className="font-black">Ingresos</span> (lo vendido),{" "}
-            <span className="font-black">Costo</span> (lo que invertiste en
-            mercancía),{" "}
+            <span className="font-black">Vendido</span> (incluye apartados sin
+            liquidar),{" "}
             <span className="font-black text-emerald-700 dark:text-emerald-300">
-              Ganancia
+              Cobrado
             </span>{" "}
-            (lo que de verdad te quedó) y{" "}
+            (dinero ya en mano),{" "}
+            <span className="font-black">Ganancia</span> (lo que de verdad te
+            quedó) y{" "}
             <span className="font-black text-amber-700 dark:text-amber-300">
               Por cobrar
             </span>{" "}
@@ -233,6 +235,7 @@ export default function DashboardPage() {
         <div id="dashboard-report-area" className="space-y-5 bg-white dark:bg-slate-950 p-1">
           <FinanceHero
             revenue={revenue}
+            collected={collected}
             cogs={cogs}
             profit={profit}
             pending={pending}
@@ -460,6 +463,7 @@ function PeriodSwitcher({
 
 function FinanceHero({
   revenue,
+  collected,
   cogs,
   profit,
   pending,
@@ -470,6 +474,7 @@ function FinanceHero({
   trend,
 }: {
   revenue: number
+  collected: number
   cogs: number
   profit: number
   pending: number
@@ -516,25 +521,28 @@ function FinanceHero({
           <GrowthChip label="Ganancia" pct={profitGrowth} />
         </div>
 
-        {/* Desglose financiero */}
+        {/* Desglose financiero — Vendido vs Cobrado separados.
+            Mari pedía dejar claro que "$X de ingresos" no es lo mismo
+            que "$X recibidos": una venta apartada cuenta en Vendido
+            pero NO en Cobrado hasta que el cliente abone. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <FinTile
             tone="primary"
-            label="Ingresos"
+            label="Vendido"
             value={formatCurrency(revenue)}
             icon={ArrowUpRight}
-            hint="Total vendido"
+            hint="Total vendido (incluye apartados)"
             sparkline={revenueSeries}
           />
           <FinTile
-            tone="slate"
-            label="Costo (COGS)"
-            value={formatCurrency(cogs)}
-            icon={Tag}
-            hint="Lo que te costó"
+            tone="emerald"
+            label="Cobrado"
+            value={formatCurrency(collected)}
+            icon={Wallet}
+            hint="Dinero realmente recibido"
           />
           <FinTile
-            tone="emerald"
+            tone="slate"
             label="Ganancia"
             value={formatCurrency(profit)}
             icon={TrendingUp}
@@ -546,7 +554,7 @@ function FinanceHero({
             label="Por cobrar"
             value={formatCurrency(pending)}
             icon={PiggyBank}
-            hint="Dinero que te deben"
+            hint="Apartados sin liquidar"
           />
         </div>
 

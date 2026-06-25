@@ -149,8 +149,16 @@ export async function getDashboardStats(periodDays = 30): Promise<DashboardStats
   }
 
   // ─────────── KPIs del período actual ───────────
+  // revenue = total VENDIDO (incluye apartados sin liquidar).
+  // collected = dinero REALMENTE recibido (sum de paid). Mari pedía
+  // distinguir ambas porque "$X de ingresos" sonaba a $X en mano cuando
+  // en realidad podían ser apartados con balance.
   const revenue = (salesData.data ?? []).reduce(
     (a: number, b: any) => a + (Number(b.total) || 0),
+    0
+  )
+  const collected = (salesData.data ?? []).reduce(
+    (a: number, b: any) => a + (Number(b.paid) || 0),
     0
   )
   const pending = (salesData.data ?? []).reduce(
@@ -291,6 +299,7 @@ export async function getDashboardStats(periodDays = 30): Promise<DashboardStats
     variants: vCount.count ?? 0,
     lowStock: lowStockCount,
     revenue,
+    collected,
     profit,
     pending,
     operations,
