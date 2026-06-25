@@ -112,6 +112,10 @@ export default function ClientOrdersPage() {
   // disparar confetti SOLO en la transición (no en cada refetch). Ignoramos
   // el primer render para no celebrar pedidos viejos al montar la página.
   const deliveredKnownRef = useRef<Set<string> | null>(null)
+  // Igual que arriba pero para pedidos LIQUIDADOS (balance pasó a 0).
+  // Mari pedía que al pagar el último abono se notara explícito el
+  // logro, no solo que cambie un número silenciosamente.
+  const paidKnownRef = useRef<Set<string> | null>(null)
 
   const loadOrders = useCallback(async () => {
     if (!email) return
@@ -218,6 +222,48 @@ export default function ClientOrdersPage() {
       }
     })()
   }, [deliveryBySale])
+
+  // Celebración al liquidar un apartado (balance 0 por primera vez).
+  // Se dispara una sola vez por orden: snapshot en ref evita re-trigger.
+  useEffect(() => {
+    const currentPaid = new Set<string>()
+    for (const o of orders) {
+      const balance = Number(o.total ?? 0) - Number(o.paid ?? 0)
+      if (balance <= 0 && o.status !== "cancelled" && Number(o.total ?? 0) > 0) {
+        currentPaid.add(o.id)
+      }
+    }
+    if (paidKnownRef.current === null) {
+      paidKnownRef.current = currentPaid
+      return
+    }
+    const before = paidKnownRef.current
+    const newlyPaid: string[] = []
+    for (const id of currentPaid) {
+      if (!before.has(id)) newlyPaid.push(id)
+    }
+    paidKnownRef.current = currentPaid
+    if (newlyPaid.length === 0) return
+    ;(async () => {
+      try {
+        const { fireConfetti } = await import("../../lib/confetti")
+        fireConfetti({
+          duration: 1600,
+          count: 70,
+          colors: ["#10b981", "#34d399", "#a7f3d0", "#fbbf24", "#ffffff"],
+        })
+        const { default: toast } = await import("react-hot-toast")
+        toast.success(
+          newlyPaid.length === 1
+            ? "¡Apartado liquidado! ✨"
+            : `${newlyPaid.length} apartados liquidados ✨`,
+          { duration: 3500 },
+        )
+      } catch {
+        /* noop */
+      }
+    })()
+  }, [orders])
 
   // Realtime via hub multiplex. Filtramos por customer_email del lado
   // cliente para evitar abrir un canal con filtro por usuario.
@@ -528,9 +574,9 @@ export default function ClientOrdersPage() {
         const containerClass = isClosed
           ? "bg-white/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60 opacity-75 dark:opacity-60 shadow-none rounded-2xl p-4 transition-all duration-200"
           : isPremium
-            ? "bg-gradient-to-br from-primary/[0.06] via-white to-white dark:from-primary/[0.10] dark:via-slate-800/60 dark:to-slate-800/60 border-2 border-primary/20 dark:border-primary/30 shadow-sm rounded-2xl p-4 transition-all duration-200"
+            ? "relative bg-gradient-to-br from-primary/[0.06] via-white to-white dark:from-primary/[0.10] dark:via-slate-800/60 dark:to-slate-800/60 border-2 border-primary/20 dark:border-primary/30 shadow-sm rounded-2xl p-4 transition-all duration-200"
             : isInRoute
-              ? "bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 ring-1 ring-emerald-300/50 dark:ring-emerald-500/40 rounded-2xl p-4 transition-all duration-200"
+              ? "relative bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 ring-2 ring-emerald-400/60 dark:ring-emerald-500/50 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 rounded-2xl p-4 transition-all duration-200"
               : isPending
                 ? "bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 border-l-4 border-l-amber-400 rounded-2xl p-4 transition-all duration-200"
                 : "bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 transition-all duration-200"
@@ -557,6 +603,21 @@ export default function ClientOrdersPage() {
                 : undefined
             }
           >
+            {/* Chip esquinero PREMIUM — visible cuando el pedido es de
+                alto valor para que destaque entre los demás sin
+                ocupar espacio en el flujo principal. */}
+            {isPremium && !isClosed && (
+              <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 text-white text-[8px] font-black uppercase tracking-widest shadow-md">
+                ✨ Premium
+              </span>
+            )}
+            {/* Chip esquinero "En camino" cuando el repartidor salió. */}
+            {isInRoute && !isPremium && (
+              <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[8px] font-black uppercase tracking-widest shadow-md flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                En camino
+              </span>
+            )}
             {/* HERO del estatus + meta del pedido en 2 lineas claras:
                 1. Banner del status (contextual completo).
                 2. Linea minima: TOTAL prominente a la izquierda + folio
