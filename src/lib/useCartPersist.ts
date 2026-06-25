@@ -10,6 +10,10 @@ export interface PersistedCartLine {
   unit_price: number
   qty: number
   stock: number
+  /** Marca esta línea como compra de preventa (stock=0 al apartar).
+   *  Si está true, el precio NO se reprice por tier; ya viene con el
+   *  descuento preventa aplicado. */
+  is_preorder?: boolean
 }
 
 interface CartSnapshot {

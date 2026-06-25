@@ -76,9 +76,17 @@ interface Props {
    * Controlado por la regla `block_oversell` de business_rules.
    */
   blockOversell?: boolean
+  /** Descuento (%) aplicado al precio cuando la variante se vende en
+   *  preventa. Default 10. Solo se usa si blockOversell=false y stock=0. */
+  preorderDiscountPct?: number
   onClose: () => void
-  /** Recibe el batch completo: solo variantes con qty > 0 */
-  onConfirm: (lines: { variantId: string; qty: number }[]) => void
+  /** Recibe el batch completo: solo variantes con qty > 0. El flag
+   *  `isPreorder` viaja por línea: true cuando la variante se está
+   *  vendiendo SIN stock (preventa). El parent decide el precio final
+   *  con el descuento configurado. */
+  onConfirm: (
+    lines: { variantId: string; qty: number; isPreorder: boolean }[],
+  ) => void
 }
 
 /**
@@ -93,6 +101,7 @@ export default function BuySheet({
   baseCartQty = 0,
   thresholds,
   blockOversell = true,
+  preorderDiscountPct = 0,
   onClose,
   onConfirm,
 }: Props) {
@@ -241,7 +250,15 @@ export default function BuySheet({
     if (!product) return
     const lines = Object.entries(qty)
       .filter(([, q]) => q > 0)
-      .map(([variantId, q]) => ({ variantId, qty: q }))
+      .map(([variantId, q]) => {
+        // Una línea es preventa cuando la variante aún no tiene stock
+        // pero la tienda permite preventa (block_oversell=false). El
+        // parent recibirá la flag y aplicará el descuento correspondiente.
+        const v = product.variants.find((x) => x.id === variantId)
+        const isPreorder =
+          !blockOversell && !!v && (v.stock ?? 0) <= 0
+        return { variantId, qty: q, isPreorder }
+      })
     if (lines.length === 0) return
     // Mini-celebración la PRIMERA VEZ del día que el cliente agrega
     // algo al carrito. Engagement positivo. Guard localStorage para
@@ -379,6 +396,16 @@ export default function BuySheet({
                   const atMax = !out && q >= effectiveStock
                   const menudeoPrice = v.price_menudeo ?? v.price
                   const effective = effectivePrice(v)
+                  // Precio especial preventa: descuento configurable sobre
+                  // el precio efectivo cuando la variante se vende sin stock.
+                  // Se muestra al cliente como motivador para pagar antes.
+                  const preorderPrice = allowPreorder
+                    ? Math.round(
+                        effective * (1 - preorderDiscountPct / 100) * 100,
+                      ) / 100
+                    : effective
+                  const showPreorderDiscount =
+                    allowPreorder && preorderDiscountPct > 0 && preorderPrice < effective
                   const hasDiscount =
                     projectedTier !== "menudeo" && effective < menudeoPrice
                   return (
@@ -411,10 +438,21 @@ export default function BuySheet({
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-black truncate">{v.variant_name}</p>
                           <div className="flex items-baseline gap-1.5 flex-wrap">
-                            <p className="text-sm font-black text-primary tabular-nums">
-                              {formatMoney(effective)}
+                            <p
+                              className={`text-sm font-black tabular-nums ${
+                                showPreorderDiscount
+                                  ? "text-violet-600 dark:text-violet-400"
+                                  : "text-primary"
+                              }`}
+                            >
+                              {formatMoney(showPreorderDiscount ? preorderPrice : effective)}
                             </p>
-                            {hasDiscount && (
+                            {showPreorderDiscount && (
+                              <span className="text-[9px] font-bold text-slate-400 line-through tabular-nums">
+                                {formatMoney(effective)}
+                              </span>
+                            )}
+                            {hasDiscount && !showPreorderDiscount && (
                               <span className="text-[9px] font-bold text-slate-400 line-through tabular-nums">
                                 {formatMoney(menudeoPrice)}
                               </span>
@@ -426,7 +464,7 @@ export default function BuySheet({
                             </p>
                           ) : allowPreorder ? (
                             <p className="text-[9px] font-black uppercase text-violet-600 dark:text-violet-400">
-                              📦 Preventa · entrega luego
+                              📦 Preventa{showPreorderDiscount ? ` · ${preorderDiscountPct}% OFF` : " · entrega luego"}
                             </p>
                           ) : v.stock <= 3 ? (
                             <p

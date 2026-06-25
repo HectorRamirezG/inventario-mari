@@ -502,11 +502,50 @@ export default function BusinessRulesPage() {
         <RuleRow
           icon={PackageX}
           title="Bloquear venta sin stock"
-          description="Si una variante está en 0, el cliente no puede agregarla al carrito. Si lo apagas, permite preventa (vende sin tener físicamente la pieza)."
+          description="Si una variante está en 0, el cliente no puede agregarla al carrito. Si lo apagas, permite preventa (vende sin tener físicamente la pieza) con un precio especial de descuento."
           affects="cliente"
           enabled={form.block_oversell}
           onToggle={(v) => patch({ block_oversell: v })}
         />
+
+        {/* Mini-card de preventa: SOLO aparece cuando la venta sin stock
+            está permitida (block_oversell=false). Configura cuánto descuenta
+            el precio para premiar al cliente que paga antes que llegue el
+            producto. La regla aplica en BuySheet, cards (grid/list) y carrito. */}
+        {!form.block_oversell && (
+          <div className="rounded-2xl bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 p-3 space-y-2">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 border border-violet-200 dark:border-violet-500/40 flex items-center justify-center text-violet-600 dark:text-violet-300 shrink-0">
+                <PackageX size={14} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 leading-tight">
+                  Descuento en preventa
+                </p>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-snug mt-1">
+                  Cuando el cliente compra algo sin stock (preventa), el
+                  precio se reduce este % para premiarlo por pagar antes
+                  que llegue la pieza.
+                </p>
+              </div>
+            </div>
+            <div className="pl-12">
+              <NumberField
+                label="Descuento"
+                value={form.preorder_discount_percent}
+                onChange={(v) => patch({ preorder_discount_percent: v })}
+                suffix="%"
+                min={0}
+                max={50}
+              />
+              <Hint>
+                Ej: precio $100 con {form.preorder_discount_percent}% → cliente
+                paga ${(100 * (1 - form.preorder_discount_percent / 100)).toFixed(2)} en preventa.
+                Cap de 5 piezas por variante en preventa.
+              </Hint>
+            </div>
+          </div>
+        )}
 
         <RuleRow
           icon={Lock}

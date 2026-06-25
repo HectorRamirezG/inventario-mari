@@ -49,8 +49,15 @@ export interface BusinessRules {
   /* ════════════════════ NUEVAS REGLAS (2026-06-17) ════════════════════ */
 
   /** Bloquea agregar al carrito (cliente) / vender (admin) cuando stock = 0.
-   *  Si está apagada, permite pre-orden (vender en negativo). */
+   *  Si está apagada, permite preventa (vender en negativo) con precio
+   *  especial (`preorder_discount_percent`). */
   block_oversell: boolean
+
+  /** Descuento (%) aplicado al precio cuando una variante se vende en
+   *  preventa (stock=0 y block_oversell=false). Premia al cliente que
+   *  paga antes de tener la pieza física. Default 10%. Solo se aplica
+   *  si block_oversell está apagado. */
+  preorder_discount_percent: number
 
   /** Días extra de gracia para clientes VIP (RFM tier "vip"). Se SUMA
    *  a `cancellation_grace_days` al evaluar `canCancelSale`. */
@@ -337,6 +344,7 @@ export const DEFAULT_RULES: BusinessRules = {
 
   // Nuevas
   block_oversell: true,
+  preorder_discount_percent: 10,
   vip_extra_grace_enabled: false,
   vip_extra_grace_days: 2,
   auto_vip_enabled: false,
@@ -444,6 +452,14 @@ function merge(raw: any): BusinessRules {
 
     // Nuevas (con defaults si no existen aún en BD)
     block_oversell: raw.block_oversell ?? DEFAULT_RULES.block_oversell,
+    preorder_discount_percent: Math.max(
+      0,
+      Math.min(
+        50,
+        Number(raw.preorder_discount_percent) ??
+          DEFAULT_RULES.preorder_discount_percent,
+      ),
+    ),
     vip_extra_grace_enabled: !!raw.vip_extra_grace_enabled,
     vip_extra_grace_days: Number(raw.vip_extra_grace_days) || DEFAULT_RULES.vip_extra_grace_days,
     auto_vip_enabled: !!raw.auto_vip_enabled,

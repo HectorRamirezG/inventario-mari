@@ -119,6 +119,9 @@ interface CartLine {
   unit_price: number
   qty: number
   stock: number
+  /** True si esta línea es preventa (stock=0 al apartar). Se respeta
+   *  el `unit_price` original (no se reprice por tier ni por volumen). */
+  is_preorder?: boolean
 }
 
 interface GuestInfo {
@@ -599,6 +602,11 @@ export default function ClientShopPage() {
           .flatMap((p) => p.variants)
           .find((v) => v.id === c.variant_id)
         if (!variant) return c
+        // Si la línea es de preventa, conservamos su precio especial:
+        // no se reprice por tier (ya viene con el descuento aplicado).
+        if (c.is_preorder) {
+          return { ...c, stock: variant.stock }
+        }
         const newPrice = priceForTier(variant, cartTier)
         return { ...c, unit_price: newPrice, stock: variant.stock }
       }),
@@ -695,18 +703,27 @@ export default function ClientShopPage() {
   // se quejaba de que en realidad no existía al pagar.
   // Se aplica sobre el subtotal y solo si totalQty supera el umbral.
   // No afecta envío ni puntos: es un descuento sobre items.
+  //
+  // Las líneas de PREVENTA quedan FUERA: ya tienen su propio descuento
+  // configurable (`preorder_discount_percent`). Aplicar también el de
+  // volumen sería un doble descuento que mata margen.
   const volumeDiscount = useMemo(() => {
     if (!bRules.auto_discount_enabled) return 0
     if (totalQty < (bRules.auto_discount_min_items || 0)) return 0
     const pct = Math.max(0, Math.min(50, bRules.auto_discount_percent || 0))
     if (pct <= 0) return 0
-    return Math.round(subtotalAmt * (pct / 100) * 100) / 100
+    // Subtotal sin las líneas de preventa.
+    const eligibleSubtotal = repricedCart.reduce(
+      (acc, c) => (c.is_preorder ? acc : acc + c.qty * c.unit_price),
+      0,
+    )
+    return Math.round(eligibleSubtotal * (pct / 100) * 100) / 100
   }, [
     bRules.auto_discount_enabled,
     bRules.auto_discount_min_items,
     bRules.auto_discount_percent,
     totalQty,
-    subtotalAmt,
+    repricedCart,
   ])
 
   // TOTAL = subtotal + envío − volumen − descuento por puntos
@@ -767,14 +784,24 @@ export default function ClientShopPage() {
     toast.success(`+ ${p.name}`, { duration: 1500 })
   }
 
-  /** Recibe el batch del BuySheet (varias variantes con sus cantidades) */
+  /** Recibe el batch del BuySheet (varias variantes con sus cantidades).
+   *  Si una línea viene con `isPreorder=true`, la aceptamos aunque no
+   *  haya stock — aplicamos el descuento de preventa de las reglas
+   *  globales y marcamos la línea para que no se reprice por tier. */
   function addBatchToCart(
     p: PublicProduct,
-    lines: { variantId: string; qty: number }[]
+    lines: { variantId: string; qty: number; isPreorder?: boolean }[]
   ) {
     if (lines.length === 0) return
     let added = 0
     let skipped = 0
+    // Cap de seguridad para preventa: tope holgado para que un cliente no
+    // aparte 1000 piezas que aún no llegan. Mismo valor que BuySheet.
+    const PREORDER_CAP = 5
+    const preorderPct = Math.max(
+      0,
+      Math.min(50, Number(bRules.preorder_discount_percent) || 0),
+    )
     // Resolvemos stock FRESCO desde `products` (no del snapshot del sheet).
     const freshVariants = products
       .flatMap((pp) => pp.variants)
@@ -784,19 +811,35 @@ export default function ClientShopPage() {
       }, new Map<string, PublicVariant>())
     setCart((prev) => {
       const next = [...prev]
-      for (const { variantId, qty } of lines) {
+      for (const { variantId, qty, isPreorder } of lines) {
         const fresh = freshVariants.get(variantId) ?? p.variants.find((vv) => vv.id === variantId)
         if (!fresh) continue
         const realStock = Math.max(0, Number(fresh.stock) || 0)
-        const safeQty = Math.min(qty, realStock)
+        // Preventa: si la regla block_oversell está apagada y la línea
+        // venía como preventa, permitimos hasta PREORDER_CAP aunque
+        // stock=0. El precio se calcula con el descuento configurado.
+        const isPreorderLine =
+          !!isPreorder && !bRules.block_oversell && realStock === 0
+        const cap = isPreorderLine ? PREORDER_CAP : realStock
+        const safeQty = Math.min(qty, cap)
         if (safeQty <= 0) {
           skipped++
           continue
         }
         added += safeQty
+        const basePrice = priceOf(fresh)
+        const finalPrice = isPreorderLine
+          ? Math.round(basePrice * (1 - preorderPct / 100) * 100) / 100
+          : basePrice
         const ix = next.findIndex((c) => c.variant_id === variantId)
         if (ix >= 0) {
-          next[ix] = { ...next[ix], qty: safeQty, stock: realStock }
+          next[ix] = {
+            ...next[ix],
+            qty: safeQty,
+            stock: realStock,
+            unit_price: finalPrice,
+            is_preorder: isPreorderLine,
+          }
         } else {
           next.push({
             variant_id: fresh.id,
@@ -805,9 +848,10 @@ export default function ClientShopPage() {
             variant_name: fresh.variant_name,
             image_url:
               (fresh.image_urls && fresh.image_urls[0]) ?? fresh.image_url ?? p.image_url,
-            unit_price: priceOf(fresh),
+            unit_price: finalPrice,
             qty: safeQty,
             stock: realStock,
+            is_preorder: isPreorderLine,
           })
         }
       }
@@ -839,11 +883,17 @@ export default function ClientShopPage() {
             .flatMap((p) => p.variants)
             .find((v) => v.id === variantId)
           const realStock = fresh?.stock ?? c.stock
-          const next = Math.max(0, Math.min(realStock, c.qty + delta))
+          // Si la línea es preventa (stock=0 al apartar), permitimos hasta
+          // 5 piezas como cap. Si en el ínterin llegó stock, también lo
+          // permitimos hasta ese stock real (lo que sea mayor).
+          const cap = c.is_preorder ? Math.max(5, realStock) : realStock
+          const next = Math.max(0, Math.min(cap, c.qty + delta))
           // Si intentaba sumar y ya estaba al tope, avisamos con el stock real.
-          if (delta > 0 && next === c.qty && c.qty === realStock) {
+          if (delta > 0 && next === c.qty && c.qty === cap) {
             toast(
-              realStock === 0
+              c.is_preorder
+                ? `Máximo 5 en preventa de ${c.variant_name}. Pregúntanos por mayoreo.`
+                : realStock === 0
                 ? `${c.variant_name} se agotó. Te avisamos cuando vuelva 💛`
                 : `Ya llevas las ${realStock} piezas disponibles de ${c.variant_name} ✨`,
               { icon: "⚠️", duration: 2400 }
@@ -1657,10 +1707,20 @@ export default function ClientShopPage() {
 
                 {repricedCart.map((c) => {
                   const lineTotal = c.qty * c.unit_price
+                  // Líneas de preventa pueden subir hasta 5 piezas (cap)
+                  // aunque stock=0. Sin esto, el botón + queda disabled.
+                  const lineCap = c.is_preorder ? 5 : c.stock
+                  const canIncrement = c.is_preorder
+                    ? c.qty < 5
+                    : c.stock > 0 && c.qty < c.stock
                   return (
                     <div
                       key={c.variant_id}
-                      className="flex items-stretch gap-3 p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700"
+                      className={`flex items-stretch gap-3 p-2.5 rounded-2xl border ${
+                        c.is_preorder
+                          ? "bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30"
+                          : "bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700"
+                      }`}
                     >
                       {/* Miniatura del carrito: object-cover llena el cuadro
                           completo. bg-slate-50 sirve como respaldo si la imagen
@@ -1680,9 +1740,16 @@ export default function ClientShopPage() {
                       {/* Datos + qty stepper */}
                       <div className="flex-1 min-w-0 flex flex-col justify-between gap-1">
                         <div className="min-w-0">
-                          <p className="text-[12px] font-black leading-tight truncate">
-                            {c.product_name}
-                          </p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className="text-[12px] font-black leading-tight truncate">
+                              {c.product_name}
+                            </p>
+                            {c.is_preorder && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-violet-500 text-white text-[8px] font-black uppercase tracking-widest leading-none">
+                                📦 Preventa
+                              </span>
+                            )}
+                          </div>
                           {c.variant_name && (
                             <p className="text-[10px] font-bold text-slate-500 truncate">
                               {c.variant_name}
@@ -1692,6 +1759,11 @@ export default function ClientShopPage() {
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-[10px] text-slate-500 tabular-nums">
                             {formatMoney(c.unit_price)} c/u
+                            {c.is_preorder && (
+                              <span className="ml-1 text-violet-600 dark:text-violet-400 font-black">
+                                · entrega luego
+                              </span>
+                            )}
                           </p>
                           {/* Stepper compacto */}
                           <div className="flex items-center gap-1 bg-white dark:bg-slate-700 rounded-full border border-slate-200 dark:border-slate-600 px-1 py-0.5">
@@ -1708,8 +1780,13 @@ export default function ClientShopPage() {
                             <button
                               onClick={() => changeQty(c.variant_id, 1)}
                               aria-label="Aumentar"
-                              disabled={c.stock === 0 || c.qty >= c.stock}
+                              disabled={!canIncrement}
                               className="w-6 h-6 rounded-full text-primary flex items-center justify-center hover:bg-primary/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={
+                                c.is_preorder
+                                  ? `Máximo ${lineCap} en preventa`
+                                  : undefined
+                              }
                             >
                               <Plus size={11} />
                             </button>
@@ -1722,7 +1799,13 @@ export default function ClientShopPage() {
                         <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">
                           Subtotal
                         </span>
-                        <span className="text-sm font-black tabular-nums text-primary">
+                        <span
+                          className={`text-sm font-black tabular-nums ${
+                            c.is_preorder
+                              ? "text-violet-600 dark:text-violet-400"
+                              : "text-primary"
+                          }`}
+                        >
                           {formatMoney(lineTotal)}
                         </span>
                       </div>
@@ -2137,6 +2220,7 @@ export default function ClientShopPage() {
             setBuySheetPreselectedVariant(null)
           }}
           blockOversell={bRules.block_oversell}
+          preorderDiscountPct={bRules.preorder_discount_percent}
         />
       </Suspense>
 
@@ -2324,7 +2408,18 @@ const ProductCardClient = memo(function ProductCardClientImpl({
 
   if (!variant) return null
 
-  const out = variant.stock <= 0
+  // out = sin stock. Si la tienda permite preventa (block_oversell=false)
+  // y stock=0, mostramos badge "Preventa" pero NO bloqueamos el botón:
+  // el BuySheet tiene el botón explícito de preventa con descuento.
+  const outOfStock = variant.stock <= 0
+  const allowPreorder = !rules.block_oversell && outOfStock
+  const out = outOfStock && !allowPreorder
+  // Precio especial de preventa (descuento sobre el precio menudeo).
+  const preorderPct = Math.max(0, Math.min(50, rules.preorder_discount_percent || 0))
+  const preorderPrice = allowPreorder
+    ? Math.round(price * (1 - preorderPct / 100) * 100) / 100
+    : price
+  const showPreorderPrice = allowPreorder && preorderPct > 0 && preorderPrice < price
 
   // Badges automáticos: NUEVO (producto creado dentro de la ventana
   // Badge 'Nuevo' (solo Últimos 3 días para que no sea perpetuo). El
@@ -2454,12 +2549,23 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                 <span className="text-[10px] uppercase tracking-widest text-slate-400">
                   Inicia sesión para ver precio
                 </span>
+              ) : showPreorderPrice ? (
+                <>
+                  <span className="text-violet-600 dark:text-violet-400 tabular-nums">
+                    {formatMoney(preorderPrice)}
+                  </span>
+                  <span className="ml-1 text-[9px] font-bold text-slate-400 line-through tabular-nums">
+                    {formatMoney(price)}
+                  </span>
+                  <span className="ml-1 text-[8px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">
+                    📦 Preventa {preorderPct}% OFF
+                  </span>
+                </>
               ) : (
                 <>
                   {formatMoney(price)}
-                  {/* Stock urgente: SOLO 1 o 2 ultimas. Antes mostrabamos
-                      'solo 8' que no era urgente. */}
-                  {!out && variant.stock <= 2 && (
+                  {/* Respeta show_stock_to_client + low_stock_label custom. */}
+                  {!out && rules.show_stock_to_client && variant.stock <= 2 && (
                     <span
                       className={`ml-1.5 text-[8px] font-black uppercase ${
                         variant.stock === 1
@@ -2467,7 +2573,9 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                           : "text-amber-600"
                       }`}
                     >
-                      {variant.stock === 1 ? "¡ÚLTIMA!" : "2 pz"}
+                      {variant.stock === 1
+                        ? "¡ÚLTIMA!"
+                        : `${rules.low_stock_label || "Solo quedan"} 2`}
                     </span>
                   )}
                   {out && (
@@ -2482,8 +2590,26 @@ const ProductCardClient = memo(function ProductCardClientImpl({
               onClick={() => variant && onOpenBuy(variant.id)}
               onPointerEnter={preloadBuySheet}
               onTouchStart={preloadBuySheet}
-              className="bg-brand w-8 h-8 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform shrink-0"
-              aria-label="Elegir tonos"
+              disabled={out}
+              className={`${
+                allowPreorder
+                  ? "bg-violet-500 hover:bg-violet-600"
+                  : "bg-brand disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+              } w-8 h-8 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform shrink-0`}
+              aria-label={
+                out
+                  ? "Producto agotado"
+                  : allowPreorder
+                  ? "Apartar en preventa"
+                  : "Elegir tonos"
+              }
+              title={
+                out
+                  ? "Sin stock"
+                  : allowPreorder
+                  ? "Apartar en preventa"
+                  : "Elegir tonos"
+              }
             >
               <Plus size={13} strokeWidth={3} />
             </button>
@@ -2605,6 +2731,19 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                 <span className="text-[11px] uppercase tracking-widest text-slate-400 font-black">
                   Inicia sesión
                 </span>
+              ) : showPreorderPrice ? (
+                <>
+                  <span className="text-violet-600 dark:text-violet-400">
+                    {formatMoney(preorderPrice)}
+                  </span>
+                  <span
+                    className={`ml-1.5 font-bold text-slate-400 line-through tabular-nums ${
+                      isFocus ? "text-sm" : "text-[10px]"
+                    }`}
+                  >
+                    {formatMoney(price)}
+                  </span>
+                </>
               ) : (
                 formatMoney(price)
               )}
@@ -2639,6 +2778,10 @@ const ProductCardClient = memo(function ProductCardClientImpl({
               <span className="inline-block text-[9px] font-black uppercase tracking-widest text-rose-600 dark:text-rose-400 mt-1">
                 Agotado
               </span>
+            ) : allowPreorder ? (
+              <span className="inline-block text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400 mt-1">
+                📦 Preventa{showPreorderPrice ? ` · ${preorderPct}% OFF` : ""}
+              </span>
             ) : rules.show_stock_to_client && variant.stock <= 2 ? (
               <span
                 className={`inline-block text-[9px] font-black uppercase tracking-widest mt-1 ${
@@ -2662,10 +2805,27 @@ const ProductCardClient = memo(function ProductCardClientImpl({
             onPointerEnter={preloadBuySheet}
             onTouchStart={preloadBuySheet}
             disabled={out}
-            className={`bg-brand ${
+            className={`${
+              allowPreorder
+                ? "bg-violet-500 hover:bg-violet-600"
+                : "bg-brand disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+            } ${
               isFocus ? "w-11 h-11" : "w-9 h-9"
-            } shrink-0 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none`}
-            aria-label={out ? "Producto agotado" : "Agregar al carrito"}
+            } shrink-0 rounded-full text-white flex items-center justify-center shadow-bloom active:scale-90 transition-transform`}
+            aria-label={
+              out
+                ? "Producto agotado"
+                : allowPreorder
+                ? "Apartar en preventa"
+                : "Agregar al carrito"
+            }
+            title={
+              out
+                ? "Sin stock"
+                : allowPreorder
+                ? "Apartar en preventa"
+                : "Agregar al carrito"
+            }
           >
             <Plus size={14} strokeWidth={3} />
           </button>
