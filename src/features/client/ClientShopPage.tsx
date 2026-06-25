@@ -1938,19 +1938,18 @@ export default function ClientShopPage() {
                     </div>
                   )
                 })}
-              </div>
 
-              {/* Footer sticky: opciones (envío + regalo) + desglose + CTA.
-                  Diseño compacto para que la LISTA de items tenga el
-                  máximo espacio posible. Subt\u00edtulos solo cuando est\u00e1n
-                  activos para no robar verticales \u00fatiles. */}
-              <div className="px-5 py-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2 shrink-0 bg-white dark:bg-slate-900">
-                {/* Switches en una sola l\u00ednea (1 fila c/u, sin descripci\u00f3n
-                    fija). Cuando el switch est\u00e1 prendido, el texto se
-                    convierte en l\u00ednea informativa real. */}
-                <div className="flex items-center gap-2">
+                {/* ─────────── OPCIONES Y DESGLOSE — dentro del scroll ───────────
+                    Mari pidió que el footer no se "comiera" la lista. Antes
+                    todo esto vivía abajo (sticky shrink-0) y con 1-2 items
+                    ya tapaba la mitad de la pantalla. Ahora son cards al
+                    final de la lista — el cliente las ve cuando scrollea
+                    hasta el fin, y el footer queda mínimo (Total + CTA). */}
+
+                {/* Switches lado a lado: envío foráneo + regalo. */}
+                <div className="flex items-center gap-2 pt-2">
                   <div
-                    className={`flex-1 flex items-center justify-between gap-2 px-3 h-10 rounded-xl border transition-colors ${
+                    className={`flex-1 flex items-center justify-between gap-2 px-3 h-11 rounded-xl border transition-colors ${
                       isForeign
                         ? "border-amber-300 bg-amber-50 dark:bg-amber-500/10"
                         : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
@@ -1958,7 +1957,7 @@ export default function ClientShopPage() {
                   >
                     <div className="text-left min-w-0 flex-1">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 leading-tight">
-                        Env\u00edo for\u00e1neo
+                        Envío foráneo
                       </p>
                       {isForeign && (
                         <p className="text-[9px] text-slate-500 truncate leading-tight">
@@ -1971,11 +1970,11 @@ export default function ClientShopPage() {
                     <Toggle
                       checked={isForeign}
                       onChange={setIsForeign}
-                      label="Env\u00edo for\u00e1neo"
+                      label="Envío foráneo"
                     />
                   </div>
                   <div
-                    className={`flex-1 flex items-center justify-between gap-2 px-3 h-10 rounded-xl border transition-colors ${
+                    className={`flex-1 flex items-center justify-between gap-2 px-3 h-11 rounded-xl border transition-colors ${
                       giftMode
                         ? "border-fuchsia-300 bg-fuchsia-50 dark:bg-fuchsia-500/10"
                         : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
@@ -1999,7 +1998,7 @@ export default function ClientShopPage() {
                   </div>
                 </div>
 
-                {/* Inputs de regalo (s\u00f3lo cuando est\u00e1 activo). */}
+                {/* Inputs de regalo (sólo cuando está activo). */}
                 <AnimatePresence initial={false}>
                   {giftMode && (
                     <motion.div
@@ -2020,7 +2019,7 @@ export default function ClientShopPage() {
                         <textarea
                           value={giftMessage}
                           onChange={(e) => setGiftMessage(e.target.value.slice(0, 240))}
-                          placeholder="Mensaje en la tarjeta (opcional, m\u00e1x 240)"
+                          placeholder="Mensaje en la tarjeta (opcional, máx 240)"
                           rows={2}
                           className="w-full px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-fuchsia-400 resize-none"
                         />
@@ -2032,8 +2031,11 @@ export default function ClientShopPage() {
                   )}
                 </AnimatePresence>
 
-                {/* Desglose: subtotal, envío, ahorro tier, total */}
-                <div className="space-y-1 text-xs">
+                {/* Desglose detallado: subtotal, envío, ahorros, descuentos,
+                    puntos. Va al final del scroll para que el cliente pueda
+                    revisarlo sin que tape la lista. El TOTAL "vivo" se ve
+                    permanentemente en el footer sticky. */}
+                <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/60 px-3 py-2.5 space-y-1 text-xs">
                   <div className="flex justify-between text-slate-500">
                     <span>Subtotal</span>
                     <span className="tabular-nums font-bold">
@@ -2065,11 +2067,6 @@ export default function ClientShopPage() {
                       </span>
                     </div>
                   )}
-
-                  {/* Línea de descuento por volumen — solo visible si la
-                      regla se activa y el carrito califica. Mari pedía
-                      verlo explícito en el desglose porque antes era
-                      invisible al cliente. */}
                   {volumeDiscount > 0 && (
                     <div className="flex justify-between text-fuchsia-600 dark:text-fuchsia-400 font-bold">
                       <span className="flex items-center gap-1">
@@ -2081,11 +2078,6 @@ export default function ClientShopPage() {
                       </span>
                     </div>
                   )}
-
-                  {/* Toggle de canje de puntos. Solo aparece si la regla
-                      está activa Y el cliente cumple el mínimo. Si se
-                      activa, descuenta automáticamente el máximo posible
-                      sin superar el total. */}
                   {loyaltyCanRedeem && (
                     <label className="flex items-center justify-between gap-2 pt-1 cursor-pointer">
                       <span className="flex items-center gap-2 text-amber-700 dark:text-amber-300 font-bold">
@@ -2104,31 +2096,37 @@ export default function ClientShopPage() {
                       )}
                     </label>
                   )}
+                </div>
+              </div>
 
-                  <div className="flex items-end justify-between pt-2 mt-1 border-t border-slate-100 dark:border-slate-800">
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-widest">
-                      Total
-                    </span>
-                    <span className="font-black text-2xl text-primary tabular-nums leading-none">
+              {/* Footer mínimo sticky: SOLO Total + CTA. Antes vivían aquí
+                  switches + desglose y comían 250px del sheet. Ahora todo
+                  eso bajó al scroll → la lista de items gana ~150px. */}
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900 space-y-2">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">
+                      Total a pagar
+                    </p>
+                    <p className="font-black text-2xl text-primary tabular-nums leading-none">
                       {formatMoney(totalAmt)}
-                    </span>
+                    </p>
                   </div>
+                  <button
+                    onClick={startCheckout}
+                    disabled={submitting || bRules.shop_closed_enabled}
+                    className="bg-brand h-12 px-5 rounded-2xl text-white text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50 press-hard"
+                  >
+                    <Receipt size={14} />
+                    {bRules.shop_closed_enabled ? "Cerrada" : "Apartar"}
+                    {!bRules.shop_closed_enabled && <ArrowRight size={13} />}
+                  </button>
                 </div>
 
-                <button
-                  onClick={startCheckout}
-                  disabled={submitting || bRules.shop_closed_enabled}
-                  className="bg-brand w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50 press-hard"
-                >
-                  <Receipt size={16} />
-                  {bRules.shop_closed_enabled ? "Tienda cerrada" : "Apartar ahora"}
-                  {!bRules.shop_closed_enabled && <ArrowRight size={14} />}
-                </button>
-
                 {bRules.shop_closed_enabled && (
-                  <p className="text-[10px] font-bold text-violet-600 dark:text-violet-300 text-center mt-2 leading-snug">
+                  <p className="text-[10px] font-bold text-violet-600 dark:text-violet-300 text-center leading-snug">
                     {bRules.shop_closed_message?.trim() ||
-                      "Volvemos pronto, tu carrito se queda guardado \ud83d\udc9c"}
+                      "Volvemos pronto, tu carrito se queda guardado 💜"}
                   </p>
                 )}
               </div>

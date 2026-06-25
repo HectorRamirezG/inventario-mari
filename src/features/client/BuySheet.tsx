@@ -2,16 +2,23 @@ import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence, PanInfo } from "framer-motion"
 
-import X from "lucide-react/dist/esm/icons/x"
-import Plus from "lucide-react/dist/esm/icons/plus"
-import Minus from "lucide-react/dist/esm/icons/minus"
-import ShoppingBag from "lucide-react/dist/esm/icons/shopping-bag"
-import Package from "lucide-react/dist/esm/icons/package"
-import Sparkles from "lucide-react/dist/esm/icons/sparkles"
-import AlertTriangle from "lucide-react/dist/esm/icons/alert-triangle"
-import Target from "lucide-react/dist/esm/icons/target"
-import Bell from "lucide-react/dist/esm/icons/bell"
-import BellRing from "lucide-react/dist/esm/icons/bell-ring"
+// Imports normales de lucide-react (no deep imports a `dist/esm/icons/*`).
+// Los deep imports daban "Could not find a declaration file" porque
+// lucide solo expone tipos en su entry point principal. Vite + Rollup
+// hacen tree-shaking nativo, así que importar desde el root NO mete
+// los 1000+ iconos al bundle: solo los que realmente usas.
+import {
+  X,
+  Plus,
+  Minus,
+  ShoppingBag,
+  Package,
+  Sparkles,
+  AlertTriangle,
+  Target,
+  Bell,
+  BellRing,
+} from "lucide-react"
 import toast from "react-hot-toast"
 
 import { useAuth } from "../../lib/useAuth"
