@@ -22,6 +22,7 @@ import {
   Star,
   Share2,
   Eye,
+  ShoppingBag,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -285,13 +286,10 @@ export default function ClientShopPage() {
   const shopOpen = isWithinBusinessHours(bRules)
 
   // Bottom Sheet de compra (estilo Shein): se abre con el botón "+" de la card.
-  // `preselectedVariant` se mantiene en una ref para no causar re-renders
-  // (sólo lo lee el `onConfirm` del sheet para hacer reset al cerrar).
+  // `preselectedVariant` es estado (no ref) porque el sheet lo lee para
+  // hacer scrollIntoView + highlight de esa variante al abrir.
   const [buySheetProduct, setBuySheetProduct] = useState<PublicProduct | null>(null)
-  const buySheetPreselectedVariantRef = useRef<string | null>(null)
-  const setBuySheetPreselectedVariant = (id: string | null) => {
-    buySheetPreselectedVariantRef.current = id
-  }
+  const [buySheetPreselectedVariant, setBuySheetPreselectedVariant] = useState<string | null>(null)
 
   // Wizard de paquetes: lo abre el cliente al tocar un bundle.
   const { bundles: activeBundles } = useActiveBundles()
@@ -470,7 +468,7 @@ export default function ClientShopPage() {
           toast.success(
             missing > 0
               ? `${added} productos recargados (${missing} ya no existen)`
-              : `${added} productos al carrito · listos para apartar`,
+              : `${added} productos agregados al carrito`,
             { duration: 3200 },
           )
           // Abrir el carrito automáticamente para que el cliente vea
@@ -1831,6 +1829,27 @@ export default function ClientShopPage() {
                   </div>
                 )}
 
+                {repricedCart.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                      <ShoppingBag size={26} className="text-slate-400" />
+                    </div>
+                    <p className="text-sm font-black text-slate-700 dark:text-slate-200">
+                      Aún no tienes nada
+                    </p>
+                    <p className="text-[11px] text-slate-400 font-medium mt-0.5 mb-4">
+                      Agrega productos del catálogo para apartar
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setOpenCart(false)}
+                      className="bg-brand h-10 px-5 rounded-2xl text-white text-[11px] font-black uppercase tracking-widest shadow-bloom press-hard"
+                    >
+                      Explorar catálogo
+                    </button>
+                  </div>
+                )}
+
                 {repricedCart.map((c) => {
                   const lineTotal = c.qty * c.unit_price
                   // Líneas de preventa pueden subir hasta 5 piezas (cap)
@@ -2108,13 +2127,19 @@ export default function ClientShopPage() {
                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">
                       Total a pagar
                     </p>
-                    <p className="font-black text-2xl text-primary tabular-nums leading-none">
+                    <p
+                      aria-live="polite"
+                      className="font-black text-2xl text-primary tabular-nums leading-none"
+                    >
                       {formatMoney(totalAmt)}
+                    </p>
+                    <p className="text-[9px] text-slate-400 font-bold mt-1 leading-none">
+                      Apartas ahora · pagas al recoger
                     </p>
                   </div>
                   <button
                     onClick={startCheckout}
-                    disabled={submitting || bRules.shop_closed_enabled}
+                    disabled={submitting || bRules.shop_closed_enabled || repricedCart.length === 0}
                     className="bg-brand h-12 px-5 rounded-2xl text-white text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom disabled:opacity-50 press-hard"
                   >
                     <Receipt size={14} />
@@ -2270,6 +2295,7 @@ export default function ClientShopPage() {
                 )
               : undefined
           }
+          preselectedVariantId={buySheetPreselectedVariant}
           onClose={() => {
             setBuySheetProduct(null)
             setBuySheetPreselectedVariant(null)

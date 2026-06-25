@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence, PanInfo } from "framer-motion"
 
@@ -86,6 +86,10 @@ interface Props {
   /** Descuento (%) aplicado al precio cuando la variante se vende en
    *  preventa. Default 10. Solo se usa si blockOversell=false y stock=0. */
   preorderDiscountPct?: number
+  /** Variante a la que el cliente tocó "+" en el catálogo / lightbox.
+   *  El sheet hace scroll a ella y la resalta con un ring — NO toca la
+   *  qty (eso confunde, ver bug "+1 al primero"). */
+  preselectedVariantId?: string | null
   onClose: () => void
   /** Recibe el batch completo: solo variantes con qty > 0. El flag
    *  `isPreorder` viaja por línea: true cuando la variante se está
@@ -109,10 +113,15 @@ export default function BuySheet({
   thresholds,
   blockOversell = true,
   preorderDiscountPct = 0,
+  preselectedVariantId = null,
   onClose,
   onConfirm,
 }: Props) {
   const [qty, setQty] = useState<Record<string, number>>({})
+  // Refs por variante para hacer scrollIntoView a la preseleccionada.
+  const variantRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  // Flag visual: la variante preseleccionada late suave por ~1.5s al abrir.
+  const [pulseVariantId, setPulseVariantId] = useState<string | null>(null)
 
   // Reinicia cantidades cuando se abre con otro producto
   useEffect(() => {
@@ -124,6 +133,28 @@ export default function BuySheet({
       setQty(base)
     }
   }, [open, product?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll a la variante preseleccionada + pulso visual.
+  // Se hace tras el frame de apertura para que el panel ya esté montado.
+  useEffect(() => {
+    if (!open || !preselectedVariantId) {
+      setPulseVariantId(null)
+      return
+    }
+    const id = preselectedVariantId
+    const t = window.setTimeout(() => {
+      const el = variantRefs.current[id]
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" })
+      }
+      setPulseVariantId(id)
+    }, 220)
+    const off = window.setTimeout(() => setPulseVariantId(null), 1800)
+    return () => {
+      window.clearTimeout(t)
+      window.clearTimeout(off)
+    }
+  }, [open, preselectedVariantId, product?.id])
 
   // Bloquear scroll del body (centralizado para evitar leaks).
   useBodyScrollLock(open)
@@ -365,12 +396,31 @@ export default function BuySheet({
               </button>
             </div>
 
+            {/* Mini-resumen sticky: solo cuando ya hay piezas seleccionadas
+                en este sheet. Sirve para que el total no se "pierda" al
+                hacer scroll por la lista de variantes. */}
+            {totalUnits > 0 && (
+              <div className="px-4 pb-2 shrink-0">
+                <div className="flex items-center justify-between px-3 py-2 rounded-2xl bg-primary/10 dark:bg-primary/15 border border-primary/30">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">
+                    {totalUnits} {totalUnits === 1 ? "pieza" : "piezas"}
+                  </span>
+                  <span
+                    aria-live="polite"
+                    className="text-sm font-black tabular-nums text-primary"
+                  >
+                    {formatMoney(totalAmt)}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Lista de variantes con selector +/- */}
             <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scroll-container-ios">
               {/* Banner de tier: muestra siempre que haya algo en este sheet
                   o en el carrito previo. Le dice al cliente exactamente
                   qué precio se le va a aplicar y cuánto le falta para subir. */}
-              {thresholds && (projectedQty > 0) && (
+              {thresholds && (projectedQty > 0) && baseCartQty === 0 && (
                 <TierBanner
                   tier={projectedTier}
                   next={nextStep}
@@ -418,10 +468,15 @@ export default function BuySheet({
                   return (
                     <div
                       key={v.id}
+                      ref={(el) => { variantRefs.current[v.id] = el }}
                       className={`flex flex-col gap-1.5 p-2.5 rounded-2xl border transition-colors ${
                         q > 0
                           ? "bg-primary/5 border-primary/30"
                           : "bg-slate-50 dark:bg-slate-800/60 border-transparent"
+                      } ${
+                        pulseVariantId === v.id
+                          ? "ring-2 ring-primary/60 animate-pulse"
+                          : ""
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -471,7 +526,7 @@ export default function BuySheet({
                             </p>
                           ) : allowPreorder ? (
                             <p className="text-[9px] font-black uppercase text-violet-600 dark:text-violet-400">
-                              📦 Preventa{showPreorderDiscount ? ` · ${preorderDiscountPct}% OFF` : " · entrega luego"}
+                              📦 Preventa{showPreorderDiscount ? ` · ${preorderDiscountPct}% OFF` : ""}
                             </p>
                           ) : v.stock <= 3 ? (
                             <p
@@ -535,8 +590,8 @@ export default function BuySheet({
                           <AlertTriangle size={11} className="shrink-0" />
                           <span className="flex-1">
                             {allowPreorder
-                              ? `Máximo ${PREORDER_CAP} en preventa. Pregunta por mayoreo.`
-                              : `Ya llevas las ${v.stock} piezas disponibles de este tono.${v.stock <= 3 ? " Aprovéchalas." : ""}`}
+                              ? `Tope de preventa: ${PREORDER_CAP} piezas.`
+                              : `Solo había ${v.stock} de este tono · ya las tienes todas.`}
                           </span>
                           {/* Quitar variante completa en 1 tap — antes el
                               cliente tenía que hacer N taps en el botón -.
