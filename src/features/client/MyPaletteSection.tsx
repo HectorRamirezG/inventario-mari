@@ -1,13 +1,10 @@
 import { useEffect, useState } from "react"
-import { motion } from "framer-motion"
 import Palette from "lucide-react/dist/esm/icons/palette"
 import Repeat from "lucide-react/dist/esm/icons/repeat"
-import Sparkles from "lucide-react/dist/esm/icons/sparkles"
 
 import { useAuth } from "../../lib/useAuth"
 import {
   getMyPurchaseProfile,
-  getCrossSellSuggestions,
   estimateRefillDays,
   type PurchaseProfile,
   type PurchasedVariant,
@@ -16,26 +13,21 @@ import { formatRelative } from "../../lib/format"
 
 /**
  * Sección "Mi paleta personal" del cliente: aparece en el ClientHomePage
- * (debajo del hero). Reúne 3 bloques en una sola card:
+ * (debajo del hero). Reúne 2 bloques en una sola card:
  *
  *   1. Paleta personal — grid con los 8 últimos tonos comprados.
  *   2. Para reordenar — productos cuyo refill estimado se acerca.
- *   3. Combina con lo que tienes — productos sugeridos por categoría.
+ *
+ * El bloque "Combina con tu estilo" se quitó (Mari: catalogo chico,
+ * dejaba solo 1 producto sugerido y no aportaba valor).
  *
  * Se auto-oculta si el cliente NO tiene historial de compras (evita
  * el "vacío deprimente" en clientas nuevas).
  */
 
-interface CrossSellItem {
-  product_id: string
-  product_name: string
-  image_url: string | null
-}
-
 export default function MyPaletteSection() {
   const { email } = useAuth()
   const [profile, setProfile] = useState<PurchaseProfile | null>(null)
-  const [crossSell, setCrossSell] = useState<CrossSellItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -44,14 +36,9 @@ export default function MyPaletteSection() {
       setLoading(false)
       return
     }
-    Promise.all([
-      getMyPurchaseProfile(email),
-      getCrossSellSuggestions(email, 5),
-    ])
-      .then(([p, cs]) => {
-        if (cancelled) return
-        setProfile(p)
-        setCrossSell(cs)
+    getMyPurchaseProfile(email)
+      .then((p) => {
+        if (!cancelled) setProfile(p)
       })
       .catch(() => {})
       .finally(() => {
@@ -167,46 +154,6 @@ export default function MyPaletteSection() {
                 </button>
               )
             })}
-          </div>
-        </div>
-      )}
-
-      {/* Combina con lo que tienes */}
-      {crossSell.length > 0 && (
-        <div className="px-4 pb-4 border-t border-slate-100 dark:border-slate-800 pt-3">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Sparkles
-              size={12}
-              className="text-violet-600 dark:text-violet-300"
-            />
-            <p className="text-[10px] uppercase tracking-widest font-black text-violet-700 dark:text-violet-300">
-              Combina con tu estilo
-            </p>
-          </div>
-          <div className="overflow-x-auto scroll-container-ios">
-            <div className="flex gap-2 pb-1">
-              {crossSell.map((c) => (
-                <motion.a
-                  key={c.product_id}
-                  href={`/?q=${encodeURIComponent(c.product_name)}`}
-                  whileTap={{ scale: 0.95 }}
-                  className="shrink-0 w-[110px] rounded-2xl border border-violet-100 dark:border-violet-500/20 bg-white dark:bg-slate-800/50 p-2"
-                >
-                  {c.image_url ? (
-                    <img
-                      src={c.image_url}
-                      alt=""
-                      className="w-full aspect-square rounded-lg object-cover bg-slate-200 dark:bg-slate-700"
-                    />
-                  ) : (
-                    <div className="w-full aspect-square rounded-lg bg-slate-200 dark:bg-slate-700" />
-                  )}
-                  <p className="text-[10px] font-black text-slate-800 dark:text-slate-100 truncate mt-1.5">
-                    {c.product_name}
-                  </p>
-                </motion.a>
-              ))}
-            </div>
           </div>
         </div>
       )}
