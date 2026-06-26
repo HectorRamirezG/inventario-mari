@@ -27,6 +27,17 @@ import {
 
 type Mode = "signin" | "signup" | "magic" | "reset"
 
+/**
+ * Feature flag para mostrar el botón "Continuar con Google".
+ * Para habilitarlo:
+ *   1. Activa el provider Google en Supabase Dashboard → Auth → Providers.
+ *   2. Configura Client ID + Secret de Google Cloud Console.
+ *   3. Cambia este flag a `true`.
+ * Mientras esté en `false`, el botón no se renderiza (queda Google
+ * deshabilitado en el lado servidor de todas formas).
+ */
+const GOOGLE_OAUTH_ENABLED = false
+
 export default function LoginPage() {
   const { signInWithPassword, signUpWithPassword, sendMagicLink, signInWithGoogle } = useAuth()
   const [mode, setMode] = useState<Mode>("signin")
@@ -381,8 +392,10 @@ export default function LoginPage() {
 
         <form onSubmit={submit} className="flex flex-col gap-3" autoComplete="on">
           {/* Google OAuth — atajo arriba del email (signin + signup).
-              Solo visible en esos modos; el reset/magic-link no aplican. */}
-          {(mode === "signin" || mode === "signup") && (
+              Solo visible en esos modos y cuando el flag está ON.
+              Mientras Google no esté configurado en Supabase Dashboard,
+              el flag GOOGLE_OAUTH_ENABLED queda en false. */}
+          {GOOGLE_OAUTH_ENABLED && (mode === "signin" || mode === "signup") && (
             <>
               <button
                 type="button"

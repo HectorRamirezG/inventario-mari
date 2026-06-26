@@ -425,6 +425,9 @@ export default function SettingsPage() {
       {/* AUDITORÍA — solo admin */}
       {isAdmin && <AuditLogCard />}
 
+      {/* RESPALDO JSON — solo admin */}
+      {isAdmin && <BackupSection />}
+
       {/* ZONA PELIGROSA — solo admin */}
       {isAdmin && <DangerZoneSection />}
 
@@ -1369,6 +1372,78 @@ const GROUPS: Array<{
     cats: SELECTIVE_CATEGORIES,
   },
 ]
+
+/**
+ * Sección que genera un respaldo JSON descargable. NO sustituye los
+ * backups automáticos de Supabase: es un atajo manual para que Mari
+ * guarde su config + ventas recientes en su Drive cada cierto tiempo.
+ */
+function BackupSection() {
+  const [busy, setBusy] = useState(false)
+  const [lastMeta, setLastMeta] = useState<{
+    when: string
+    included: number
+    missing: number
+    sizeKb: number
+  } | null>(null)
+
+  async function handleDownload() {
+    setBusy(true)
+    const tid = toast.loading("Generando respaldo...")
+    try {
+      const { downloadBackup } = await import("./backupService")
+      const meta = await downloadBackup()
+      setLastMeta({
+        when: new Date(meta.generated_at).toLocaleString("es-MX"),
+        included: meta.tables_included.length,
+        missing: meta.tables_missing.length,
+        sizeKb: Math.round(meta.total_size_estimate / 1024),
+      })
+      toast.success(
+        `Respaldo descargado · ${meta.tables_included.length} tablas`,
+        { id: tid },
+      )
+    } catch (e: any) {
+      toast.error(e?.message ?? "Error al generar respaldo", { id: tid })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="surface-card p-5 mb-4">
+      <h2 className="font-semibold tracking-tight text-base mb-2 flex items-center gap-2">
+        <Database size={14} className="text-emerald-500" /> Respaldo manual
+      </h2>
+      <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-snug mb-3">
+        Descarga un archivo JSON con tu configuración + catálogo + ventas
+        recientes (90 días). Guárdalo en tu Drive o iCloud. Sirve como
+        red de seguridad además del backup automático de Supabase.
+      </p>
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={busy}
+        className="h-11 px-4 rounded-2xl bg-emerald-500 text-white text-[11px] font-black uppercase tracking-widest flex items-center gap-2 shadow-bloom hover:bg-emerald-600 disabled:opacity-50 press-hard"
+      >
+        <Database size={13} />
+        {busy ? "Generando..." : "Descargar respaldo JSON"}
+      </button>
+      {lastMeta && (
+        <div className="mt-3 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+          <p>
+            <strong>Último respaldo:</strong> {lastMeta.when}
+          </p>
+          <p>
+            {lastMeta.included} tablas incluidas
+            {lastMeta.missing > 0 && ` · ${lastMeta.missing} tablas no encontradas`}{" "}
+            · {lastMeta.sizeKb} KB
+          </p>
+        </div>
+      )}
+    </section>
+  )
+}
 
 function DangerZoneSection() {
   const ALL_CATEGORIES = Object.keys(CATEGORY_INFO) as ResetCategory[]

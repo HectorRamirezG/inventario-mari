@@ -31,6 +31,7 @@ import {
   Gift,
   AlertCircle,
   X,
+  RotateCcw,
 } from "lucide-react"
 import { motion } from "framer-motion"
 
@@ -407,6 +408,7 @@ function writeDismissed(map: Record<string, number>) {
 
 function PriorityActionsSection() {
   const { email } = useAuth()
+  const bRules = useBusinessRules()
   const [items, setItems] = useState<PriorityItem[]>([])
   const [dismissed, setDismissed] = useState<Record<string, number>>(() =>
     readDismissed(),
@@ -437,7 +439,6 @@ function PriorityActionsSection() {
     for (const s of (salesPending ?? []) as any[]) {
       const bal = Number(s.balance) || 0
       if (bal <= 0) continue
-      const token = s.public_token ?? s.id
       const folio = String(s.id).slice(0, 8).toUpperCase()
       out.push({
         id: `saldo-${s.id}`,
@@ -448,7 +449,7 @@ function PriorityActionsSection() {
         // reporta un pago" — cuando había 3 saldos se leían idénticas.
         // Ahora cada card muestra su folio para diferenciarse.
         caption: `Folio #${folio} · toca para abonar`,
-        href: `/ticket/${token}`,
+        href: `/mis-pedidos`,
       })
     }
 
@@ -481,7 +482,7 @@ function PriorityActionsSection() {
             caption: n.picked_up_at
               ? `Salió ${formatRelative(n.picked_up_at)}`
               : "Sigue el progreso en tu pedido",
-            href: `/ticket/${token}`,
+            href: `/mis-pedidos`,
           })
         }
       }
@@ -513,10 +514,41 @@ function PriorityActionsSection() {
       /* noop */
     }
 
+    // 4) Repetir último pedido pagado (1-tap reorder). Solo si el
+    //    admin habilitó `reorder_banner_enabled` y existe un pedido
+    //    pagado en los últimos 90 días. Es el único priority item que
+    //    invita a comprar de nuevo, no a resolver un pendiente.
+    if (bRules.reorder_banner_enabled) {
+      try {
+        const since = new Date(Date.now() - 90 * 24 * 3600 * 1000)
+        const { data: lastPaid } = await supabase
+          .from("sales")
+          .select("id,total,created_at,status")
+          .eq("customer_email", email.toLowerCase())
+          .eq("status", "paid")
+          .gte("created_at", since.toISOString())
+          .order("created_at", { ascending: false })
+          .limit(1)
+        const last = (lastPaid?.[0] as any) ?? null
+        if (last) {
+          out.push({
+            id: `reorder-${last.id}`,
+            icon: RotateCcw,
+            tone: "emerald",
+            title: `Repetir tu último pedido · ${formatMoney(Number(last.total) || 0)}`,
+            caption: "Te llevamos al catálogo con todo cargado",
+            href: `/?reorder=${last.id}`,
+          })
+        }
+      } catch {
+        /* noop */
+      }
+    }
+
     // Clamp a 6 totales para no saturar la home con 11 cards
     // (5 saldos + 3 deliveries + 3 wishes en el peor caso).
     setItems(out.slice(0, 6))
-  }, [email])
+  }, [email, bRules.reorder_banner_enabled])
 
   useEffect(() => {
     load()

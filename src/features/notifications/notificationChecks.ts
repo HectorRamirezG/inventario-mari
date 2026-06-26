@@ -334,11 +334,82 @@ export async function runClientChecks(email: string | null | undefined): Promise
     await Promise.allSettled([
       checkLayawayDueSoon(email),
       checkBirthday(email),
+      checkAnniversary(email),
       checkWishlistBackInStock(email),
     ])
   } catch (e: any) {
     debug.warn("[notif-checks] client:", e?.message)
   }
+}
+
+/* ════════════════════════════════════════════════════════════
+ *  CHECK: ANIVERSARIO DEL PRIMER APARTADO
+ * ════════════════════════════════════════════════════════════
+ * Push automático cuando el cliente cumple 1 año de su primer
+ * apartado. Mensaje cariñoso + cupón sugerido de 15% (mismo
+ * formato determinístico que el cupón de cumple).
+ *
+ * Gated por la regla `anniversary_push_enabled` — si Mari lo
+ * tiene apagado en BusinessRules, no se dispara nada.
+ */
+async function checkAnniversary(email: string): Promise<void> {
+  if (!email) return
+  const rules = getBusinessRules()
+  if (!rules.anniversary_push_enabled) return
+  const clean = email.trim().toLowerCase()
+  if (!clean) return
+  if (!fireOncePerDay(`anniversary-${clean}`)) return
+
+  let firstSaleIso: string | null = null
+  try {
+    const { data } = await supabase
+      .from("sales")
+      .select("created_at")
+      .eq("customer_email", clean)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: true })
+      .limit(1)
+    firstSaleIso = (data?.[0] as any)?.created_at ?? null
+  } catch {
+    return
+  }
+  if (!firstSaleIso) return
+
+  const first = new Date(firstSaleIso)
+  const today = new Date()
+  // Mismo mes + día, año diferente (al menos 1 año).
+  const isAnniv =
+    first.getMonth() === today.getMonth() &&
+    first.getDate() === today.getDate() &&
+    today.getFullYear() > first.getFullYear()
+  if (!isAnniv) return
+
+  const years = today.getFullYear() - first.getFullYear()
+
+  // Cupón determinístico tipo aniversario.
+  const seed = `${clean}-${today.getFullYear()}-anniversary`
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) | 0
+  }
+  const coupon = `ANIV${Math.abs(hash).toString(36).slice(0, 5).toUpperCase()}`
+  const discountPct = 15
+
+  await notifyClient(clean, {
+    type: "anniversary",
+    title: `🎉 ¡${years} ${years === 1 ? "año" : "años"} con Beauty's Me!`,
+    body: `Gracias por seguir aquí. Tu regalo: ${discountPct}% OFF con el código ${coupon}. Muéstraselo a Mari al apartar 💖`,
+    link: "/",
+    metadata: { date: todayKey(), coupon, discount_pct: discountPct, years },
+  })
+
+  await notifyAdmins({
+    type: "anniversary",
+    title: `🎉 Aniversario hoy: ${clean}`,
+    body: `${years} ${years === 1 ? "año" : "años"} desde su primer pedido. Cupón: ${coupon} (${discountPct}% OFF).`,
+    link: "/apartados",
+    metadata: { email: clean, coupon, discount_pct: discountPct, years },
+  })
 }
 
 /* ════════════════════════════════════════════════════════════

@@ -56,6 +56,20 @@ export interface BuySheetVariant {
   price_medio?: number | null
   price_mayoreo?: number | null
   image_url: string | null
+  /** Color hex del tono real (ej. "#B22222" para Cherry Bomb). Opcional
+   *  — si no existe, no se renderiza el swatch. La columna en BD es
+   *  `swatch_hex` en `product_variants`; si no está, el dato llega
+   *  undefined y el componente lo ignora silenciosamente. */
+  swatch_hex?: string | null
+}
+
+/**
+ * Valida formato hex (#RGB o #RRGGBB). Defensa contra strings inválidos
+ * en BD que tirarían el CSS o crearían un swatch invisible.
+ */
+function isValidHex(value: string | null | undefined): value is string {
+  if (!value || typeof value !== "string") return false
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim())
 }
 
 export interface BuySheetProduct {
@@ -473,8 +487,10 @@ export default function BuySheet({
                     >
                       <div className="flex items-center gap-3">
                         {/* Miniatura: object-cover llena el cuadro. bg neutro
-                            como respaldo para imagenes con fondo transparente. */}
-                        <div className="w-14 h-14 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0">
+                            como respaldo para imagenes con fondo transparente.
+                            Si la variante tiene swatch_hex, overlay con un
+                            círculo del color real (esquina inferior derecha). */}
+                        <div className="relative w-14 h-14 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0">
                           {v.image_url ? (
                             <img
                               src={imageAvatar(v.image_url) || v.image_url}
@@ -487,6 +503,14 @@ export default function BuySheet({
                             />
                           ) : (
                             <Package size={18} />
+                          )}
+                          {isValidHex(v.swatch_hex) && (
+                            <span
+                              className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ring-2 ring-white dark:ring-slate-900 shadow-sm"
+                              style={{ backgroundColor: v.swatch_hex! }}
+                              aria-label={`Color: ${v.swatch_hex}`}
+                              title={`Tono ${v.swatch_hex}`}
+                            />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">

@@ -14,6 +14,7 @@ import {
   Smartphone,
   ExternalLink,
   Shield,
+  NotebookPen,
 } from "lucide-react"
 import Fuse from "fuse.js"
 
@@ -23,6 +24,7 @@ import KpiCard from "../../components/ui/KpiCard"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import Skeleton from "../../components/ui/Skeleton"
 import VipBadge from "../../components/ui/VipBadge"
+import CustomerNotesDrawer from "../../components/ui/CustomerNotesDrawer"
 import { formatMoney } from "../../lib/format"
 import { isVipCustomer } from "../../lib/vipStatus"
 import { useBusinessRules } from "../settings/businessRulesService"
@@ -70,6 +72,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [errMsg, setErrMsg] = useState<string | null>(null)
+  // Drawer de notas privadas + tags por cliente.
+  const [notesFor, setNotesFor] = useState<{ email: string; name: string | null } | null>(null)
 
   async function load() {
     setLoading(true)
@@ -214,7 +218,13 @@ export default function UsersPage() {
             ) : (
               <ul className="space-y-2">
                 {filteredUsers.map((u: RegisteredUser) => (
-                  <UserRow key={u.id} user={u} />
+                  <UserRow
+                    key={u.id}
+                    user={u}
+                    onOpenNotes={(email, name) =>
+                      setNotesFor({ email, name })
+                    }
+                  />
                 ))}
               </ul>
             )}
@@ -248,11 +258,25 @@ export default function UsersPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Drawer de notas privadas + tags por cliente. */}
+      <CustomerNotesDrawer
+        open={!!notesFor}
+        email={notesFor?.email ?? null}
+        customerName={notesFor?.name ?? null}
+        onClose={() => setNotesFor(null)}
+      />
     </div>
   )
 }
 
-function UserRow({ user }: { user: RegisteredUser }) {
+function UserRow({
+  user,
+  onOpenNotes,
+}: {
+  user: RegisteredUser
+  onOpenNotes: (email: string, name: string | null) => void
+}) {
   const rules = useBusinessRules()
   const isAdmin = user.role === "admin"
   const isStaff = user.role === "staff"
@@ -364,6 +388,14 @@ function UserRow({ user }: { user: RegisteredUser }) {
             <MessageCircle size={9} /> WA
           </a>
         )}
+        <button
+          type="button"
+          onClick={() => onOpenNotes(user.email, user.full_name)}
+          className="mt-1 h-6 px-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] font-black flex items-center gap-1 press hover:bg-slate-200 dark:hover:bg-slate-700"
+          title="Notas privadas y etiquetas"
+        >
+          <NotebookPen size={9} /> Notas
+        </button>
       </div>
     </li>
   )

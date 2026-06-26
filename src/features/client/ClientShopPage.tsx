@@ -2321,6 +2321,10 @@ export default function ClientShopPage() {
                       (v.image_urls && v.image_urls[0]) ??
                       v.image_url ??
                       buySheetProduct.image_url,
+                    // Acceso tolerante: si la columna swatch_hex no existe
+                    // en BD, simplemente queda undefined y el componente
+                    // no renderiza el círculo.
+                    swatch_hex: (v as any).swatch_hex ?? null,
                   })),
                 } as BuySheetProduct)
               : null

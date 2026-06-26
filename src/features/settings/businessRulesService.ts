@@ -279,6 +279,20 @@ export interface BusinessRules {
   shop_closed_message: string
   /** Fecha tentativa de retorno (YYYY-MM-DD). Opcional, se muestra si está. */
   shop_closed_until: string | null
+
+  /* ═══════════════════ RETENCIÓN (opcional, opt-in) ═══════════════════
+   * Features de retención que Mari puede activar/desactivar a
+   * voluntad. Todas OFF por defecto para no asumir. */
+
+  /** Banner "♻️ Repetir tu último pedido" en la Home cliente cuando
+   *  hay un pedido pagado reciente. */
+  reorder_banner_enabled: boolean
+  /** Push automático al aniversario del primer apartado de cada
+   *  cliente con mensaje + 15% off sugerido. */
+  anniversary_push_enabled: boolean
+  /** Push de carrito abandonado: 24h después de dejar 3+ piezas sin
+   *  apartar, recuerda al cliente con un cupón dinámico. */
+  abandoned_cart_enabled: boolean
 }
 
 /**
@@ -421,6 +435,11 @@ export const DEFAULT_RULES: BusinessRules = {
   shop_closed_enabled: false,
   shop_closed_message: "",
   shop_closed_until: null,
+
+  // Retención opt-in — todas OFF por default
+  reorder_banner_enabled: false,
+  anniversary_push_enabled: false,
+  abandoned_cart_enabled: false,
 }
 
 let cache: BusinessRules | null = null
@@ -648,6 +667,11 @@ function merge(raw: any): BusinessRules {
       /^\d{4}-\d{2}-\d{2}$/.test(raw.shop_closed_until)
         ? raw.shop_closed_until
         : null,
+
+    // Retención
+    reorder_banner_enabled: !!raw.reorder_banner_enabled,
+    anniversary_push_enabled: !!raw.anniversary_push_enabled,
+    abandoned_cart_enabled: !!raw.abandoned_cart_enabled,
   }
 }
 

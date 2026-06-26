@@ -46,6 +46,7 @@ import {
   GripVertical,
   MoonStar,
   Bell,
+  ShoppingBag,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -1092,6 +1093,38 @@ export default function BusinessRulesPage() {
             )
           })()}
         </RuleRow>
+      </Section>
+
+      {/* ════════════ RETENCIÓN (opt-in) ════════════ */}
+      <Section
+        icon={<Sparkles size={14} />}
+        title="Retención y reenganche"
+        subtitle="Funciones opcionales que invitan al cliente a volver"
+      >
+        <RuleRow
+          icon={RotateCcw}
+          title="Banner '♻️ Repetir tu último pedido' en Home"
+          description="Cuando el cliente entra a Inicio y tiene un pedido pagado reciente, aparece un banner gigante para repetir la compra en un tap."
+          affects="cliente"
+          enabled={form.reorder_banner_enabled}
+          onToggle={(v) => patch({ reorder_banner_enabled: v })}
+        />
+        <RuleRow
+          icon={Heart}
+          title="Aniversario del primer apartado"
+          description="Push automático 1 año después del primer pedido del cliente, con un saludo cariñoso y un cupón sugerido de 15%."
+          affects="cliente"
+          enabled={form.anniversary_push_enabled}
+          onToggle={(v) => patch({ anniversary_push_enabled: v })}
+        />
+        <RuleRow
+          icon={ShoppingBag}
+          title="Recordatorio de carrito abandonado"
+          description="Si un cliente deja 3+ piezas en el carrito sin apartar, 24h después recibe un push amable. Cero spam: solo si la cifra justifica."
+          affects="cliente"
+          enabled={form.abandoned_cart_enabled}
+          onToggle={(v) => patch({ abandoned_cart_enabled: v })}
+        />
       </Section>
 
       {/* ════════════ PROGRAMA DE PREMIOS ════════════ */}
