@@ -47,19 +47,19 @@ interface Rule {
 const RULES: Rule[] = [
   // ────────── Auth ──────────
   { test: /invalid login credentials|invalid_grant/i,
-    message: "Correo o contraseña incorrectos." },
+    message: "Correo o contraseña incorrectos · intenta de nuevo 💖" },
   { test: /email not confirmed/i,
-    message: "Tu correo aún no está confirmado. Revisa tu bandeja de entrada." },
+    message: "Tu correo aún no está confirmado · revisa tu bandeja (y el spam)." },
   { test: /user already registered|already registered/i,
-    message: "Ya hay una cuenta con ese correo." },
+    message: "Ya hay una cuenta con ese correo · mejor inicia sesión." },
   { test: /jwt expired|invalid jwt|jwt.*expired/i,
-    message: "Tu sesión expiró. Inicia sesión de nuevo." },
+    message: "Tu sesión se durmió · inicia sesión otra vez." },
   { test: /password should be at least|weak.?password/i,
-    message: "La contraseña es muy corta. Usa al menos 6 caracteres." },
+    message: "La contraseña es muy cortita · usa al menos 6 caracteres." },
   { test: /rate limit|too many requests/i,
-    message: "Demasiados intentos. Espera un momento e intenta de nuevo." },
+    message: "Mucho tap muy rápido · dale 10 segundos e intenta otra vez." },
   { test: /email rate limit/i,
-    message: "Esperaste muy poco entre correos. Inténtalo en un minuto." },
+    message: "Esperaste muy poco entre correos · inténtalo en un minuto." },
 
   // ────────── Permisos / RLS ──────────
   { test: /permission denied|not authorized|forbidden|rls/i,
@@ -85,9 +85,9 @@ const RULES: Rule[] = [
 
   // ────────── Red / fetch ──────────
   { test: /failed to fetch|networkerror|network request failed/i,
-    message: "Sin conexión a internet. Revisa tu red e inténtalo de nuevo." },
+    message: "Sin internet · revisa tu red y vuelve a intentar." },
   { test: /timeout|timed out|aborted/i,
-    message: "El servidor tardó demasiado en responder. Intenta de nuevo." },
+    message: "El servidor tardó demasiado · vuelve a intentar." },
   { test: (_m, c) => c === "503",
     message: "El servidor está temporalmente saturado. Espera un momento." },
   { test: (_m, c) => c === "504",
@@ -97,11 +97,23 @@ const RULES: Rule[] = [
 
   // ────────── Storage ──────────
   { test: /payload too large|file too large/i,
-    message: "El archivo es demasiado grande. Reduce su peso e inténtalo de nuevo." },
+    message: "Esa foto pesa demasiado · bajemos calidad o usa una más ligera." },
   { test: /invalid.?mime|unsupported.?(file|media|format)/i,
-    message: "Formato de archivo no permitido. Usa JPG, PNG o WEBP." },
+    message: "Ese formato no lo soporto · usa JPG, PNG o WEBP." },
   { test: /storage.*not found|object.*not found/i,
-    message: "No se encontró ese archivo. Quizá ya fue borrado." },
+    message: "No encuentro ese archivo · quizá ya fue borrado." },
+  { test: /signed url|expired.*url/i,
+    message: "El enlace caducó · recarga la página para uno nuevo." },
+
+  // ────────── Stock / negocio (mensajes con personalidad Mari) ──────────
+  { test: /insufficient stock|sin stock|out of stock/i,
+    message: "¡Volaron esos tonos! · ya no hay stock disponible." },
+  { test: /sale.*cancelled|venta.*cancelada/i,
+    message: "Este pedido ya estaba cancelado." },
+  { test: /payment.*already.*approved/i,
+    message: "Ese comprobante ya fue aprobado antes · todo en orden." },
+  { test: /(invalid|bad).*token|token.*invalid/i,
+    message: "Ese enlace ya no es válido · pide uno nuevo a Mari." },
 
   // ────────── Genéricos por código HTTP ──────────
   { test: (_m, c) => c === "401",

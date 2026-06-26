@@ -1057,7 +1057,7 @@ export default function BusinessRulesPage() {
           />
           <label className="block pt-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 block">
-              Fecha tentativa de retorno (opcional)
+              Reapertura automática (opcional)
             </span>
             <input
               type="date"
@@ -1067,7 +1067,30 @@ export default function BusinessRulesPage() {
               }
               className="settings-input"
             />
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+              Al llegar este día la tienda reabre sola — sin entrar al
+              admin. Déjalo vacío si no sabes cuándo regresas.
+            </p>
           </label>
+          {/* Chip countdown: solo cuando vacaciones activas + fecha definida */}
+          {form.shop_closed_enabled && form.shop_closed_until && (() => {
+            const until = new Date(form.shop_closed_until + "T23:59:59")
+            const ms = until.getTime() - Date.now()
+            if (!Number.isFinite(ms)) return null
+            if (ms <= 0) {
+              return (
+                <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                  ✅ La fecha ya pasó · la tienda ya reabrió automáticamente
+                </p>
+              )
+            }
+            const days = Math.ceil(ms / (24 * 3600 * 1000))
+            return (
+              <p className="mt-2 text-[10px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400">
+                🌴 Vacaciones activas · reabre en {days} {days === 1 ? "día" : "días"}
+              </p>
+            )
+          })()}
         </RuleRow>
       </Section>
 

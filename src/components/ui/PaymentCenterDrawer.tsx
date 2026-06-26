@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence, type PanInfo } from "framer-motion"
 import {
@@ -13,6 +13,8 @@ import {
   ArrowRight,
   ShieldCheck,
   Receipt as ReceiptIcon,
+  Image as ImageIcon,
+  FileText,
 } from "lucide-react"
 
 import { formatMoney, formatRelative, shortId } from "../../lib/format"
@@ -66,6 +68,13 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
   const [proofs, setProofs] = useState<PaymentProof[]>([])
   const [loadingProofs, setLoadingProofs] = useState(false)
   const { email: authEmail } = useAuth()
+  // Ref del cuerpo del drawer — lo capturamos para generar el
+  // recibo en imagen / PDF (cuando ya está pagado).
+  const receiptBodyRef = useRef<HTMLDivElement | null>(null)
+  // Detectamos transición a pagado para disparar el confetti +
+  // overlay "Pagado ✓" 1 vez por apertura.
+  const [justPaidFlash, setJustPaidFlash] = useState(false)
+  const wasPaidRef = useRef<boolean | null>(null)
 
   // Reset tab al abrir / cambiar de venta
   useEffect(() => {
@@ -90,6 +99,46 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
   }, [sale?.id, open])
 
   useBodyScrollLock(open)
+
+  // Trigger del confetti + flash "Pagado ✓" cuando el balance cae a 0
+  // estando el drawer abierto (cliente subió comprobante o admin
+  // aprobó → realtime baja balance). Respeta motion=off.
+  useEffect(() => {
+    if (!open || !sale) {
+      wasPaidRef.current = null
+      return
+    }
+    const total = Number(sale.total) || 0
+    const paid = Number(sale.paid) || 0
+    const balance = Math.max(0, total - paid)
+    const nowPaid = balance <= 0
+    if (wasPaidRef.current === null) {
+      wasPaidRef.current = nowPaid
+      return
+    }
+    if (!wasPaidRef.current && nowPaid) {
+      wasPaidRef.current = true
+      const motionOff =
+        typeof document !== "undefined" &&
+        document.documentElement.dataset.motion === "off"
+      if (!motionOff) {
+        setJustPaidFlash(true)
+        window.setTimeout(() => setJustPaidFlash(false), 1600)
+      }
+      ;(async () => {
+        try {
+          const { fireConfetti } = await import("../../lib/confetti")
+          fireConfetti({
+            duration: 1400,
+            count: 60,
+            colors: ["#10b981", "#34d399", "#a7f3d0", "#fbbf24", "#ffffff"],
+          })
+        } catch {}
+      })()
+    } else {
+      wasPaidRef.current = nowPaid
+    }
+  }, [open, sale?.id, sale?.paid, sale?.total])
 
   // ESC para cerrar
   useEffect(() => {
@@ -161,6 +210,29 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
             className="relative z-10 w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.35)] max-h-[92vh] flex flex-col touch-pan-y"
             style={OVERLAY_PANEL_STYLE}
           >
+            {/* Overlay "Pagado ✓" cuando el balance acaba de caer a 0.
+                Aparece encima del contenido por 1.6s y se desvanece. */}
+            <AnimatePresence>
+              {justPaidFlash && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.7 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none bg-emerald-500/20 backdrop-blur-sm rounded-t-[2rem]"
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-20 h-20 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-2xl">
+                      <CheckCircle2 size={48} strokeWidth={2.5} />
+                    </div>
+                    <p className="text-base font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-100">
+                      ¡Pagado!
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Handle drag */}
             <div className="flex justify-center pt-2 pb-1 cursor-grab active:cursor-grabbing shrink-0">
               <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
@@ -253,6 +325,42 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                           {formatMoney(sale.paid)} ya cobrado
                         </span>
                       </div>
+
+                      {/* Plan sugerido: 3 abonos. Solo aparece cuando el
+                          saldo justifica dividir (>= $200) y el cliente
+                          aún no ha hecho 3+ pagos. Es una sugerencia
+                          visual — no se obliga ni se compromete a nada. */}
+                      {safeBalance >= 200 && (sale.payments?.length ?? 0) < 3 && (
+                        <div className="mt-3 pt-3 border-t border-white/40 dark:border-slate-700/40">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1.5">
+                            Plan sugerido
+                          </p>
+                          <div className="flex items-center gap-1">
+                            {[0, 1, 2].map((i) => {
+                              const installment = Math.ceil(
+                                (safeBalance / 3) * 100,
+                              ) / 100
+                              return (
+                                <div
+                                  key={i}
+                                  className="flex-1 rounded-lg bg-white/70 dark:bg-slate-900/40 px-2 py-1.5 text-center"
+                                >
+                                  <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 leading-none">
+                                    Abono {i + 1}
+                                  </p>
+                                  <p className="text-[11px] font-black tabular-nums text-primary leading-tight mt-0.5">
+                                    {formatMoney(installment)}
+                                  </p>
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <p className="text-[9px] text-slate-500 dark:text-slate-400 mt-1.5 italic leading-snug">
+                            3 abonos quincenales · puedes adelantar o
+                            pagar más cuando quieras.
+                          </p>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -261,7 +369,10 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
 
             {/* Si ya está pagado, mensaje de gracias en lugar de tabs */}
             {isPaid ? (
-              <div className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios">
+              <div
+                ref={receiptBodyRef}
+                className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios"
+              >
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -277,6 +388,43 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                     Gracias por confiar en Beauty's Me ✨
                   </p>
                 </motion.div>
+
+                {/* CTAs de recibo: imagen + PDF. Reusa shareImage (lazy-loaded). */}
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!sale) return
+                      const { shareTicketImage } = await import(
+                        "../../lib/shareImage"
+                      )
+                      await shareTicketImage({
+                        node: receiptBodyRef.current,
+                        filename: `recibo-${sale.id.slice(0, 8)}.png`,
+                        text: "Mi recibo de Beauty's Me",
+                      })
+                    }}
+                    className="h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press"
+                  >
+                    <ImageIcon size={12} /> Imagen
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!sale) return
+                      const { shareTicketPdf } = await import(
+                        "../../lib/shareImage"
+                      )
+                      await shareTicketPdf({
+                        node: receiptBodyRef.current,
+                        filename: `recibo-${sale.id.slice(0, 8)}.pdf`,
+                      })
+                    }}
+                    className="h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press"
+                  >
+                    <FileText size={12} /> PDF
+                  </button>
+                </div>
 
                 {/* Historial igual visible para que sepa qué pagó */}
                 {(payments.length > 0 || proofs.length > 0) && (

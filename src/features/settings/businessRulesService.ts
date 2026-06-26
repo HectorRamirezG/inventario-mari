@@ -706,7 +706,22 @@ export function useBusinessRules(): BusinessRules {
       listeners.delete(l)
     }
   }, [])
-  return val
+  return computeEffectiveRules(val)
+}
+
+/**
+ * Aplica reglas calculadas en runtime:
+ *  - Modo vacaciones (`shop_closed_enabled`) se DESACTIVA solo si
+ *    `shop_closed_until` ya pasó. Permite a Mari programar "cerrada
+ *    hasta el 5 ene" y olvidarse: el día 6 reabre automático.
+ */
+function computeEffectiveRules(r: BusinessRules): BusinessRules {
+  if (!r.shop_closed_enabled || !r.shop_closed_until) return r
+  const until = new Date(r.shop_closed_until + "T23:59:59")
+  if (Number.isFinite(until.getTime()) && Date.now() > until.getTime()) {
+    return { ...r, shop_closed_enabled: false }
+  }
+  return r
 }
 
 /**
@@ -714,7 +729,7 @@ export function useBusinessRules(): BusinessRules {
  * Usa la caché — si aún no cargó devuelve DEFAULT_RULES.
  */
 export function getBusinessRules(): BusinessRules {
-  return cache ?? DEFAULT_RULES
+  return computeEffectiveRules(cache ?? DEFAULT_RULES)
 }
 
 /** Pre-carga la caché al boot. Llámalo desde App.tsx. */

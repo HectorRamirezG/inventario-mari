@@ -244,3 +244,20 @@ export const sound = {
     else (sound as any).tap()
   },
 }
+
+/**
+ * Helpers de haptic SIN sonido — para taps muy frecuentes (botones +/-,
+ * toggles, swipes) donde un beep cada vez sería molesto pero sí
+ * queremos el feedback táctil. Respeta `prefs.haptics` + quiet hours.
+ *
+ * Uso típico:
+ *   haptic.light()   // tap normal de UI
+ *   haptic.medium()  // confirmación
+ *   haptic.heavy()   // error / rechazo
+ */
+export const haptic = {
+  light: () => vibrate(6),
+  medium: () => vibrate(14),
+  heavy: () => vibrate([20, 30, 20]),
+  selection: () => vibrate(3),
+}

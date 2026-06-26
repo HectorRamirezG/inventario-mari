@@ -117,6 +117,7 @@ function initOnce() {
 export function useAuth(): AuthState & {
   signInWithPassword: (email: string, password: string) => Promise<void>
   signUpWithPassword: (email: string, password: string, fullName?: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
   sendMagicLink: (email: string) => Promise<void>
   signOut: () => Promise<void>
   forgetDevice: () => Promise<void>
@@ -164,6 +165,23 @@ export function useAuth(): AuthState & {
     if (error) throw new Error(error.message)
   }, [])
 
+  /** OAuth con Google — redirige a Google y vuelve a /login. Requiere
+   *  que el provider esté habilitado en Supabase Auth con su client_id
+   *  y client_secret (config del dashboard, no del código). */
+  const signInWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin + "/login",
+        queryParams: {
+          access_type: "offline",
+          prompt: "select_account",
+        },
+      },
+    })
+    if (error) throw new Error(error.message)
+  }, [])
+
   const signOut = useCallback(async () => {
     // Disparamos un evento para que el shell aplique fade-out (300ms)
     // antes de que Supabase tumbe la sesión y React rerender al Login.
@@ -197,6 +215,7 @@ export function useAuth(): AuthState & {
     ...state,
     signInWithPassword,
     signUpWithPassword,
+    signInWithGoogle,
     sendMagicLink,
     signOut,
     forgetDevice,

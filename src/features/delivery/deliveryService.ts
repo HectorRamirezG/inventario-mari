@@ -234,9 +234,7 @@ export async function updateDeliveryStatus(
               body: note.driver_name
                 ? `${note.driver_name} ya tiene tu pedido y va para allá.`
                 : "El repartidor ya tiene tu pedido y va para allá.",
-              link: (sale as any).public_token
-                ? `/ticket/${(sale as any).public_token}`
-                : null,
+              link: "/mis-pedidos",
               metadata: { delivery_id: id, sale_id: note.sale_id, driver: note.driver_name },
             })
           } else {
@@ -244,9 +242,7 @@ export async function updateDeliveryStatus(
               type: "delivery_delivered",
               title: "Tu pedido fue entregado 💖",
               body: "Esperamos te encante. Cualquier cosa, escríbenos.",
-              link: (sale as any).public_token
-                ? `/ticket/${(sale as any).public_token}`
-                : null,
+              link: "/mis-pedidos",
               metadata: { delivery_id: id, sale_id: note.sale_id },
             })
           }
@@ -319,7 +315,7 @@ export async function updateDeliveryStatusByToken(
         body: result.driver_name
           ? `${result.driver_name} ya tiene tu pedido y va para allá.`
           : "El repartidor ya tiene tu pedido y va para allá.",
-        link: result.sale_token ? `/ticket/${result.sale_token}` : null,
+        link: "/mis-pedidos",
         metadata: {
           sale_id: result.sale_id,
           driver: result.driver_name,
@@ -331,7 +327,7 @@ export async function updateDeliveryStatusByToken(
         type: "delivery_delivered",
         title: "Tu pedido fue entregado 💖",
         body: "Esperamos te encante. Cualquier cosa, escríbenos.",
-        link: result.sale_token ? `/ticket/${result.sale_token}` : null,
+        link: "/mis-pedidos",
         metadata: {
           sale_id: result.sale_id,
           via: "driver_self_service",

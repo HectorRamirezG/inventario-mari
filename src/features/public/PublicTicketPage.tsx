@@ -676,7 +676,7 @@ function QRModal({
     >
       <div className="px-5 pt-5 pb-4 flex items-center justify-between">
         <h3 className="text-sm font-black tracking-tight flex items-center gap-1.5">
-          <QrCode size={14} className="text-primary" /> Tu ticket en QR
+          <QrCode size={14} className="text-primary" /> QR de entrega
         </h3>
         <button
           type="button"
@@ -698,9 +698,14 @@ function QRModal({
             loading="lazy"
           />
         </div>
-        <p className="text-[11px] font-bold text-slate-500 text-center leading-snug">
-          Escanea o comparte el link para que alguien más vea este ticket.
-        </p>
+        <div className="w-full rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 p-2.5 text-center">
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300 leading-tight">
+            Muéstraselo a Mari al recibir tu pedido
+          </p>
+          <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/70 mt-1 leading-snug">
+            Ella escanea con su admin → marca entregado y registra tu pago en un tap.
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => copyToClipboard(url, "Link copiado")}

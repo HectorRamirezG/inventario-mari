@@ -333,30 +333,59 @@ function DailyLoginAwardMount() {
     const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
     if (prefs.lastDailyLoginAt === today) return
 
-    // Calcula nuevo streak: si ayer = lastDailyLoginAt → +1; si más
-    // viejo o nunca → reinicia a 1.
-    const yesterday = new Date(Date.now() - 24 * 3600 * 1000)
-      .toISOString()
-      .slice(0, 10)
-    const nextStreak =
-      prefs.lastDailyLoginAt === yesterday
-        ? Math.max(1, prefs.dailyLoginStreak) + 1
-        : 1
-
     let cancelled = false
     ;(async () => {
       try {
+        const { supabase } = await import("./lib/supabase")
+
+        // ───── ANTI-ABUSO #1: verificar SERVIDOR-SIDE si ya hubo
+        // award de "daily_login" hoy. localStorage es trivialmente
+        // editable; loyalty_events tiene timestamps de servidor.
+        const dayStart = new Date()
+        dayStart.setHours(0, 0, 0, 0)
+        const { data: todaysEvents } = await supabase
+          .from("loyalty_events")
+          .select("id")
+          .eq("customer_email", email.toLowerCase())
+          .eq("action_key", "daily_login")
+          .gte("created_at", dayStart.toISOString())
+          .limit(1)
+        if (cancelled) return
+        const alreadyAwardedToday =
+          Array.isArray(todaysEvents) && todaysEvents.length > 0
+        if (alreadyAwardedToday) {
+          // Sincroniza localStorage para que el flag de hoy quede puesto
+          // sin disparar award duplicado.
+          set("lastDailyLoginAt", today)
+          // Recalculamos streak desde el servidor (honesto).
+          set("dailyLoginStreak", await computeServerStreak(email))
+          return
+        }
+
+        // ───── ANTI-ABUSO #2: streak ahora se calcula desde
+        // loyalty_events reales, NO desde localStorage. Si el cliente
+        // edita prefs.dailyLoginStreak no gana puntos extra: los
+        // bonuses semanales/mensuales se removieron del cliente y
+        // deben dispararse server-side en award_loyalty_points.
+        const realStreakBeforeToday = await computeServerStreak(email)
+        if (cancelled) return
+        const nextStreak = realStreakBeforeToday + 1
+
         const { awardLoyaltyPoints } = await import(
           "./features/loyalty/loyaltyService"
         )
         const { toast } = await import("react-hot-toast")
 
-        // Award diario base.
-        const got = await awardLoyaltyPoints(email, "daily_login")
+        // Award diario base — el único call al servidor desde aquí.
+        // Pasamos `today` como ref_id para que el SQL pueda agregar un
+        // UNIQUE(customer_email, action_key, ref_id) y rechazar duplicados.
+        const got = await awardLoyaltyPoints(
+          email,
+          "daily_login",
+          today,
+        )
         if (cancelled) return
 
-        // Marca el día como ya otorgado (siempre, gane o no — evita
-        // reintentar si la regla está apagada).
         set("lastDailyLoginAt", today)
         set("dailyLoginStreak", nextStreak)
 
@@ -369,27 +398,11 @@ function DailyLoginAwardMount() {
           )
         }
 
-        // Bonus de streak: cada múltiplo de 7 dispara `streak_7days`.
-        // Cada múltiplo de 30 dispara `streak_30days` (ENCIMA del de 7).
-        // Best-effort: si las reglas no existen el RPC retorna 0.
-        if (nextStreak > 1 && nextStreak % 7 === 0) {
-          const bonus7 = await awardLoyaltyPoints(email, "streak_7days")
-          if (!cancelled && bonus7 > 0) {
-            toast.success(`+${bonus7} pts · ¡bonus de 7 días!`, {
-              duration: 3500,
-              icon: "🔥",
-            })
-          }
-        }
-        if (nextStreak > 1 && nextStreak % 30 === 0) {
-          const bonus30 = await awardLoyaltyPoints(email, "streak_30days")
-          if (!cancelled && bonus30 > 0) {
-            toast.success(`+${bonus30} pts · ¡un MES sin faltar!`, {
-              duration: 4500,
-              icon: "👑",
-            })
-          }
-        }
+        // NOTA: los bonuses streak_7days / streak_30days SE QUITARON
+        // del cliente — eran vulnerables porque dependían del valor
+        // de prefs.dailyLoginStreak en localStorage (editable). Deben
+        // dispararse dentro del RPC `award_loyalty_points` en SQL,
+        // contando eventos `daily_login` consecutivos del servidor.
       } catch {
         /* best-effort, silencioso */
       }
@@ -402,10 +415,51 @@ function DailyLoginAwardMount() {
     email,
     rules.loyalty_enabled,
     prefs.lastDailyLoginAt,
-    prefs.dailyLoginStreak,
     set,
   ])
   return null
+}
+
+/**
+ * Calcula la racha actual de días consecutivos con evento `daily_login`
+ * desde la tabla `loyalty_events` (server-side, no editable por el
+ * cliente). Cuenta hacia atrás desde HOY hasta el primer hueco.
+ *
+ * Limita a 60 días de histórico para acotar la query — si alguien tiene
+ * racha >60 ya es champion suficiente.
+ */
+async function computeServerStreak(email: string): Promise<number> {
+  try {
+    const { supabase } = await import("./lib/supabase")
+    const since = new Date(Date.now() - 60 * 24 * 3600 * 1000)
+    const { data } = await supabase
+      .from("loyalty_events")
+      .select("created_at")
+      .eq("customer_email", email.toLowerCase())
+      .eq("action_key", "daily_login")
+      .gte("created_at", since.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(60)
+    if (!data || data.length === 0) return 0
+    const days = new Set<string>()
+    for (const ev of data as any[]) {
+      const d = new Date(ev.created_at as string)
+      days.add(d.toISOString().slice(0, 10))
+    }
+    let streak = 0
+    const cursor = new Date()
+    // Si HOY ya tiene daily_login, cuenta; si no, empieza desde ayer.
+    if (!days.has(cursor.toISOString().slice(0, 10))) {
+      cursor.setDate(cursor.getDate() - 1)
+    }
+    while (days.has(cursor.toISOString().slice(0, 10))) {
+      streak++
+      cursor.setDate(cursor.getDate() - 1)
+    }
+    return streak
+  } catch {
+    return 0
+  }
 }
 
 /** Captura `?ref=email` del URL al mount UNA vez. Comportamiento:

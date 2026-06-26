@@ -35,6 +35,7 @@ import KpiCard from "../../components/ui/KpiCard"
 import TabBar, { type TabItem } from "../../components/ui/TabBar"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import Skeleton from "../../components/ui/Skeleton"
+import DeliveryScanFAB from "./DeliveryScanFAB"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { formatRelative, shortId } from "../../lib/format"
 import {
@@ -162,6 +163,14 @@ export default function DeliveriesAdminPage() {
       <PageHeader
         title="Comandas"
         subtitle="Entregas activas y su historial — en un solo lugar"
+      />
+
+      {/* FAB "Escanear para entregar" — abre cámara, lee QR del
+          cliente y abre sheet de confirmación con un tap. */}
+      <DeliveryScanFAB
+        onAfterDeliver={() =>
+          queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+        }
       />
 
       {/* KPIs */}

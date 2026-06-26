@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { useNavigate, useLocation } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
@@ -60,6 +61,15 @@ interface MyOrder {
   payment_url: string | null
 }
 
+/** Mini-thumb por item para el strip visual de la card. */
+interface OrderItemThumb {
+  variant_id: string | null
+  product_name: string | null
+  variant_name: string | null
+  qty: number
+  image_url: string | null
+}
+
 /** Mini-snapshot de la comanda asociada a la venta. Solo lectura desde
  *  el lado cliente — modificar la entrega es tarea del admin. */
 interface MyDelivery extends OrderProgressDelivery {
@@ -98,6 +108,10 @@ export default function ClientOrdersPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   /** sale_id -> cantidad de incidencias abiertas. Mantenido por realtime. */
   const [openTicketsBySale, setOpenTicketsBySale] = useState<Record<string, number>>({})
+  /** sale_id -> primeras 4 fotos de productos (mini strip visual). */
+  const [itemsBySale, setItemsBySale] = useState<Record<string, OrderItemThumb[]>>({})
+  /** IDs que acaban de transicionar a "pagado" — ring verde temporal. */
+  const [justPaidIds, setJustPaidIds] = useState<Set<string>>(new Set())
   const toggleExpanded = useCallback((id: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev)
@@ -154,6 +168,58 @@ export default function ClientOrdersPage() {
       }
     }
     setDeliveryBySale(map)
+    // Fetch tolerante de sale_items + thumbs de variantes para mostrar
+    // el mini-strip visual en cada card. Es "nice to have": si falla,
+    // las cards simplemente no muestran fotos.
+    const orderIds = list.map((o: any) => o.id).filter(Boolean)
+    if (orderIds.length > 0) {
+      ;(async () => {
+        try {
+          const { data: items } = await supabase
+            .from("sale_items")
+            .select("sale_id,variant_id,product_name,variant_name,qty")
+            .in("sale_id", orderIds)
+          if (!items || !aliveRef.current) return
+          const variantIds = Array.from(
+            new Set(
+              (items as any[])
+                .map((it) => it.variant_id)
+                .filter((v): v is string => !!v),
+            ),
+          )
+          let imgByVariant = new Map<string, string | null>()
+          if (variantIds.length > 0) {
+            const { data: variants } = await supabase
+              .from("product_variants")
+              .select("id,image_url,image_urls")
+              .in("id", variantIds)
+            for (const v of (variants as any[]) ?? []) {
+              const img =
+                (Array.isArray(v.image_urls) && v.image_urls[0]) ||
+                v.image_url ||
+                null
+              imgByVariant.set(v.id, img ?? null)
+            }
+          }
+          const grouped: Record<string, OrderItemThumb[]> = {}
+          for (const it of items as any[]) {
+            const thumb: OrderItemThumb = {
+              variant_id: it.variant_id ?? null,
+              product_name: it.product_name ?? null,
+              variant_name: it.variant_name ?? null,
+              qty: Number(it.qty) || 0,
+              image_url: it.variant_id
+                ? imgByVariant.get(it.variant_id) ?? null
+                : null,
+            }
+            ;(grouped[it.sale_id] ??= []).push(thumb)
+          }
+          if (aliveRef.current) setItemsBySale(grouped)
+        } catch {
+          /* best-effort */
+        }
+      })()
+    }
     // Segundo fetch tolerante de campos opcionales (lat/lng + client fields).
     // Si las columnas no existen, este select silenciosamente regresa null.
     const ids = Object.values(map).map((d) => d.id)
@@ -244,6 +310,26 @@ export default function ClientOrdersPage() {
     }
     paidKnownRef.current = currentPaid
     if (newlyPaid.length === 0) return
+    // Marcar visualmente las cards que acaban de transicionar a pagado.
+    // Respeta data-motion="off": si Mari (o el SO) pidió sin animaciones,
+    // omitimos el ring animado — solo confetti + toast.
+    const motionOff =
+      typeof document !== "undefined" &&
+      document.documentElement.dataset.motion === "off"
+    if (!motionOff) {
+      setJustPaidIds((prev) => {
+        const next = new Set(prev)
+        for (const id of newlyPaid) next.add(id)
+        return next
+      })
+      window.setTimeout(() => {
+        setJustPaidIds((prev) => {
+          const next = new Set(prev)
+          for (const id of newlyPaid) next.delete(id)
+          return next
+        })
+      }, 2400)
+    }
     ;(async () => {
       try {
         const { fireConfetti } = await import("../../lib/confetti")
@@ -314,6 +400,24 @@ export default function ClientOrdersPage() {
     enabled: !!email,
   })
 
+  // Pull-to-refresh global del layout cliente — escuchamos el evento
+  // "mari:pull-refresh" y disparamos un reload local de pedidos.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const section = (e as CustomEvent).detail?.section
+      // Aceptamos eventos sin section (genéricos) o con section "shop".
+      if (section && section !== "shop" && section !== "orders") return
+      loadOrders()
+      loadOpenTickets()
+    }
+    window.addEventListener("mari:pull-refresh", handler as EventListener)
+    return () =>
+      window.removeEventListener(
+        "mari:pull-refresh",
+        handler as EventListener,
+      )
+  }, [loadOrders, loadOpenTickets])
+
   // Escuchar request de "abrir centro de pago de venta X" desde notifs.
   // Si la orden ya está cargada, abrimos PaymentCenterDrawer; si no, la
   // marcamos pendiente y abrimos cuando llegue del fetch.
@@ -347,9 +451,16 @@ export default function ClientOrdersPage() {
     return () => window.removeEventListener("mari:payment-proof-uploaded", handler)
   }, [loadOrders])
 
-  /** Counts por categoría (para badges en los tabs). */
-  const counts = useMemo(() => {
-    const c = { all: orders.length, active: 0, delivered: 0, cancelled: 0 }
+  /** Counts + monto pendiente + en-camino para el sticky summary. */
+  const summary = useMemo(() => {
+    const c = {
+      all: orders.length,
+      active: 0,
+      delivered: 0,
+      cancelled: 0,
+      pendingAmount: 0,
+      inRoute: 0,
+    }
     for (const o of orders) {
       if (o.status === "cancelled") {
         c.cancelled++
@@ -364,10 +475,13 @@ export default function ClientOrdersPage() {
         c.delivered++
       } else {
         c.active++
+        c.pendingAmount += balance
+        if (dStatus === "picked_up") c.inRoute++
       }
     }
     return c
   }, [orders, deliveryBySale])
+  const counts = summary
 
   /** Pedidos filtrados según el tab seleccionado. */
   const filteredOrders = useMemo(() => {
@@ -406,12 +520,16 @@ export default function ClientOrdersPage() {
   }, [orders, rules])
 
   /** Para invitar a reordenar: cliente puede repetir compra de un pedido
-   *  ya entregado o pagado completamente. Reordena via reusing
-   *  sales:prefill-cart pero en el cliente (BuySheet). Simple: navega
-   *  al catálogo. Si queremos, después conectamos a un evento que
-   *  pre-llene el carrito del cliente. */
-  const handleReorder = useCallback(
+   *  ya entregado o pagado completamente. Abre un sheet de preview con
+   *  los items + thumbnails, y al confirmar navega al catálogo con
+   *  `?reorder=<saleId>` para que ClientShopPage prefille el carrito. */
+  const [reorderPreviewId, setReorderPreviewId] = useState<string | null>(null)
+  const handleReorder = useCallback((saleId: string) => {
+    setReorderPreviewId(saleId)
+  }, [])
+  const confirmReorder = useCallback(
     (saleId: string) => {
+      setReorderPreviewId(null)
       toast("Te llevamos al catálogo · reorganizamos tu carrito 💖", {
         icon: "♻️",
         duration: 1800,
@@ -428,25 +546,35 @@ export default function ClientOrdersPage() {
           <Skeleton className="h-7 w-40 mb-2" rounded="lg" />
           <Skeleton className="h-3 w-64" rounded="full" />
         </div>
+        {/* Skeleton que matchea la nueva card: pill + folio/fecha
+            + hero total + barra + strip de fotos + CTA + chips. */}
         {[1, 2, 3].map((i) => (
           <div
             key={i}
-            className="bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 space-y-3"
+            className="bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl p-3.5 space-y-2.5"
           >
             <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <Skeleton className="h-2 w-12" rounded="full" />
-                <Skeleton className="h-4 w-20" rounded="md" />
+              <Skeleton className="h-6 w-28" rounded="full" />
+              <div className="space-y-1 text-right">
+                <Skeleton className="h-2.5 w-16 ml-auto" rounded="full" />
+                <Skeleton className="h-2 w-12 ml-auto" rounded="full" />
               </div>
-              <Skeleton className="h-5 w-20" rounded="full" />
             </div>
-            <Skeleton className="h-3 w-32" rounded="full" />
-            <div className="flex justify-between">
-              <Skeleton className="h-3 w-16" rounded="full" />
-              <Skeleton className="h-4 w-20" rounded="md" />
+            <div className="flex items-baseline gap-2">
+              <Skeleton className="h-6 w-24" rounded="md" />
+              <Skeleton className="h-3 w-20" rounded="full" />
             </div>
             <Skeleton className="h-1.5 w-full" rounded="full" />
-            <Skeleton className="h-9 w-full" rounded="xl" />
+            <div className="flex gap-1.5">
+              {[0, 1, 2, 3].map((k) => (
+                <Skeleton key={k} className="w-10 h-10" rounded="lg" />
+              ))}
+            </div>
+            <Skeleton className="h-11 w-full" rounded="xl" />
+            <div className="flex gap-1.5">
+              <Skeleton className="h-8 w-16" rounded="lg" />
+              <Skeleton className="h-8 w-16" rounded="lg" />
+            </div>
           </div>
         ))}
       </div>
@@ -477,6 +605,35 @@ export default function ClientOrdersPage() {
         }
       />
 
+      {/* Sticky summary — panorama del estado de los pedidos arriba.
+          Se muestra cuando hay 2+ pedidos O cuando hay 1+ con saldo
+          pendiente (lo más importante para el cliente). */}
+      {(orders.length >= 2 || summary.pendingAmount > 0) && (
+        <div className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between gap-3 max-w-md mx-auto">
+            <div className="min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 leading-none">
+                Pendiente
+              </p>
+              <p className="text-base font-black tabular-nums text-amber-600 dark:text-amber-400 leading-tight">
+                {formatMoney(summary.pendingAmount)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {summary.inRoute > 0 && (
+                <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {summary.inRoute} en camino
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest">
+                {summary.active} activos
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Filtros tab — solo si tiene más de 1 pedido. */}
       {orders.length > 1 && (
         <TabBar
@@ -499,27 +656,31 @@ export default function ClientOrdersPage() {
         />
       )}
 
-      {/* Empty state contextual por filtro. */}
+      {/* Empty state contextual por filtro — microcopy diferenciado. */}
       {filteredOrders.length === 0 && (
         <EmptyStateIllustration
           variant="no-orders"
           title={
             filter === "active"
-              ? "Sin pedidos activos"
+              ? orders.length === 0
+                ? "Tu primer pedido te está esperando"
+                : "Todo al corriente ✨"
               : filter === "delivered"
-              ? "Sin entregas todavía"
+              ? "Aún no recibes nada 📦"
               : filter === "cancelled"
-              ? "Sin pedidos cancelados"
+              ? "Sin cancelaciones 💖"
               : "Aún no tienes pedidos"
           }
           subtitle={
             filter === "active"
-              ? "Cuando apartes o tengas saldo pendiente aparecerá aquí."
+              ? orders.length === 0
+                ? "Cuando apartes algo del catálogo, aparecerá aquí con su seguimiento."
+                : "Ya no tienes nada pendiente. ¿Armar un nuevo pedido?"
               : filter === "delivered"
-              ? "Tus compras entregadas aparecerán aquí."
+              ? "Tus entregas completadas se guardan aquí para que las consultes cuando quieras."
               : filter === "cancelled"
-              ? "Esperemos que nunca tengas que ver esto."
-              : "Arma tu carrito desde el catálogo y aparecerán aquí."
+              ? "Esperemos que nunca tengas que cancelar."
+              : "Arma tu carrito desde el catálogo y aparecerá aquí."
           }
           cta={
             filter === "active" || orders.length === 0 ? (
@@ -571,23 +732,48 @@ export default function ClientOrdersPage() {
         const showInteractive = !isClosed && (!isCompact || isExpanded)
 
         // Capa visual: el closed se aplana, el premium gana peso, el envio activo respira.
+        // `relative` siempre — los chips esquineros viven en absolute.
         const containerClass = isClosed
-          ? "bg-white/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60 opacity-75 dark:opacity-60 shadow-none rounded-2xl p-4 transition-all duration-200"
+          ? "relative bg-white/60 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/60 opacity-75 dark:opacity-60 shadow-none rounded-2xl p-3.5 transition-all duration-200"
           : isPremium
-            ? "relative bg-gradient-to-br from-primary/[0.06] via-white to-white dark:from-primary/[0.10] dark:via-slate-800/60 dark:to-slate-800/60 border-2 border-primary/20 dark:border-primary/30 shadow-sm rounded-2xl p-4 transition-all duration-200"
+            ? "relative bg-gradient-to-br from-primary/[0.06] via-white to-white dark:from-primary/[0.10] dark:via-slate-800/60 dark:to-slate-800/60 border-2 border-primary/20 dark:border-primary/30 shadow-sm rounded-2xl p-3.5 transition-all duration-200"
             : isInRoute
-              ? "relative bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 ring-2 ring-emerald-400/60 dark:ring-emerald-500/50 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 rounded-2xl p-4 transition-all duration-200"
+              ? "relative bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 ring-2 ring-emerald-400/60 dark:ring-emerald-500/50 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 rounded-2xl p-3.5 transition-all duration-200"
               : isPending
-                ? "bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 border-l-4 border-l-amber-400 rounded-2xl p-4 transition-all duration-200"
-                : "bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 transition-all duration-200"
+                ? "relative bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 border-l-4 border-l-amber-400 rounded-2xl p-3.5 transition-all duration-200"
+                : "relative bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl p-3.5 transition-all duration-200"
+
+        const isCancelled = o.status === "cancelled"
+        const payPct = Math.min(
+          100,
+          Math.round((safePaid / Math.max(1, safeTotal)) * 100),
+        )
+        const itemThumbs = itemsBySale[o.id] ?? []
+        const totalItemsQty = itemThumbs.reduce(
+          (acc, t) => acc + (t.qty || 0),
+          0,
+        )
+        const isJustPaid = justPaidIds.has(o.id)
 
         return (
           <motion.div
             key={o.id}
             initial={false}
-            animate={{ opacity: 1, y: 0 }}
+            animate={
+              isJustPaid
+                ? {
+                    opacity: 1,
+                    y: 0,
+                    boxShadow: [
+                      "0 0 0 0 rgba(16,185,129,0)",
+                      "0 0 0 8px rgba(16,185,129,0.35)",
+                      "0 0 0 0 rgba(16,185,129,0)",
+                    ],
+                  }
+                : { opacity: 1, y: 0 }
+            }
+            transition={isJustPaid ? { duration: 1.6, ease: "easeOut" } : undefined}
             className={containerClass}
-            style={{ contain: "layout style paint" }}
             onClick={isCompact ? () => toggleExpanded(o.id) : undefined}
             role={isCompact ? "button" : undefined}
             tabIndex={isCompact ? 0 : undefined}
@@ -603,37 +789,42 @@ export default function ClientOrdersPage() {
                 : undefined
             }
           >
-            {/* Chip esquinero PREMIUM — visible cuando el pedido es de
-                alto valor para que destaque entre los demás sin
-                ocupar espacio en el flujo principal. */}
+            {/* Chips esquineros — flotan SIN clip (sin contain:paint).
+                Premium gana prioridad sobre "En camino". */}
             {isPremium && !isClosed && (
-              <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 text-white text-[8px] font-black uppercase tracking-widest shadow-md">
+              <span className="absolute -top-2 right-3 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 text-white text-[8px] font-black uppercase tracking-widest shadow-md z-10">
                 ✨ Premium
               </span>
             )}
-            {/* Chip esquinero "En camino" cuando el repartidor salió. */}
             {isInRoute && !isPremium && (
-              <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[8px] font-black uppercase tracking-widest shadow-md flex items-center gap-1">
+              <span className="absolute -top-2 right-3 px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[8px] font-black uppercase tracking-widest shadow-md flex items-center gap-1 z-10">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                 En camino
               </span>
             )}
-            {/* HERO del estatus + meta del pedido en 2 lineas claras:
-                1. Banner del status (contextual completo).
-                2. Linea minima: TOTAL prominente a la izquierda + folio
-                   sutil a la derecha. Fecha sale como caption en su
-                   propia linea para no truncarse en mobile. */}
-            <OrderStatusBanner
-              paid={paid}
-              balance={balance}
-              delivery={delivery}
-              cancelled={o.status === "cancelled"}
-              createdAt={o.created_at}
-            />
 
-            <div className="flex items-baseline justify-between gap-3 mt-3">
+            {/* HEADER: status pill (izq) + folio/fecha (der). */}
+            <div className="flex items-start justify-between gap-2 mb-2.5">
+              <OrderStatusPill
+                paid={paid}
+                balance={balance}
+                delivery={delivery}
+                cancelled={isCancelled}
+              />
+              <div className="text-right shrink-0 leading-tight">
+                <p className="text-[10px] font-black tabular-nums text-slate-500 dark:text-slate-400">
+                  #{shortId(o.id)}
+                </p>
+                <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 tabular-nums uppercase tracking-wider mt-0.5">
+                  {formatDate(o.created_at)}
+                </p>
+              </div>
+            </div>
+
+            {/* HERO — total + saldo inline (sin línea aparte). */}
+            <div className="flex items-baseline gap-2 flex-wrap mb-2">
               <span
-                className={`text-[20px] font-black tabular-nums leading-none ${
+                className={`text-[22px] font-black tabular-nums leading-none ${
                   paid
                     ? "text-emerald-600 dark:text-emerald-400"
                     : "text-slate-900 dark:text-slate-100"
@@ -641,26 +832,91 @@ export default function ClientOrdersPage() {
               >
                 {formatMoney(o.total)}
               </span>
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 tabular-nums shrink-0">
-                #{shortId(o.id)}
-              </span>
+              {!paid && !isCancelled && (
+                <span className="text-[11px] font-black tabular-nums text-amber-600 dark:text-amber-400 leading-none">
+                  · faltan {formatMoney(balance)}
+                </span>
+              )}
+              {paid && !isCancelled && (
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 leading-none">
+                  · liquidado
+                </span>
+              )}
             </div>
-            <p className="text-[9px] uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500 font-black mt-1 mb-3">
-              {formatDate(o.created_at)}
-            </p>
 
-            {/* TRACKER dinámico: barra pago / stepper delivery / mini-mapa */}
-            <OrderProgressTracker
-              total={safeTotal}
-              paid={safePaid}
-              balance={balance}
-              delivery={delivery}
-            />
+            {/* Progreso slim de pago: solo cuando hay saldo. */}
+            {!paid && !isCancelled && (
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      background:
+                        "linear-gradient(90deg, var(--brand-from), var(--brand-to))",
+                      width: `${payPct}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-[9px] font-black tabular-nums text-slate-500 dark:text-slate-400 shrink-0 w-9 text-right">
+                  {payPct}%
+                </span>
+              </div>
+            )}
 
-            {/* Indicador "Repartidor en camino" REMOVIDO: el OrderStatusBanner
-                superior ya lo comunica con dot pulsante + texto. No duplicar. */}
+            {/* Tracker delivery — solo si hay comanda; aporta el stepper visual. */}
+            {delivery && (
+              <div className="mb-3">
+                <OrderProgressTracker
+                  total={safeTotal}
+                  paid={safePaid}
+                  balance={balance}
+                  delivery={delivery}
+                />
+              </div>
+            )}
 
-            {/* Badge inline si hay incidencias abiertas para este pedido. */}
+            {/* Mini strip de productos: hasta 4 thumbs solapados +
+                contador "+N" si hay más. Da identidad visual a la card. */}
+            {itemThumbs.length > 0 && (
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex -space-x-2">
+                  {itemThumbs.slice(0, 4).map((t, i) => (
+                    <div
+                      key={`${o.id}-thumb-${i}`}
+                      className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 ring-2 ring-white dark:ring-slate-800 overflow-hidden flex items-center justify-center text-slate-300"
+                      title={`${t.qty}× ${t.product_name ?? ""}${t.variant_name ? " · " + t.variant_name : ""}`}
+                    >
+                      {t.image_url ? (
+                        <img
+                          src={t.image_url}
+                          alt={t.product_name ?? ""}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <ShoppingBag size={14} />
+                      )}
+                    </div>
+                  ))}
+                  {itemThumbs.length > 4 && (
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 ring-2 ring-white dark:ring-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500 dark:text-slate-300">
+                      +{itemThumbs.length - 4}
+                    </div>
+                  )}
+                </div>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 leading-tight">
+                  {totalItemsQty} {totalItemsQty === 1 ? "pieza" : "piezas"}
+                  <span className="text-slate-400">
+                    {" · "}
+                    {itemThumbs.length}{" "}
+                    {itemThumbs.length === 1 ? "producto" : "productos"}
+                  </span>
+                </span>
+              </div>
+            )}
+
+            {/* Badge inline si hay incidencias abiertas. */}
             {(openTicketsBySale[o.id] ?? 0) > 0 && (
               <button
                 type="button"
@@ -669,7 +925,7 @@ export default function ClientOrdersPage() {
                   setSupportSaleId(o.id)
                   setOpenSupport(true)
                 }}
-                className="mt-2 w-full flex items-center justify-between gap-2 px-3 h-9 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 text-[10px] font-black uppercase tracking-widest press"
+                className="mb-2 w-full flex items-center justify-between gap-2 px-3 h-9 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 text-[10px] font-black uppercase tracking-widest press"
               >
                 <span className="flex items-center gap-1.5">
                   <LifeBuoy size={11} />
@@ -681,40 +937,131 @@ export default function ClientOrdersPage() {
               </button>
             )}
 
-            {/* Hint para tarjetas compactas colapsadas. */}
-            {isCompact && !isExpanded && (
-              <p className="mt-2 text-[9px] text-slate-400 italic text-center">
-                Toca para pagar o ver opciones
-              </p>
+            {/* PRIMARY CTA — usa SmartOrderActions con hideSecondary
+                porque las acciones secundarias ahora viven en la
+                toolbar de iconos compacta abajo. */}
+            {showInteractive && (
+              <SmartOrderActions
+                order={{
+                  id: o.id,
+                  balance,
+                  paid: safePaid,
+                  total: safeTotal,
+                  status: o.status,
+                  public_token: o.public_token,
+                }}
+                delivery={delivery}
+                canSupport={claim.allowed}
+                hideSecondary
+                onPay={() => setPaymentOrder(o)}
+                onViewTicket={() => setTicketToken(o.public_token ?? o.id)}
+                onSupport={() => {
+                  setSupportSaleId(o.id)
+                  setOpenSupport(true)
+                }}
+              />
             )}
 
-            {/* SMART ACTIONS — boton principal mutante segun estado.
-                El cliente YA NO modifica la entrega (es tarea del admin).
-                Por eso onEditDelivery queda undefined. */}
+            {/* TOOLBAR SECUNDARIA — todas las acciones secundarias en una
+                fila de chips compactos. Antes vivían en 3 bloques separados:
+                SmartOrderActions(secondary) + Reordenar/Calificar + Cancelar.
+                Ahora una sola toolbar coherente. */}
             {showInteractive && (
-              <div className="mt-3">
-                <SmartOrderActions
-                  order={{
-                    id: o.id,
-                    balance,
-                    paid: safePaid,
-                    total: safeTotal,
-                    status: o.status,
-                    public_token: o.public_token,
+              <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setTicketToken(o.public_token ?? o.id)
                   }}
-                  delivery={delivery}
-                  canSupport={claim.allowed}
-                  onPay={() => setPaymentOrder(o)}
-                  onViewTicket={() => setTicketToken(o.public_token ?? o.id)}
-                  onSupport={() => {
-                    setSupportSaleId(o.id)
-                    setOpenSupport(true)
-                  }}
-                />
+                  className="h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-700/70 hover:bg-slate-100 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                  title="Ver ticket detallado"
+                >
+                  <ShoppingBag size={11} />
+                  Ticket
+                </button>
+                {claim.allowed && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSupportSaleId(o.id)
+                      setOpenSupport(true)
+                    }}
+                    className="h-8 px-2.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/15 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                    title="Reportar un problema"
+                  >
+                    <LifeBuoy size={11} />
+                    Ayuda
+                  </button>
+                )}
+                {canReview && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      openRateOrder(o.id)
+                    }}
+                    className="h-8 px-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                    title="Calificar productos"
+                  >
+                    <Star size={11} />
+                    Calificar
+                  </button>
+                )}
+                {isCompleted && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleReorder(o.id)
+                    }}
+                    className="h-8 px-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                    title="Repetir esta compra"
+                  >
+                    <RotateCcw size={11} />
+                    Reordenar
+                  </button>
+                )}
+                {rules.client_can_self_cancel && cancel.allowed && (
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      const reason = await promptDialog({
+                        title: "Cancelar este pedido",
+                        description:
+                          "Cuéntanos por qué cancelas. Si abonaste algo, te contactaremos para devolverlo.",
+                        placeholder:
+                          "Ej. Me equivoqué de tono, ya no lo necesito…",
+                        confirmLabel: "Sí, cancelar pedido",
+                        multiline: true,
+                      })
+                      if (reason === null) return
+                      const snapshot = orders
+                      runWithUndo({
+                        message: "Pedido cancelado",
+                        optimisticUI: () =>
+                          setOrders((prev) =>
+                            prev.filter((x) => x.id !== o.id),
+                          ),
+                        revertUI: () => setOrders(snapshot),
+                        commit: async () => {
+                          await cancelSale(o.id, reason || null)
+                        },
+                      })
+                    }}
+                    className="h-8 px-2.5 rounded-lg bg-transparent text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 ml-auto press"
+                    title="Cancelar pedido"
+                  >
+                    <XCircle size={11} />
+                    Cancelar
+                  </button>
+                )}
               </div>
             )}
 
-            {/* Hint de ventana para soporte */}
+            {/* Micro-info al pie — solo si aplica. */}
             {!claim.allowed && (
               <p className="mt-2 text-[10px] text-slate-400 italic flex items-center gap-1">
                 <Lock size={10} /> {claim.reason}
@@ -722,74 +1069,15 @@ export default function ClientOrdersPage() {
             )}
             {claim.allowed && Number.isFinite(claim.remainingMs) && (
               <p className="mt-2 text-[10px] text-slate-400 italic">
-                Te quedan {formatRemaining(claim.remainingMs)} para reportar
+                ⏳ {formatRemaining(claim.remainingMs)} para reportar
               </p>
             )}
 
-            {/* Acciones post-pago: reseñar (si aplica regla) o reordenar.
-                "Reordenar" requiere pedido completado; "Calificar" puede
-                aparecer antes si la regla `reviews_on_paid_enabled` está
-                activa. */}
-            {(isCompleted || canReview) && (
-              <div className="mt-2 flex justify-end gap-2 flex-wrap">
-                {canReview && (
-                  <button
-                    type="button"
-                    onClick={() => openRateOrder(o.id)}
-                    className="h-10 px-3.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
-                    title="Calificar los productos de este pedido"
-                  >
-                    <Star size={12} />
-                    Calificar productos
-                  </button>
-                )}
-                {isCompleted && (
-                  <button
-                    type="button"
-                    onClick={() => handleReorder(o.id)}
-                    className="h-10 px-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
-                    title="Repetir esta compra"
-                  >
-                    <RotateCcw size={12} />
-                    Reordenar
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Botón cancelar — solo si la regla `client_can_self_cancel` está
-                activa Y la venta sigue dentro de la ventana de gracia. */}
-            {rules.client_can_self_cancel && cancel.allowed && (
-              <div className="mt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const reason = await promptDialog({
-                      title: "Cancelar este pedido",
-                      description:
-                        "Cuéntanos por qué cancelas. Si abonaste algo, te contactaremos para devolverlo.",
-                      placeholder: "Ej. Me equivoqué de tono, ya no lo necesito…",
-                      confirmLabel: "Sí, cancelar pedido",
-                      multiline: true,
-                    })
-                    if (reason === null) return
-                    const snapshot = orders
-                    runWithUndo({
-                      message: "Pedido cancelado",
-                      optimisticUI: () =>
-                        setOrders((prev) => prev.filter((x) => x.id !== o.id)),
-                      revertUI: () => setOrders(snapshot),
-                      commit: async () => {
-                        await cancelSale(o.id, reason || null)
-                      },
-                    })
-                  }}
-                  className="h-8 px-3 rounded-xl bg-transparent text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
-                >
-                  <XCircle size={11} />
-                  Cancelar pedido
-                </button>
-              </div>
+            {/* Hint compact colapsado. */}
+            {isCompact && !isExpanded && (
+              <p className="mt-2 text-[9px] text-slate-400 italic text-center">
+                Toca para pagar o ver opciones
+              </p>
             )}
           </motion.div>
         )
@@ -848,6 +1136,15 @@ export default function ClientOrdersPage() {
         onClose={() => setRateOrderId(null)}
         saleId={rateOrderId}
       />
+
+      {/* Sheet de preview para reordenar: muestra los items del pedido
+          original antes de mandar al cliente al catálogo. */}
+      <ReorderPreviewSheet
+        open={!!reorderPreviewId}
+        items={reorderPreviewId ? itemsBySale[reorderPreviewId] ?? [] : []}
+        onCancel={() => setReorderPreviewId(null)}
+        onConfirm={() => reorderPreviewId && confirmReorder(reorderPreviewId)}
+      />
     </div>
   )
 }
@@ -869,100 +1166,197 @@ export default function ClientOrdersPage() {
  * NO redunda con el tracker de abajo: el tracker muestra PROGRESO,
  * el banner muestra CONTEXTO (qué pasó / qué falta).
  */
-function OrderStatusBanner({
+
+/**
+ * Variante compacta tipo "pill" del status para la card pro.
+ * Solo dot + título — el contexto extendido (subtitle) se eliminó porque
+ * la nueva card ya muestra el saldo inline junto al total.
+ */
+function OrderStatusPill({
   paid,
   balance,
   delivery,
   cancelled,
-  createdAt: _createdAt,
 }: {
   paid: boolean
   balance: number
   delivery: MyDelivery | null
   cancelled: boolean
-  createdAt: string
 }) {
-  // Decide qué mensaje + colores aplicar.
-  let title = ""
-  let subtitle = ""
-  let toneCls = ""
-  let dotCls = ""
+  let title = "Pedido recibido"
+  let toneCls =
+    "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+  let dotCls = "bg-slate-400"
 
   if (cancelled) {
-    title = "Pedido cancelado"
-    subtitle = "Esta orden ya no está activa"
-    toneCls =
-      "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400"
+    title = "Cancelado"
+    toneCls = "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
     dotCls = "bg-slate-400"
   } else if (delivery?.status === "delivered") {
-    const when = delivery.delivered_at
-      ? new Date(delivery.delivered_at).toLocaleDateString("es-MX", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-        })
-      : null
     title = "Entregado"
-    subtitle = when ? `Llegó el ${when}` : "Tu pedido fue entregado"
-    toneCls =
-      "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+    toneCls = "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
     dotCls = "bg-emerald-500"
   } else if (delivery?.status === "picked_up") {
     title = "En camino"
-    subtitle = delivery.driver_name
-      ? `Va contigo · con ${delivery.driver_name}`
-      : "Tu pedido salió a entrega"
-    toneCls =
-      "bg-sky-50 dark:bg-sky-500/10 border-sky-200 dark:border-sky-500/30 text-sky-700 dark:text-sky-300"
+    toneCls = "bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300"
     dotCls = "bg-sky-500 animate-pulse"
-  } else if (
-    delivery?.status === "sent" ||
-    delivery?.status === "draft"
-  ) {
-    title = "Listo para enviar"
-    subtitle = "Beauty's Me está preparando tu pedido"
-    toneCls =
-      "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300"
+  } else if (delivery?.status === "sent" || delivery?.status === "draft") {
+    title = "Preparando"
+    toneCls = "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300"
     dotCls = "bg-amber-500"
   } else if (paid && !delivery) {
-    title = "Pagado"
-    subtitle = "Recoge en tienda cuando gustes"
-    toneCls =
-      "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+    title = "Pagado · recoger"
+    toneCls = "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
     dotCls = "bg-emerald-500"
   } else if (balance > 0) {
     title = "Saldo pendiente"
-    subtitle = `Te falta abonar ${new Intl.NumberFormat("es-MX", {
-      style: "currency",
-      currency: "MXN",
-    }).format(balance)}`
-    toneCls =
-      "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300"
+    toneCls = "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300"
     dotCls = "bg-amber-500"
-  } else {
-    title = "Pedido recibido"
-    subtitle = "Procesando…"
-    toneCls =
-      "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-    dotCls = "bg-slate-400"
   }
 
   return (
-    <div
-      className={`rounded-2xl border px-4 py-3 flex items-center gap-3 ${toneCls}`}
+    <span
+      className={`inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[10px] font-black uppercase tracking-widest leading-none ${toneCls}`}
     >
       <span
-        className={`w-2 h-2 rounded-full shrink-0 ${dotCls}`}
+        className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotCls}`}
         aria-hidden
       />
-      <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-black leading-tight tracking-tight">
-          {title}
-        </p>
-        <p className="text-[11px] font-bold opacity-80 leading-snug line-clamp-2 mt-0.5">
-          {subtitle}
-        </p>
-      </div>
-    </div>
+      {title}
+    </span>
+  )
+}
+
+/**
+ * Bottom sheet de preview para reordenar. Muestra los items del pedido
+ * original con thumbnails + cantidades, permite confirmar (navega al
+ * catálogo con ?reorder=...) o cancelar.
+ *
+ * Render via portal a document.body para escapar de cualquier
+ * stacking context del layout cliente.
+ */
+function ReorderPreviewSheet({
+  open,
+  items,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean
+  items: OrderItemThumb[]
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  if (typeof document === "undefined") return null
+  if (!open) return null
+  const totalQty = items.reduce((a, t) => a + (t.qty || 0), 0)
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-end justify-center">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+        onClick={onCancel}
+        aria-hidden
+      />
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 28 }}
+        className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] pb-safe max-h-[85vh] flex flex-col shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.45)]"
+      >
+        <div className="flex justify-center pt-2 pb-1 shrink-0">
+          <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
+        </div>
+        <div className="px-5 pb-3 shrink-0">
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black leading-none">
+            Reordenar
+          </p>
+          <h3 className="text-lg font-black tracking-tight mt-1">
+            ¿Repetir este pedido?
+          </h3>
+          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+            Te llevamos al catálogo con estos productos pre-cargados en el
+            carrito.
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-3 scroll-container-ios">
+          {items.length === 0 ? (
+            <div className="py-10 text-center text-slate-400">
+              <ShoppingBag size={28} className="mx-auto mb-2" />
+              <p className="text-xs font-bold">
+                Cargando productos del pedido…
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {items.map((t, i) => (
+                <div
+                  key={`reorder-${i}`}
+                  className="flex items-center gap-3 p-2 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700"
+                >
+                  <div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0">
+                    {t.image_url ? (
+                      <img
+                        src={t.image_url}
+                        alt={t.product_name ?? ""}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <ShoppingBag size={16} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-black truncate">
+                      {t.product_name ?? "Producto"}
+                    </p>
+                    {t.variant_name && (
+                      <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 truncate">
+                        {t.variant_name}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-xs font-black tabular-nums text-primary shrink-0">
+                    ×{t.qty}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 shrink-0 bg-white dark:bg-slate-900">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              {items.length} {items.length === 1 ? "producto" : "productos"} ·{" "}
+              {totalQty} {totalQty === 1 ? "pieza" : "piezas"}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex-1 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-black uppercase tracking-widest press"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={items.length === 0}
+              className="flex-[1.4] h-11 rounded-2xl bg-brand text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-bloom disabled:opacity-50 press-hard"
+            >
+              <RotateCcw size={13} />
+              Sí, al carrito
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>,
+    document.body,
   )
 }

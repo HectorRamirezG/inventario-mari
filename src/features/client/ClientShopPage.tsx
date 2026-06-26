@@ -33,6 +33,7 @@ import { imageThumbnail } from "../../lib/imageTransform"
 import { useAuth } from "../../lib/useAuth"
 import { fetchMyProfile } from "../profile/profileService"
 import { sound } from "../../lib/sound"
+import { haptic } from "../../lib/sound"
 import { useWishlist } from "../../lib/useWishlist"
 import { useLongPress } from "../../lib/useLongPress"
 import SmartLocationInput from "../../components/ui/SmartLocationInput"
@@ -884,6 +885,9 @@ export default function ClientShopPage() {
   }
 
   function changeQty(variantId: string, delta: number) {
+    // Haptic light antes del setState para feedback inmediato (incluso
+    // si el state no cambia por tope de stock, el tap se siente).
+    haptic.light()
     setCart((prev) =>
       prev
         .map((c) => {
@@ -1636,7 +1640,10 @@ export default function ClientShopPage() {
                 isFavorite={wishlist.has(p.id)}
                 priority={idx === 0}
                 hidePrice={bRules.hide_prices_until_login && !isLogged}
-                onToggleFavorite={() => wishlist.toggle(p.id)}
+                onToggleFavorite={() => {
+                  haptic.light()
+                  wishlist.toggle(p.id)
+                }}
                 onOpenLightbox={(variantId) => {
                   setLightboxStartVariant(variantId)
                   setLightboxProduct(p)
@@ -1852,13 +1859,31 @@ export default function ClientShopPage() {
                     <p className="text-[11px] text-slate-400 font-medium mt-0.5 mb-4">
                       Agrega productos del catálogo para apartar
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setOpenCart(false)}
-                      className="bg-brand h-10 px-5 rounded-2xl text-white text-[11px] font-black uppercase tracking-widest shadow-bloom press-hard"
-                    >
-                      Explorar catálogo
-                    </button>
+                    <div className="flex flex-col items-center gap-2 w-full px-4">
+                      <button
+                        type="button"
+                        onClick={() => setOpenCart(false)}
+                        className="bg-brand h-10 px-5 rounded-2xl text-white text-[11px] font-black uppercase tracking-widest shadow-bloom press-hard"
+                      >
+                        Explorar catálogo
+                      </button>
+                      {/* Atajo a wishlist si tiene productos guardados —
+                          mata el "empty state muerto" cuando el cliente
+                          tiene favoritos pero no los recordaba. */}
+                      {wishlist.count > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenCart(false)
+                            navigate("/wishes")
+                          }}
+                          className="h-9 px-4 rounded-2xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 press"
+                        >
+                          <Heart size={11} />
+                          Ver mis favoritos ({wishlist.count})
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 

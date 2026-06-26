@@ -245,7 +245,7 @@ async function checkLayawayDueSoon(email: string): Promise<void> {
       type: "layaway_due_soon",
       title: "Tu apartado está por vencer",
       body: `Saldo: ${formatMoney(Number(sale.balance) || 0)}. Te quedan pocos días para liquidarlo.`,
-      link: sale.public_token ? `/ticket/${sale.public_token}` : "/mis-pedidos",
+      link: "/mis-pedidos",
       metadata: { sale_id: sale.id },
     })
   }
@@ -277,21 +277,34 @@ async function checkBirthday(email: string): Promise<void> {
   const [, m, d] = profile.birthday.split("-").map(Number)
   if (m !== today.getMonth() + 1 || d !== today.getDate()) return
 
+  // Código de cupón determinístico por email + año. Mari lo puede
+  // verificar regenerándolo en su admin. Garantiza unicidad por persona
+  // por año sin necesidad de tabla nueva.
+  const year = today.getFullYear()
+  const seed = `${clean}-${year}-birthday`
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) | 0
+  }
+  const coupon = `CUMPLE${Math.abs(hash).toString(36).slice(0, 5).toUpperCase()}`
+  const discountPct = 15
+
   await notifyClient(clean, {
     type: "birthday",
-    title: `¡Feliz cumpleaños${profile.name ? ", " + profile.name : ""}! 🎂`,
-    body: "te manda un saludo enorme y muchísimo éxito hoy. Pasa al chat para tu sorpresa.",
-    link: "/tienda",
-    metadata: { date: todayKey() },
+    title: `¡Feliz cumpleaños${profile.name ? ", " + profile.name.split(" ")[0] : ""}! 🎂`,
+    body: `Tu regalo: ${discountPct}% OFF en tu próxima compra con el código ${coupon}. Solo muéstraselo a Mari al apartar 💖`,
+    link: "/",
+    metadata: { date: todayKey(), coupon, discount_pct: discountPct },
   })
 
-  // Y a le avisamos para que arme algo bonito si quiere
+  // Y a Mari le avisamos con el mismo código para que pueda verificar
+  // que el cliente no se lo invente.
   await notifyAdmins({
     type: "birthday",
     title: `🎂 Cumpleaños hoy: ${profile.name ?? clean}`,
-    body: "Considera mandarle un detalle o cupón.",
+    body: `Su cupón automático: ${coupon} (${discountPct}% OFF). Aplícaselo si lo muestra al apartar.`,
     link: "/apartados",
-    metadata: { email: clean },
+    metadata: { email: clean, coupon, discount_pct: discountPct },
   })
 }
 

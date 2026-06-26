@@ -53,6 +53,10 @@ interface Props {
   onSupport: () => void
   /** Abre el bloque de QuickDeliveryActions (modificar entrega). */
   onEditDelivery?: () => void
+  /** Cuando true, solo renderiza el CTA primario (las secundarias
+   *  se manejan en una toolbar externa, p.ej. la card de pedidos
+   *  cliente). Default: false (mantiene comportamiento legacy). */
+  hideSecondary?: boolean
 }
 
 export default function SmartOrderActions({
@@ -63,6 +67,7 @@ export default function SmartOrderActions({
   onViewTicket,
   onSupport,
   onEditDelivery,
+  hideSecondary = false,
 }: Props) {
   const hasBalance = Number(order.balance) > 0
   const isFullyPaid = !hasBalance
@@ -167,7 +172,8 @@ export default function SmartOrderActions({
     <div className="flex flex-col gap-2">
       {primaryNode}
 
-      {/* Secundarias siempre visibles */}
+      {/* Secundarias siempre visibles — a menos que el padre las maneje aparte. */}
+      {!hideSecondary && (
       <div className="flex gap-2">
         {/* Ver ticket — siempre disponible */}
         <button
@@ -188,17 +194,20 @@ export default function SmartOrderActions({
             <MessageCircle size={12} /> Ayuda
           </button>
         )}
-        {/* QR de entrega cuando está in_route — atajo secundario */}
+        {/* QR de entrega cuando está in_route — atajo abre el drawer
+            in-app del ticket (que contiene el QR), no la página /ticket/. */}
         {isInRoute && order.public_token && (
-          <a
-            href={`/ticket/${order.public_token}#qr`}
+          <button
+            type="button"
+            onClick={onViewTicket}
             className="h-9 px-3 rounded-xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white text-xs font-black flex items-center gap-1 press"
             title="Código de entrega para mostrar al repartidor"
           >
             <QrCode size={12} />
-          </a>
+          </button>
         )}
       </div>
+      )}
     </div>
   )
 }

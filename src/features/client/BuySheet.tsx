@@ -22,6 +22,7 @@ import {
 import toast from "react-hot-toast"
 
 import { useAuth } from "../../lib/useAuth"
+import { haptic } from "../../lib/sound"
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"
 import ProductConversation from "../../components/ui/ProductConversation"
@@ -120,8 +121,6 @@ export default function BuySheet({
   const [qty, setQty] = useState<Record<string, number>>({})
   // Refs por variante para hacer scrollIntoView a la preseleccionada.
   const variantRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  // Flag visual: la variante preseleccionada late suave por ~1.5s al abrir.
-  const [pulseVariantId, setPulseVariantId] = useState<string | null>(null)
 
   // Reinicia cantidades cuando se abre con otro producto
   useEffect(() => {
@@ -134,26 +133,19 @@ export default function BuySheet({
     }
   }, [open, product?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll a la variante preseleccionada + pulso visual.
-  // Se hace tras el frame de apertura para que el panel ya esté montado.
+  // Scroll suave a la variante preseleccionada al abrir el sheet.
+  // (Sin ring/pulse — generaba un parpadeo molesto. El scroll basta
+  // para dirigir la atención.)
   useEffect(() => {
-    if (!open || !preselectedVariantId) {
-      setPulseVariantId(null)
-      return
-    }
+    if (!open || !preselectedVariantId) return
     const id = preselectedVariantId
     const t = window.setTimeout(() => {
       const el = variantRefs.current[id]
       if (el) {
         el.scrollIntoView({ behavior: "smooth", block: "center" })
       }
-      setPulseVariantId(id)
     }, 220)
-    const off = window.setTimeout(() => setPulseVariantId(null), 1800)
-    return () => {
-      window.clearTimeout(t)
-      window.clearTimeout(off)
-    }
+    return () => window.clearTimeout(t)
   }, [open, preselectedVariantId, product?.id])
 
   // Bloquear scroll del body (centralizado para evitar leaks).
@@ -171,7 +163,10 @@ export default function BuySheet({
 
   function change(variantId: string, delta: number, max: number) {
     setQty((q) => {
-      const next = Math.max(0, Math.min(max, (q[variantId] ?? 0) + delta))
+      const current = q[variantId] ?? 0
+      const next = Math.max(0, Math.min(max, current + delta))
+      // Haptic suave solo si efectivamente cambió (no en topes).
+      if (next !== current) haptic.light()
       return { ...q, [variantId]: next }
     })
   }
@@ -179,6 +174,7 @@ export default function BuySheet({
   /** Limpia esta variante del selector (Quitar todo). Útil cuando el
    *  cliente está atMax y quiere descartar todo de un tap. */
   function clearVariant(variantId: string) {
+    haptic.medium()
     setQty((q) => ({ ...q, [variantId]: 0 }))
   }
 
@@ -473,10 +469,6 @@ export default function BuySheet({
                         q > 0
                           ? "bg-primary/5 border-primary/30"
                           : "bg-slate-50 dark:bg-slate-800/60 border-transparent"
-                      } ${
-                        pulseVariantId === v.id
-                          ? "ring-2 ring-primary/60 animate-pulse"
-                          : ""
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -946,10 +938,10 @@ function NotifyOnStockButton({
         }
       }}
       disabled={busy}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-violet-50 dark:bg-violet-500/15 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 text-[10px] font-black hover:bg-violet-100 dark:hover:bg-violet-500/25 transition-colors disabled:opacity-50"
+      className="w-full h-11 px-3 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-bloom hover:opacity-95 active:scale-[0.98] transition-all disabled:opacity-50"
     >
-      <Bell size={11} className="shrink-0" />
-      Avísame cuando llegue
+      <Bell size={13} className="shrink-0" />
+      Avísame cuando vuelva 💛
     </button>
   )
 }

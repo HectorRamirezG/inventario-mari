@@ -202,11 +202,7 @@ export default function MyWalletPage() {
               key={o.sale_id}
               order={o}
               index={i}
-              onClick={() =>
-                navigate(
-                  o.public_token ? `/ticket/${o.public_token}` : "/mis-pedidos",
-                )
-              }
+              onClick={() => navigate("/mis-pedidos")}
             />
           ))
         )}

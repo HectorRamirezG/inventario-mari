@@ -11,6 +11,8 @@ import {
   Sparkles,
   AlertCircle,
   Gift,
+  Image as ImageIcon,
+  FileText,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -86,8 +88,12 @@ export default function ClientTicketDrawer({ open, token, onClose }: Props) {
   const [delivery, setDelivery] = useState<OrderProgressDelivery | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const aliveRef = useRef(true)
-  const store = getStoreInfo()
+  const aliveRef = useRef(true)  const store = getStoreInfo()
+
+  // Ref del cuerpo del ticket — apunta al div scrolleable que tiene
+  // los items + totales. Lo usan shareTicketImage / shareTicketPdf
+  // para capturarlo a PNG / PDF.
+  const ticketBodyRef = useRef<HTMLDivElement | null>(null)
 
   useBodyScrollLock(open)
 
@@ -405,7 +411,10 @@ export default function ClientTicketDrawer({ open, token, onClose }: Props) {
                 </div>
 
                 {/* Cuerpo scrolleable: items + totales */}
-                <div className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios space-y-4">
+                <div
+                  ref={ticketBodyRef}
+                  className="flex-1 overflow-y-auto px-5 pb-6 scroll-container-ios space-y-4"
+                >
                   {/* Banner de regalo (si aplica) — parseado desde notes
                       con prefijo [REGALO] que viene del checkout cliente. */}
                   {(() => {
@@ -562,6 +571,42 @@ export default function ClientTicketDrawer({ open, token, onClose }: Props) {
                       className="flex-1 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press"
                     >
                       <Copy size={11} /> Copiar link
+                    </button>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!ticket) return
+                        const { shareTicketImage } = await import(
+                          "../../lib/shareImage"
+                        )
+                        await shareTicketImage({
+                          node: ticketBodyRef.current,
+                          filename: `ticket-${shortId(ticket.id)}.png`,
+                          text: `Mi ticket en ${store.name} · Total ${formatMoney(ticket.total)}`,
+                          fallbackUrl: `${window.location.origin}/ticket/${ticket.public_token}`,
+                        })
+                      }}
+                      className="flex-1 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press"
+                    >
+                      <ImageIcon size={11} /> Imagen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!ticket) return
+                        const { shareTicketPdf } = await import(
+                          "../../lib/shareImage"
+                        )
+                        await shareTicketPdf({
+                          node: ticketBodyRef.current,
+                          filename: `ticket-${shortId(ticket.id)}.pdf`,
+                        })
+                      }}
+                      className="flex-1 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press"
+                    >
+                      <FileText size={11} /> PDF
                     </button>
                   </div>
                 </div>
