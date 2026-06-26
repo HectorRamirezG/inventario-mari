@@ -6,7 +6,7 @@
  *
  * Contenido:
  *   - app_settings (business_rules, ui_settings, etc.)
- *   - products + product_variants (catálogo completo)
+ *   - products + variants (catálogo completo)
  *   - sales recientes (90 días) + sale_items + payments
  *   - delivery_notes recientes (90 días)
  *   - user_profiles (sin datos sensibles)
@@ -37,7 +37,7 @@ export interface AppBackup {
 const TABLES_FULL: Array<{ key: string; orderBy?: string }> = [
   { key: "app_settings" },
   { key: "products", orderBy: "name" },
-  { key: "product_variants", orderBy: "variant_name" },
+  { key: "variants", orderBy: "variant_name" },
   { key: "categories" },
   { key: "bundles" },
   { key: "loyalty_rules" },

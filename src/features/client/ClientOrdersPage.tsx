@@ -190,7 +190,7 @@ export default function ClientOrdersPage() {
           let imgByVariant = new Map<string, string | null>()
           if (variantIds.length > 0) {
             const { data: variants } = await supabase
-              .from("product_variants")
+              .from("variants")
               .select("id,image_url,image_urls")
               .in("id", variantIds)
             for (const v of (variants as any[]) ?? []) {

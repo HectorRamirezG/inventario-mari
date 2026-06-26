@@ -58,7 +58,7 @@ export interface BuySheetVariant {
   image_url: string | null
   /** Color hex del tono real (ej. "#B22222" para Cherry Bomb). Opcional
    *  — si no existe, no se renderiza el swatch. La columna en BD es
-   *  `swatch_hex` en `product_variants`; si no está, el dato llega
+   *  `swatch_hex` en `variants`; si no está, el dato llega
    *  undefined y el componente lo ignora silenciosamente. */
   swatch_hex?: string | null
 }
