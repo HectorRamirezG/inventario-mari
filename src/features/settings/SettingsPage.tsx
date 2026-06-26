@@ -227,6 +227,21 @@ export default function SettingsPage() {
             className="settings-input"
           />
         </Field>
+        <Field label="Tu bio personal (aparece en cada compra)">
+          <textarea
+            value={form.owner_bio}
+            onChange={(e) =>
+              setForm({ ...form, owner_bio: e.target.value.slice(0, 240) })
+            }
+            placeholder="Ej. Soy Mari, llevo 4 años seleccionando estos productos personalmente. Si no te gusta, lo cambiamos."
+            maxLength={240}
+            rows={3}
+            className="settings-input resize-none leading-relaxed"
+          />
+          <p className="text-[10px] text-slate-400 mt-1">
+            Humaniza la decisión de compra · aparece en el carrito (máx 240 chars · {form.owner_bio.length}/240)
+          </p>
+        </Field>
 
         <div className="flex gap-2 pt-3">
           <button

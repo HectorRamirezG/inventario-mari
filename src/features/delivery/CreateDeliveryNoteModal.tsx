@@ -19,6 +19,7 @@ import {
   Calendar,
   CheckCircle2,
   XCircle,
+  Sparkles,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -94,6 +95,13 @@ export default function CreateDeliveryNoteModal({
   /** Toggle para mostrar el bloque "modificar dirección" (oculto por
    *  default porque heredamos la del cliente). */
   const [editAddress, setEditAddress] = useState(false)
+  /** Sugerencia de historial del cliente para auto-llenar dirección /
+   *  ubicación cuando la venta no las trae. Banner aceptar/ignorar. */
+  const [suggestedHistory, setSuggestedHistory] = useState<{
+    address: string | null
+    locationUrl: string | null
+    ordersCount: number
+  } | null>(null)
 
   const [submitting, setSubmitting] = useState(false)
   const [createdNote, setCreatedNote] = useState<DeliveryNote | null>(null)
@@ -136,7 +144,35 @@ export default function CreateDeliveryNoteModal({
     setNotes("")
     setTracking("")
     setDeletingId(null)
+    setSuggestedHistory(null)
     loadExisting()
+
+    // Smart-fill: si la venta NO trae dirección/ubicación, buscamos en
+    // historial del cliente (pedidos anteriores + user_profiles). Si
+    // hay algo, lo sugerimos como banner para que Mari acepte o ignore.
+    const needsAddress = !sale.customer_address
+    const needsLocation = !sale.customer_location
+    if ((needsAddress || needsLocation) && sale.customer_email) {
+      ;(async () => {
+        try {
+          const { fetchCustomerHistory } = await import(
+            "../users/customerHistoryService"
+          )
+          const hist = await fetchCustomerHistory(sale.customer_email)
+          if (!hist) return
+          // Solo guardamos lo que falta en la venta actual.
+          const suggestion: { address: string | null; locationUrl: string | null } = {
+            address: needsAddress && hist.address ? hist.address : null,
+            locationUrl: needsLocation && hist.locationUrl ? hist.locationUrl : null,
+          }
+          if (suggestion.address || suggestion.locationUrl) {
+            setSuggestedHistory({ ...suggestion, ordersCount: hist.ordersCount })
+          }
+        } catch {
+          /* tolerante — si no hay historia, no sugerimos */
+        }
+      })()
+    }
   }, [open, sale, loadExisting])
 
   useBodyScrollLock(open)
@@ -528,6 +564,56 @@ export default function CreateDeliveryNoteModal({
                   </Field>
 
                   {/* === Sobreescribir dirección (sólo si difiere de la del cliente) === */}
+                  {/* Sugerencia inteligente: si la venta no trae dirección/pin
+                      pero el cliente ya tiene datos en pedidos anteriores,
+                      ofrecemos aceptarlos con 1 tap. Evita re-capturar. */}
+                  {suggestedHistory &&
+                    (suggestedHistory.address || suggestedHistory.locationUrl) && (
+                      <div className="rounded-2xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 p-3 space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles size={12} className="text-emerald-600" />
+                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+                            Encontramos datos previos
+                          </p>
+                          <span className="text-[9px] font-bold text-emerald-700/70 dark:text-emerald-300/70 ml-auto">
+                            {suggestedHistory.ordersCount} pedidos antes
+                          </span>
+                        </div>
+                        {suggestedHistory.address && (
+                          <p className="text-[11px] font-bold text-emerald-800/90 dark:text-emerald-200/90 leading-snug">
+                            📍 {suggestedHistory.address}
+                          </p>
+                        )}
+                        {suggestedHistory.locationUrl && (
+                          <p className="text-[10px] font-bold text-emerald-700/80 dark:text-emerald-300/80 truncate">
+                            🗺️ {suggestedHistory.locationUrl}
+                          </p>
+                        )}
+                        <div className="flex gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (suggestedHistory.address)
+                                setDeliveryAddress(suggestedHistory.address)
+                              if (suggestedHistory.locationUrl)
+                                setLocationUrl(suggestedHistory.locationUrl)
+                              setEditAddress(true)
+                              setSuggestedHistory(null)
+                            }}
+                            className="flex-1 h-8 rounded-lg bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest press"
+                          >
+                            Usar estos datos
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSuggestedHistory(null)}
+                            className="h-8 px-3 rounded-lg bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-300 text-[10px] font-black press"
+                          >
+                            Ignorar
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   {!editAddress ? (
                     <button
                       type="button"

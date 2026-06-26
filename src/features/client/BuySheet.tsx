@@ -23,6 +23,8 @@ import toast from "react-hot-toast"
 
 import { useAuth } from "../../lib/useAuth"
 import { haptic } from "../../lib/sound"
+import { getStoreInfo } from "../../lib/useStoreInfo"
+import { getBusinessRules } from "../settings/businessRulesService"
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"
 import ProductConversation from "../../components/ui/ProductConversation"
@@ -637,6 +639,32 @@ export default function BuySheet({
                   )
                 })
               )}
+
+              {/* Bio personal de Mari + chip de garantía — humaniza
+                  la decisión de compra y reduce ansiedad de cliente nuevo. */}
+              {(() => {
+                const store = getStoreInfo()
+                const rules = getBusinessRules()
+                const showBio = !!store.owner_bio.trim()
+                const showWarranty = rules.claim_window_enabled && rules.claim_window_hours > 0
+                if (!showBio && !showWarranty) return null
+                return (
+                  <div className="pt-3 mt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                    {showBio && (
+                      <p className="text-[10px] text-slate-600 dark:text-slate-300 leading-relaxed italic">
+                        “{store.owner_bio}”
+                      </p>
+                    )}
+                    {showWarranty && (
+                      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-widest">
+                        ✓ Garantía {rules.claim_window_hours >= 24
+                          ? `${Math.round(rules.claim_window_hours / 24)} días`
+                          : `${rules.claim_window_hours} h`}{" "}· cambio sin problema
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
 
               {/* Q&A público del producto — diferido para no competir con la animación. */}
               {showSecondary && (

@@ -32,6 +32,14 @@ interface StockoutPrediction {
   suggestedReorder: number
 }
 
+/** Búsqueda agregada que NO devolvió productos en el catálogo cliente.
+ *  Si la tabla `search_misses` no existe, la sección simplemente no
+ *  se renderiza. */
+interface SearchMiss {
+  query: string
+  count: number
+}
+
 /**
  * Lista las variantes cuyo stock está en o por debajo del `min_stock`
  * de su producto. Muestra cuánto falta para llegar al mínimo y permite
@@ -43,6 +51,9 @@ export default function LowStockView() {
   // Predicciones de stockout — calculadas a partir de sale_items
   // de los últimos 30 días. Mostramos las top 5 más urgentes.
   const [predictions, setPredictions] = useState<StockoutPrediction[]>([])
+  // Top búsquedas que NO devolvieron productos en el catálogo.
+  // Si la tabla search_misses no existe, queda en [] y no se renderiza.
+  const [searchMisses, setSearchMisses] = useState<SearchMiss[]>([])
 
   // Modales
   const [openMove, setOpenMove] = useState(false)
@@ -119,6 +130,35 @@ export default function LowStockView() {
       } catch (e: any) {
         debug.warn("[stockout] predict:", e?.message)
         setPredictions([])
+      }
+
+      // Búsquedas sin resultado — agrupadas por query, ordenadas por
+      // popularidad. Tolerante: si la tabla no existe, sección omitida.
+      try {
+        const sinceMisses = new Date(
+          Date.now() - 30 * 24 * 3600 * 1000,
+        )
+        const { data: misses } = await supabase
+          .from("search_misses")
+          .select("query")
+          .gte("created_at", sinceMisses.toISOString())
+          .limit(500)
+        if (misses && Array.isArray(misses)) {
+          const counts = new Map<string, number>()
+          for (const r of misses as any[]) {
+            const q = String(r.query ?? "").trim().toLowerCase()
+            if (!q) continue
+            counts.set(q, (counts.get(q) || 0) + 1)
+          }
+          const arr: SearchMiss[] = Array.from(counts.entries())
+            .map(([query, count]) => ({ query, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5)
+          setSearchMisses(arr)
+        }
+      } catch (e: any) {
+        debug.warn("[search-misses] load:", e?.message)
+        setSearchMisses([])
       }
     } finally {
       setLoading(false)
@@ -213,6 +253,38 @@ export default function LowStockView() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Búsquedas sin resultado — gap inteligente del catálogo. Las
+          clientas buscaron estas cosas y no encontraron nada. Pivote
+          de inventario basado en demanda real. */}
+      {searchMisses.length > 0 && (
+        <div className="rounded-2xl border border-fuchsia-200/70 dark:border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-50 to-pink-50 dark:from-fuchsia-500/10 dark:to-pink-500/10 p-3">
+          <h3 className="text-[11px] font-black uppercase tracking-widest text-fuchsia-700 dark:text-fuchsia-300 flex items-center gap-1.5 mb-2">
+            🔎 Buscado y NO encontrado
+            <span className="text-[9px] font-bold opacity-70 normal-case tracking-normal">
+              · últimos 30 días
+            </span>
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {searchMisses.map((m) => (
+              <span
+                key={m.query}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/70 dark:bg-slate-900/40 text-[10px] font-black text-fuchsia-800 dark:text-fuchsia-200"
+                title={`Buscado ${m.count} ${m.count === 1 ? "vez" : "veces"}`}
+              >
+                {m.query}
+                <span className="text-[8px] font-bold opacity-60">
+                  ×{m.count}
+                </span>
+              </span>
+            ))}
+          </div>
+          <p className="text-[10px] text-fuchsia-700/80 dark:text-fuchsia-300/70 mt-2 leading-snug">
+            Considera agregar estos productos al catálogo · convierte
+            búsquedas en ventas.
+          </p>
         </div>
       )}
 

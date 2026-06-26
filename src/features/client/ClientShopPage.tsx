@@ -580,6 +580,25 @@ export default function ClientShopPage() {
     return arr
   }, [products, deferredQ, categoryFilter, sortBy, onlyWishlist, wishlist, fuse])
 
+  // Log de búsquedas SIN resultado — alimenta el insight admin
+  // "qué buscan tus clientas que no tienes". Tolerante: si la tabla
+  // search_misses no existe, silenciosamente se ignora.
+  useEffect(() => {
+    if (filtered.length > 0) return
+    const needle = deferredQ.trim()
+    if (needle.length < 3) return
+    // Pequeño debounce para no enviar mientras el cliente escribe.
+    const t = window.setTimeout(() => {
+      import("../products/searchInsightsService").then(({ logSearchMiss }) =>
+        logSearchMiss(needle, {
+          customerEmail: authEmail,
+          categoryFilter: categoryFilter !== "all" ? categoryFilter : null,
+        }),
+      )
+    }, 1200)
+    return () => window.clearTimeout(t)
+  }, [filtered.length, deferredQ, authEmail, categoryFilter])
+
   const handleScan = (code: string) => {
     const norm = code.trim().toLowerCase()
     const match = products.find(

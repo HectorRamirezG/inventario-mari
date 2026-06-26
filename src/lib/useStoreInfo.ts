@@ -12,6 +12,9 @@ export interface StoreInfo {
   address: string
   thanks_message: string
   footer_note: string
+  /** Mini-bio personal de Mari — aparece en el footer del BuySheet
+   *  para humanizar el carrito ("soy Mari, llevo 4 años..."). Vacío = no se muestra. */
+  owner_bio: string
 }
 
 const DEFAULT: StoreInfo = {
@@ -21,6 +24,7 @@ const DEFAULT: StoreInfo = {
   address: "",
   thanks_message: "¡Gracias por tu compra!",
   footer_note: "Conserva este ticket para cualquier aclaración.",
+  owner_bio: "",
 }
 
 const KEY = "mari-store-info"
