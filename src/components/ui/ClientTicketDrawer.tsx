@@ -88,7 +88,8 @@ export default function ClientTicketDrawer({ open, token, onClose }: Props) {
   const [delivery, setDelivery] = useState<OrderProgressDelivery | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const aliveRef = useRef(true)  const store = getStoreInfo()
+  const aliveRef = useRef(true)
+  const store = getStoreInfo()
 
   // Ref del cuerpo del ticket — apunta al div scrolleable que tiene
   // los items + totales. Lo usan shareTicketImage / shareTicketPdf
