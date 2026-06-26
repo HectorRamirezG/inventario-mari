@@ -390,6 +390,10 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
               balance={safeBalance}
               pct={pct}
               isPaid={isPaid}
+              hasPendingProof={lastProof?.kind === "pending"}
+            />
+              pct={pct}
+              isPaid={isPaid}
             />
 
             {/* Si está pagado, vista de gracias + recibos */}
@@ -739,18 +743,27 @@ function RadialHero({
   balance,
   pct,
   isPaid,
+  hasPendingProof = false,
 }: {
   total: number
   paid: number
   balance: number
   pct: number
   isPaid: boolean
+  /** Si true, el anillo pulsa sutilmente (mensaje visual: "hay algo
+   *  esperando que Mari apruebe"). */
+  hasPendingProof?: boolean
 }) {
   const size = 124
   const stroke = 10
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const offset = c * (1 - pct / 100)
+  // Si hay proof pending Y el motion no está deshabilitado, pulsa.
+  const motionOff =
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.motion === "off"
+  const shouldPulse = hasPendingProof && !isPaid && !motionOff
 
   return (
     <div className="px-5 pb-2 pt-1 shrink-0">
@@ -782,7 +795,21 @@ function RadialHero({
         <div className="relative flex items-center gap-3">
           {/* Anillo SVG */}
           <div className="relative shrink-0" style={{ width: size, height: size }}>
-            <svg width={size} height={size} className="-rotate-90">
+            {/* Halo pulsante cuando hay proof esperando aprobación */}
+            {shouldPulse && (
+              <motion.span
+                aria-hidden
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background:
+                    "radial-gradient(circle, var(--brand-from) 0%, transparent 70%)",
+                }}
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: [0.0, 0.35, 0.0], scale: [0.85, 1.08, 0.85] }}
+                transition={{ duration: 2.4, ease: "easeInOut", repeat: Infinity }}
+              />
+            )}
+            <svg width={size} height={size} className="-rotate-90 relative">
               {/* Track */}
               <circle
                 cx={size / 2}

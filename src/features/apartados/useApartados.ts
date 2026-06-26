@@ -20,7 +20,7 @@ import { useDebouncedValue } from "../../lib/useDebouncedValue"
 import { runWithUndo } from "../../lib/withUndo"
 import type { Sale } from "../../types/database"
 
-export type ApartadosFilter = "pending" | "paid" | "all"
+export type ApartadosFilter = "pending" | "paid" | "all" | "due_today"
 
 export const apartadosQueryKey = (
   filter: ApartadosFilter,
@@ -97,7 +97,13 @@ export function useApartados() {
   const queryKey = apartadosQueryKey(filter, onlyLayaway)
   const { data, isLoading, refetch } = useQuery<ApartadosBundle>({
     queryKey,
-    queryFn: () => fetchApartadosBundle(filter, onlyLayaway),
+    queryFn: () => {
+      // "due_today" usa el mismo dataset que pending+layaway; el
+      // filtrado fino por fecha se aplica client-side en `filtered`.
+      const baseFilter = filter === "due_today" ? "pending" : filter
+      const baseOnlyLayaway = filter === "due_today" ? true : onlyLayaway
+      return fetchApartadosBundle(baseFilter, baseOnlyLayaway)
+    },
     staleTime: 20_000,
     placeholderData: (prev) => prev,
   })
@@ -202,9 +208,27 @@ export function useApartados() {
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim()
-    const list = !q ? sales : fuse.search(q).map((r) => r.item)
+    let list = !q ? sales : fuse.search(q).map((r) => r.item)
+    // Filtro "Vencen HOY" — ventana [vencidos hace 2d, vencen hoy].
+    // Plazo de apartado se asume 30 días desde created_at (no hay
+    // due_date en sales). 30d => vence; 28d => vence en 2d; 32d => 2d
+    // vencido. Sirve para que Mari priorice los inminentes.
+    if (filter === "due_today") {
+      const now = Date.now()
+      const day = 24 * 60 * 60 * 1000
+      // created entre (now - 32d) y (now - 30d) => vencido hoy o hasta 2 días tarde.
+      // Pero queremos también los que vencen en próximas 24h => created entre (now - 30d) y (now - 29d).
+      // Tomamos ventana ampla: vencen en ≤1d o vencidos ≤2d => created_at ∈ [now-32d, now-29d].
+      const earlyMs = now - 32 * day
+      const lateMs = now - 29 * day
+      list = list.filter((s) => {
+        if (Number(s.balance) <= 0) return false
+        const t = new Date(s.created_at).getTime()
+        return t >= earlyMs && t <= lateMs
+      })
+    }
     return [...list].sort((a, b) => lastActivityFor(b) - lastActivityFor(a))
-  }, [sales, debouncedSearch, lastActivityFor, fuse])
+  }, [sales, debouncedSearch, lastActivityFor, fuse, filter])
 
   const totals = useMemo(() => {
     return filtered.reduce(

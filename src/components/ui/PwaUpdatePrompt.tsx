@@ -53,23 +53,49 @@ export default function PwaUpdatePrompt() {
           exit={{ y: 60, opacity: 0 }}
           transition={{ type: "spring", stiffness: 320, damping: 28 }}
           className="fixed left-1/2 -translate-x-1/2 z-[350] pointer-events-auto"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 100px)" }}
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 130px)" }}
         >
-          <div className="flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-2xl bg-gradient-to-br from-primary via-fuchsia-500 to-purple-500 text-white shadow-[0_20px_50px_-15px_rgba(230,0,126,0.55)]">
-            <RefreshCw size={14} className="shrink-0" />
+          {/* Pulse glow rosa de fondo — pulsa indefinidamente para
+              que el banner NO pase desapercibido en mobile. */}
+          <motion.span
+            aria-hidden
+            className="absolute inset-0 rounded-2xl"
+            style={{
+              background:
+                "radial-gradient(ellipse, var(--brand-from) 0%, transparent 70%)",
+            }}
+            initial={{ opacity: 0.0 }}
+            animate={{ opacity: [0.0, 0.45, 0.0] }}
+            transition={{ duration: 2.2, ease: "easeInOut", repeat: Infinity }}
+          />
+          <div className="relative flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-2xl bg-gradient-to-br from-primary via-fuchsia-500 to-purple-500 text-white shadow-[0_20px_50px_-15px_rgba(230,0,126,0.75)] ring-2 ring-white/30">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2.4, ease: "linear", repeat: Infinity }}
+              className="shrink-0"
+            >
+              <RefreshCw size={14} />
+            </motion.div>
             <div className="flex flex-col leading-tight pr-1.5">
-              <span className="text-[11px] font-black">Nueva versión lista</span>
+              <span className="text-[11px] font-black">¡Nueva versión lista!</span>
               <span className="text-[9px] font-bold opacity-90">
-                Refresca para aplicar mejoras
+                Refresca para ver lo nuevo
               </span>
             </div>
-            <button
+            <motion.button
               type="button"
               onClick={() => updateServiceWorker(true)}
+              whileTap={{ scale: 0.95 }}
+              animate={{ boxShadow: [
+                "0 0 0 0 rgba(255,255,255,0.0)",
+                "0 0 0 6px rgba(255,255,255,0.0)",
+                "0 0 0 0 rgba(255,255,255,0.0)",
+              ] }}
+              transition={{ duration: 1.8, repeat: Infinity }}
               className="h-9 px-3 rounded-xl bg-white text-primary text-[10px] font-black uppercase tracking-widest shadow-sm press"
             >
               Actualizar
-            </button>
+            </motion.button>
             <button
               type="button"
               onClick={() => {

@@ -61,7 +61,11 @@ const CyclesPage = lazy(() => import("./features/cycles/CyclesPage"))
 const SupportPage = lazy(() => import("./features/support/SupportPage"))
 
 import ThemeToggle from "./components/ui/ThemeToggle"
+import SoundToggle from "./components/ui/SoundToggle"
+import WhatsAppDirectButton from "./components/ui/WhatsAppDirectButton"
 import CartHeaderButton from "./components/ui/CartHeaderButton"
+import CartReminderMount from "./components/ui/CartReminderMount"
+import DarkScheduleMount from "./components/ui/DarkScheduleMount"
 import ClientActionHub from "./components/ui/ClientActionHub"
 import CommandPalette from "./components/ui/CommandPalette"
 import KeyboardHelpDialog from "./components/ui/KeyboardHelpDialog"
@@ -190,6 +194,7 @@ export default function App() {
           }}
         />
         <ThemeMount />
+        <DarkScheduleMount />
         <ConnectionBanner />
         <AnnouncementBanner />
         <InstallPrompt />
@@ -201,6 +206,7 @@ export default function App() {
         <ScrollToTopButton />
         <ScrollToTopOnRoute />
         <SignOutOverlay />
+        <CartReminderMount />
         <Routes>
           {/* Públicas (sin login) */}
           <Route path="/ticket/:token" element={<PublicTicketPage />} />
@@ -1723,6 +1729,8 @@ function ShopShell() {
                 shop en cuanto el cliente tenga items. Reemplaza al FAB. */}
             <CartHeaderButton />
             {isLogged && <NotificationBell />}
+            <SoundToggle />
+            <WhatsAppDirectButton />
             <ThemeToggle />
             {showAdminLink && (
               <Link

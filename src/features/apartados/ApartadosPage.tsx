@@ -62,6 +62,7 @@ const waLink = (raw?: string | null) => {
 const FILTERS: { id: ApartadosFilter; label: string; tone: string }[] = [
   { id: "all", label: "Todos", tone: "text-slate-500" },
   { id: "pending", label: "Pendientes", tone: "text-rose-500" },
+  { id: "due_today", label: "Vencen HOY", tone: "text-amber-500" },
   { id: "paid", label: "Pagados", tone: "text-emerald-500" },
 ];
 
@@ -76,6 +77,9 @@ export default function ApartadosPage() {
   /** ID de venta que llega vía notificación → la resaltamos visualmente
    *  por unos segundos y hacemos scroll para que sea fácil de ubicar. */
   const [highlightedSaleId, setHighlightedSaleId] = useState<string | null>(null);
+  /** Cursor de teclado (J/K para navegar, Enter para abrir ticket).
+   *  Marca con highlightedSaleId para feedback visual + scroll into view. */
+  const [cursorIdx, setCursorIdx] = useState<number | null>(null);
 
   // Escuchar request de "abrir/resaltar una venta específica" desde
   // notificaciones. Funciona si la sale ya está en la lista; si todavía
@@ -101,6 +105,48 @@ export default function ApartadosPage() {
     window.addEventListener("apartados:highlight-sale", handler)
     return () => window.removeEventListener("apartados:highlight-sale", handler)
   }, [])
+
+  // Atajos J/K (next/prev sale) + Enter (abrir ticket de la sale cursor).
+  // No interfiere con inputs/textareas. Si las sales cambian (filtro o
+  // refresh), el cursor se mantiene si el id sigue existiendo, sino reset.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const sales = state.sales
+      if (sales.length === 0) return
+      if (e.key === "j" || e.key === "J") {
+        e.preventDefault()
+        setCursorIdx((p) => (p === null ? 0 : Math.min(sales.length - 1, p + 1)))
+      } else if (e.key === "k" || e.key === "K") {
+        e.preventDefault()
+        setCursorIdx((p) => (p === null ? 0 : Math.max(0, p - 1)))
+      } else if (e.key === "Enter" && cursorIdx !== null) {
+        const sale = sales[cursorIdx]
+        if (sale) {
+          e.preventDefault()
+          setTicketSale(sale)
+        }
+      } else if (e.key === "Escape" && cursorIdx !== null) {
+        setCursorIdx(null)
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [state.sales, cursorIdx])
+
+  // Cuando cambia el cursor, scroll + highlight transitorio (sin spam de animación).
+  useEffect(() => {
+    if (cursorIdx === null) return
+    const sale = state.sales[cursorIdx]
+    if (!sale) return
+    setHighlightedSaleId(sale.id)
+    requestAnimationFrame(() => {
+      const node = document.getElementById(`apartado-${sale.id}`)
+      node?.scrollIntoView({ behavior: "smooth", block: "center" })
+    })
+  }, [cursorIdx, state.sales])
 
   useEffect(() => {
     const emails = state.sales
@@ -217,6 +263,8 @@ export default function ApartadosPage() {
               ? "Sin ventas pagadas"
               : state.filter === "pending"
               ? "Sin saldos pendientes"
+              : state.filter === "due_today"
+              ? "Sin apartados venciendo hoy ✨"
               : "Sin apartados ni ventas"
           }
           subtitle={
@@ -224,6 +272,8 @@ export default function ApartadosPage() {
               ? "No encontramos coincidencias con tu búsqueda"
               : state.filter === "pending"
               ? "¡Excelente! Todas las ventas están cobradas."
+              : state.filter === "due_today"
+              ? "Ningún apartado vence en las próximas 24h — vas al día."
               : "Cuando registres una venta o un apartado aparecerá aquí."
           }
         />

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles, Receipt, CheckCircle2, Clock, ArrowRight,
   CreditCard, MessageCircle, ArrowLeft, Home, LifeBuoy,
-  Share2, Download, QrCode, X, Copy, Printer,
+  Share2, Download, QrCode, X, Copy, Printer, RotateCcw,
 } from "lucide-react"
 import toast from "react-hot-toast"
 import { supabase } from "../../lib/supabase"
@@ -363,6 +363,17 @@ export default function PublicTicketPage() {
               onClick={() => window.print()}
             />
             <ToolbarBtn label="QR" icon={QrCode} onClick={() => setOpenQR(true)} />
+            {/* Volver a pedir — solo cuando el ticket está pagado Y
+                el usuario NO es admin/staff. Atajo de recompra desde
+                el ticket sin volver a /mis-pedidos. */}
+            {ticket.balance <= 0 && !isStaffOrAdmin(role) && (
+              <ToolbarBtn
+                label="Volver a pedir"
+                icon={RotateCcw}
+                onClick={() => navigate(`/?reorder=${ticket.id}`)}
+                tone="emerald"
+              />
+            )}
           </motion.div>
         )}
 
@@ -621,17 +632,24 @@ export default function PublicTicketPage() {
 
 /** Botón circular de la toolbar (Compartir / PDF / QR). Estilo flat
  *  blanco con icon arriba y label corto debajo. Incluye haptic feedback
- *  sutil en mobile. */
+ *  sutil en mobile. Acepta `tone="emerald"` para destacar CTAs especiales
+ *  (ej. "Volver a pedir"). */
 function ToolbarBtn({
   label,
   icon: Icon,
   onClick,
+  tone = "default",
 }: {
   label: string
   icon: typeof Share2
   onClick: () => void
+  tone?: "default" | "emerald"
 }) {
   const { tap } = useFeedback()
+  const cls =
+    tone === "emerald"
+      ? "bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800"
+      : "bg-white/80 border-slate-200 hover:bg-white hover:border-primary/40 hover:text-primary text-slate-700"
   return (
     <button
       type="button"
@@ -639,10 +657,10 @@ function ToolbarBtn({
         tap()
         onClick()
       }}
-      className="flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl bg-white/80 backdrop-blur border border-slate-200 hover:bg-white hover:border-primary/40 hover:text-primary transition-colors shadow-sm press"
+      className={`flex flex-col items-center gap-0.5 px-4 py-2 rounded-2xl backdrop-blur border transition-colors shadow-sm press ${cls}`}
     >
-      <Icon size={14} className="text-slate-700" />
-      <span className="text-[10px] font-black uppercase tracking-widest text-slate-700">
+      <Icon size={14} />
+      <span className="text-[10px] font-black uppercase tracking-widest">
         {label}
       </span>
     </button>

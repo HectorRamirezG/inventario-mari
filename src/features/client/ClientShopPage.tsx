@@ -49,6 +49,7 @@ import { getCategoryVisual } from "../../components/ui/CategoryIcon"
 import AbandonedCartBanner from "../../components/ui/AbandonedCartBanner"
 import QuickGlance from "../../components/ui/QuickGlance"
 import { useCartPersist, clearPersistedCart, type PersistedCartLine } from "../../lib/useCartPersist"
+import { useLocalStorageState } from "../../lib/useLocalStorageState"
 import { buildGiftNotes } from "../../lib/giftNotes"
 import {
   notifyCartChanged,
@@ -216,8 +217,15 @@ export default function ClientShopPage() {
   const [q, setQ] = useState(() => searchParams.get("q") ?? "")
   // Debounce automatico del search para no recomputar fuse en cada tecla.
   const deferredQ = useDeferredValue(q)
-  const [sortBy, setSortBy] = useState<"newest" | "price_asc" | "price_desc" | "name">("newest")
-  const [categoryFilter, setCategoryFilter] = useState<string>("all")
+  // Filtros persistentes — sobreviven a refresh / cierre de pestaña
+  // para que el cliente no tenga que reconfigurar su vista cada vez.
+  const [sortBy, setSortBy] = useLocalStorageState<
+    "newest" | "price_asc" | "price_desc" | "name"
+  >("mari:shop:sortBy", "newest")
+  const [categoryFilter, setCategoryFilter] = useLocalStorageState<string>(
+    "mari:shop:categoryFilter",
+    "all",
+  )
   const [cart, setCart] = useState<CartLine[]>([])
   useCartPersist(cart as PersistedCartLine[])
   const [openCart, setOpenCart] = useState(false)

@@ -94,6 +94,41 @@ export const APARTADO_TEMPLATES: WaTemplate[] = [
         `${typeof window !== "undefined" ? window.location.origin : ""}/`,
       ].join("\n"),
   },
+  {
+    id: "vip_thanks",
+    label: "Agradecimiento VIP",
+    emoji: "👑",
+    build: (sale, ctx) =>
+      [
+        `Hola ${firstName(sale)} 👑`,
+        ``,
+        `Eres una de mis clientas favoritas y quería agradecerte personalmente por tu compra.`,
+        ctx.daysSince > 0
+          ? `Nos vimos hace ${ctx.daysSince} día${ctx.daysSince === 1 ? "" : "s"} y ya extrañaba saber de ti 💖`
+          : `¡Justo hoy! Gracias por confiar.`,
+        ``,
+        `Si quieres echar un ojo a lo nuevo que llegó, te dejo el link:`,
+        `${typeof window !== "undefined" ? window.location.origin : ""}/`,
+      ].join("\n"),
+  },
+  {
+    id: "we_miss_you",
+    label: "¡Te extrañamos!",
+    emoji: "💌",
+    build: (sale, ctx) =>
+      [
+        `Hola ${firstName(sale)} 💌`,
+        ``,
+        ctx.daysSince >= 60
+          ? `¿Cómo has estado? Hace ${ctx.daysSince} días que no te veo por aquí y quería saludarte.`
+          : ctx.daysSince >= 30
+          ? `Hace ${ctx.daysSince} días que no nos vemos, quería pasar a saludarte 💖`
+          : `Pasé a saludarte y a recordarte que aquí seguimos para lo que necesites.`,
+        ``,
+        `Si necesitas algo de la tienda, escríbeme y con gusto te ayudo.`,
+        `${typeof window !== "undefined" ? window.location.origin : ""}/`,
+      ].join("\n"),
+  },
 ]
 
 function firstName(sale: Sale): string {

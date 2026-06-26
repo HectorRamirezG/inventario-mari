@@ -2,6 +2,7 @@ import { supabase } from "../../lib/supabase"
 import { notifyClient, notifyAdmins } from "../notifications/notificationsService"
 import { getBusinessRules } from "../settings/businessRulesService"
 import { compressImage } from "../../lib/imageCompress"
+import { debug } from "../../lib/debug"
 
 /**
  * Delivery Notes (Comandas de entrega) — service.
@@ -263,11 +264,71 @@ export async function updateDeliveryStatus(
       /* best-effort */
     }
   }
-}
+  // Auto-aprobar pago en efectivo si la entrega se completó.
+  // Best-effort, silencia errores.
+  if (status === "delivered") {
+    try {
+      const { data: note } = await supabase
+        .from("delivery_notes")
+        .select("sale_id")
+        .eq("id", id)
+        .maybeSingle()
+      await tryAutoApproveCashOnDelivery((note as any)?.sale_id ?? null)
+    } catch {
+      /* noop */
+    }
+  }}
 
 export async function deleteDeliveryNote(id: string): Promise<void> {
   const { error } = await supabase.from("delivery_notes").delete().eq("id", id)
   if (error) throw error
+}
+
+/**
+ * Cuando una comanda pasa a `delivered`, buscamos payment_proofs del
+ * mismo sale con method='efectivo' y status='pending_verification'.
+ * Si encontramos uno con amount ≤ balance actual, lo aprobamos
+ * automáticamente. Así Mari no tiene que hacer dos pasos: entregar +
+ * marcar el efectivo como recibido.
+ *
+ * Best-effort: cualquier fallo se ignora silenciosamente. Si el RPC
+ * `approve_payment_proof` truena por permisos (driver anónimo), nadie
+ * se entera y Mari sigue aprobando manualmente desde su panel.
+ */
+async function tryAutoApproveCashOnDelivery(saleId: string | null | undefined): Promise<void> {
+  if (!saleId) return
+  try {
+    const { data: proofs } = await supabase
+      .from("payment_proofs")
+      .select("id, amount, method, status")
+      .eq("sale_id", saleId)
+      .eq("status", "pending_verification")
+      .ilike("method", "efectivo")
+    const list = (proofs as Array<{ id: string; amount: number | null }>) ?? []
+    if (list.length === 0) return
+
+    const { data: sale } = await supabase
+      .from("sales")
+      .select("balance")
+      .eq("id", saleId)
+      .maybeSingle()
+    const currentBalance = Number((sale as any)?.balance) || 0
+    if (currentBalance <= 0) return
+
+    // Aprobamos solo el primer proof cuyo monto ≤ balance (evita
+    // sobreaprobar y dejar balance negativo). Si Mari declaró dos
+    // proofs cash, el resto los aprueba manualmente.
+    const { approveProof } = await import("../payments/paymentProofsService")
+    for (const p of list) {
+      const amt = Number(p.amount) || currentBalance
+      if (amt <= currentBalance + 0.01) {
+        await approveProof(p.id, Math.min(amt, currentBalance), "efectivo")
+        return
+      }
+    }
+  } catch (e: any) {
+    debug.warn("[delivery] auto-approve cash on delivery falló:", e?.message)
+  }
 }
 
 /**
@@ -350,6 +411,14 @@ export async function updateDeliveryStatusByToken(
         driver: result.driver_name,
       },
     })
+    // Auto-aprobar pago en efectivo del cliente (si lo declaró antes).
+    // El repartidor recibió el dinero al entregar; aprobamos el proof
+    // best-effort para que el balance baje a 0 sin pasos extra.
+    try {
+      await tryAutoApproveCashOnDelivery(result.sale_id ?? null)
+    } catch {
+      /* noop */
+    }
   } else {
     // Cuando inicia el camino, avisamos a admins también (rápido)
     await notifyAdmins({
@@ -364,6 +433,13 @@ export async function updateDeliveryStatusByToken(
         driver: result.driver_name,
       },
     })
+  }
+
+  // Auto-aprobar pago en efectivo cuando el driver marca entregado.
+  // Best-effort: si el RPC truena por permisos anon, queda pending y
+  // Mari lo aprueba manualmente desde su panel.
+  if (next === "delivered") {
+    await tryAutoApproveCashOnDelivery(result.sale_id ?? null)
   }
 }
 
