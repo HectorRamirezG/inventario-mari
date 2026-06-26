@@ -27,19 +27,8 @@ import {
 
 type Mode = "signin" | "signup" | "magic" | "reset"
 
-/**
- * Feature flag para mostrar el botón "Continuar con Google".
- * Para habilitarlo:
- *   1. Activa el provider Google en Supabase Dashboard → Auth → Providers.
- *   2. Configura Client ID + Secret de Google Cloud Console.
- *   3. Cambia este flag a `true`.
- * Mientras esté en `false`, el botón no se renderiza (queda Google
- * deshabilitado en el lado servidor de todas formas).
- */
-const GOOGLE_OAUTH_ENABLED = false
-
 export default function LoginPage() {
-  const { signInWithPassword, signUpWithPassword, sendMagicLink, signInWithGoogle } = useAuth()
+  const { signInWithPassword, signUpWithPassword, sendMagicLink } = useAuth()
   const [mode, setMode] = useState<Mode>("signin")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -391,48 +380,6 @@ export default function LoginPage() {
         )}
 
         <form onSubmit={submit} className="flex flex-col gap-3" autoComplete="on">
-          {/* Google OAuth — atajo arriba del email (signin + signup).
-              Solo visible en esos modos y cuando el flag está ON.
-              Mientras Google no esté configurado en Supabase Dashboard,
-              el flag GOOGLE_OAUTH_ENABLED queda en false. */}
-          {GOOGLE_OAUTH_ENABLED && (mode === "signin" || mode === "signup") && (
-            <>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    setBusy(true)
-                    await signInWithGoogle()
-                    // No hace falta navigate: el redirect de Google
-                    // tomará control y volverá a /login con sesión.
-                  } catch (e) {
-                    const { translateError } = await import("../../lib/supabaseErrors")
-                    toast.error(translateError(e, "No se pudo abrir Google"))
-                  } finally {
-                    setBusy(false)
-                  }
-                }}
-                disabled={busy}
-                className="flex items-center justify-center gap-2.5 h-12 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-100 text-sm font-black hover:border-slate-400 dark:hover:border-slate-500 active:scale-[0.98] transition-all disabled:opacity-50 press"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-                  <path fill="#EA4335" d="M12 5.04c1.97 0 3.74.68 5.13 1.99l3.83-3.83C18.66 1.18 15.6 0 12 0 7.32 0 3.26 2.7 1.28 6.65l4.46 3.46C6.71 7.16 9.13 5.04 12 5.04z" />
-                  <path fill="#4285F4" d="M23.49 12.27c0-.82-.07-1.61-.21-2.37H12v4.5h6.46c-.28 1.5-1.12 2.77-2.39 3.62l3.86 3c2.26-2.09 3.56-5.17 3.56-8.75z" />
-                  <path fill="#FBBC05" d="M5.74 14.27a7.25 7.25 0 0 1 0-4.54L1.28 6.27a12 12 0 0 0 0 11.46l4.46-3.46z" />
-                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.91l-3.86-3c-1.07.72-2.45 1.15-4.07 1.15-2.87 0-5.29-2.12-6.16-4.97l-4.46 3.46C3.26 21.3 7.32 24 12 24z" />
-                </svg>
-                Continuar con Google
-              </button>
-              <div className="flex items-center gap-2 my-1">
-                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                  o con email
-                </span>
-                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-              </div>
-            </>
-          )}
-
           <AnimatePresence>
             {mode === "signup" && (
               <motion.label
