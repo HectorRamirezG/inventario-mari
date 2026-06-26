@@ -173,18 +173,10 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
     return null
   }, [proofs])
 
-  if (typeof document === "undefined" || !sale) return null
-
-  // Defensa contra balance desincronizado
-  const safeTotal = Number(sale.total) || 0
-  const safePaid = Number(sale.paid) || 0
-  const safeBalance = Math.max(0, safeTotal - safePaid)
-  const isPaid = safeBalance <= 0
-  const pct =
-    safeTotal > 0 ? Math.min(100, (safePaid / safeTotal) * 100) : 0
-  const payments = sale.payments ?? []
-
-  // Timeline unificada: pagos confirmados + comprobantes pending/rejected
+  // Timeline unificada: pagos confirmados + comprobantes pending/rejected.
+  // OJO: este useMemo DEBE vivir ANTES de cualquier early return — si se
+  // mueve abajo, React cuenta menos hooks cuando `sale` es null vs cuando
+  // tiene valor, lo que dispara el error #310 al darle "Pagar saldo".
   const timeline = useMemo(() => {
     type Entry =
       | { kind: "payment"; at: string; amount: number; method: string | null }
@@ -197,6 +189,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
           rejection_reason: string | null
         }
     const entries: Entry[] = []
+    const payments = sale?.payments ?? []
     for (const p of payments) {
       entries.push({
         kind: "payment",
@@ -219,7 +212,17 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
     }
     entries.sort((a, b) => b.at.localeCompare(a.at))
     return entries
-  }, [payments, proofs])
+  }, [sale, proofs])
+
+  if (typeof document === "undefined" || !sale) return null
+
+  // Defensa contra balance desincronizado
+  const safeTotal = Number(sale.total) || 0
+  const safePaid = Number(sale.paid) || 0
+  const safeBalance = Math.max(0, safeTotal - safePaid)
+  const isPaid = safeBalance <= 0
+  const pct =
+    safeTotal > 0 ? Math.min(100, (safePaid / safeTotal) * 100) : 0
 
   const handleShareBalance = async () => {
     tap()
