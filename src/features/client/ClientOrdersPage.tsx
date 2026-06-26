@@ -4,7 +4,6 @@ import { useNavigate, useLocation } from "react-router-dom"
 import { motion } from "framer-motion"
 import {
   LifeBuoy,
-  Lock,
   ShoppingBag,
   XCircle,
   RotateCcw,
@@ -821,26 +820,41 @@ export default function ClientOrdersPage() {
               </div>
             </div>
 
-            {/* HERO — total + saldo inline (sin línea aparte). */}
+            {/* HERO — cuando está completado mostramos 'Pagaste $X'
+                en grande (lo que YA pagó, no el total). Si está pendiente
+                mostramos el total + cuánto falta. */}
             <div className="flex items-baseline gap-2 flex-wrap mb-2">
-              <span
-                className={`text-[22px] font-black tabular-nums leading-none ${
-                  paid
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-slate-900 dark:text-slate-100"
-                }`}
-              >
-                {formatMoney(o.total)}
-              </span>
-              {!paid && !isCancelled && (
-                <span className="text-[11px] font-black tabular-nums text-amber-600 dark:text-amber-400 leading-none">
-                  · faltan {formatMoney(balance)}
-                </span>
-              )}
-              {paid && !isCancelled && (
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 leading-none">
-                  · liquidado
-                </span>
+              {isCompleted ? (
+                <>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 leading-none">
+                    Pagaste
+                  </span>
+                  <span className="text-[22px] font-black tabular-nums leading-none text-emerald-600 dark:text-emerald-400">
+                    {formatMoney(safePaid)}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span
+                    className={`text-[22px] font-black tabular-nums leading-none ${
+                      paid
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-slate-900 dark:text-slate-100"
+                    }`}
+                  >
+                    {formatMoney(o.total)}
+                  </span>
+                  {!paid && !isCancelled && (
+                    <span className="text-[11px] font-black tabular-nums text-amber-600 dark:text-amber-400 leading-none">
+                      · faltan {formatMoney(balance)}
+                    </span>
+                  )}
+                  {paid && !isCancelled && !isCompleted && (
+                    <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 leading-none">
+                      · liquidado
+                    </span>
+                  )}
+                </>
               )}
             </div>
 
@@ -863,8 +877,10 @@ export default function ClientOrdersPage() {
               </div>
             )}
 
-            {/* Tracker delivery — solo si hay comanda; aporta el stepper visual. */}
-            {delivery && (
+            {/* Tracker delivery — solo cuando hay comanda Y el pedido
+                NO está completado (en isCompleted el tracker sólo añade
+                ruido visual; ya entregó, ya está). */}
+            {delivery && !isCompleted && (
               <div className="mb-3">
                 <OrderProgressTracker
                   total={safeTotal}
@@ -937,10 +953,58 @@ export default function ClientOrdersPage() {
               </button>
             )}
 
-            {/* PRIMARY CTA — usa SmartOrderActions con hideSecondary
-                porque las acciones secundarias ahora viven en la
-                toolbar de iconos compacta abajo. */}
-            {showInteractive && (
+            {/* ACCIONES — dos variantes según estado:
+                A) isCompleted (pagado + entregado): vista CELEBRATORIA
+                   con un solo CTA emerald "Volver a pedir" + chip Calificar
+                   + link discreto al ticket. Sin Smart Order Actions ni
+                   chips redundantes.
+                B) Resto (pendiente, en camino, etc.): SmartOrderActions
+                   + toolbar completa como antes. */}
+            {showInteractive && isCompleted && (
+              <div className="space-y-2">
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.98 }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleReorder(o.id)
+                  }}
+                  className="relative overflow-hidden w-full h-11 rounded-xl flex items-center justify-center gap-2 text-white text-[11px] font-black uppercase tracking-widest shadow-[0_10px_30px_-10px_rgba(16,185,129,0.5)] press-hard bg-gradient-to-br from-emerald-500 to-teal-500"
+                >
+                  <RotateCcw size={13} />
+                  Volver a pedir
+                </motion.button>
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setTicketToken(o.public_token ?? o.id)
+                    }}
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:text-primary press"
+                  >
+                    Ver ticket →
+                  </button>
+                  {canReview && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openRateOrder(o.id)
+                      }}
+                      className="h-8 px-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                      title="Calificar productos"
+                    >
+                      <Star size={11} />
+                      Calificar
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* PRIMARY CTA — usa SmartOrderActions cuando NO está completado. */}
+            {showInteractive && !isCompleted && (
               <SmartOrderActions
                 order={{
                   id: o.id,
@@ -962,11 +1026,9 @@ export default function ClientOrdersPage() {
               />
             )}
 
-            {/* TOOLBAR SECUNDARIA — todas las acciones secundarias en una
-                fila de chips compactos. Antes vivían en 3 bloques separados:
-                SmartOrderActions(secondary) + Reordenar/Calificar + Cancelar.
-                Ahora una sola toolbar coherente. */}
-            {showInteractive && (
+            {/* TOOLBAR SECUNDARIA — solo para pedidos NO completados.
+                Los completados ya tienen su acción simplificada arriba. */}
+            {showInteractive && !isCompleted && (
               <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
@@ -992,7 +1054,7 @@ export default function ClientOrdersPage() {
                     title="Reportar un problema"
                   >
                     <LifeBuoy size={11} />
-                    Ayuda
+                    Reportar
                   </button>
                 )}
                 {canReview && (
@@ -1007,20 +1069,6 @@ export default function ClientOrdersPage() {
                   >
                     <Star size={11} />
                     Calificar
-                  </button>
-                )}
-                {isCompleted && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleReorder(o.id)
-                    }}
-                    className="h-8 px-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
-                    title="Repetir esta compra"
-                  >
-                    <RotateCcw size={11} />
-                    Reordenar
                   </button>
                 )}
                 {rules.client_can_self_cancel && cancel.allowed && (
@@ -1061,13 +1109,11 @@ export default function ClientOrdersPage() {
               </div>
             )}
 
-            {/* Micro-info al pie — solo si aplica. */}
-            {!claim.allowed && (
-              <p className="mt-2 text-[10px] text-slate-400 italic flex items-center gap-1">
-                <Lock size={10} /> {claim.reason}
-              </p>
-            )}
-            {claim.allowed && Number.isFinite(claim.remainingMs) && (
+            {/* Micro-info al pie — SOLO cuando hay claim activo (mostrar
+                cuánto tiempo queda para reportar). Cuando ya no se puede
+                reportar y está todo OK, no mostramos nada para no
+                ensuciar la card. */}
+            {!isCompleted && claim.allowed && Number.isFinite(claim.remainingMs) && (
               <p className="mt-2 text-[10px] text-slate-400 italic">
                 ⏳ {formatRemaining(claim.remainingMs)} para reportar
               </p>

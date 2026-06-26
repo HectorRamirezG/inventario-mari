@@ -746,24 +746,24 @@ function RadialHero({
   pct: number
   isPaid: boolean
 }) {
-  const size = 196
-  const stroke = 14
+  const size = 124
+  const stroke = 10
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const offset = c * (1 - pct / 100)
 
   return (
-    <div className="px-5 pb-3 pt-1 shrink-0">
+    <div className="px-5 pb-2 pt-1 shrink-0">
       <div
-        className={`relative rounded-3xl p-5 overflow-hidden ${
+        className={`relative rounded-2xl p-3.5 overflow-hidden ${
           isPaid
             ? "bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50 dark:from-emerald-500/15 dark:via-teal-500/10 dark:to-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30"
             : "bg-gradient-to-br from-rose-50 via-pink-50 to-purple-50 dark:from-rose-500/10 dark:via-pink-500/10 dark:to-purple-500/10 border border-pink-200 dark:border-pink-500/30"
         }`}
       >
-        {/* Orbes decorativos */}
+        {/* Orbes decorativos (compactos) */}
         <span
-          className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-30 blur-xl"
+          className="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-30 blur-xl"
           style={{
             background: isPaid
               ? "linear-gradient(135deg,#10b981,#34d399)"
@@ -771,7 +771,7 @@ function RadialHero({
           }}
         />
         <span
-          className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full opacity-20 blur-xl"
+          className="absolute -bottom-8 -left-6 w-20 h-20 rounded-full opacity-20 blur-xl"
           style={{
             background: isPaid
               ? "linear-gradient(135deg,#34d399,#a7f3d0)"
@@ -779,7 +779,7 @@ function RadialHero({
           }}
         />
 
-        <div className="relative flex items-center gap-4">
+        <div className="relative flex items-center gap-3">
           {/* Anillo SVG */}
           <div className="relative shrink-0" style={{ width: size, height: size }}>
             <svg width={size} height={size} className="-rotate-90">
@@ -821,18 +821,18 @@ function RadialHero({
               </defs>
             </svg>
             {/* Centro */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-1">
               <p
-                className={`text-[8px] uppercase tracking-widest font-black ${
+                className={`text-[7px] uppercase tracking-widest font-black leading-none ${
                   isPaid
                     ? "text-emerald-700 dark:text-emerald-300"
                     : "text-slate-500 dark:text-slate-400"
                 }`}
               >
-                {isPaid ? "Pagado" : "Te faltan"}
+                {isPaid ? "Pagado" : "Faltan"}
               </p>
               <p
-                className={`text-[22px] font-black tabular-nums leading-none mt-0.5 ${
+                className={`text-[15px] font-black tabular-nums leading-tight mt-0.5 ${
                   isPaid
                     ? "text-emerald-700 dark:text-emerald-300"
                     : "text-primary"
@@ -840,25 +840,22 @@ function RadialHero({
               >
                 {formatMoney(isPaid ? paid : balance)}
               </p>
-              <p className="text-[9px] text-slate-500 dark:text-slate-400 font-bold mt-1">
-                de {formatMoney(total)}
-              </p>
               {!isPaid && pct > 0 && (
-                <div className="mt-1.5 px-2 py-0.5 rounded-full bg-white/80 dark:bg-slate-900/60 text-[9px] font-black tabular-nums text-primary">
+                <p className="text-[8px] font-black tabular-nums text-primary/70 leading-none mt-0.5">
                   {pct.toFixed(0)}%
-                </div>
+                </p>
               )}
               {isPaid && (
                 <Sparkles
-                  size={14}
-                  className="text-emerald-500 dark:text-emerald-300 mt-1"
+                  size={11}
+                  className="text-emerald-500 dark:text-emerald-300 mt-0.5"
                 />
               )}
             </div>
           </div>
 
-          {/* Mini-stats al lado del anillo */}
-          <div className="flex-1 min-w-0 space-y-2">
+          {/* Mini-stats al lado del anillo (compactos) */}
+          <div className="flex-1 min-w-0 space-y-1.5">
             <MiniStat
               icon={Wallet}
               label="Cobrado"
@@ -902,12 +899,12 @@ function MiniStat({
     muted: "text-slate-400 dark:text-slate-500 line-through",
   }
   return (
-    <div className="flex items-center justify-between gap-2 rounded-xl bg-white/70 dark:bg-slate-900/40 px-2.5 py-1.5">
-      <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-black text-slate-500 dark:text-slate-400">
-        <Icon size={10} />
+    <div className="flex items-center justify-between gap-2 rounded-lg bg-white/70 dark:bg-slate-900/40 px-2 py-1">
+      <span className="flex items-center gap-1 text-[8px] uppercase tracking-widest font-black text-slate-500 dark:text-slate-400">
+        <Icon size={9} />
         {label}
       </span>
-      <span className={`text-[12px] font-black tabular-nums ${TONE[tone]}`}>
+      <span className={`text-[11px] font-black tabular-nums ${TONE[tone]}`}>
         {value}
       </span>
     </div>
