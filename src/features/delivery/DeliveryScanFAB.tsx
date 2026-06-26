@@ -182,28 +182,44 @@ export default function DeliveryScanFAB({
 
   return (
     <>
-      {/* FAB flotante en bottom-right */}
+      {/* FAB flotante en bottom-right. Forma de pill expandible:
+          icono + label "Entregar" para que se entienda sin tap. En
+          tablets/desktop se queda en la esquina; en mobile sube por
+          encima del dock cliente. */}
       <button
         type="button"
         onClick={() => setOpenScanner(true)}
         aria-label="Escanear QR para entregar"
         title="Escanear QR del cliente para entregar y cobrar"
-        className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 z-[120] w-14 h-14 rounded-full text-white shadow-bloom active:scale-90 transition-transform flex items-center justify-center"
+        className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 z-[120] h-14 px-5 rounded-full text-white shadow-[0_18px_40px_-12px_rgba(230,0,126,0.55)] active:scale-95 transition-transform flex items-center gap-2.5 group"
         style={{
           background:
             "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
         }}
       >
         {loading ? (
-          <Loader2 size={22} className="animate-spin" />
+          <>
+            <Loader2 size={20} className="animate-spin" />
+            <span className="text-[11px] font-black uppercase tracking-widest">
+              Cargando…
+            </span>
+          </>
         ) : (
-          <ScanLine size={22} strokeWidth={2.5} />
+          <>
+            <ScanLine size={22} strokeWidth={2.5} />
+            <span className="text-[11px] font-black uppercase tracking-widest">
+              Escanear · Entregar
+            </span>
+          </>
         )}
       </button>
 
       <BarcodeScanner
         open={openScanner}
         onClose={() => setOpenScanner(false)}
+        title="Escanear QR de entrega"
+        hint="Apunta al QR del cliente · ticket o comanda"
+        manualPlaceholder="Pega el link del ticket o el token…"
         onScan={(text) => {
           // Cerramos el scanner SOLO si la lectura fue válida.
           // (handleScan retorna true tanto en éxito como en errores

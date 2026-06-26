@@ -595,64 +595,20 @@ const SaleCard = memo(function SaleCardImpl({
         )}
       </div>
 
-      {/* Contacto rápido — siempre visible (icon-only). Los 3 actions
-          que Mari toca 95% del tiempo: WhatsApp, llamar y abrir mapa.
-          Cada uno con tooltip; el ancho fijo evita reflow al cambiar
-          cantidad de botones. */}
-      <div className="flex items-center gap-1.5 mb-2.5">
-        {wa ? (
-          <a
-            href={wa}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="h-8 px-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 hover:bg-emerald-100 press"
-            title="Abrir WhatsApp"
-          >
-            <MessageCircle size={11} /> WA
-          </a>
-        ) : null}
-        {effectivePhone && <WhatsAppTemplateMenu sale={sale} compact />}
-        {effectivePhone && (
-          <a
-            href={`tel:${cleanPhone(effectivePhone)}`}
-            className="h-8 w-8 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center hover:bg-slate-100 press"
-            title={
-              phoneWasUpdated
-                ? `Llamar · número actualizado · original: ${salePhone}`
-                : `Llamar a ${effectivePhone}`
-            }
-          >
-            <Phone size={12} />
-            {phoneWasUpdated && (
-              <span className="sr-only">Número actualizado</span>
-            )}
-          </a>
-        )}
-        {sale.customer_location && (
-          <a
-            href={sale.customer_location}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="h-8 w-8 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-300 flex items-center justify-center hover:bg-blue-100 press"
-            title="Abrir ubicación en mapas"
-          >
-            <MapPin size={12} />
-          </a>
-        )}
-        {/* "Más" — abre la sección que antes estaba siempre expandible.
-            Ahora oculta a primera vista para limpiar la card. */}
-        {(sale.customer_address || sale.notes || extractLatLng(sale.customer_location ?? "")) && (
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="ml-auto h-8 px-2 rounded-lg bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[9px] font-black uppercase tracking-widest hover:bg-slate-100 press"
-            aria-expanded={expanded}
-            title="Dirección · mapa · notas"
-          >
-            {expanded ? "▲ Menos" : "▼ Más"}
-          </button>
-        )}
-      </div>
+      {/* Toggle del acordeón: solo despliega DATOS DE CONTACTO + mapa +
+          notas. Los items y pagos viven exclusivamente en el TicketView
+          (botón "Ticket") para evitar duplicar información. */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-2 py-1.5"
+      >
+        <span>
+          {expanded ? "▲ Ocultar contacto" : "▼ Ver contacto"}
+          <span className="ml-1 normal-case font-bold text-slate-300">
+            (teléfono · dirección · mapa)
+          </span>
+        </span>
+      </button>
 
       <AnimatePresence initial={false}>
         {expanded && (
@@ -660,8 +616,51 @@ const SaleCard = memo(function SaleCardImpl({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden mb-3 space-y-2"
+            className="overflow-hidden mb-3 space-y-3"
           >
+            {/* Contactos rápidos */}
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {wa && (
+                <a
+                  href={wa}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-widest hover:bg-emerald-100"
+                >
+                  <MessageCircle size={10} /> WhatsApp
+                </a>
+              )}
+              {effectivePhone && <WhatsAppTemplateMenu sale={sale} compact />}
+              {effectivePhone && (
+                <a
+                  href={`tel:${cleanPhone(effectivePhone)}`}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[9px] font-black uppercase tracking-widest"
+                  title={
+                    phoneWasUpdated
+                      ? `Número actualizado en perfil. Original en venta: ${salePhone}`
+                      : undefined
+                  }
+                >
+                  <Phone size={10} /> {effectivePhone}
+                  {phoneWasUpdated && (
+                    <span className="ml-1 text-[7px] text-emerald-600 dark:text-emerald-400 normal-case font-bold">
+                      ✓ actualizado
+                    </span>
+                  )}
+                </a>
+              )}
+              {sale.customer_location && (
+                <a
+                  href={sale.customer_location}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-[9px] font-black uppercase tracking-widest hover:bg-blue-100"
+                >
+                  <MapPin size={10} /> Pin
+                </a>
+              )}
+            </div>
+
             {sale.customer_address && (
               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 italic">
                 📍 {sale.customer_address}
@@ -692,6 +691,17 @@ const SaleCard = memo(function SaleCardImpl({
                 💬 {sale.notes}
               </p>
             )}
+
+            {/* Atajo al ticket completo: items y pagos viven SOLO ahí
+                para no duplicar la información dentro de la card. */}
+            <button
+              type="button"
+              onClick={onTicket}
+              className="w-full h-9 rounded-xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 press"
+              title="Ver detalle de productos, pagos y totales"
+            >
+              <Receipt size={12} /> Ver ticket completo
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
