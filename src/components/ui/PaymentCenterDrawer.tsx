@@ -447,7 +447,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                             Subir comprobante
                           </p>
                           <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80 leading-tight">
-                            Transferencia, depósito o efectivo
+                            Transferencia o depósito bancario
                           </p>
                         </div>
                         <ArrowRight
@@ -464,10 +464,10 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-black text-slate-700 dark:text-slate-200 leading-tight">
-                          ¿Pagas al recoger?
+                          Efectivo al recoger
                         </p>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-                          Mari lo registra cuando entregue tu pedido
+                          Mari lo registra cuando te entregue el pedido
                         </p>
                       </div>
                     </div>
