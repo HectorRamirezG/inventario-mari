@@ -56,6 +56,8 @@ import {
 } from "../../lib/useCartSummary"
 import type { BuySheetProduct } from "./BuySheet"
 import SupportModal from "../support/SupportModal"
+import ShippingEstimator from "./ShippingEstimator"
+import SavedAddressesSelector from "./SavedAddressesSelector"
 import {
   useTierThresholds,
   tierForQty,
@@ -681,6 +683,13 @@ export default function ClientShopPage() {
   const { balance: myLoyalty } = useMyLoyaltyBalance()
   const [useLoyalty, setUseLoyalty] = useState(false)
 
+  // Pack de empaque premium — cliente paga extra por envoltura bonita.
+  // Solo aparece si `gift_wrap_enabled` está activo en business rules.
+  const [useGiftWrap, setUseGiftWrap] = useState(false)
+  const giftWrapAmount = useGiftWrap && bRules.gift_wrap_enabled
+    ? Number(bRules.gift_wrap_price ?? 0)
+    : 0
+
   // Confeti en hitos del cliente:
   //  - Cruzar 100 puntos por primera vez → dorado.
   //  - Activarse como VIP automático por primera vez → morado.
@@ -776,10 +785,14 @@ export default function ClientShopPage() {
     repricedCart,
   ])
 
-  // TOTAL = subtotal + envío − volumen − descuento por puntos
+  // TOTAL = subtotal + envío + empaque premium − volumen − descuento por puntos
   const totalAmt = Math.max(
     0,
-    subtotalAmt + shippingCalc.amount - volumeDiscount - loyaltyDiscount,
+    subtotalAmt +
+      shippingCalc.amount +
+      giftWrapAmount -
+      volumeDiscount -
+      loyaltyDiscount,
   )
 
   // Ahorro vs menudeo (motivacional)
@@ -1141,6 +1154,13 @@ export default function ClientShopPage() {
         ? buildGiftNotes(giftRecipient, giftMessage, null)
         : null
 
+      // Si pidió empaque premium, agregamos línea descriptiva al notes
+      // (sigue siendo texto libre — Mari lo lee al preparar).
+      const wrapNote = useGiftWrap && bRules.gift_wrap_enabled
+        ? `[EMPAQUE PREMIUM +$${bRules.gift_wrap_price}] ${bRules.gift_wrap_label}`
+        : null
+      const combinedNotes = [giftNotes, wrapNote].filter(Boolean).join("\n\n") || null
+
       const { data: sale, error } = await supabase
         .from("sales")
         .insert({
@@ -1149,7 +1169,7 @@ export default function ClientShopPage() {
           customer_phone: guest.phone.trim() || null,
           customer_address: guest.address.trim() || null,
           customer_location: guest.locationUrl.trim() || null,
-          notes: giftNotes,
+          notes: combinedNotes,
           total,
           paid: 0,
           balance: total,
@@ -2174,6 +2194,38 @@ export default function ClientShopPage() {
                 </div>
               </div>
 
+              {/* Estimador de envío inline — el cliente captura su CP y ve
+                  costo + ETA antes de comprometerse. Reduce dramáticamente
+                  la pregunta "¿cuánto cuesta y cuándo llega?". hideWhenEmpty
+                  lo oculta cuando Mari no ha configurado ninguna zona. */}
+              {repricedCart.length > 0 && (
+                <div className="px-5 pb-2 space-y-2">
+                  {bRules.gift_wrap_enabled && (
+                    <label className="rounded-xl border border-pink-200 dark:border-pink-500/30 bg-pink-50/70 dark:bg-pink-500/5 px-3 py-2 flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useGiftWrap}
+                        onChange={(e) => setUseGiftWrap(e.target.checked)}
+                        className="w-4 h-4 accent-pink-500"
+                      />
+                      <span className="text-base">🎁</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-black text-pink-800 dark:text-pink-200 truncate">
+                          {bRules.gift_wrap_label}
+                        </p>
+                        <p className="text-[9px] text-pink-600 dark:text-pink-300">
+                          Caja + listón + tarjeta personalizada
+                        </p>
+                      </div>
+                      <span className="text-[12px] font-black tabular-nums text-pink-700 dark:text-pink-300 shrink-0">
+                        +{formatMoney(bRules.gift_wrap_price)}
+                      </span>
+                    </label>
+                  )}
+                  <ShippingEstimator compact hideWhenEmpty />
+                </div>
+              )}
+
               {/* Footer mínimo sticky: SOLO Total + CTA. Antes vivían aquí
                   switches + desglose y comían 250px del sheet. Ahora todo
                   eso bajó al scroll → la lista de items gana ~150px. */}
@@ -2272,7 +2324,8 @@ export default function ClientShopPage() {
                   placeholder="WhatsApp (10 dígitos)"
                   type="tel"
                 />
-                <SmartLocationInput
+                <SavedAddressesSelector
+                  mode="picker"
                   address={guest.address}
                   onAddressChange={(v) => setGuest({ ...guest, address: v })}
                   locationUrl={guest.locationUrl}

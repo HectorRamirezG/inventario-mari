@@ -46,6 +46,10 @@ import DailyReportShareButton from "./DailyReportShareButton"
 import HotProductsCard from "./HotProductsCard"
 import DueRemindersCard from "./DueRemindersCard"
 import TodayDeliveriesCard from "./TodayDeliveriesCard"
+import TodayGlanceCard from "./TodayGlanceCard"
+import PeakHoursCard from "./PeakHoursCard"
+import ProductFunnelCard from "./ProductFunnelCard"
+import ProductOfMonthCard from "./ProductOfMonthCard"
 
 /**
  * TrendChart vive en archivo separado e importa `recharts` (~250kb gz).
@@ -216,6 +220,13 @@ export default function DashboardPage() {
         <CycleBanner />
       </SafeSection>
 
+      {/* "Tu día en 1 vistazo" — bloque-hero matutino con saludo + entregas
+          + comprobantes + saldos + cumpleaños. Se auto-oculta si no hay nada
+          urgente (día despejado muestra una micro-card celebratoria). */}
+      <SafeSection scope="dashboard:today-glance">
+        <TodayGlanceCard />
+      </SafeSection>
+
       {/* 3 CARDS DE ACCESO RÁPIDO (operaciones del día) */}
       <DailyOpsCards
         shipments={stats?.pendingShipments ?? 0}
@@ -349,6 +360,21 @@ export default function DashboardPage() {
       {/* ════════════════ ANÁLISIS ════════════════ */}
       {dashTab === "analisis" && (
         <div className="space-y-5">
+          {/* Producto del mes — ganador automático del mes anterior */}
+          <SafeSection scope="dashboard:product-of-month">
+            <ProductOfMonthCard />
+          </SafeSection>
+
+          {/* Hora pico real — visitas vs ventas por hora */}
+          <SafeSection scope="dashboard:peak-hours">
+            <PeakHoursCard days={period} />
+          </SafeSection>
+
+          {/* Embudo por producto — visto → carrito → apartado → pagado */}
+          <SafeSection scope="dashboard:product-funnel">
+            <ProductFunnelCard days={period} />
+          </SafeSection>
+
           {/* Métodos de pago */}
           <PaymentMethodsCard methods={stats?.paymentMethods ?? []} />
 

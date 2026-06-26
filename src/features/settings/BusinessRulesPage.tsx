@@ -40,6 +40,7 @@ import {
   ImagePlus,
   Megaphone,
   Tag,
+  Gift,
   Trophy,
   Trash2,
   Plus,
@@ -62,6 +63,7 @@ import {
   type WelcomeSlide,
 } from "./businessRulesService"
 import LoyaltyRulesEditor from "../loyalty/LoyaltyRulesEditor"
+import ShippingZonesEditor from "./ShippingZonesEditor"
 import {
   ACCENT_NAMES,
   ACCENT_LABELS,
@@ -193,6 +195,9 @@ export default function BusinessRulesPage() {
           onToggle={(v) => patch({ force_tracking_foraneo: v })}
         />
       </Section>
+
+      {/* ZONAS DE ENVÍO */}
+      <ShippingZonesEditor />
 
       {/* SEGURIDAD FINANCIERA */}
       <Section icon={<ShieldAlert size={14} />} title="Seguridad financiera" subtitle="Confirmaciones, anticipos">
@@ -386,6 +391,35 @@ export default function BusinessRulesPage() {
 
       {/* PROMOS Y EXPERIENCIA DEL CLIENTE */}
       <Section icon={<PartyPopper size={14} />} title="Promos y experiencia" subtitle="Descuentos automáticos, mensajes en tickets">
+        <RuleRow
+          icon={Gift}
+          title="Pack de empaque premium"
+          description="El cliente puede pagar extra por empaque bonito (caja + listón + tarjeta). Aparece como opcional en el carrito."
+          affects="cliente"
+          example="Margen alto, esfuerzo mínimo — perfecto para regalos."
+          enabled={form.gift_wrap_enabled}
+          onToggle={(v) => patch({ gift_wrap_enabled: v })}
+        >
+          <div className="space-y-2">
+            <NumberField
+              label="Precio"
+              value={form.gift_wrap_price}
+              onChange={(v) => patch({ gift_wrap_price: v })}
+              suffix="$"
+              min={0}
+              max={9999}
+            />
+            <input
+              type="text"
+              value={form.gift_wrap_label}
+              maxLength={120}
+              onChange={(e) => patch({ gift_wrap_label: e.target.value })}
+              placeholder="Etiqueta visible (ej: Envuelve para regalo)"
+              className="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[12px] dark:text-slate-100"
+            />
+          </div>
+        </RuleRow>
+
         <RuleRow
           icon={PartyPopper}
           title="Descuento automático por volumen"

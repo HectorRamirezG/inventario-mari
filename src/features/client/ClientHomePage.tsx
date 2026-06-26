@@ -50,6 +50,8 @@ import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
 import ReviewStoriesBar from "../../components/ui/ReviewStoriesBar"
 import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
 import Skeleton from "../../components/ui/Skeleton"
+import MyPaletteSection from "./MyPaletteSection"
+import ProductOfMonthCard from "../dashboard/ProductOfMonthCard"
 
 interface PublicVariant {
   id: string
@@ -154,6 +156,10 @@ export default function ClientHomePage() {
       {isLogged && <MyMessagesSection />}
       {isLogged && <MySavingsSection />}
 
+      {/* Paleta personal del cliente: tonos comprados + sugerencias de
+          reposición + cross-sell. Se auto-oculta sin historial. */}
+      {isLogged && <MyPaletteSection />}
+
       {/* Stories de resenias — marketing organico. Banda horizontal con
           las mejores resenias con foto, estilo Instagram stories. Click
           en una abre el producto en la tienda. Solo aparece si hay >=3. */}
@@ -161,6 +167,10 @@ export default function ClientHomePage() {
 
       {/* Productos vistos recientemente */}
       <RecentlyViewedRow onOpen={openProduct} />
+
+      {/* Producto del mes — ganador automático del mes anterior. Se
+          auto-oculta cuando no hay ventas. Clickeable: navega via ?q= */}
+      <ProductOfMonthCard asLink />
 
       {/* Producto del día */}
       {loading ? (

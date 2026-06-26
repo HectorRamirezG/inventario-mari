@@ -27,6 +27,7 @@ import Camera from "lucide-react/dist/esm/icons/camera"
 import Star from "lucide-react/dist/esm/icons/star"
 import Users from "lucide-react/dist/esm/icons/users"
 import Truck from "lucide-react/dist/esm/icons/truck"
+import Box from "lucide-react/dist/esm/icons/box"
 
 import type { BusinessRules } from "../features/settings/businessRulesService"
 
@@ -34,6 +35,7 @@ export type AdminSection =
   | "hoy"
   | "catalogo"
   | "caja"
+  | "empaque"
   | "pendientes"
   | "entregas"
   | "ciclos"
@@ -106,6 +108,14 @@ export const ADMIN_SECTIONS: AdminSectionEntry[] = [
     accent: "linear-gradient(135deg,#0ea5e9,#6366f1)",
     shortcut: "9",
     hint: "Comandas de entrega · estatus y repartidor",
+  },
+  {
+    id: "empaque",
+    label: "Empaque",
+    caption: "Workflow para procesar pedidos uno por uno",
+    icon: Box,
+    accent: "linear-gradient(135deg,#f59e0b,#ec4899)",
+    hint: "Modo empaque · una venta a la vez",
   },
   {
     id: "catalogo",

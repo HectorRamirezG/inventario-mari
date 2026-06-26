@@ -36,6 +36,7 @@ import TabBar, { type TabItem } from "../../components/ui/TabBar"
 import EmptyStateIllustration from "../../components/ui/EmptyStateIllustration"
 import Skeleton from "../../components/ui/Skeleton"
 import DeliveryScanFAB from "./DeliveryScanFAB"
+import DriverSheetButton from "./DriverSheetButton"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { formatRelative, shortId } from "../../lib/format"
 import {
@@ -163,6 +164,9 @@ export default function DeliveriesAdminPage() {
       <PageHeader
         title="Comandas"
         subtitle="Entregas activas y su historial — en un solo lugar"
+        right={
+          <DriverSheetButton notes={list} triggerVariant="primary" />
+        }
       />
 
       {/* FAB "Escanear para entregar" — abre cámara, lee QR del

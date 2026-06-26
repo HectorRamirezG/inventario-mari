@@ -40,6 +40,7 @@ const ClientHomePage = lazy(() => import("./features/client/ClientHomePage"))
 const PricingPage = lazy(() => import("./features/pricing/PricingPage"))
 const DashboardPage = lazy(() => import("./features/dashboard/DashboardPage"))
 const SalesPage = lazy(() => import("./features/sales/SalesPage"))
+const PackingModePage = lazy(() => import("./features/sales/PackingModePage"))
 const ApartadosPage = lazy(() => import("./features/apartados/ApartadosPage"))
 const DeliveriesAdminPage = lazy(() => import("./features/delivery/DeliveriesAdminPage"))
 const SettingsPage = lazy(() => import("./features/settings/SettingsPage"))
@@ -51,6 +52,7 @@ const MyReportsPage = lazy(() => import("./features/client/MyReportsPage"))
 const MyWishesPage = lazy(() => import("./features/wishes/MyWishesPage"))
 const MyWalletPage = lazy(() => import("./features/wallet/MyWalletPage"))
 const MyRewardsPage = lazy(() => import("./features/loyalty/MyRewardsPage"))
+const MyTrophiesPage = lazy(() => import("./features/loyalty/MyTrophiesPage"))
 const MyPromosPage = lazy(() => import("./features/promos/MyPromosPage"))
 const WishAdminPage = lazy(() => import("./features/wishes/WishAdminPage"))
 const StoriesAdminPage = lazy(() => import("./features/stories/StoriesAdminPage"))
@@ -1455,6 +1457,7 @@ function AdminShell() {
                     {section === "hoy" && <DashboardPage />}
                     {section === "catalogo" && <InventoryPage />}
                     {section === "caja" && <SalesPage />}
+                    {section === "empaque" && <PackingModePage />}
                     {section === "pendientes" && <ApartadosPage />}
                     {section === "entregas" && <DeliveriesAdminPage />}
                     {section === "soporte" && <SupportPage />}
@@ -1836,6 +1839,20 @@ function ShopShell() {
                         to="/login"
                         replace
                         state={{ from: "/mis-premios" }}
+                      />
+                    )
+                  }
+                />
+                <Route
+                  path="/mis-trofeos"
+                  element={
+                    isLogged ? (
+                      <MyTrophiesPage />
+                    ) : (
+                      <Navigate
+                        to="/login"
+                        replace
+                        state={{ from: "/mis-trofeos" }}
                       />
                     )
                   }

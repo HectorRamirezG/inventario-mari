@@ -40,6 +40,7 @@ import {
 import { applyMovement } from "../movements/movementService"
 import { getPendingStockAlertsByProduct } from "../client/stockAlertsService"
 import StockSubscribersDrawer from "../../components/ui/StockSubscribersDrawer"
+import StickerWaButton from "../client/StickerWaButton"
 import type { Product, Variant } from "../../types/database"
 import type { PricingConfig } from "../pricing/pricingTypes"
 
@@ -539,6 +540,37 @@ function GeneralTab({
           )}
         </p>
       </div>
+
+      {/* Generador de sticker WhatsApp 512×512 — botón ligero, solo en modo
+          edición y cuando ya hay foto del producto o de su primera variante.
+          Mari descarga y comparte → marketing organic. */}
+      {product && (() => {
+        const cover =
+          product.image_url ??
+          product.variants?.find((v) => v.image_url || (v.image_urls?.length ?? 0) > 0)
+            ?.image_url ??
+          (product.variants?.find((v) => (v.image_urls?.length ?? 0) > 0)?.image_urls?.[0] ?? null)
+        const price =
+          sug?.men ??
+          (product.variants?.[0]?.price_menudeo ?? product.variants?.[0]?.price ?? 0)
+        return (
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-emerald-100 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5 px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-widest">
+                Marketing express
+              </p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                Genera un sticker 512×512 para WhatsApp
+              </p>
+            </div>
+            <StickerWaButton
+              productName={product.name}
+              imageUrl={cover ?? null}
+              price={Number(price ?? 0)}
+            />
+          </div>
+        )
+      })()}
 
       {/* Uploader de foto del producto: sólo cuando NO hay variantes */}
       {product && !hasVariants && (

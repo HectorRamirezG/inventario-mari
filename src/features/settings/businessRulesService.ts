@@ -280,6 +280,12 @@ export interface BusinessRules {
   /** Fecha tentativa de retorno (YYYY-MM-DD). Opcional, se muestra si está. */
   shop_closed_until: string | null
 
+  /* ═══════════════════ PACK DE EMPAQUE PREMIUM (opt-in) ═════════════════
+   * Cliente puede pagar +$X por empaque bonito (caja + listón + tarjeta). */
+  gift_wrap_enabled: boolean
+  gift_wrap_price: number
+  gift_wrap_label: string
+
   /* ═══════════════════ RETENCIÓN (opcional, opt-in) ═══════════════════
    * Features de retención que Mari puede activar/desactivar a
    * voluntad. Todas OFF por defecto para no asumir. */
@@ -435,6 +441,11 @@ export const DEFAULT_RULES: BusinessRules = {
   shop_closed_enabled: false,
   shop_closed_message: "",
   shop_closed_until: null,
+
+  // Pack de empaque premium (OFF por defecto)
+  gift_wrap_enabled: false,
+  gift_wrap_price: 30,
+  gift_wrap_label: "Envuelve para regalo (caja + listón + tarjeta)",
 
   // Retención opt-in — todas OFF por default
   reorder_banner_enabled: false,
@@ -667,6 +678,17 @@ function merge(raw: any): BusinessRules {
       /^\d{4}-\d{2}-\d{2}$/.test(raw.shop_closed_until)
         ? raw.shop_closed_until
         : null,
+
+    // Pack de empaque premium
+    gift_wrap_enabled: !!raw.gift_wrap_enabled,
+    gift_wrap_price:
+      typeof raw.gift_wrap_price === "number" && raw.gift_wrap_price >= 0
+        ? raw.gift_wrap_price
+        : 30,
+    gift_wrap_label:
+      typeof raw.gift_wrap_label === "string" && raw.gift_wrap_label.trim()
+        ? raw.gift_wrap_label.slice(0, 120)
+        : DEFAULT_RULES.gift_wrap_label,
 
     // Retención
     reorder_banner_enabled: !!raw.reorder_banner_enabled,

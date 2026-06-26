@@ -26,6 +26,7 @@ import { useAuth } from "../../lib/useAuth"
 import Skeleton from "../../components/ui/Skeleton"
 import Avatar from "../../components/ui/Avatar"
 import TabBar, { type TabItem } from "../../components/ui/TabBar"
+import { getVerifiedBuyerEmails } from "./verifiedBuyerService"
 import {
   OVERLAY_BACKDROP_TRANSITION,
   OVERLAY_PANEL_STYLE,
@@ -291,7 +292,11 @@ export default function ReviewsDrawer({
             {/* Contenido scrollable */}
             <div className="flex-1 overflow-y-auto px-5 py-4">
               {tab === "view" ? (
-                <ViewTab reviews={reviews} loading={loading} />
+                <ViewTab
+                  reviews={reviews}
+                  loading={loading}
+                  productId={productId}
+                />
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
                   {/* Rating */}
@@ -409,10 +414,22 @@ export default function ReviewsDrawer({
 function ViewTab({
   reviews,
   loading,
+  productId,
 }: {
   reviews: Review[]
   loading: boolean
+  productId: string
 }) {
+  const [verifiedSet, setVerifiedSet] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (reviews.length === 0) return
+    const emails = reviews.map((r) => r.customer_email)
+    getVerifiedBuyerEmails(productId, emails)
+      .then(setVerifiedSet)
+      .catch(() => setVerifiedSet(new Set()))
+  }, [productId, reviews])
+
   if (loading) {
     return (
       <div className="space-y-3">
@@ -454,11 +471,19 @@ function ViewTab({
               <p className="text-[12px] font-black text-slate-900 dark:text-slate-100 leading-tight truncate">
                 {r.customer_name || r.customer_email.split("@")[0]}
               </p>
-              <div className="flex items-center gap-2 mt-0.5">
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                 <ReviewStars value={r.rating} size={10} />
                 <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 flex items-center gap-1">
                   <Calendar size={9} /> {fmtDate(r.created_at)}
                 </span>
+                {verifiedSet.has(r.customer_email.toLowerCase()) && (
+                  <span
+                    className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/15 px-1.5 py-0.5 rounded-full inline-flex items-center gap-1"
+                    title="Esta persona compró el producto"
+                  >
+                    ✓ Verificada
+                  </span>
+                )}
               </div>
             </div>
           </header>

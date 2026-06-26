@@ -1268,3 +1268,36 @@ html, body, .bg-white, .text-slate-900, .text-slate-800, .border-slate-100 {
     display: revert !important;
   }
 }
+
+/* =====================================================================
+   PRINT MODE 2 — Hoja del repartidor (carta normal con paginación).
+   Se activa cuando body tiene clase .printing-driver-sheet (la pone
+   DriverSheetButton justo antes de window.print() y la quita en
+   afterprint). Solo se imprime el nodo con clase .print-target.
+===================================================================== */
+@media print {
+  body.printing-driver-sheet {
+    background: white !important;
+  }
+  body.printing-driver-sheet * {
+    visibility: hidden !important;
+  }
+  body.printing-driver-sheet .print-target,
+  body.printing-driver-sheet .print-target * {
+    visibility: visible !important;
+    color: black !important;
+  }
+  body.printing-driver-sheet .print-target {
+    position: absolute !important;
+    inset: 0 !important;
+    margin: 0 !important;
+    padding: 8mm !important;
+    background: white !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  /* Página carta para la hoja del repartidor */
+  body.printing-driver-sheet ~ * {
+    page: letter;
+  }
+}

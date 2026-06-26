@@ -283,14 +283,24 @@ export default function MyRewardsPage() {
             : "Suma puntos comprando y reseñando"
         }
         right={
-          <button
-            onClick={() => setHistoryOpen(true)}
-            aria-label="Historial"
-            title="Historial de puntos"
-            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center press"
-          >
-            <History size={14} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => navigate("/mis-trofeos")}
+              aria-label="Mis trofeos"
+              title="Mis trofeos"
+              className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 hover:text-amber-700 flex items-center justify-center press"
+            >
+              <Trophy size={14} />
+            </button>
+            <button
+              onClick={() => setHistoryOpen(true)}
+              aria-label="Historial"
+              title="Historial de puntos"
+              className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary flex items-center justify-center press"
+            >
+              <History size={14} />
+            </button>
+          </div>
         }
       />
 

@@ -28,6 +28,8 @@ import { getBusinessRules } from "../settings/businessRulesService"
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"
 import ProductConversation from "../../components/ui/ProductConversation"
+import LiveViewersChip from "./LiveViewersChip"
+import CustomerPhotosGallery from "./CustomerPhotosGallery"
 import {
   detectCartTier,
   priceForTier,
@@ -397,6 +399,7 @@ export default function BuySheet({
                     Elige tus tonos
                   </p>
                   <p className="text-base font-black truncate">{product.name}</p>
+                  <LiveViewersChip productId={product.id} />
                 </div>
               </div>
               <button
@@ -665,6 +668,11 @@ export default function BuySheet({
                   </div>
                 )
               })()}
+
+              {/* Galería de fotos REALES de clientas — más convincente
+                  que la foto de estudio. Aparece solo si hay reviews con
+                  image_url aprobadas. */}
+              <CustomerPhotosGallery productId={product.id} />
 
               {/* Q&A público del producto — diferido para no competir con la animación. */}
               {showSecondary && (
