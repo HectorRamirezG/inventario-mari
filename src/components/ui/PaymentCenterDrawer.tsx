@@ -6,7 +6,6 @@ import {
   Wallet,
   History as HistoryIcon,
   CheckCircle2,
-  Clock,
   Loader2,
   AlertCircle,
   CreditCard,
