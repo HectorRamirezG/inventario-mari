@@ -92,11 +92,11 @@ export async function getTodayGlance(): Promise<TodayGlance> {
       .in("status", ["draft", "sent", "picked_up"])
       .order("created_at", { ascending: true })
       .limit(20),
-    // 1) Comprobantes pendientes (sin revisar)
+    // 1) Comprobantes pendientes (incluye efectivos declarados por el cliente)
     supabase
       .from("payment_proofs")
       .select("id, sale_id, customer_email, amount, created_at")
-      .eq("status", "pending")
+      .in("status", ["pending", "pending_verification"])
       .order("created_at", { ascending: true })
       .limit(20),
     // 2) Apartados con saldo que vencen en ≤5 días (incluye los ya vencidos)

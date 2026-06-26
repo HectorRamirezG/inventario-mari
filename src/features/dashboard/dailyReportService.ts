@@ -56,7 +56,7 @@ export async function getDailyReport(date = new Date()): Promise<DailyReport> {
     supabase
       .from("payment_proofs")
       .select("id", { count: "exact", head: true })
-      .eq("status", "pending")
+      .in("status", ["pending", "pending_verification"])
       .gte("created_at", startIso)
       .lte("created_at", endIso),
   ])

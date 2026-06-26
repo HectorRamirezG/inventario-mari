@@ -251,8 +251,12 @@ export default function ReviewProofDrawer({
             {/* Header */}
             <div className="flex items-center justify-between px-5 pb-3 shrink-0">
               <div>
-                <p className="text-[9px] uppercase tracking-widest text-amber-600 dark:text-amber-400 font-black">
-                  Comprobante recibido
+                <p className={`text-[9px] uppercase tracking-widest font-black ${
+                  proof?.image_url
+                    ? "text-amber-600 dark:text-amber-400"
+                    : "text-emerald-600 dark:text-emerald-400"
+                }`}>
+                  {proof?.image_url ? "Comprobante recibido" : "Cobro en efectivo pendiente"}
                 </p>
                 <h3 className="text-base font-black tracking-tight">
                   {sale ? shortId(sale.id) : "Cargando..."}
@@ -383,7 +387,7 @@ export default function ReviewProofDrawer({
                   )}
 
                   {/* Status badges + motivo de rechazo si existe */}
-                  {proof.status !== "pending" && (
+                  {proof.status !== "pending" && proof.status !== "pending_verification" && (
                     <div className="space-y-2">
                       <div
                         className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
@@ -416,7 +420,7 @@ export default function ReviewProofDrawer({
                   )}
 
                   {/* Form de aprobación */}
-                  {proof.status === "pending" && (
+                  {(proof.status === "pending" || proof.status === "pending_verification") && (
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-2">
                         <div>

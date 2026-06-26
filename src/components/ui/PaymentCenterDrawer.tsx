@@ -29,9 +29,11 @@ import { shareText } from "../../lib/share"
 import { useFeedback } from "../../lib/useFeedback"
 import {
   listProofsForSale,
+  uploadPaymentProof,
   type PaymentProof,
 } from "../../features/payments/paymentProofsService"
 import ReportPaymentButton, { ProofsHistory } from "./ReportPaymentButton"
+import toast from "react-hot-toast"
 
 interface Props {
   open: boolean
@@ -72,6 +74,11 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
   const [proofs, setProofs] = useState<PaymentProof[]>([])
   const [loadingProofs, setLoadingProofs] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
+  // Flujo "pagaré en efectivo al recoger": crea un proof method='efectivo'
+  // sin imagen para que Mari lo valide al recibir el dinero físico.
+  const [showCash, setShowCash] = useState(false)
+  const [cashAmount, setCashAmount] = useState<number | "">("")
+  const [cashBusy, setCashBusy] = useState(false)
   const { email: authEmail } = useAuth()
   const { tap, success } = useFeedback()
 
@@ -84,7 +91,12 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
 
   // Reset al abrir / cambiar de venta
   useEffect(() => {
-    if (open) setShowUpload(false)
+    if (open) {
+      setShowUpload(false)
+      setShowCash(false)
+      setCashAmount("")
+      setCashBusy(false)
+    }
   }, [open, sale?.id])
 
   // Cargar comprobantes
@@ -236,6 +248,60 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
         )} por pagar. Puedes pagarlo aquí:\n${link}`
       : `Faltan ${formatMoney(safeBalance)} por pagar en mi pedido de Beauty's Me ✨`
     await shareText({ title: "Mi saldo Beauty's Me", text: msg })
+  }
+
+  // Confirmar intención de pago en efectivo: crea un payment_proof con
+  // method='efectivo' SIN imagen y status='pending_verification'. Mari lo
+  // verá en su feed y lo aprobará al recibir el dinero físico.
+  const handleCashCommit = async () => {
+    if (!sale) return
+    const amt = Number(cashAmount)
+    if (!amt || amt <= 0) {
+      toast.error("Escribe cuánto pagarás en efectivo")
+      return
+    }
+    if (amt > safeBalance + 0.01) {
+      toast.error(`El monto excede tu saldo (${formatMoney(safeBalance)})`)
+      return
+    }
+    setCashBusy(true)
+    const tid = toast.loading("Avisando a Mari...")
+    try {
+      const proof = await uploadPaymentProof({
+        saleId: sale.id,
+        file: null,
+        amount: amt,
+        method: "efectivo",
+        customerEmail: authEmail ?? null,
+        note: "Pagaré en efectivo al recoger",
+      })
+      success()
+      toast.success(
+        "Listo ✨ Mari lo confirma cuando lo reciba",
+        { id: tid, duration: 4000 },
+      )
+      setShowCash(false)
+      setCashAmount("")
+      // refresca proofs locales para que el banner se vea ya
+      try {
+        const list = await listProofsForSale(sale.id)
+        setProofs(list)
+      } catch {
+        /* noop */
+      }
+      // Notifica a otros containers para que refresquen también.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("mari:payment-proof-uploaded", {
+            detail: { saleId: sale.id, proofId: proof?.id ?? null },
+          }),
+        )
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo registrar", { id: tid })
+    } finally {
+      setCashBusy(false)
+    }
   }
 
   return createPortal(
@@ -394,7 +460,7 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                 {lastProof && <ProofStatusBanner data={lastProof} />}
 
                 {/* ────────── GRID DE MÉTODOS ────────── */}
-                {!showUpload && (
+                {!showUpload && !showCash && (
                   <div className="space-y-2.5 pt-1">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 px-1">
                       ¿Cómo quieres pagar?
@@ -457,20 +523,36 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                       </div>
                     </button>
 
-                    {/* Pagar al recoger / hablar con Mari */}
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-3.5 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-500 flex items-center justify-center shrink-0">
-                        <Banknote size={16} />
+                    {/* Pagar al recoger — abre mini-form que crea proof
+                        method='efectivo' sin imagen. Mari lo valida al
+                        recibir el dinero físico. */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        tap()
+                        setCashAmount(safeBalance > 0 ? Number(safeBalance.toFixed(2)) : "")
+                        setShowCash(true)
+                      }}
+                      className="w-full rounded-2xl border-2 border-amber-200 dark:border-amber-500/40 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/5 p-4 text-left press"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                          <Banknote size={20} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[15px] font-black leading-tight text-amber-800 dark:text-amber-200">
+                            Efectivo al recoger
+                          </p>
+                          <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80 leading-tight">
+                            Avisas a Mari y ella lo confirma al recibirlo
+                          </p>
+                        </div>
+                        <ArrowRight
+                          size={16}
+                          className="text-amber-700 dark:text-amber-300"
+                        />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-black text-slate-700 dark:text-slate-200 leading-tight">
-                          Efectivo al recoger
-                        </p>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
-                          Mari lo registra cuando te entregue el pedido
-                        </p>
-                      </div>
-                    </div>
+                    </button>
 
                     {/* Compartir saldo con alguien (mamá / pareja) */}
                     <button
@@ -513,6 +595,109 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
                     />
                     <p className="text-center text-[10px] font-bold text-slate-400 flex items-center justify-center gap-1">
                       <ShieldCheck size={11} /> Mari valida tu pago y se abona al saldo
+                    </p>
+                  </motion.div>
+                )}
+
+                {/* Vista de pago en efectivo — cliente declara cuánto
+                    pagará al recoger. Crea proof pending para Mari. */}
+                {showCash && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="space-y-3"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (cashBusy) return
+                        setShowCash(false)
+                        setCashAmount("")
+                      }}
+                      disabled={cashBusy}
+                      className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1 press disabled:opacity-50"
+                    >
+                      ← Volver a métodos
+                    </button>
+
+                    <div className="rounded-2xl border-2 border-amber-200 dark:border-amber-500/40 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/5 p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-bloom">
+                          <Banknote size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[15px] font-black leading-tight text-amber-900 dark:text-amber-100">
+                            Pagar en efectivo
+                          </p>
+                          <p className="text-[10px] text-amber-700/80 dark:text-amber-300/80 leading-tight">
+                            Avisas el monto y Mari lo confirma al recibirlo
+                          </p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-300 block mb-1">
+                          ¿Cuánto pagarás en efectivo?
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base font-black text-amber-700 dark:text-amber-300 pointer-events-none">
+                            $
+                          </span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step="0.01"
+                            max={safeBalance}
+                            value={cashAmount}
+                            onChange={(e) =>
+                              setCashAmount(
+                                e.target.value === "" ? "" : Number(e.target.value),
+                              )
+                            }
+                            disabled={cashBusy}
+                            placeholder="0.00"
+                            className="w-full h-14 pl-8 pr-3 rounded-xl border-2 border-amber-200 dark:border-amber-500/40 bg-white dark:bg-slate-900 text-2xl font-black tabular-nums outline-none focus:border-amber-500 disabled:opacity-50"
+                          />
+                        </div>
+                        <div className="flex items-center justify-between mt-1.5 text-[10px] font-bold">
+                          <span className="text-amber-700/80 dark:text-amber-300/80">
+                            Tu saldo: {formatMoney(safeBalance)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCashAmount(Number(safeBalance.toFixed(2)))}
+                            disabled={cashBusy}
+                            className="text-amber-700 dark:text-amber-300 underline disabled:opacity-50"
+                          >
+                            usar todo el saldo
+                          </button>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCashCommit}
+                        disabled={cashBusy || !cashAmount || Number(cashAmount) <= 0}
+                        className="w-full h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white text-[12px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-[0_10px_30px_-8px_rgba(245,158,11,0.5)] press-hard disabled:opacity-50"
+                      >
+                        {cashBusy ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            Enviando...
+                          </>
+                        ) : (
+                          <>
+                            <Banknote size={14} />
+                            Avisar a Mari
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <p className="text-center text-[10px] font-bold text-slate-400 flex items-center justify-center gap-1">
+                      <ShieldCheck size={11} /> Mari valida tu pago al recibir el dinero
                     </p>
                   </motion.div>
                 )}
@@ -786,14 +971,15 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
   const s = String(entry.status)
   const isPending = s === "pending" || s === "pending_verification"
   const isRejected = s === "rejected"
+  const isCash = (entry.method ?? "").toLowerCase() === "efectivo"
   const cfg = isPending
     ? {
         bg: "bg-amber-50/70 dark:bg-amber-500/10",
         border: "border-amber-100 dark:border-amber-500/30",
         dot: "bg-amber-400 ring-amber-100 dark:ring-amber-500/20",
         text: "text-amber-700 dark:text-amber-300",
-        icon: <Loader2 size={10} className="animate-spin" />,
-        label: "Comprobante en validación",
+        icon: isCash ? <Banknote size={10} /> : <Loader2 size={10} className="animate-spin" />,
+        label: isCash ? "Pago en efectivo pendiente" : "Comprobante en validación",
       }
     : isRejected
     ? {
@@ -802,7 +988,7 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
         dot: "bg-rose-400 ring-rose-100 dark:ring-rose-500/20",
         text: "text-rose-700 dark:text-rose-300",
         icon: <AlertCircle size={10} />,
-        label: "Comprobante rechazado",
+        label: isCash ? "Pago en efectivo rechazado" : "Comprobante rechazado",
       }
     : {
         bg: "bg-slate-50/70 dark:bg-slate-800/40",
@@ -864,16 +1050,27 @@ function ProofStatusBanner({
   data: { proof: PaymentProof; kind: "pending" | "approved" | "rejected" }
 }) {
   const { proof, kind } = data
+  const isCash = (proof.method ?? "").toLowerCase() === "efectivo"
   const cfg = {
-    pending: {
-      cls: "border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-200",
-      icon: <Loader2 size={14} className="animate-spin" />,
-      title: "Validando tu comprobante…",
-      sub:
-        proof.amount && proof.amount > 0
-          ? `${formatMoney(Number(proof.amount))} · te avisamos al aprobar`
-          : "Te avisamos cuando esté aprobado",
-    },
+    pending: isCash
+      ? {
+          cls: "border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-200",
+          icon: <Banknote size={14} />,
+          title: "Pago en efectivo registrado",
+          sub:
+            proof.amount && proof.amount > 0
+              ? `${formatMoney(Number(proof.amount))} · Mari lo confirma al recibirlo`
+              : "Mari lo confirma cuando reciba el dinero",
+        }
+      : {
+          cls: "border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-200",
+          icon: <Loader2 size={14} className="animate-spin" />,
+          title: "Validando tu comprobante…",
+          sub:
+            proof.amount && proof.amount > 0
+              ? `${formatMoney(Number(proof.amount))} · te avisamos al aprobar`
+              : "Te avisamos cuando esté aprobado",
+        },
     approved: {
       cls: "border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-200",
       icon: <CheckCircle2 size={14} />,
@@ -883,7 +1080,7 @@ function ProofStatusBanner({
     rejected: {
       cls: "border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-200",
       icon: <AlertCircle size={14} />,
-      title: "Tu comprobante fue rechazado",
+      title: isCash ? "Tu pago en efectivo fue rechazado" : "Tu comprobante fue rechazado",
       sub:
         proof.rejection_reason ||
         "Vuelve a enviarlo o cambia el método",

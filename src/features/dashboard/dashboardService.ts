@@ -97,11 +97,11 @@ export async function getDashboardStats(periodDays = 30): Promise<DashboardStats
       .gt("balance", 0)
       .lte("created_at", cutoffIso)
       .neq("status", "cancelled"),
-    // 7) comprobantes pendientes
+    // 7) comprobantes pendientes (incluye efectivos declarados por el cliente)
     supabase
       .from("payment_proofs")
       .select("id", { count: "exact", head: true })
-      .eq("status", "pending"),
+      .in("status", ["pending", "pending_verification"]),
     // 8) ventas período anterior (para comparativa)
     supabase
       .from("sales")

@@ -67,7 +67,7 @@ async function checkPendingProofs(): Promise<void> {
   const { data, error } = await supabase
     .from("payment_proofs")
     .select("id, sale_id, created_at")
-    .eq("status", "pending")
+    .in("status", ["pending", "pending_verification"])
     .lt("created_at", oneHourAgo)
     .order("created_at", { ascending: true })
     .limit(10)

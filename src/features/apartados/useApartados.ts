@@ -53,7 +53,7 @@ async function fetchApartadosBundle(
     supabase
       .from("payment_proofs")
       .select("sale_id")
-      .eq("status", "pending")
+      .in("status", ["pending", "pending_verification"])
       .in("sale_id", ids),
     getLatestProofActivity(ids),
     supabase
