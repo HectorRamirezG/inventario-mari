@@ -66,6 +66,7 @@ import WhatsAppDirectButton from "./components/ui/WhatsAppDirectButton"
 import CartHeaderButton from "./components/ui/CartHeaderButton"
 import CartReminderMount from "./components/ui/CartReminderMount"
 import DarkScheduleMount from "./components/ui/DarkScheduleMount"
+import ClientPagesPrefetchMount from "./components/ui/ClientPagesPrefetchMount"
 import ClientActionHub from "./components/ui/ClientActionHub"
 import CommandPalette from "./components/ui/CommandPalette"
 import KeyboardHelpDialog from "./components/ui/KeyboardHelpDialog"
@@ -207,6 +208,7 @@ export default function App() {
         <ScrollToTopOnRoute />
         <SignOutOverlay />
         <CartReminderMount />
+        <ClientPagesPrefetchMount />
         <Routes>
           {/* Públicas (sin login) */}
           <Route path="/ticket/:token" element={<PublicTicketPage />} />

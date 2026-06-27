@@ -50,6 +50,7 @@ import TodayGlanceCard from "./TodayGlanceCard"
 import PeakHoursCard from "./PeakHoursCard"
 import ProductFunnelCard from "./ProductFunnelCard"
 import ProductOfMonthCard from "./ProductOfMonthCard"
+import MarginByCategoryCard from "./MarginByCategoryCard"
 
 /**
  * TrendChart vive en archivo separado e importa `recharts` (~250kb gz).
@@ -365,9 +366,14 @@ export default function DashboardPage() {
             <ProductOfMonthCard />
           </SafeSection>
 
-          {/* Hora pico real — visitas vs ventas por hora */}
+          {/* Hora pico real — visitas vs ventas por hora (con toggle heatmap) */}
           <SafeSection scope="dashboard:peak-hours">
             <PeakHoursCard days={period} />
+          </SafeSection>
+
+          {/* Margen real por categoría — dónde se gana más dinero */}
+          <SafeSection scope="dashboard:margin-by-category">
+            <MarginByCategoryCard days={period} />
           </SafeSection>
 
           {/* Embudo por producto — visto → carrito → apartado → pagado */}

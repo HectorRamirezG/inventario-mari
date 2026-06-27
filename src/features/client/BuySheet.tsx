@@ -27,6 +27,7 @@ import { getStoreInfo } from "../../lib/useStoreInfo"
 import { getBusinessRules } from "../settings/businessRulesService"
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"
+import StickerWaButton from "./StickerWaButton"
 import ProductConversation from "../../components/ui/ProductConversation"
 import LiveViewersChip from "./LiveViewersChip"
 import CustomerPhotosGallery from "./CustomerPhotosGallery"
@@ -402,13 +403,28 @@ export default function BuySheet({
                   <LiveViewersChip productId={product.id} />
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                aria-label="Cerrar"
-                className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center shrink-0"
-              >
-                <X size={14} />
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Sticker WhatsApp — descarga 512×512 webp para compartir
+                    el producto con amigas. Marketing orgánico. */}
+                <StickerWaButton
+                  productName={product.name}
+                  imageUrl={product.image_url ?? null}
+                  price={
+                    product.variants
+                      .map((v) => Number(v.price_menudeo ?? v.price) || 0)
+                      .filter((n) => n > 0)
+                      .sort((a, b) => a - b)[0] ?? 0
+                  }
+                  iconOnly
+                />
+                <button
+                  onClick={onClose}
+                  aria-label="Cerrar"
+                  className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center"
+                >
+                  <X size={14} />
+                </button>
+              </div>
             </div>
 
             {/* Mini-resumen sticky: solo cuando ya hay piezas seleccionadas

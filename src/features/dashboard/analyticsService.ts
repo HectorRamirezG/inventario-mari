@@ -59,6 +59,68 @@ export async function getPeakHours(days = 30): Promise<PeakHour[]> {
   }))
 }
 
+/* ─────────── 1.b) Heatmap día×hora ─────────── */
+
+export interface PeakSlot {
+  /** 0=Domingo, 1=Lunes, ..., 6=Sábado (Date.getDay()) */
+  dayOfWeek: number
+  hour: number // 0..23
+  visits: number
+  sales: number
+}
+
+/**
+ * Devuelve los 168 slots (7 días × 24 horas) con visitas y ventas.
+ * Útil para un heatmap "qué día/hora vende más". Lectura más fina
+ * que `getPeakHours` que solo agrega por hora del día.
+ */
+export async function getPeakHoursHeatmap(days = 30): Promise<PeakSlot[]> {
+  const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString()
+
+  // Inicializa matriz 7×24
+  const visits: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
+  const sales: number[][] = Array.from({ length: 7 }, () => new Array(24).fill(0))
+
+  const { data: vRows } = await supabase
+    .from("site_visitors")
+    .select("pages_viewed, last_seen_at")
+    .gte("last_seen_at", sinceIso)
+    .limit(2000)
+  for (const v of (vRows ?? []) as any[]) {
+    const arr = Array.isArray(v.pages_viewed) ? v.pages_viewed : []
+    for (const p of arr) {
+      const ts = typeof p === "object" && p?.at ? p.at : v.last_seen_at
+      if (!ts) continue
+      const d = new Date(ts)
+      visits[d.getDay()][d.getHours()] += 1
+    }
+  }
+
+  const { data: sRows } = await supabase
+    .from("sales")
+    .select("created_at, status")
+    .gte("created_at", sinceIso)
+    .neq("status", "cancelled")
+    .limit(2000)
+  for (const s of (sRows ?? []) as any[]) {
+    const d = new Date(s.created_at)
+    sales[d.getDay()][d.getHours()] += 1
+  }
+
+  const out: PeakSlot[] = []
+  for (let day = 0; day < 7; day++) {
+    for (let hour = 0; hour < 24; hour++) {
+      out.push({
+        dayOfWeek: day,
+        hour,
+        visits: visits[day][hour],
+        sales: sales[day][hour],
+      })
+    }
+  }
+  return out
+}
+
 /* ─────────── 2) Funnel por producto ─────────── */
 
 export interface ProductFunnel {
@@ -223,4 +285,84 @@ export async function getProductOfMonth(): Promise<ProductOfMonth | null> {
     total_orders: winner.orders.size,
     monthLabel,
   }
+}
+
+/* ─────────── 4) Margen real por categoría ─────────── */
+
+export interface CategoryMargin {
+  category: string
+  revenue: number
+  cost: number
+  profit: number
+  items_sold: number
+  margin_pct: number // 0..100
+}
+
+/**
+ * Suma profit por categoría usando `sale_items.profit` (ya calculado al
+ * momento de vender en `salesService.createSale`) joineado con
+ * `products.category`. Sale en orden descendente por profit.
+ *
+ * Cubre solo ventas NO canceladas en la ventana de días dados.
+ */
+export async function getMarginByCategory(days = 30): Promise<CategoryMargin[]> {
+  const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString()
+
+  const { data: items } = await supabase
+    .from("sale_items")
+    .select(
+      "product_id, qty, unit_price, profit, sales!inner(status, created_at)",
+    )
+    .gte("sales.created_at", sinceIso)
+    .neq("sales.status", "cancelled")
+    .not("product_id", "is", null)
+    .limit(10000)
+
+  const list = (items ?? []) as any[]
+  if (list.length === 0) return []
+
+  // Trae las categorías de los productos involucrados.
+  const productIds = Array.from(
+    new Set(list.map((it) => it.product_id).filter(Boolean)),
+  )
+  if (productIds.length === 0) return []
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, category")
+    .in("id", productIds)
+  const catByProduct = new Map<string, string>()
+  for (const p of (products ?? []) as any[]) {
+    catByProduct.set(p.id, p.category || "Sin categoría")
+  }
+
+  const agg = new Map<
+    string,
+    { revenue: number; profit: number; qty: number }
+  >()
+  for (const it of list) {
+    const cat = catByProduct.get(it.product_id) || "Sin categoría"
+    const qty = Number(it.qty) || 0
+    const unit = Number(it.unit_price) || 0
+    const profit = Number(it.profit) || 0
+    const e = agg.get(cat) ?? { revenue: 0, profit: 0, qty: 0 }
+    e.revenue += qty * unit
+    e.profit += profit
+    e.qty += qty
+    agg.set(cat, e)
+  }
+
+  return Array.from(agg.entries())
+    .map(([category, e]) => {
+      const cost = Math.max(0, e.revenue - e.profit)
+      return {
+        category,
+        revenue: e.revenue,
+        cost,
+        profit: e.profit,
+        items_sold: e.qty,
+        margin_pct: e.revenue > 0 ? (e.profit / e.revenue) * 100 : 0,
+      }
+    })
+    .filter((c) => c.revenue > 0)
+    .sort((a, b) => b.profit - a.profit)
 }

@@ -8,18 +8,23 @@ import { toastSuccess, toastError } from "../../lib/toast"
 
 /**
  * Mini-botón reusable que genera y descarga un sticker WhatsApp 512×512
- * para un producto. Mari lo comparte → marketing gratis.
+ * para un producto. Mari lo comparte → marketing gratis. También sirve
+ * para clientes que quieren compartir el producto con sus amigas.
  */
 export default function StickerWaButton({
   productName,
   imageUrl,
   price,
   variant = "ghost",
+  iconOnly = false,
 }: {
   productName: string
   imageUrl: string | null
   price: number
   variant?: "ghost" | "primary"
+  /** Cuando true, sólo renderiza el icono (botón circular). Útil cuando
+   *  el espacio es escaso (header de un drawer, etc.). */
+  iconOnly?: boolean
 }) {
   const [busy, setBusy] = useState(false)
 
@@ -41,6 +46,25 @@ export default function StickerWaButton({
     } finally {
       setBusy(false)
     }
+  }
+
+  if (iconOnly) {
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={busy}
+        aria-label="Descargar sticker para WhatsApp"
+        title="Genera un sticker 512×512 listo para WhatsApp"
+        className="w-9 h-9 rounded-full bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center active:scale-90 disabled:opacity-50"
+      >
+        {busy ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <MessageCircle size={14} />
+        )}
+      </button>
+    )
   }
 
   const cls =
