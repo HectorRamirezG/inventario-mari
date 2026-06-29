@@ -48,6 +48,9 @@ import { copyToClipboard } from "../../lib/clipboard"
 import { confirmAction } from "../../lib/confirm"
 import OverlayShell from "./OverlayShell"
 import { useTheme, type Theme } from "../../lib/useTheme"
+import SoundToggle from "./SoundToggle"
+import ThemeToggle from "./ThemeToggle"
+import WhatsAppDirectButton from "./WhatsAppDirectButton"
 import {
   ACCENT_NAMES,
   ACCENT_LABELS,
@@ -389,6 +392,11 @@ export default function UserProfileDrawer({ open, onClose }: Props) {
                       regla está activa). Abre el LoyaltyDrawer con la
                       lista plana de movimientos. */}
                   {email && <MyLoyaltyMiniCard />}
+
+                  {/* Preferencias rápidas — controles que antes vivían
+                      en el header (sonido, tema, WhatsApp directo).
+                      Movidos aquí para no saturar el header. */}
+                  <QuickPreferencesSection />
 
                   {/* Mi estilo: cliente elige color personal + emoji.
                       Funciona como override del theme global del admin
@@ -795,6 +803,53 @@ const THEME_OPTIONS: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "dark", label: "Oscuro", icon: Moon },
   { value: "system", label: "Auto", icon: Monitor },
 ]
+
+/* ─────────────────────────────────────────────────────────────
+ * QuickPreferencesSection
+ * Controles que antes vivían en el header del shop (sonido,
+ * tema, WhatsApp directo). Movidos al perfil para no saturar el
+ * header (Cart + Bell + Avatar es suficiente).
+ *
+ * Render: 3 botones-icono con label arriba. Mantienen la lógica
+ * existente de cada componente (no duplicamos handlers).
+ * ───────────────────────────────────────────────────────────── */
+function QuickPreferencesSection() {
+  return (
+    <section className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3">
+      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2 px-0.5">
+        Preferencias rápidas
+      </h4>
+      <div className="grid grid-cols-3 gap-2">
+        <PrefCell label="Sonido">
+          <SoundToggle />
+        </PrefCell>
+        <PrefCell label="Tema">
+          <ThemeToggle />
+        </PrefCell>
+        <PrefCell label="WhatsApp">
+          <WhatsAppDirectButton />
+        </PrefCell>
+      </div>
+    </section>
+  )
+}
+
+function PrefCell({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1.5 py-1">
+      {children}
+      <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 leading-none">
+        {label}
+      </span>
+    </div>
+  )
+}
 
 function MyStyleSection() {
   const { prefs, set } = useUserPrefs()

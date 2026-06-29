@@ -1385,7 +1385,7 @@ export default function ClientShopPage() {
 
   if (loading) {
     return (
-      <div className="pb-32">
+      <div className="space-y-3 pb-[calc(5rem+env(safe-area-inset-bottom))]">
         {/* Saludo skeleton */}
         <div className="mb-4 space-y-2">
           <Skeleton className="h-3 w-20" rounded="full" />
@@ -1449,7 +1449,7 @@ export default function ClientShopPage() {
   }
 
   return (
-    <div className="pb-24">
+    <div className="space-y-3 pb-[calc(5rem+env(safe-area-inset-bottom))]">
       {/* NOTA: Hero, Banner instalación, Stories, RecentlyViewedRow y
           ProductOfTheDay se MOVIERON a `ClientHomePage` (ruta /inicio)
           para alivianar la tienda. Aquí solo dejamos: aviso "cerrado",
@@ -1461,15 +1461,15 @@ export default function ClientShopPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-3 rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 px-4 py-3 flex items-center gap-3"
         >
-          <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-base">
-            🌙
+          <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center">
+            <Sparkles size={14} />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-black text-amber-900 dark:text-amber-100 leading-tight">
               Estamos cerrados
             </p>
             <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-tight mt-0.5">
-              Horario: {bRules.business_hours_open} a {bRules.business_hours_close}. Puedes seguir explorando, los pedidos se procesan mañana ✨
+              Horario: {bRules.business_hours_open} a {bRules.business_hours_close}. Puedes seguir explorando, los pedidos se procesan mañana.
             </p>
           </div>
         </motion.div>
@@ -3021,12 +3021,8 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           <FakeViewersBadge productId={product.id} />
         )}
         {onToggleFavorite && (
-          <div className="absolute top-2 right-2 z-10 flex flex-col gap-1.5">
+          <div className="absolute top-2 right-2 z-10">
             <WishlistHeart active={isFavorite} onClick={onToggleFavorite} />
-            <ProductShareButton
-              productId={product.id}
-              productName={product.name}
-            />
           </div>
         )}
       </motion.div>
@@ -3394,9 +3390,14 @@ function CartTierBanner({
    con barra de progreso. Catalogo = vitrina limpia.
 */
 
-/**
- * Mini botón de compartir individual en cada ProductCard. Genera un
- * link al catálogo con el filtro `?q=<nombre>` para que el receptor
+/* ──────── ProductShareButton ELIMINADO ────────
+   Mari pidió no mostrar botón de compartir individual en cada card del
+   catálogo (saturaba la card y duplicaba con el share del header del
+   shop, el del BuySheet y el del PublicTicketPage). El cliente que
+   quiere compartir un producto lo abre y comparte desde el sheet o el
+   header. Catálogo = vitrina limpia, solo wishlist heart.
+*/
+
  * caiga directo en ese producto (el universal search reacciona a `q`).
  * Si el cliente está logueado y la regla `share_product` está activa,
  * gana puntos. Best-effort y silencioso.
@@ -3404,57 +3405,5 @@ function CartTierBanner({
  * Vive como sub-componente para usar useAuth sin invalidar el memo del
  * padre `ProductCardClient`.
  */
-function ProductShareButton({
-  productId: _productId,
-  productName,
-}: {
-  productId: string
-  productName: string
-}) {
-  const { email: authEmail } = useAuth()
-  const [busy, setBusy] = useState(false)
-
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      aria-label={`Compartir ${productName}`}
-      title="Compartir producto"
-      onClick={async (e) => {
-        e.stopPropagation()
-        if (busy) return
-        setBusy(true)
-        try {
-          const { shareUrl } = await import("../../lib/share")
-          const origin = window.location.origin
-          const url = `${origin}/?q=${encodeURIComponent(productName)}`
-          const r = await shareUrl({
-            title: productName,
-            text: `Mira esto en Beauty's Me: ${productName} 💖`,
-            url,
-          })
-          if (r === "copied") {
-            toast.success("Link copiado al portapapeles")
-          }
-          if (authEmail && (r === "shared" || r === "copied")) {
-            try {
-              const { awardLoyaltyPoints } = await import(
-                "../loyalty/loyaltyService"
-              )
-              const got = await awardLoyaltyPoints(authEmail, "share_product")
-              if (got > 0) toast.success(`+${got} pts por compartir ✨`)
-            } catch {
-              /* noop */
-            }
-          }
-        } finally {
-          setBusy(false)
-        }
-      }}
-      className="w-8 h-8 rounded-full bg-white/90 dark:bg-slate-900/85 backdrop-blur border border-slate-200/60 dark:border-slate-700/60 text-slate-600 dark:text-slate-300 flex items-center justify-center shadow-sm active:scale-90 hover:text-primary transition-colors disabled:opacity-50"
-    >
-      <Share2 size={13} />
-    </button>
-  )
-}
+// (función eliminada — ver bloque "ProductShareButton ELIMINADO" arriba)
 

@@ -24,7 +24,7 @@ export default function ThemeToggle({ className = "" }: { className?: string }) 
         rules.force_dark_mode
           ? "La tienda está en modo oscuro forzado"
           : "La tienda está en modo claro forzado",
-        { icon: "🔒", duration: 2000 },
+        { duration: 2000 },
       )
       return
     }

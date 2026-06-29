@@ -42,7 +42,7 @@ export default function SessionExpiryWatcher() {
           notifiedRef.current = true
           toast(
             "Tu sesión expiró. Vuelve a iniciar sesión.",
-            { icon: "⏰", duration: 4500 },
+            { duration: 4500 },
           )
           // Mover a login después de mostrar el toast (no inmediato
           // para que el cliente alcance a leerlo).
@@ -75,7 +75,6 @@ export default function SessionExpiryWatcher() {
       if (notifiedRef.current) return
       notifiedRef.current = true
       toast("Tu sesión expiró. Vuelve a iniciar sesión.", {
-        icon: "⏰",
         duration: 4500,
       })
       ;(async () => {

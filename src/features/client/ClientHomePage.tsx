@@ -138,7 +138,7 @@ export default function ClientHomePage() {
   }
 
   return (
-    <div className="pb-24">
+    <div className="space-y-3 pb-[calc(5rem+env(safe-area-inset-bottom))]">
       <ClientHero
         customerName={authName || (authEmail ? authEmail.split("@")[0] : "")}
         isLogged={isLogged}

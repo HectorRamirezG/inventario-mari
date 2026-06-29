@@ -61,8 +61,6 @@ const CyclesPage = lazy(() => import("./features/cycles/CyclesPage"))
 const SupportPage = lazy(() => import("./features/support/SupportPage"))
 
 import ThemeToggle from "./components/ui/ThemeToggle"
-import SoundToggle from "./components/ui/SoundToggle"
-import WhatsAppDirectButton from "./components/ui/WhatsAppDirectButton"
 import CartHeaderButton from "./components/ui/CartHeaderButton"
 import CartReminderMount from "./components/ui/CartReminderMount"
 import DarkScheduleMount from "./components/ui/DarkScheduleMount"
@@ -1729,13 +1727,11 @@ function ShopShell() {
             </div>
           </Link>
           <div className="flex items-center gap-2 shrink-0">
-            {/* Carrito persistente — visible desde cualquier pagina del
-                shop en cuanto el cliente tenga items. Reemplaza al FAB. */}
+            {/* Header MINIMAL: solo Carrito + Notificaciones + Avatar.
+                Sound, Theme y WhatsApp directo viven en el UserProfileDrawer
+                (tap al avatar) para no saturar el header. */}
             <CartHeaderButton />
             {isLogged && <NotificationBell />}
-            <SoundToggle />
-            <WhatsAppDirectButton />
-            <ThemeToggle />
             {showAdminLink && (
               <Link
                 to="/admin"

@@ -94,7 +94,7 @@ export default function MyReportsPage() {
   })()
 
   return (
-    <div className="max-w-2xl mx-auto pb-24">
+    <div className="space-y-3 pb-[calc(5rem+env(safe-area-inset-bottom))]">
       <PageHeader
         icon={LifeBuoy}
         title="Mis reportes"

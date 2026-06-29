@@ -18,9 +18,8 @@ export default function SoundToggle({ className = "" }: { className?: string }) 
     tap()
     const next = !prefs.sounds
     set("sounds", next)
-    toast(next ? "Sonido activado 🔊" : "Sonido silenciado 🔇", {
+    toast(next ? "Sonido activado" : "Sonido silenciado", {
       duration: 1500,
-      icon: next ? "🔊" : "🔇",
     })
   }
 
