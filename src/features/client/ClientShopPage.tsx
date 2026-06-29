@@ -25,6 +25,7 @@ import {
   Eye,
   ShoppingBag,
   Trash2,
+  Gift,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -87,6 +88,12 @@ import {
   useActiveBundles,
   type Bundle,
 } from "../bundles/bundlesService"
+import {
+  useCoupons,
+  validateCouponWithUsage,
+  couponMarkerForNotes,
+  type ValidatedCoupon,
+} from "../promos/couponService"
 
 // Loader único del BuySheet — se reutiliza para el lazy() y para el
 // preload-on-hover/idle desde los botones "+" de cada tarjeta.
@@ -699,6 +706,19 @@ export default function ClientShopPage() {
     ? Number(bRules.gift_wrap_price ?? 0)
     : 0
 
+  // Cupón — opcional. El cliente teclea código + tap "Aplicar". Si es
+  // válido, descontamos del total y guardamos el código en `sales.notes`
+  // como marcador `[CUPÓN: <CODE>]` para tracking de Mari. El catálogo
+  // de cupones lo edita Mari desde Reglas (CouponsEditor).
+  const { coupons: availableCoupons } = useCoupons()
+  const [couponInput, setCouponInput] = useState("")
+  const [couponChecking, setCouponChecking] = useState(false)
+  const [appliedCoupon, setAppliedCoupon] = useState<ValidatedCoupon | null>(null)
+  // Si cambian los items del carrito (subtotal varía), re-evaluamos el
+  // cupón aplicado para que el descuento siempre refleje el carrito real.
+  // Si el cupón pasa a no aplicar (subtotal bajó del min_subtotal), lo
+  // quitamos silenciosamente con toast informativo.
+
   // Confeti en hitos del cliente:
   //  - Cruzar 100 puntos por primera vez → dorado.
   //  - Activarse como VIP automático por primera vez → morado.
@@ -794,15 +814,46 @@ export default function ClientShopPage() {
     repricedCart,
   ])
 
-  // TOTAL = subtotal + envío + empaque premium − volumen − descuento por puntos
+  // TOTAL = subtotal + envío + empaque premium − volumen − puntos − cupón
+  const couponDiscount = appliedCoupon?.discount ?? 0
   const totalAmt = Math.max(
     0,
     subtotalAmt +
       shippingCalc.amount +
       giftWrapAmount -
       volumeDiscount -
-      loyaltyDiscount,
+      loyaltyDiscount -
+      couponDiscount,
   )
+
+  // Re-validación del cupón cuando cambia el subtotal del carrito. Si
+  // el subtotal bajó del min_subtotal, removemos el cupón con toast.
+  // El descuento se recalcula desde el subtotal actual (no del subtotal
+  // congelado al momento de aplicar).
+  useEffect(() => {
+    if (!appliedCoupon) return
+    if (subtotalAmt <= 0) {
+      setAppliedCoupon(null)
+      return
+    }
+    const c = appliedCoupon.coupon
+    if (c.min_subtotal > 0 && subtotalAmt < c.min_subtotal) {
+      setAppliedCoupon(null)
+      toast(`Tu cupón ${c.code} ya no aplica · tu carrito bajó del mínimo`, {
+        icon: "ℹ️",
+        duration: 3000,
+      })
+      return
+    }
+    // Recalcula descuento sobre el subtotal actual.
+    const newDiscount =
+      c.type === "percent"
+        ? Math.min(subtotalAmt, Math.round((subtotalAmt * c.amount) / 100 * 100) / 100)
+        : Math.min(subtotalAmt, c.amount)
+    if (Math.abs(newDiscount - appliedCoupon.discount) > 0.01) {
+      setAppliedCoupon({ coupon: c, discount: newDiscount })
+    }
+  }, [subtotalAmt, appliedCoupon])
 
   // Ahorro vs menudeo (motivacional)
   const savingsVsMenudeo = useMemo(() => {
@@ -819,6 +870,52 @@ export default function ClientShopPage() {
 
   function priceOf(v: PublicVariant): number {
     return v.price_menudeo ?? v.price ?? v.price_medio ?? v.price_mayoreo ?? 0
+  }
+
+  /** Aplica un código de cupón al carrito. Valida client-side primero
+   *  (catálogo activo + subtotal + expiración) y luego verifica usage
+   *  en BD (max_uses). Si todo OK, actualiza `appliedCoupon` y toast
+   *  con el descuento aplicado. */
+  async function applyCoupon() {
+    const code = couponInput.trim().toUpperCase()
+    if (!code) {
+      toast.error("Escribe un código de cupón")
+      return
+    }
+    if (subtotalAmt <= 0) {
+      toast.error("Agrega productos primero")
+      return
+    }
+    setCouponChecking(true)
+    try {
+      const result = await validateCouponWithUsage(
+        code,
+        subtotalAmt,
+        availableCoupons,
+      )
+      if (!result.ok) {
+        toast.error(result.reason)
+        sound.error()
+        return
+      }
+      setAppliedCoupon(result.data)
+      setCouponInput("")
+      toast.success(
+        `Cupón ${result.data.coupon.code} aplicado · -${formatMoney(result.data.discount)}`,
+        { duration: 3000 },
+      )
+      sound.success()
+    } catch (e: any) {
+      toast.error(e?.message ?? "No se pudo validar el cupón")
+    } finally {
+      setCouponChecking(false)
+    }
+  }
+
+  /** Quita el cupón aplicado. Se vuelve a permitir teclear uno nuevo. */
+  function removeCoupon() {
+    setAppliedCoupon(null)
+    setCouponInput("")
   }
 
   // NOTA: hubo una funci\u00f3n `addToCart(p, v)` legacy que agregaba una
@@ -1188,7 +1285,17 @@ export default function ClientShopPage() {
       const wrapNote = useGiftWrap && bRules.gift_wrap_enabled
         ? `[EMPAQUE PREMIUM +$${bRules.gift_wrap_price}] ${bRules.gift_wrap_label}`
         : null
-      const combinedNotes = [giftNotes, wrapNote].filter(Boolean).join("\n\n") || null
+      // Si el cliente aplicó cupón, lo marcamos en notes para que Mari
+      // lo vea en el ticket y para que `countCouponUsage` lo cuente.
+      const couponNote = appliedCoupon
+        ? couponMarkerForNotes(
+            appliedCoupon.coupon.code,
+            appliedCoupon.discount,
+            appliedCoupon.coupon.type,
+            appliedCoupon.coupon.amount,
+          )
+        : null
+      const combinedNotes = [giftNotes, wrapNote, couponNote].filter(Boolean).join("\n\n") || null
 
       const { data: sale, error } = await supabase
         .from("sales")
@@ -1963,6 +2070,84 @@ export default function ClientShopPage() {
                     thresholds={thresholds}
                     savings={savingsVsMenudeo}
                   />
+                )}
+
+                {/* Cupón — solo aparece si hay items en el carrito y
+                    Mari tiene cupones configurados. Si no hay cupones,
+                    no mostramos para no confundir con un input muerto. */}
+                {totalQty > 0 && availableCoupons.length > 0 && (
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-3">
+                    {appliedCoupon ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <Gift size={15} strokeWidth={2.5} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-300 leading-none">
+                            Cupón aplicado
+                          </p>
+                          <p className="text-[13px] font-black text-slate-900 dark:text-slate-100 truncate mt-0.5">
+                            {appliedCoupon.coupon.code}
+                          </p>
+                          <p className="text-[10px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300 mt-0.5">
+                            Ahorras {formatMoney(appliedCoupon.discount)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={removeCoupon}
+                          aria-label="Quitar cupón"
+                          className="shrink-0 w-7 h-7 rounded-full bg-slate-100 hover:bg-rose-100 dark:bg-slate-700 dark:hover:bg-rose-500/20 text-slate-500 hover:text-rose-500 dark:text-slate-300 dark:hover:text-rose-300 flex items-center justify-center transition-colors press"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+                          <Gift size={11} className="text-pink-500" strokeWidth={2.5} />
+                          ¿Tienes un cupón?
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={couponInput}
+                            onChange={(e) =>
+                              setCouponInput(e.target.value.toUpperCase().replace(/\s+/g, ""))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault()
+                                applyCoupon()
+                              }
+                            }}
+                            placeholder="CODIGO"
+                            maxLength={24}
+                            autoCapitalize="characters"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            className="flex-1 h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 text-sm font-black tracking-wider tabular-nums uppercase outline-none focus:border-primary/50 transition-colors"
+                            aria-label="Código de cupón"
+                          />
+                          <button
+                            type="button"
+                            onClick={applyCoupon}
+                            disabled={couponChecking || !couponInput.trim()}
+                            className="h-10 px-4 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[11px] font-black uppercase tracking-widest shadow-sm disabled:opacity-50 disabled:cursor-not-allowed press flex items-center gap-1.5"
+                          >
+                            {couponChecking ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <>
+                                Aplicar
+                                <ArrowRight size={11} />
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
 
                 {/* Sticky CTA mini cuando hay muchos items: el cliente no

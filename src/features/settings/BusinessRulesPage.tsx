@@ -64,6 +64,7 @@ import {
 } from "./businessRulesService"
 import LoyaltyRulesEditor from "../loyalty/LoyaltyRulesEditor"
 import ShippingZonesEditor from "./ShippingZonesEditor"
+import CouponsEditor from "../promos/CouponsEditor"
 import {
   ACCENT_NAMES,
   ACCENT_LABELS,
@@ -198,6 +199,9 @@ export default function BusinessRulesPage() {
 
       {/* ZONAS DE ENVÍO */}
       <ShippingZonesEditor />
+
+      {/* CUPONES DE DESCUENTO */}
+      <CouponsEditor />
 
       {/* SEGURIDAD FINANCIERA */}
       <Section icon={<ShieldAlert size={14} />} title="Seguridad financiera" subtitle="Confirmaciones, anticipos">

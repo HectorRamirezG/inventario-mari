@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles,
@@ -13,6 +14,10 @@ import {
   ArrowLeft,
   User as UserIcon,
   Gift,
+  Compass,
+  ShieldCheck,
+  Heart,
+  MessageCircle,
 } from "lucide-react"
 import toast from "react-hot-toast"
 import { useAuth } from "../../lib/useAuth"
@@ -29,6 +34,7 @@ type Mode = "signin" | "signup" | "magic" | "reset"
 
 export default function LoginPage() {
   const { signInWithPassword, signUpWithPassword, sendMagicLink } = useAuth()
+  const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>("signin")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -49,9 +55,13 @@ export default function LoginPage() {
   //    el password input (común causa de "credenciales inválidas").
   //  - magicSentAt: timestamp del último magic link enviado para mostrar
   //    botón "Reenviar" con cooldown de 60s.
+  //  - welcomeSplash: overlay fullscreen que aparece 400ms tras tap en
+  //    Smart Login con avatar + saludo. Reduce el "flash blanco" entre
+  //    login y dashboard. Sensación de app que te conoce.
   const [capsLockOn, setCapsLockOn] = useState(false)
   const [magicSentAt, setMagicSentAt] = useState<number | null>(null)
   const [magicResendIn, setMagicResendIn] = useState(0)
+  const [welcomeSplash, setWelcomeSplash] = useState(false)
 
   // Si el user prellena email desde quick login, lo sincronizamos.
   useEffect(() => {
@@ -136,6 +146,11 @@ export default function LoginPage() {
     e.preventDefault()
     if (loading) return
     setLoading(true)
+    // Smart Login: si vamos a entrar como el último usuario conocido,
+    // pintamos un splash mini con avatar + saludo mientras Supabase
+    // valida. Reduce el "flash blanco" entre login y dashboard.
+    const isSmartLogin = mode === "signin" && quickMode && !!last
+    if (isSmartLogin) setWelcomeSplash(true)
     try {
       if (mode === "signin") {
         await signInWithPassword(email.trim(), password)
@@ -203,6 +218,9 @@ export default function LoginPage() {
           ? "Ya existe una cuenta con ese correo. Inicia sesión."
           : msg
       toast.error(friendly)
+      // Splash debe cerrarse si hubo error — si no, quedaba pegado y
+      // el usuario veía pantalla "Hola María" sobre un error invisible.
+      setWelcomeSplash(false)
     } finally {
       setLoading(false)
     }
@@ -231,6 +249,58 @@ export default function LoginPage() {
 
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center px-5 overflow-hidden bg-white dark:bg-slate-950">
+      {/* Welcome splash: overlay fullscreen breve con avatar + saludo
+          mientras Supabase valida el Smart Login. Se autoremueve cuando
+          la sesión cambia (el padre redirige) o si hay error. */}
+      <AnimatePresence>
+        {welcomeSplash && last && (
+          <motion.div
+            key="welcome-splash"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22 }}
+            className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl"
+          >
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 200, damping: 18 }}
+            >
+              <Avatar
+                name={last.full_name || last.email}
+                src={last.avatar_url}
+                size={96}
+              />
+            </motion.div>
+            <motion.p
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12, duration: 0.3 }}
+              className="mt-5 text-[10px] font-black uppercase tracking-[0.3em] text-primary"
+            >
+              Hola de nuevo
+            </motion.p>
+            <motion.h2
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.18, duration: 0.32 }}
+              className="text-2xl font-black text-slate-900 dark:text-slate-50 mt-1 tracking-tight"
+            >
+              {(last.full_name || last.email.split("@")[0])}
+            </motion.h2>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.28, duration: 0.25 }}
+              className="mt-4"
+            >
+              <Loader2 size={18} className="text-primary animate-spin" />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Aurora animada de fondo — 3 blobs con escala+rotación lenta. */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <motion.div
@@ -312,6 +382,41 @@ export default function LoginPage() {
             </button>
           )}
         </div>
+
+        {/* Tabs Contraseña / Enlace mágico — toggle rápido entre los
+            dos métodos más usados sin perder el email tecleado. Solo
+            visibles cuando estamos en uno de esos dos modos. Reset y
+            signup tienen su propio flow lineal. */}
+        {(mode === "signin" || mode === "magic") && (
+          <div className="mb-4 flex gap-1 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/60">
+            <button
+              type="button"
+              onClick={() => setMode("signin")}
+              className={`flex-1 h-9 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all press flex items-center justify-center gap-1.5 ${
+                mode === "signin"
+                  ? "bg-white dark:bg-slate-900 text-primary shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700"
+              }`}
+              aria-pressed={mode === "signin"}
+            >
+              <Lock size={11} strokeWidth={2.5} />
+              Contraseña
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("magic")}
+              className={`flex-1 h-9 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all press flex items-center justify-center gap-1.5 ${
+                mode === "magic"
+                  ? "bg-white dark:bg-slate-900 text-primary shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700"
+              }`}
+              aria-pressed={mode === "magic"}
+            >
+              <Send size={11} strokeWidth={2.5} />
+              Enlace mágico
+            </button>
+          </div>
+        )}
 
         {/* Chip de referido: visible cuando vino una invitación por URL
             y el modo es signup. Se borra del state al hacer signup OK. */}
@@ -554,6 +659,32 @@ export default function LoginPage() {
               </>
             )}
           </motion.button>
+
+          {/* Explorar sin cuenta — atajo para clienta que solo quiere ver
+              el catálogo. Si después decide apartar, el flujo guest del
+              cart pide email/teléfono y crea la venta sin obligar a
+              signup. Visible en signin y signup; en magic/reset queda
+              fuera porque ya es un flujo lineal. */}
+          {(mode === "signin" || mode === "signup") && (
+            <div className="relative flex items-center gap-3 py-1">
+              <span className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+              <span className="text-[9px] font-black uppercase tracking-[0.25em] text-slate-400 dark:text-slate-500">
+                o
+              </span>
+              <span className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+            </div>
+          )}
+          {(mode === "signin" || mode === "signup") && (
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="h-11 rounded-2xl text-[12px] font-black flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 bg-white/60 dark:bg-slate-800/40 text-slate-700 dark:text-slate-300 hover:bg-white hover:border-primary/40 hover:text-primary transition-colors press"
+              aria-label="Explorar el catálogo sin iniciar sesión"
+            >
+              <Compass size={14} strokeWidth={2.5} />
+              Solo quiero ver el catálogo
+            </button>
+          )}
         </form>
 
         {/* Reenviar magic link con cooldown 60s. Visible solo si ya hubo
@@ -630,15 +761,28 @@ export default function LoginPage() {
         )}
       </motion.div>
 
-      {/* Pie discreto */}
-      <motion.p
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.6, duration: 0.5 }}
-        className="mt-6 text-center text-[10px] uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 font-bold flex items-center gap-1.5"
+      {/* Pie con trust signals — 3 pills horizontales que comunican
+          confianza sin saturar. Usan icons de lucide (no emoji-char)
+          para mantener consistencia con la UI interna. */}
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.55, duration: 0.5 }}
+        className="mt-6 flex items-center gap-1.5 text-slate-400 dark:text-slate-500"
       >
-        Hecho con <span className="text-rose-500 dark:text-rose-400">♥</span> para tu rutina diaria
-      </motion.p>
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/60 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-700/60 text-[9px] font-black uppercase tracking-widest">
+          <ShieldCheck size={11} className="text-emerald-500" strokeWidth={2.5} />
+          Pago seguro
+        </span>
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/60 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-700/60 text-[9px] font-black uppercase tracking-widest">
+          <MessageCircle size={11} className="text-sky-500" strokeWidth={2.5} />
+          Respuesta rápida
+        </span>
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/60 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-700/60 text-[9px] font-black uppercase tracking-widest">
+          <Heart size={11} className="text-rose-500" strokeWidth={2.5} />
+          Hecho local
+        </span>
+      </motion.div>
     </div>
   )
 }
