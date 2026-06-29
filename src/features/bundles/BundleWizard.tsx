@@ -190,20 +190,35 @@ export default function BundleWizard({
               <div className="h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-600" />
             </div>
 
-            {/* Header */}
+            {/* Header con imagen del bundle (si hay) o icono fallback */}
             <div className="flex items-start gap-3 px-5 pb-3 shrink-0">
-              <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-bloom"
-                style={{
-                  background:
-                    "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
-                }}
-              >
-                <Package size={20} />
-              </div>
+              {bundle.image_url ? (
+                <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 shadow-bloom ring-2 ring-white dark:ring-slate-900">
+                  <img
+                    src={bundle.image_url}
+                    alt={bundle.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-bloom"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                  }}
+                >
+                  <Package size={22} />
+                </div>
+              )}
               <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-black uppercase tracking-widest text-primary">
-                  Paquete
+                <p className="text-[9px] font-black uppercase tracking-widest text-primary flex items-center gap-1">
+                  <Sparkles size={9} /> Paquete
+                  {bundle.discount_percent > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 rounded-full text-[8px] bg-primary text-white">
+                      -{bundle.discount_percent}%
+                    </span>
+                  )}
                 </p>
                 <h3 className="text-base font-black tracking-tight truncate">
                   {bundle.name}
@@ -248,7 +263,7 @@ export default function BundleWizard({
                 })}
               </div>
               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1.5">
-                Paso {stepIx + 1} de {totalSlots} ·{" "}
+                Paso {stepIx + 1} de {totalSlots} · elige tu{" "}
                 <strong className="text-slate-700 dark:text-slate-200">
                   {currentSlot?.label}
                 </strong>
@@ -332,7 +347,7 @@ export default function BundleWizard({
                 <div className="flex items-center justify-between text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
                   <span className="flex items-center gap-1">
                     <Sparkles size={11} />
-                    Descuento paquete ({bundle.discount_percent}%)
+                    Ahorras con paquete
                   </span>
                   <span className="tabular-nums">
                     -{formatMoney(discountAmt)}
@@ -347,6 +362,11 @@ export default function BundleWizard({
                   {formatMoney(finalTotal)}
                 </span>
               </div>
+              {discountAmt > 0 && allChosen && (
+                <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 text-center pt-0.5">
+                  🎉 Te ahorras {formatMoney(discountAmt)} con este paquete
+                </p>
+              )}
 
               <div className="flex gap-2 pt-2">
                 {stepIx > 0 && (

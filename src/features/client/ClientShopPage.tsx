@@ -24,6 +24,7 @@ import {
   Share2,
   Eye,
   ShoppingBag,
+  Trash2,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -1043,6 +1044,26 @@ export default function ClientShopPage() {
       return
     }
 
+    // Rate limit: máximo 3 intentos de checkout en 60s por sesión.
+    // Cubre doble-tap accidental, refrescar y volver a tap, bots.
+    // Defensa server-side adicional debería existir en el RPC.
+    const { rateLimit, rateLimitRetryAfterMs } = await import(
+      "../../lib/rateLimit"
+    )
+    if (!rateLimit("client:create-sale", { max: 3, windowMs: 60_000 })) {
+      const wait = Math.ceil(
+        rateLimitRetryAfterMs("client:create-sale", {
+          max: 3,
+          windowMs: 60_000,
+        }) / 1000,
+      )
+      toast.error(
+        `Estás haciendo muchos intentos. Espera ${wait}s y vuelve a intentar.`,
+        { duration: 4000 },
+      )
+      return
+    }
+
     // Modo vacaciones: tienda cerrada por decisión del admin. Mensaje
     // amigable con fecha de retorno si la configuró.
     if (bRules.shop_closed_enabled) {
@@ -1807,6 +1828,31 @@ export default function ClientShopPage() {
                     type="button"
                     onClick={async () => {
                       if (repricedCart.length === 0) return
+                      const { confirmAction } = await import("../../lib/confirm")
+                      const ok = await confirmAction({
+                        title: "¿Vaciar tu carrito?",
+                        description: `Se eliminarán ${totalQty} ${
+                          totalQty === 1 ? "pieza" : "piezas"
+                        } y no se podrá deshacer. ¿Seguro?`,
+                        confirmLabel: "Sí, vaciar",
+                        tone: "danger",
+                      })
+                      if (!ok) return
+                      setCart([])
+                      haptic.medium()
+                      toast("Carrito vaciado", { icon: "🗑️", duration: 1800 })
+                    }}
+                    disabled={repricedCart.length === 0}
+                    aria-label="Vaciar carrito"
+                    title="Vaciar carrito"
+                    className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-rose-500 press disabled:opacity-40"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (repricedCart.length === 0) return
                       const { shareText } = await import("../../lib/share")
                       const lines = repricedCart.map(
                         (c) =>
@@ -2021,6 +2067,29 @@ export default function ClientShopPage() {
                             </button>
                           </div>
                         </div>
+                        {/* Guardar para después: mueve el item del
+                            carrito a wishlist sin perderlo de vista.
+                            Solo aparece para clientes logueados (sin
+                            login el wishlist es local y se pierde al
+                            borrar app/cookies). */}
+                        {isLogged && !c.is_preorder && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              wishlist.toggle(c.product_id)
+                              changeQty(c.variant_id, -c.qty)
+                              toast(
+                                "Guardado para después en tus deseos 💖",
+                                { icon: "💖", duration: 2200 },
+                              )
+                            }}
+                            className="text-[9px] font-bold text-slate-500 hover:text-rose-500 mt-1 self-start flex items-center gap-1 press"
+                            title="Mover este producto a mis deseos"
+                          >
+                            <Heart size={10} />
+                            Guardar para después
+                          </button>
+                        )}
                       </div>
 
                       {/* Subtotal por línea (alineado a la derecha) */}

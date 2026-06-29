@@ -392,9 +392,6 @@ export default function PaymentCenterDrawer({ open, sale, onClose }: Props) {
               isPaid={isPaid}
               hasPendingProof={lastProof?.kind === "pending"}
             />
-              pct={pct}
-              isPaid={isPaid}
-            />
 
             {/* Si está pagado, vista de gracias + recibos */}
             {isPaid ? (
@@ -760,9 +757,13 @@ function RadialHero({
   const c = 2 * Math.PI * r
   const offset = c * (1 - pct / 100)
   // Si hay proof pending Y el motion no está deshabilitado, pulsa.
+  // Respeta tanto el flag interno (data-motion="off" via userPrefs) como
+  // la preferencia del SO `prefers-reduced-motion: reduce` (a11y).
   const motionOff =
     typeof document !== "undefined" &&
-    document.documentElement.dataset.motion === "off"
+    (document.documentElement.dataset.motion === "off" ||
+      (typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches))
   const shouldPulse = hasPendingProof && !isPaid && !motionOff
 
   return (

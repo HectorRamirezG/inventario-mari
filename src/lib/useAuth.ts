@@ -183,9 +183,16 @@ export function useAuth(): AuthState & {
   }, [])
 
   const signOut = useCallback(async () => {
-    // Disparamos un evento para que el shell aplique fade-out (300ms)
-    // antes de que Supabase tumbe la sesión y React rerender al Login.
+    // Marca este sign-out como voluntario para que SessionExpiryWatcher
+    // no muestre el toast "Tu sesión expiró". El flag se limpia tras
+    // un delay generoso para cubrir todo el flujo de redirect.
     if (typeof window !== "undefined") {
+      ;(window as any).__mariSigningOutVoluntary = true
+      window.setTimeout(() => {
+        ;(window as any).__mariSigningOutVoluntary = false
+      }, 3000)
+      // Disparamos un evento para que el shell aplique fade-out (300ms)
+      // antes de que Supabase tumbe la sesión y React rerender al Login.
       window.dispatchEvent(new CustomEvent("mari:signing-out"))
       await new Promise((r) => setTimeout(r, 280))
     }

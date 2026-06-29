@@ -85,6 +85,7 @@ import PullToRefresh from "./components/ui/PullToRefresh"
 import ScrollToTopButton from "./components/ui/ScrollToTopButton"
 import ScrollToTopOnRoute from "./components/ui/ScrollToTopOnRoute"
 import SignOutOverlay from "./components/ui/SignOutOverlay"
+import SessionExpiryWatcher from "./components/ui/SessionExpiryWatcher"
 
 import { useGlobalShortcuts } from "./lib/useGlobalShortcuts"
 import { useTheme } from "./lib/useTheme"
@@ -207,6 +208,7 @@ export default function App() {
         <ScrollToTopButton />
         <ScrollToTopOnRoute />
         <SignOutOverlay />
+        <SessionExpiryWatcher />
         <CartReminderMount />
         <ClientPagesPrefetchMount />
         <Routes>

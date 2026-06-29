@@ -93,11 +93,32 @@ export default function PublicTicketPage() {
       : ""
 
   async function handleShare() {
+    // Texto rico: el cliente comparte su pedido en WhatsApp/IG con un
+    // formato bonito en lugar de solo "Ticket #XXXX · Total $YYY".
+    // Si está pagado, mensaje positivo. Si está pendiente, invita a
+    // pagar (útil cuando comparte con mamá/pareja para que liquide).
+    let text: string | undefined
+    if (ticket) {
+      const isPaid = (ticket.balance ?? 0) <= 0
+      const isCancelled = ticket.status === "cancelled"
+      const lines: string[] = []
+      if (isCancelled) {
+        lines.push(`Mi pedido cancelado en ${store.name}`)
+      } else if (isPaid) {
+        lines.push(`✨ Mi compra en ${store.name}`)
+        lines.push(`Total: ${formatMoney(ticket.total)} · pagado`)
+        lines.push(`Ticket #${shortId(ticket.id)}`)
+      } else {
+        lines.push(`💖 Mi pedido en ${store.name}`)
+        lines.push(`Total: ${formatMoney(ticket.total)}`)
+        lines.push(`Te falta: ${formatMoney(ticket.balance)}`)
+        lines.push(`Ticket #${shortId(ticket.id)} — paga aquí 👇`)
+      }
+      text = lines.join("\n")
+    }
     const r = await shareUrl({
       title: "Mi ticket de Beauty's Me",
-      text: ticket
-        ? `Ticket ${shortId(ticket.id)} · Total ${formatMoney(ticket.total)}`
-        : undefined,
+      text,
       url: publicUrl,
     })
     if (r === "copied") toast.success("Link copiado al portapapeles")

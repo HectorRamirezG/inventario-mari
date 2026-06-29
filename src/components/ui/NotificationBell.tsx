@@ -566,7 +566,19 @@ export default function NotificationBell({
           new CustomEvent("mari:navigate", { detail: { tab: target.section } })
         )
       } else if (target.route) {
-        navigate(target.route)
+        // Pasamos el detail también como router state. Esto cubre el
+        // caso en que la página destino no esté montada cuando el
+        // CustomEvent se dispara (Suspense pendiente) — el listener no
+        // existe aún y el evento se pierde. Con state, la página lo
+        // lee al mount y abre el drawer/highlight correctamente.
+        navigate(target.route, {
+          state: {
+            followUp: {
+              event: target.followUp.event,
+              detail: target.followUp.detail,
+            },
+          },
+        })
       }
       const delay = target.followUp.delayMs ?? 250
       setTimeout(() => {

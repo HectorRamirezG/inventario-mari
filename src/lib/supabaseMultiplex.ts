@@ -124,11 +124,74 @@ export function startSupabaseMultiplex() {
     emitStatus(map[status] ?? "joining")
   })
   channel = ch
+
+  // ───── Auto-reconnect ─────
+  // El canal de Supabase a veces se cierra cuando: (a) el teléfono entra
+  // a modo standby varias horas, (b) cambia de wifi a 4G y vuelve, (c)
+  // hay timeout del servidor. Sin reconnect explícito, la PWA deja de
+  // recibir eventos y Mari/cliente piensa que "ya no llega nada".
+  //
+  // Estrategia: en visibilitychange + online, si el status NO es "joined",
+  // forzamos un reset del canal.
+  const reconnectIfBroken = () => {
+    if (currentStatus === "joined" || currentStatus === "joining") return
+    debug.warn(
+      `[realtime] reconectando (status=${currentStatus})`,
+    )
+    try {
+      if (channel) supabase.removeChannel(channel)
+    } catch {
+      /* swallow */
+    }
+    channel = null
+    started = false
+    emitStatus("unknown")
+    // Pequeño delay para evitar thundering herd.
+    window.setTimeout(() => startSupabaseMultiplex(), 250)
+  }
+
+  const onVis = () => {
+    if (document.visibilityState === "visible") reconnectIfBroken()
+  }
+  const onOnline = () => reconnectIfBroken()
+  document.addEventListener("visibilitychange", onVis)
+  window.addEventListener("online", onOnline)
+
+  // Heartbeat: si pasaron 90s sin NINGÚN evento Y la página está
+  // visible, asumimos canal muerto y reconectamos. 90s es conservador
+  // para no reconectar de más cuando simplemente no hay actividad.
+  const heartbeatId = window.setInterval(() => {
+    if (document.visibilityState !== "visible") return
+    if (currentStatus !== "joined") return
+    const since = lastEventAt ? Date.now() - lastEventAt : Infinity
+    if (since > 90_000) {
+      // Sin evento en 90s + canal "joined" → probablemente muerto silencioso.
+      // Forzamos un ping ligero: hacemos un select trivial. Si truena por
+      // red, reconectamos.
+      supabase
+        .from("app_settings")
+        .select("key")
+        .limit(1)
+        .then(({ error }) => {
+          if (error) reconnectIfBroken()
+        })
+    }
+  }, 30_000)
+
+  // Limpieza (sólo si se llama stopSupabaseMultiplex después).
+  ;(channel as any).__cleanup = () => {
+    document.removeEventListener("visibilitychange", onVis)
+    window.removeEventListener("online", onOnline)
+    window.clearInterval(heartbeatId)
+  }
 }
 
 export function stopSupabaseMultiplex() {
   if (!channel) return
   try {
+    // Limpia listeners de reconnect/heartbeat antes de remover.
+    const cleanup = (channel as any).__cleanup as (() => void) | undefined
+    if (typeof cleanup === "function") cleanup()
     supabase.removeChannel(channel)
   } catch (e: any) {
     debug.warn("[supabaseMultiplex] removeChannel:", e?.message)

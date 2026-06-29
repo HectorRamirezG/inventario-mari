@@ -14,10 +14,14 @@ import {
   Power,
   Pencil,
   X,
+  Sparkles,
+  Eye,
+  Wand2,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
 import PageHeader from "../../components/ui/PageHeader"
+import ImageUploader from "../../components/ui/ImageUploader"
 import { confirmAction } from "../../lib/confirm"
 import { formatMoney } from "../../lib/format"
 import { supabase } from "../../lib/supabase"
@@ -421,11 +425,22 @@ function BundleEditorModal({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-2 space-y-4">
+          {/* Plantillas rápidas — solo al CREAR (no editar) */}
+          {!bundle && slots.length <= 1 && (
+            <BundleQuickTemplates
+              onApply={(tpl) => {
+                if (!name) setName(tpl.name)
+                setSlots(tpl.slots)
+                if (tpl.discount && discount === 0) setDiscount(tpl.discount)
+              }}
+            />
+          )}
+
           {/* Datos básicos */}
           <div className="space-y-2">
             <label className="block">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 block">
-                Nombre
+                Nombre del paquete
               </span>
               <input
                 type="text"
@@ -438,51 +453,78 @@ function BundleEditorModal({
             </label>
             <label className="block">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 block">
-                Descripción
+                Descripción (opcional)
               </span>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                placeholder="Explicación corta del paquete (opcional)"
+                placeholder="Qué lleva, para quién es, qué lo hace especial…"
                 maxLength={240}
                 className="settings-input resize-none py-2"
               />
             </label>
-            <label className="block">
+
+            {/* Imagen — desde dispositivo (cámara o galería) */}
+            <div className="block">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 block">
-                URL de imagen (opcional)
+                Imagen del paquete
               </span>
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://…"
-                className="settings-input"
+              <ImageUploader
+                value={imageUrl || null}
+                onChange={(url) => setImageUrl(url ?? "")}
+                folder="bundles"
+                label="Agregar foto del paquete"
               />
-            </label>
+              <p className="text-[9px] font-bold text-slate-400 mt-1 leading-snug">
+                Sube una foto desde tu cámara o galería. Si no agregas, el
+                cliente verá un icono genérico.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <label className="block">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1 block">
                   Descuento (%)
                 </span>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={discount}
-                  onChange={(e) => setDiscount(Number(e.target.value) || 0)}
-                  className="settings-input text-center"
-                />
+                <div className="relative">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={discount}
+                    onChange={(e) =>
+                      setDiscount(Number(e.target.value) || 0)
+                    }
+                    className="settings-input text-center pr-7"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 pointer-events-none">
+                    %
+                  </span>
+                </div>
+                {discount > 0 && (
+                  <p className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                    El cliente verá “Ahorras X%”
+                  </p>
+                )}
               </label>
-              <label className="flex items-center gap-2 pt-5">
+              <label className="flex items-start gap-2 pt-5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={active}
                   onChange={(e) => setActive(e.target.checked)}
-                  className="w-4 h-4 accent-primary"
+                  className="w-4 h-4 accent-primary mt-0.5"
                 />
-                <span className="text-[11px] font-bold">Visible al cliente</span>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold block leading-tight">
+                    Visible al cliente
+                  </span>
+                  <span className="text-[9px] text-slate-500 leading-tight">
+                    {active
+                      ? "Aparece en la tienda"
+                      : "Oculto (solo tú lo ves)"}
+                  </span>
+                </div>
               </label>
             </div>
           </div>
@@ -490,15 +532,20 @@ function BundleEditorModal({
           {/* Slots */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
-                Slots del paquete
-              </h4>
+              <div className="min-w-0">
+                <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
+                  Qué lleva el paquete
+                </h4>
+                <p className="text-[9px] font-bold text-slate-500 mt-0.5">
+                  Agrega 1 slot por cada producto que el cliente elegirá
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={addSlot}
                 className="h-8 px-3 rounded-full bg-primary text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-1 press shadow-sm"
               >
-                <Plus size={11} /> Slot
+                <Plus size={11} /> Agregar slot
               </button>
             </div>
             <ul className="space-y-2">
@@ -514,6 +561,18 @@ function BundleEditorModal({
               ))}
             </ul>
           </div>
+
+          {/* Preview de cómo lo verá el cliente */}
+          {(name || imageUrl) && slots.length > 0 && (
+            <BundleClientPreview
+              name={name || "(sin nombre)"}
+              description={description}
+              imageUrl={imageUrl}
+              discount={discount}
+              slotsCount={slots.length}
+              piecesCount={slots.reduce((a, s) => a + s.qty, 0)}
+            />
+          )}
         </div>
 
         {/* Footer */}
@@ -609,12 +668,31 @@ function SlotEditor({
         onClick={() => setExpanded((v) => !v)}
         className="w-full flex items-center justify-between text-[10px] font-bold text-slate-600 dark:text-slate-300 px-1"
       >
-        <span>
-          {slot.eligible_variant_ids.length === 0
-            ? "Variantes elegibles: TODAS las activas"
-            : `${slot.eligible_variant_ids.length} variante${slot.eligible_variant_ids.length === 1 ? "" : "s"} elegible${slot.eligible_variant_ids.length === 1 ? "" : "s"}`}
+        <span className="flex items-center gap-1.5">
+          {slot.eligible_variant_ids.length === 0 ? (
+            <>
+              <span className="px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest leading-none bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+                Libre
+              </span>
+              <span>El cliente elige cualquier variante</span>
+            </>
+          ) : (
+            <>
+              <span className="px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest leading-none bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300">
+                Filtrado
+              </span>
+              <span>
+                {slot.eligible_variant_ids.length} variante
+                {slot.eligible_variant_ids.length === 1 ? "" : "s"} elegible
+                {slot.eligible_variant_ids.length === 1 ? "" : "s"}
+              </span>
+            </>
+          )}
         </span>
-        {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        <span className="text-slate-400">
+          {expanded ? "— ocultar" : "— elegir"}
+          {expanded ? <ChevronUp size={12} className="inline ml-0.5" /> : <ChevronDown size={12} className="inline ml-0.5" />}
+        </span>
       </button>
       <AnimatePresence>
         {expanded && (
@@ -687,5 +765,208 @@ function SlotEditor({
         )}
       </AnimatePresence>
     </li>
+  )
+}
+
+/* ────────
+ * Plantillas rápidas para crear bundles típicos en 1 tap.
+ * Solo aparecen al crear (no editar) y cuando hay <=1 slot (estado
+ * inicial). Ahorran configurar los slots de cero para los casos más
+ * comunes ("set 3 labiales", "trio de uniqueco", etc.).
+ * ──────── */
+interface QuickTemplate {
+  id: string
+  name: string
+  emoji: string
+  description: string
+  slots: BundleSlot[]
+  discount?: number
+}
+
+const QUICK_TEMPLATES: QuickTemplate[] = [
+  {
+    id: "set-2",
+    name: "Set de 2 piezas",
+    emoji: "💋",
+    description: "2 productos a elegir, 10% off",
+    slots: [
+      { label: "Producto 1", qty: 1, eligible_variant_ids: [] },
+      { label: "Producto 2", qty: 1, eligible_variant_ids: [] },
+    ],
+    discount: 10,
+  },
+  {
+    id: "set-3",
+    name: "Set de 3 piezas",
+    emoji: "✨",
+    description: "3 productos a elegir, 15% off",
+    slots: [
+      { label: "Producto 1", qty: 1, eligible_variant_ids: [] },
+      { label: "Producto 2", qty: 1, eligible_variant_ids: [] },
+      { label: "Producto 3", qty: 1, eligible_variant_ids: [] },
+    ],
+    discount: 15,
+  },
+  {
+    id: "kit-completo",
+    name: "Kit completo (5 piezas)",
+    emoji: "🎁",
+    description: "5 productos, 20% off",
+    slots: [
+      { label: "Producto 1", qty: 1, eligible_variant_ids: [] },
+      { label: "Producto 2", qty: 1, eligible_variant_ids: [] },
+      { label: "Producto 3", qty: 1, eligible_variant_ids: [] },
+      { label: "Producto 4", qty: 1, eligible_variant_ids: [] },
+      { label: "Producto 5", qty: 1, eligible_variant_ids: [] },
+    ],
+    discount: 20,
+  },
+  {
+    id: "duo-mismo",
+    name: "2x1 / Duo mismo producto",
+    emoji: "👯",
+    description: "1 slot que pide 2 piezas iguales",
+    slots: [{ label: "Producto", qty: 2, eligible_variant_ids: [] }],
+    discount: 50, // "compra 1 lleva 2" ≈ 50% en cada uno
+  },
+]
+
+function BundleQuickTemplates({
+  onApply,
+}: {
+  onApply: (tpl: QuickTemplate) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-2xl border border-primary/30 bg-primary/5 dark:bg-primary/10 p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 text-left"
+      >
+        <span className="w-7 h-7 rounded-lg bg-primary text-white flex items-center justify-center shrink-0">
+          <Wand2 size={13} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 leading-tight">
+            Empieza con una plantilla
+          </p>
+          <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 leading-tight">
+            Set 2, Set 3, Kit completo… toca y solo cambia el nombre
+          </p>
+        </div>
+        {open ? (
+          <ChevronUp size={14} className="text-slate-400" />
+        ) : (
+          <ChevronDown size={14} className="text-slate-400" />
+        )}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-3 grid grid-cols-2 gap-2">
+              {QUICK_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  onClick={() => {
+                    onApply(tpl)
+                    setOpen(false)
+                    toast.success(`Plantilla aplicada: ${tpl.name}`, {
+                      duration: 1800,
+                    })
+                  }}
+                  className="text-left p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-primary press"
+                >
+                  <p className="text-base mb-0.5">{tpl.emoji}</p>
+                  <p className="text-[10px] font-black text-slate-700 dark:text-slate-200 leading-tight">
+                    {tpl.name}
+                  </p>
+                  <p className="text-[9px] text-slate-500 leading-tight">
+                    {tpl.description}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+/* ────────
+ * Mini preview de cómo se verá el paquete en la tienda del cliente.
+ * No es interactivo — es informativo para que Mari "vea" antes de
+ * guardar. Mismo estilo que la card real del cliente (compacto).
+ * ──────── */
+function BundleClientPreview({
+  name,
+  description,
+  imageUrl,
+  discount,
+  slotsCount,
+  piecesCount,
+}: {
+  name: string
+  description: string
+  imageUrl: string
+  discount: number
+  slotsCount: number
+  piecesCount: number
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3 space-y-2">
+      <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+        <Eye size={11} />
+        Vista previa para el cliente
+      </div>
+      <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="aspect-[16/9] bg-slate-100 dark:bg-slate-800 relative">
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-slate-300">
+              <Package size={32} />
+            </div>
+          )}
+          {discount > 0 && (
+            <span
+              className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-bloom"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+              }}
+            >
+              -{discount}%
+            </span>
+          )}
+        </div>
+        <div className="p-3">
+          <p className="text-[9px] font-black uppercase tracking-widest text-primary leading-none flex items-center gap-1">
+            <Sparkles size={9} /> Paquete
+          </p>
+          <p className="text-sm font-black mt-1 truncate">{name}</p>
+          {description && (
+            <p className="text-[10px] font-bold text-slate-500 line-clamp-2 mt-0.5">
+              {description}
+            </p>
+          )}
+          <p className="text-[10px] font-bold text-slate-500 mt-1">
+            {slotsCount} slot{slotsCount === 1 ? "" : "s"} · {piecesCount} pieza
+            {piecesCount === 1 ? "" : "s"} a elegir
+          </p>
+        </div>
+      </div>
+    </div>
   )
 }

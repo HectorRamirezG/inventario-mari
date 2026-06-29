@@ -8,6 +8,8 @@ import {
   XCircle,
   RotateCcw,
   Star,
+  QrCode,
+  X as XIcon,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -76,6 +78,32 @@ interface MyDelivery extends OrderProgressDelivery {
   client_time_pref?: string | null
 }
 
+/** Lee el set de IDs ya celebrados (paid/delivered) desde localStorage.
+ *  Permite que el confetti NO se vuelva a disparar al remontar la página. */
+function readCelebratedSet(key: string | null): Set<string> {
+  if (!key || typeof window === "undefined") return new Set()
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [])
+  } catch {
+    return new Set()
+  }
+}
+
+/** Persiste el set de IDs ya celebrados. Cap a 200 para evitar crecimiento
+ *  sin fin (cliente con 500 pedidos liquidados a lo largo de años). */
+function writeCelebratedSet(key: string | null, set: Set<string>): void {
+  if (!key || typeof window === "undefined") return
+  try {
+    const arr = Array.from(set).slice(-200)
+    window.localStorage.setItem(key, JSON.stringify(arr))
+  } catch {
+    /* localStorage lleno o privado — ignorar */
+  }
+}
+
 export default function ClientOrdersPage() {
   const { email, fullName } = useAuth()
   const navigate = useNavigate()
@@ -85,6 +113,28 @@ export default function ClientOrdersPage() {
   const [shouldOpenHelpOnMount] = useState<boolean>(
     () => !!(location.state as { openHelp?: boolean } | null)?.openHelp,
   )
+  // Si llegamos con state.followUp (típicamente desde NotificationBell
+  // tras click en notif de comprobante aprobado/rechazado), disparamos
+  // el evento custom para que el listener correspondiente abra el drawer.
+  // Esto cubre el caso en que el componente NO está montado cuando el
+  // NotificationBell hizo dispatch (Suspense + lazy), el evento se
+  // perdería sin este fallback por router state.
+  useEffect(() => {
+    const fu = (location.state as { followUp?: { event: string; detail: any } } | null)
+      ?.followUp
+    if (!fu || !fu.event) return
+    // Disparamos en próximo tick para que los listeners del componente
+    // tengan tiempo de montarse.
+    const id = window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent(fu.event, { detail: fu.detail }))
+    }, 80)
+    // Limpiamos el state para que un refresh NO vuelva a disparar el
+    // followUp (sino se abriría el drawer cada vez que el cliente
+    // refresca la página).
+    navigate(location.pathname, { replace: true, state: {} })
+    return () => window.clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [orders, setOrders] = useState<MyOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [paymentOrder, setPaymentOrder] = useState<MyOrder | null>(null)
@@ -122,13 +172,21 @@ export default function ClientOrdersPage() {
   const rules = useBusinessRules()
   const aliveRef = useRef(true)
   // Trackea qué deliveries el cliente ya vio en estado 'delivered' para
-  // disparar confetti SOLO en la transición (no en cada refetch). Ignoramos
-  // el primer render para no celebrar pedidos viejos al montar la página.
+  // disparar confetti SOLO en la transición (no en cada refetch). Persistido
+  // en localStorage por email para que sobreviva remount/refresh — sin esto,
+  // cada vez que el cliente entra a /mis-pedidos se le dispara el confetti
+  // de TODOS los pedidos liquidados (bug reportado por Mari).
   const deliveredKnownRef = useRef<Set<string> | null>(null)
-  // Igual que arriba pero para pedidos LIQUIDADOS (balance pasó a 0).
-  // Mari pedía que al pagar el último abono se notara explícito el
-  // logro, no solo que cambie un número silenciosamente.
   const paidKnownRef = useRef<Set<string> | null>(null)
+  /** QR del pedido que se muestra al repartidor/Mari para identificar la venta. */
+  const [qrSaleId, setQrSaleId] = useState<string | null>(null)
+
+  const celebratedPaidKey = email
+    ? `mari:celebrated-paid:${email.toLowerCase()}`
+    : null
+  const celebratedDeliveredKey = email
+    ? `mari:celebrated-delivered:${email.toLowerCase()}`
+    : null
 
   const loadOrders = useCallback(async () => {
     if (!email) return
@@ -258,17 +316,25 @@ export default function ClientOrdersPage() {
     }
   }, [email, loadOrders])
 
-  // Confetti al detectar transición a 'delivered'. Si es el PRIMER load
-  // ya delivered (pedido viejo), inicializa el set sin disparar — el
-  // confetti es solo para el momento de la entrega real, no para revisitar
-  // pedidos viejos. Best-effort: lazy import para no inflar el bundle.
+  // Confetti al detectar transición a 'delivered'. Persistimos los IDs
+  // ya celebrados en localStorage para que no se vuelva a disparar al
+  // remontar la página (cliente entra/sale de /mis-pedidos varias veces).
   useEffect(() => {
+    if (loading) return
     const currentDelivered = new Set<string>()
     for (const [saleId, d] of Object.entries(deliveryBySale)) {
       if (d.status === "delivered") currentDelivered.add(saleId)
     }
     if (deliveredKnownRef.current === null) {
-      deliveredKnownRef.current = currentDelivered
+      // Primera inicialización tras load: leer set persistido. Si hay
+      // pedidos delivered que NO están persistidos (caso raro tras
+      // limpiar localStorage), los persistimos sin disparar confetti.
+      const persisted = readCelebratedSet(celebratedDeliveredKey)
+      const merged = new Set<string>([...persisted, ...currentDelivered])
+      deliveredKnownRef.current = merged
+      if (merged.size !== persisted.size) {
+        writeCelebratedSet(celebratedDeliveredKey, merged)
+      }
       return
     }
     const before = deliveredKnownRef.current
@@ -276,8 +342,10 @@ export default function ClientOrdersPage() {
     for (const id of currentDelivered) {
       if (!before.has(id)) newlyDelivered.push(id)
     }
-    deliveredKnownRef.current = currentDelivered
     if (newlyDelivered.length === 0) return
+    const merged = new Set<string>([...before, ...newlyDelivered])
+    deliveredKnownRef.current = merged
+    writeCelebratedSet(celebratedDeliveredKey, merged)
     ;(async () => {
       try {
         const { fireConfetti } = await import("../../lib/confetti")
@@ -286,11 +354,12 @@ export default function ClientOrdersPage() {
         /* noop */
       }
     })()
-  }, [deliveryBySale])
+  }, [deliveryBySale, loading, celebratedDeliveredKey])
 
   // Celebración al liquidar un apartado (balance 0 por primera vez).
-  // Se dispara una sola vez por orden: snapshot en ref evita re-trigger.
+  // Mismo patrón: persistencia en localStorage para evitar re-disparo.
   useEffect(() => {
+    if (loading) return
     const currentPaid = new Set<string>()
     for (const o of orders) {
       const balance = Number(o.total ?? 0) - Number(o.paid ?? 0)
@@ -299,7 +368,12 @@ export default function ClientOrdersPage() {
       }
     }
     if (paidKnownRef.current === null) {
-      paidKnownRef.current = currentPaid
+      const persisted = readCelebratedSet(celebratedPaidKey)
+      const merged = new Set<string>([...persisted, ...currentPaid])
+      paidKnownRef.current = merged
+      if (merged.size !== persisted.size) {
+        writeCelebratedSet(celebratedPaidKey, merged)
+      }
       return
     }
     const before = paidKnownRef.current
@@ -307,8 +381,10 @@ export default function ClientOrdersPage() {
     for (const id of currentPaid) {
       if (!before.has(id)) newlyPaid.push(id)
     }
-    paidKnownRef.current = currentPaid
     if (newlyPaid.length === 0) return
+    const merged = new Set<string>([...before, ...newlyPaid])
+    paidKnownRef.current = merged
+    writeCelebratedSet(celebratedPaidKey, merged)
     // Marcar visualmente las cards que acaban de transicionar a pagado.
     // Respeta data-motion="off": si Mari (o el SO) pidió sin animaciones,
     // omitimos el ring animado — solo confetti + toast.
@@ -348,7 +424,7 @@ export default function ClientOrdersPage() {
         /* noop */
       }
     })()
-  }, [orders])
+  }, [orders, loading, celebratedPaidKey])
 
   // Realtime via hub multiplex. Filtramos por customer_email del lado
   // cliente para evitar abrir un canal con filtro por usuario.
@@ -985,20 +1061,36 @@ export default function ClientOrdersPage() {
                   >
                     Ver ticket →
                   </button>
-                  {canReview && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openRateOrder(o.id)
-                      }}
-                      className="h-8 px-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
-                      title="Calificar productos"
-                    >
-                      <Star size={11} />
-                      Calificar
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {canReview && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openRateOrder(o.id)
+                        }}
+                        className="h-8 px-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 text-amber-700 dark:text-amber-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                        title="Calificar productos"
+                      >
+                        <Star size={11} />
+                        Calificar
+                      </button>
+                    )}
+                    {o.public_token && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setQrSaleId(o.id)
+                        }}
+                        className="h-8 w-8 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center press"
+                        title="QR del pedido (mostrar a Mari o repartidor)"
+                        aria-label="QR del pedido"
+                      >
+                        <QrCode size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1042,6 +1134,20 @@ export default function ClientOrdersPage() {
                   <ShoppingBag size={11} />
                   Ticket
                 </button>
+                {o.public_token && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setQrSaleId(o.id)
+                    }}
+                    className="h-8 px-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                    title="QR del pedido (mostrar a Mari o repartidor)"
+                  >
+                    <QrCode size={11} />
+                    QR
+                  </button>
+                )}
                 {claim.allowed && (
                   <button
                     type="button"
@@ -1191,6 +1297,16 @@ export default function ClientOrdersPage() {
         onCancel={() => setReorderPreviewId(null)}
         onConfirm={() => reorderPreviewId && confirmReorder(reorderPreviewId)}
       />
+
+      {/* QR del pedido — modal con código QR que codifica el URL público
+          del ticket. El cliente lo muestra a Mari (caja) o al repartidor
+          para que escaneen y abran TODA la info del pedido (items, dirección,
+          monto, status) sin teclear nada. */}
+      <OrderQrModal
+        open={!!qrSaleId}
+        sale={qrSaleId ? orders.find((o) => o.id === qrSaleId) ?? null : null}
+        onClose={() => setQrSaleId(null)}
+      />
     </div>
   )
 }
@@ -1270,6 +1386,111 @@ function OrderStatusPill({
       />
       {title}
     </span>
+  )
+}
+
+/**
+ * Modal con el QR del pedido individual. Codifica el URL público del
+ * ticket (`/ticket/{token}`) — al escanearlo, Mari o el repartidor
+ * abren toda la información del pedido (cliente, items, dirección,
+ * monto, status) sin teclear nada.
+ *
+ * Cada pedido tiene SU propio QR — distinto al QR del usuario (que
+ * codifica solo el email para identificación general en caja).
+ */
+function OrderQrModal({
+  open,
+  sale,
+  onClose,
+}: {
+  open: boolean
+  sale: MyOrder | null
+  onClose: () => void
+}) {
+  if (typeof document === "undefined") return null
+  if (!open || !sale) return null
+  const token = sale.public_token ?? sale.id
+  const ticketUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/ticket/${token}` : ""
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=${encodeURIComponent(
+    ticketUrl,
+  )}`
+  const balance = Math.max(
+    0,
+    (Number(sale.total) || 0) - (Number(sale.paid) || 0),
+  )
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[260] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="absolute inset-0 bg-slate-950/75 backdrop-blur-sm"
+        aria-hidden
+      />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.92, y: 12 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        className="relative w-full max-w-xs rounded-3xl bg-white dark:bg-slate-900 shadow-premium overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 pt-5 pb-3 flex items-start justify-between">
+          <div className="min-w-0">
+            <p className="text-[9px] uppercase tracking-widest text-slate-400 font-black leading-none">
+              QR del pedido
+            </p>
+            <p className="text-sm font-black tracking-tight mt-0.5 flex items-center gap-1.5">
+              <QrCode size={14} className="text-primary" />
+              {shortId(sale.id)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center press"
+          >
+            <XIcon size={14} />
+          </button>
+        </div>
+        <div className="px-5 pb-5 flex flex-col items-center gap-3">
+          <div className="rounded-2xl bg-white p-3 ring-1 ring-slate-200">
+            <img
+              src={qrSrc}
+              alt="QR de mi pedido"
+              width={240}
+              height={240}
+              className="w-60 h-60 object-contain"
+              loading="lazy"
+            />
+          </div>
+          <div className="text-center space-y-1">
+            <p className="text-sm font-black tabular-nums text-slate-900 dark:text-slate-100">
+              {formatMoney(sale.total)}
+            </p>
+            {balance > 0 ? (
+              <p className="text-[11px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                Faltan {formatMoney(balance)}
+              </p>
+            ) : (
+              <p className="text-[11px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+                Liquidado ✓
+              </p>
+            )}
+          </div>
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 text-center leading-snug">
+            Muéstralo a Mari o al repartidor — abren tu pedido completo
+            sin teclear nada.
+          </p>
+        </div>
+      </motion.div>
+    </div>,
+    document.body,
   )
 }
 

@@ -47,6 +47,16 @@ export default class ErrorBoundary extends Component<Props, State> {
           }),
         )
       }
+      // Logger remoto best-effort: registra el error en Supabase si
+      // existe la tabla error_logs. Si no existe, falla silencioso.
+      // Lazy import para no inflar el bundle inicial.
+      import("../../lib/logger")
+        .then(({ logBoundaryError }) => {
+          logBoundaryError(error, info.componentStack ?? "", scope)
+        })
+        .catch(() => {
+          /* logger no disponible — no romper la app por esto */
+        })
     } catch {
       /* nunca propagar errores del propio boundary */
     }
