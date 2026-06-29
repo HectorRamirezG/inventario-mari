@@ -25,6 +25,7 @@ import { translateError } from "../../lib/supabaseErrors"
 import { sound } from "../../lib/sound"
 import { fireConfetti } from "../../lib/confetti"
 import { useBodyScrollLock } from "../../lib/bodyScrollLock"
+import { parseScannedCode } from "../../lib/scannedCode"
 
 /**
  * FAB de "Escanear para entregar" en DeliveriesAdminPage.
@@ -54,19 +55,19 @@ export default function DeliveryScanFAB({
   const [collectAmount, setCollectAmount] = useState<string>("")
   const [submitting, setSubmitting] = useState(false)
 
-  /** Extrae el token de un URL escaneado. Soporta:
-   *  - https://app/comanda/<token>
-   *  - https://app/ticket/<token>
-   *  - solo <token> a pelo (32-64 chars alfanum) */
-  function extractToken(scan: string): { kind: "comanda" | "ticket"; token: string } | null {
-    const text = scan.trim()
-    const comanda = text.match(/\/comanda\/([A-Za-z0-9_-]{8,})/i)
-    if (comanda) return { kind: "comanda", token: comanda[1] }
-    const ticket = text.match(/\/ticket\/([A-Za-z0-9_-]{8,})/i)
-    if (ticket) return { kind: "ticket", token: ticket[1] }
-    // Solo token: asumimos que es de comanda (uso más probable en admin)
-    if (/^[A-Za-z0-9_-]{8,64}$/.test(text)) {
-      return { kind: "comanda", token: text }
+  /** Extrae el token útil de lo que sea que escaneó Mari.
+   *  Apoyado en `parseScannedCode` (parser compartido) + un fallback
+   *  cuando el QR es solo un token a pelo (que asumimos de comanda,
+   *  el uso más probable de este FAB). */
+  function extractToken(
+    scan: string,
+  ): { kind: "comanda" | "ticket"; token: string } | null {
+    const parsed = parseScannedCode(scan)
+    if (parsed.kind === "comanda") return { kind: "comanda", token: parsed.token }
+    if (parsed.kind === "ticket") return { kind: "ticket", token: parsed.token }
+    // Token a pelo (32-64 alfanum) — asumimos comanda.
+    if (parsed.kind === "sku" && /^[A-Za-z0-9_-]{8,64}$/.test(parsed.code)) {
+      return { kind: "comanda", token: parsed.code }
     }
     return null
   }
@@ -74,6 +75,7 @@ export default function DeliveryScanFAB({
   async function handleScan(text: string): Promise<boolean> {
     const parsed = extractToken(text)
     if (!parsed) {
+      sound.error()
       toast.error("QR no reconocido · debe ser de ticket o comanda")
       return false
     }
@@ -81,6 +83,10 @@ export default function DeliveryScanFAB({
     try {
       let note: PublicDeliveryNote | null = null
       let dnId: string | null = null
+      /** Si el ticket existe pero AÚN no tiene comanda asociada, lo
+       *  guardamos para ofrecer salir a Apartados con la venta resaltada
+       *  (en vez de mostrar un error opaco "No encontré comanda…"). */
+      let ticketWithoutDelivery: { saleId: string; customerName: string | null } | null = null
 
       if (parsed.kind === "comanda") {
         note = await getPublicDeliveryNote(parsed.token)
@@ -94,14 +100,21 @@ export default function DeliveryScanFAB({
           dnId = (dn as any)?.id ?? null
         }
       } else {
-        // /ticket/ → buscamos la venta por public_token, luego la comanda más reciente
+        // /ticket/<token> → buscamos la venta por public_token,
+        //   luego la comanda más reciente.
         const { data: sale } = await supabase
           .from("sales")
-          .select("id")
+          .select("id,customer_name,status")
           .eq("public_token", parsed.token)
           .maybeSingle()
-        const saleId = (sale as any)?.id as string | undefined
+        const saleRow = sale as any
+        const saleId = saleRow?.id as string | undefined
         if (saleId) {
+          if (saleRow.status === "cancelled") {
+            sound.error()
+            toast.error("Esa venta está cancelada · no se puede entregar")
+            return true
+          }
           const { data: dn } = await supabase
             .from("delivery_notes")
             .select("id,public_token")
@@ -111,11 +124,45 @@ export default function DeliveryScanFAB({
             .maybeSingle()
           const dnToken = (dn as any)?.public_token as string | undefined
           dnId = (dn as any)?.id ?? null
-          if (dnToken) note = await getPublicDeliveryNote(dnToken)
+          if (dnToken) {
+            note = await getPublicDeliveryNote(dnToken)
+          } else {
+            // Ticket válido pero sin comanda todavía. Lo capturamos para
+            // mensaje + escape route.
+            ticketWithoutDelivery = {
+              saleId,
+              customerName: saleRow.customer_name ?? null,
+            }
+          }
         }
       }
 
+      // Ticket válido pero sin comanda → navegar a Apartados con la
+      // venta resaltada para que Mari pueda crear la comanda desde ahí.
+      if (!note && ticketWithoutDelivery) {
+        sound.scan()
+        const who = ticketWithoutDelivery.customerName || "el cliente"
+        toast(
+          `Pedido de ${who} no tiene comanda aún · ábrelo desde Apartados para crearla`,
+          { icon: "ℹ️", duration: 3500 },
+        )
+        window.dispatchEvent(
+          new CustomEvent("app:navigate", {
+            detail: { tab: "pendientes" },
+          }),
+        )
+        setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent("apartados:highlight-sale", {
+              detail: { saleId: ticketWithoutDelivery!.saleId },
+            }),
+          )
+        }, 280)
+        return true
+      }
+
       if (!note) {
+        sound.error()
         toast.error("No encontré comanda para ese código")
         return false
       }
@@ -126,6 +173,7 @@ export default function DeliveryScanFAB({
         return true
       }
       if (note.sale.status === "cancelled") {
+        sound.error()
         toast.error("Esa venta está cancelada · no se puede entregar")
         return true
       }
@@ -137,6 +185,7 @@ export default function DeliveryScanFAB({
       sound.scan()
       return true
     } catch (e) {
+      sound.error()
       toast.error(translateError(e, "Error leyendo el código"))
       return false
     } finally {
