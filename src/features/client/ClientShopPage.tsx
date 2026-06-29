@@ -3397,13 +3397,5 @@ function CartTierBanner({
    quiere compartir un producto lo abre y comparte desde el sheet o el
    header. Catálogo = vitrina limpia, solo wishlist heart.
 */
-
- * caiga directo en ese producto (el universal search reacciona a `q`).
- * Si el cliente está logueado y la regla `share_product` está activa,
- * gana puntos. Best-effort y silencioso.
- *
- * Vive como sub-componente para usar useAuth sin invalidar el memo del
- * padre `ProductCardClient`.
- */
 // (función eliminada — ver bloque "ProductShareButton ELIMINADO" arriba)
 
