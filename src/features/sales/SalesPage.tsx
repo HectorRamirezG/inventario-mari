@@ -38,6 +38,8 @@ import { formatMoney } from "../../lib/format";
 import { sound } from "../../lib/sound";
 import { useWakeLock } from "../../lib/useWakeLock";
 import { confirmAction } from "../../lib/confirm";
+import { parseScannedCode } from "../../lib/scannedCode";
+import { supabase } from "../../lib/supabase";
 import {
   useBusinessRules,
   calculateAutoDiscount,
@@ -200,29 +202,113 @@ export default function SalesPage() {
   }, [search, state.results]);
 
   /**
-   * Handler del scanner. Busca el SKU leído en el catálogo y lo agrega
-   * al carrito. Devuelve true para cerrar el scanner inmediatamente al
-   * encontrar match; si no se encuentra, deja el scanner abierto y avisa.
+   * Handler del scanner. Detecta el tipo del código escaneado (ticket
+   * público / comanda / deep-link de producto / URL externa / SKU)
+   * y reacciona diferente:
+   *
+   *  - **ticket/comanda**: Mari escaneó el QR del cliente. Resolvemos el
+   *    `sale_id` desde `public_token` y navegamos a Apartados con
+   *    highlight de esa venta. Evita el ruido de "URL no encontrada".
+   *  - **product** (deep-link `/p/<id>`): buscamos la primera variante
+   *    de ese producto y la agregamos al carrito.
+   *  - **external_url**: avisamos que el QR no es un código de venta.
+   *  - **sku**: lookup por SKU/variant_name como hasta ahora.
+   *
+   * El handler es async; el `onScan` de `<BarcodeScanner>` recibe el
+   * wrapper que retorna false (no cerrar) y nosotros cerramos
+   * manualmente con setScannerOpen tras resolver la promesa.
    */
   const handleScan = useCallback(
-    (code: string) => {
-      const norm = code.trim().toUpperCase();
-      const match = state.results.find(
-        (r: any) =>
+    async (raw: string): Promise<boolean> => {
+      const parsed = parseScannedCode(raw);
+
+      // CASO 1 — QR de ticket del cliente
+      if (parsed.kind === "ticket" || parsed.kind === "comanda") {
+        sound.scan();
+        try {
+          const { data, error } = await supabase
+            .from("sales")
+            .select("id,customer_name,customer_email")
+            .eq("public_token", parsed.token)
+            .maybeSingle();
+          if (error || !data) {
+            sound.error();
+            toast.error("Ese ticket no existe o ya no es válido", {
+              duration: 2500,
+            });
+            return false;
+          }
+          const who = (data as any).customer_name || (data as any).customer_email || "el cliente";
+          toast.success(`Pedido de ${who} · abriendo Apartados`, {
+            duration: 1800,
+          });
+          // Navegar a sección Apartados y resaltar la venta. El handler
+          // global en App.tsx espera `detail.tab`.
+          window.dispatchEvent(
+            new CustomEvent("app:navigate", {
+              detail: { tab: "pendientes" },
+            }),
+          );
+          setTimeout(() => {
+            window.dispatchEvent(
+              new CustomEvent("apartados:highlight-sale", {
+                detail: { saleId: (data as any).id },
+              }),
+            );
+          }, 280);
+          return true;
+        } catch {
+          sound.error();
+          toast.error("No se pudo verificar el ticket", { duration: 2000 });
+          return false;
+        }
+      }
+
+      // CASO 2 — deep-link de producto (/p/<id>)
+      if (parsed.kind === "product") {
+        const match = (state.results as any[]).find(
+          (r) => String(r.product_id) === parsed.id,
+        );
+        if (match) {
+          actions.addToCart(match);
+          sound.scan();
+          toast.success(`+ ${match.variant_name}`, { duration: 1500 });
+          return true;
+        }
+        sound.error();
+        toast.error("Ese producto no está en el catálogo activo", {
+          duration: 2000,
+        });
+        return false;
+      }
+
+      // CASO 3 — URL externa (no nuestra)
+      if (parsed.kind === "external_url") {
+        sound.error();
+        toast.error("Este QR no es de un producto · revisa el código", {
+          duration: 2500,
+        });
+        return false;
+      }
+
+      // CASO 4 — SKU plano (comportamiento original)
+      const norm = parsed.code.toUpperCase();
+      const match = (state.results as any[]).find(
+        (r) =>
           (r.sku ?? "").toUpperCase() === norm ||
-          (r.variant_name ?? "").toUpperCase() === norm
+          (r.variant_name ?? "").toUpperCase() === norm,
       );
       if (match) {
         actions.addToCart(match);
         sound.scan();
         toast.success(`+ ${match.variant_name}`, { duration: 1500 });
-        return true; // cierra scanner
+        return true;
       }
       sound.error();
-      toast.error(`Código "${code}" no encontrado`, { duration: 2000 });
+      toast.error(`Código "${parsed.code}" no encontrado`, { duration: 2000 });
       return false;
     },
-    [state.results, actions]
+    [state.results, actions],
   );
 
   /**
@@ -885,11 +971,16 @@ export default function SalesPage() {
         </section>
       </div>
 
-      {/* SCANNER (cámara fullscreen) */}
+      {/* SCANNER (cámara fullscreen). El handler es async porque puede
+          hacer queries para resolver QRs de ticket/comanda. Cerramos el
+          scanner solo cuando la promesa resuelve true (= acción exitosa). */}
       <BarcodeScanner
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
-        onScan={handleScan}
+        onScan={(text) => {
+          void handleScan(text).then((ok) => ok && setScannerOpen(false));
+          return false;
+        }}
       />
 
       {/* TICKET de la última venta cerrada */}
