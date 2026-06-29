@@ -763,26 +763,46 @@ export default function LoginPage() {
 
       {/* Pie con trust signals — 3 pills horizontales que comunican
           confianza sin saturar. Usan icons de lucide (no emoji-char)
-          para mantener consistencia con la UI interna. */}
-      <motion.div
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.55, duration: 0.5 }}
-        className="mt-6 flex items-center gap-1.5 text-slate-400 dark:text-slate-500"
-      >
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/60 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-700/60 text-[9px] font-black uppercase tracking-widest">
-          <ShieldCheck size={11} className="text-emerald-500" strokeWidth={2.5} />
-          Pago seguro
-        </span>
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/60 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-700/60 text-[9px] font-black uppercase tracking-widest">
-          <MessageCircle size={11} className="text-sky-500" strokeWidth={2.5} />
-          Respuesta rápida
-        </span>
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/60 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-700/60 text-[9px] font-black uppercase tracking-widest">
-          <Heart size={11} className="text-rose-500" strokeWidth={2.5} />
-          Hecho local
-        </span>
-      </motion.div>
+          para mantener consistencia con la UI interna. Cada pill entra
+          con stagger 90ms via initial→animate de framer-motion para
+          que aparezcan una tras otra en cascada. */}
+      <div className="mt-6 flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
+        {[
+          {
+            icon: ShieldCheck,
+            label: "Pago seguro",
+            iconColor: "text-emerald-500",
+          },
+          {
+            icon: MessageCircle,
+            label: "Respuesta rápida",
+            iconColor: "text-sky-500",
+          },
+          {
+            icon: Heart,
+            label: "Hecho local",
+            iconColor: "text-rose-500",
+          },
+        ].map((pill, i) => {
+          const Icon = pill.icon
+          return (
+            <motion.span
+              key={pill.label}
+              initial={{ opacity: 0, y: 6, scale: 0.92 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{
+                delay: 0.55 + i * 0.09,
+                duration: 0.36,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white/60 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-700/60 text-[9px] font-black uppercase tracking-widest"
+            >
+              <Icon size={11} className={pill.iconColor} strokeWidth={2.5} />
+              {pill.label}
+            </motion.span>
+          )
+        })}
+      </div>
     </div>
   )
 }

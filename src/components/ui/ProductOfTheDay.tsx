@@ -102,9 +102,10 @@ export default function ProductOfTheDay({ products, onOpen }: Props) {
           </span>
         </div>
 
-        {/* Badge stock bajo arriba a la derecha — solo si quedan ≤5 */}
+        {/* Badge stock bajo arriba a la derecha — solo si quedan ≤5.
+            Usa `pulse-warm` (más orgánico que animate-pulse de tailwind). */}
         {lowStock && (
-          <div className="absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500 text-white shadow-sm animate-pulse">
+          <div className="absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500 text-white shadow-sm pulse-warm">
             <span className="text-[9px] font-black uppercase tracking-widest">
               {stock === 1 ? "Última" : `Quedan ${stock}`}
             </span>

@@ -195,13 +195,17 @@ export default function SmartOrderActions({
           </button>
         )}
         {/* QR de entrega cuando está in_route — atajo abre el drawer
-            in-app del ticket (que contiene el QR), no la página /ticket/. */}
+            in-app del ticket (que contiene el QR), no la página /ticket/.
+            Estilo brand gradient para visibilidad en dark+light (antes
+            era slate-900/slate-100 que se confundía en algunos fondos
+            dark). */}
         {isInRoute && order.public_token && (
           <button
             type="button"
             onClick={onViewTicket}
-            className="h-9 px-3 rounded-xl bg-slate-900 dark:bg-slate-100 dark:text-slate-900 text-white text-xs font-black flex items-center gap-1 press"
+            className="h-9 px-3 rounded-xl bg-gradient-to-br from-primary to-fuchsia-500 text-white text-xs font-black flex items-center gap-1 shadow-[0_6px_18px_-8px_rgba(236,72,153,0.55)] press"
             title="Código de entrega para mostrar al repartidor"
+            aria-label="QR de entrega"
           >
             <QrCode size={12} />
           </button>

@@ -383,7 +383,12 @@ export default function PublicTicketPage() {
               icon={Printer}
               onClick={() => window.print()}
             />
-            <ToolbarBtn label="QR" icon={QrCode} onClick={() => setOpenQR(true)} />
+            <ToolbarBtn
+              label="QR"
+              icon={QrCode}
+              onClick={() => setOpenQR(true)}
+              tone="brand"
+            />
             {/* Volver a pedir — solo cuando el ticket está pagado Y
                 el usuario NO es admin/staff. Atajo de recompra desde
                 el ticket sin volver a /mis-pedidos. */}
@@ -654,7 +659,8 @@ export default function PublicTicketPage() {
 /** Botón circular de la toolbar (Compartir / PDF / QR). Estilo flat
  *  blanco con icon arriba y label corto debajo. Incluye haptic feedback
  *  sutil en mobile. Acepta `tone="emerald"` para destacar CTAs especiales
- *  (ej. "Volver a pedir"). */
+ *  (ej. "Volver a pedir") o `tone="brand"` para acciones de marca
+ *  (ej. QR de entrega) que necesitan visibilidad alta en ambos temas. */
 function ToolbarBtn({
   label,
   icon: Icon,
@@ -664,13 +670,15 @@ function ToolbarBtn({
   label: string
   icon: typeof Share2
   onClick: () => void
-  tone?: "default" | "emerald"
+  tone?: "default" | "emerald" | "brand"
 }) {
   const { tap } = useFeedback()
   const cls =
     tone === "emerald"
-      ? "bg-emerald-50 border-emerald-200 hover:bg-emerald-100 text-emerald-700 hover:text-emerald-800"
-      : "bg-white/80 border-slate-200 hover:bg-white hover:border-primary/40 hover:text-primary text-slate-700"
+      ? "bg-emerald-50 dark:bg-emerald-500/15 border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300"
+      : tone === "brand"
+      ? "bg-gradient-to-br from-primary to-fuchsia-500 border-transparent text-white shadow-[0_6px_18px_-8px_rgba(236,72,153,0.55)]"
+      : "bg-white/80 dark:bg-slate-800/70 border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 hover:border-primary/40 dark:hover:border-primary/40 hover:text-primary text-slate-700 dark:text-slate-200"
   return (
     <button
       type="button"

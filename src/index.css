@@ -964,6 +964,102 @@ html[data-motion="high"] *::after {
   .tilt-hover:hover {
     transform: perspective(800px) rotateX(2deg) rotateY(-2deg) translateY(-2px);
   }
+
+  /* ─────────────────────────────────────────────────────
+   * Wave amor visual 2026-06-29
+   * ───────────────────────────────────────────────────── */
+
+  /* CTA glow: pulso sutil de glow brand para botones primarios.
+   * Más suave que pulse-glow (que es para iconos circulares).
+   * Llama el ojo sin ser distraente. Usa box-shadow animado. */
+  @keyframes cta-glow {
+    0%, 100% {
+      box-shadow:
+        0 8px 24px -8px color-mix(in srgb, var(--brand-from) 35%, transparent),
+        0 0 0 0 color-mix(in srgb, var(--brand-from) 40%, transparent);
+    }
+    50% {
+      box-shadow:
+        0 10px 28px -8px color-mix(in srgb, var(--brand-from) 50%, transparent),
+        0 0 0 6px color-mix(in srgb, var(--brand-from) 0%, transparent);
+    }
+  }
+  .cta-glow {
+    animation: cta-glow 2.8s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cta-glow { animation: none; }
+  }
+
+  /* Smooth theme: transición sutil de bg/color/border cuando cambia
+   * dark↔light. Aplicado a html para que TODO el árbol transicione.
+   * Duración corta para no se sienta lento. */
+  .smooth-theme,
+  .smooth-theme * {
+    transition: background-color 240ms ease, color 240ms ease,
+      border-color 240ms ease, fill 240ms ease, stroke 240ms ease;
+  }
+  /* Cuando el user prefiere reduced motion, sin transiciones */
+  @media (prefers-reduced-motion: reduce) {
+    .smooth-theme,
+    .smooth-theme * { transition: none; }
+  }
+
+  /* Pattern decorativo de puntos brand muy sutil — usar en superficies
+   * hero de marca (ej. card del producto del día) para feel premium. */
+  .dot-pattern {
+    background-image:
+      radial-gradient(circle, color-mix(in srgb, var(--brand-from) 18%, transparent) 1px, transparent 1px);
+    background-size: 14px 14px;
+  }
+
+  /* Glow success: pulso emerald para confirmaciones (cobro, +pts, etc.) */
+  @keyframes glow-pulse-success {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+    50%      { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+  }
+  .glow-pulse-success {
+    animation: glow-pulse-success 1.6s ease-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .glow-pulse-success { animation: none; }
+  }
+
+  /* Pulse cálido para badges de urgencia ("Quedan 2") — animación más
+   * orgánica que el animate-pulse de tailwind (que se ve mecánico). */
+  @keyframes pulse-warm {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.06); opacity: 0.92; }
+  }
+  .pulse-warm {
+    animation: pulse-warm 1.8s ease-in-out infinite;
+    transform-origin: center;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-warm { animation: none; }
+  }
+
+  /* Float lento — para íconos hero y elementos decorativos.
+   * Movimiento Y muy ligero, no distrae. */
+  @keyframes float-y {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+  }
+  .float-y {
+    animation: float-y 4s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .float-y { animation: none; }
+  }
+
+  /* Hover lift cliente: igual que card-lift pero translateY más visible
+   * para que se sienta en mobile (card-lift es para admin denso). */
+  .lift-on-hover {
+    @apply transition-all duration-200;
+  }
+  .lift-on-hover:hover {
+    @apply -translate-y-1 shadow-lg;
+  }
 }
 
 /* Press automático en buttons sin clases custom — opt-out con .no-press */

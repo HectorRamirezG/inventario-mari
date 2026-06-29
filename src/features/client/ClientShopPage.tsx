@@ -1830,11 +1830,14 @@ export default function ClientShopPage() {
         <LayoutGroup id="shop-catalog">
           {/* Carrusel de PAQUETES — visible solo si hay bundles activos.
               Mari los administra desde /admin → Paquetes. Cliente tap →
-              wizard de armado con slots. */}
+              wizard de armado con slots. Respeta el viewMode del catálogo
+              para integrarse visualmente (grid = scroll horizontal,
+              focus/list = lista vertical). */}
           {activeBundles.length > 0 && !q && (
             <BundlesCarousel
               bundles={activeBundles}
               onOpen={(b) => setActiveBundle(b)}
+              viewMode={viewMode}
             />
           )}
           <motion.div
@@ -2550,7 +2553,11 @@ export default function ClientShopPage() {
                   <button
                     onClick={startCheckout}
                     disabled={submitting || bRules.shop_closed_enabled || repricedCart.length === 0}
-                    className="bg-brand h-11 px-4 rounded-2xl text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-bloom disabled:opacity-50 press-hard"
+                    className={`bg-brand h-11 px-4 rounded-2xl text-white text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-bloom disabled:opacity-50 press-hard ${
+                      !(submitting || bRules.shop_closed_enabled || repricedCart.length === 0)
+                        ? "cta-glow"
+                        : ""
+                    }`}
                   >
                     <Receipt size={13} />
                     {bRules.shop_closed_enabled ? "Cerrada" : "Apartar"}
@@ -3401,14 +3408,30 @@ const ProductCardClient = memo(function ProductCardClientImpl({
  * Solo visible cuando hay bundles activos en BD. Cada card abre el
  * BundleWizard donde el cliente arma su set eligiendo una variante por
  * slot. Los bundles dan descuento del N% sobre el total armado.
+ *
+ * Respeta el `viewMode` del catálogo:
+ *  - `grid` (default): scroll horizontal compacto (cards w-44).
+ *  - `focus`: lista vertical full-width (1 card por fila).
+ *  - `list`: lista vertical compacta (cards más bajas).
+ *
+ * Bug fix 2026-06-29: el `scroll-container-ios` + `snap-mandatory`
+ * capturaba el touch vertical en algunos browsers mobile (Mari reportó
+ * que no podía scrollear hacia abajo cuando el carrusel estaba visible).
+ * Ahora usa `touch-action: pan-x` explícito para dejar pasar pan-y al
+ * scroll padre, sin snap-mandatory.
  * ──────────────────────────────────────────────────────────────────── */
 function BundlesCarousel({
   bundles,
   onOpen,
+  viewMode = "grid",
 }: {
   bundles: Bundle[]
   onOpen: (b: Bundle) => void
+  viewMode?: "focus" | "grid" | "list"
 }) {
+  const isVerticalList = viewMode === "focus" || viewMode === "list"
+  const isCompactList = viewMode === "list"
+
   return (
     <div className="mb-4">
       <div className="flex items-baseline justify-between mb-2 px-0.5">
@@ -3420,43 +3443,175 @@ function BundlesCarousel({
           {bundles.length} disponible{bundles.length === 1 ? "" : "s"}
         </span>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-2 scroll-container-ios -mx-1 px-1 snap-x snap-mandatory">
-        {bundles.map((b) => (
-          <button
-            key={b.id}
-            type="button"
-            onClick={() => onOpen(b)}
-            className="snap-start shrink-0 w-44 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-primary/40 hover:shadow-md transition-all text-left press"
-          >
-            <div className="relative aspect-[4/3] bg-gradient-to-br from-primary/10 via-violet-500/10 to-fuchsia-500/10 flex items-center justify-center text-primary">
-              {b.image_url ? (
-                <img
-                  src={b.image_url}
-                  alt={b.name}
-                  loading="lazy"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Package size={32} strokeWidth={1.5} />
-              )}
-              {b.discount_percent > 0 && (
-                <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-fuchsia-500 text-white text-[8px] font-black uppercase tracking-widest shadow-sm">
-                  -{b.discount_percent}%
-                </span>
-              )}
-            </div>
-            <div className="p-2.5">
-              <p className="text-[11px] font-black leading-tight line-clamp-2">
-                {b.name}
-              </p>
-              <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
-                {b.slots.length} producto{b.slots.length === 1 ? "" : "s"} a tu elección
-              </p>
-            </div>
-          </button>
-        ))}
-      </div>
+
+      {isVerticalList ? (
+        // Layout vertical: integra con el grid del catálogo. Sin scroll
+        // horizontal, sin touch-action conflicts. Cards adaptan altura.
+        <div className={isCompactList ? "flex flex-col gap-2" : "flex flex-col gap-3"}>
+          {bundles.map((b) => (
+            <BundleCardItem
+              key={b.id}
+              bundle={b}
+              onOpen={onOpen}
+              variant={isCompactList ? "list" : "focus"}
+            />
+          ))}
+        </div>
+      ) : (
+        // Layout horizontal (grid default): scroll horizontal con
+        // touch-action: pan-x para no bloquear el scroll vertical del padre.
+        <div
+          className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x lift-on-hover-container"
+          style={{ touchAction: "pan-x" }}
+        >
+          {bundles.map((b) => (
+            <BundleCardItem
+              key={b.id}
+              bundle={b}
+              onOpen={onOpen}
+              variant="grid"
+            />
+          ))}
+        </div>
+      )}
     </div>
+  )
+}
+
+/** Card individual de un bundle. Tres variantes según viewMode:
+ *  - `grid`: card vertical compacta para scroll horizontal (w-44).
+ *  - `focus`: card horizontal grande full-width (imagen izquierda, info derecha).
+ *  - `list`: card horizontal compacta (más densa).
+ *
+ *  Visual común: imagen con gradient brand de fondo si falta, badge -X%
+ *  en esquina, info de slots, hover lift. */
+function BundleCardItem({
+  bundle: b,
+  onOpen,
+  variant,
+}: {
+  bundle: Bundle
+  onOpen: (b: Bundle) => void
+  variant: "grid" | "focus" | "list"
+}) {
+  if (variant === "list") {
+    // Horizontal compacto — imagen mini izquierda, info derecha, chevron.
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(b)}
+        className="w-full flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-2 lift-on-hover hover:border-primary/40 text-left press"
+      >
+        <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-gradient-to-br from-primary/15 via-violet-500/15 to-fuchsia-500/15 flex items-center justify-center text-primary">
+          {b.image_url ? (
+            <img
+              src={b.image_url}
+              alt={b.name}
+              loading="lazy"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <Package size={22} strokeWidth={1.5} />
+          )}
+          {b.discount_percent > 0 && (
+            <span className="absolute top-0.5 right-0.5 px-1 py-0.5 rounded-full bg-fuchsia-500 text-white text-[8px] font-black tracking-widest shadow-sm">
+              -{b.discount_percent}%
+            </span>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-[12px] font-black leading-tight line-clamp-1">
+            {b.name}
+          </p>
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+            {b.slots.length} producto{b.slots.length === 1 ? "" : "s"} a tu elección
+            {b.discount_percent > 0 && (
+              <span className="text-emerald-600 dark:text-emerald-400 ml-1">
+                · ahorras {b.discount_percent}%
+              </span>
+            )}
+          </p>
+        </div>
+        <Package size={14} className="text-slate-300 dark:text-slate-600 shrink-0" />
+      </button>
+    )
+  }
+
+  if (variant === "focus") {
+    // Full-width card grande — imagen tipo hero arriba, info debajo.
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(b)}
+        className="w-full rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 lift-on-hover hover:border-primary/40 text-left press"
+      >
+        <div className="relative aspect-[16/9] bg-gradient-to-br from-primary/15 via-violet-500/15 to-fuchsia-500/15 flex items-center justify-center text-primary">
+          {b.image_url ? (
+            <img
+              src={b.image_url}
+              alt={b.name}
+              loading="lazy"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <Package size={48} strokeWidth={1.5} />
+          )}
+          {b.discount_percent > 0 && (
+            <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full bg-fuchsia-500 text-white text-[10px] font-black uppercase tracking-widest shadow-md">
+              Ahorra {b.discount_percent}%
+            </span>
+          )}
+        </div>
+        <div className="p-3.5">
+          <p className="text-sm font-black leading-tight line-clamp-2">
+            {b.name}
+          </p>
+          {b.description && (
+            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
+              {b.description}
+            </p>
+          )}
+          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-2">
+            {b.slots.length} producto{b.slots.length === 1 ? "" : "s"} a tu elección
+          </p>
+        </div>
+      </button>
+    )
+  }
+
+  // grid (default) — card vertical compacta para scroll horizontal.
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(b)}
+      className="snap-start shrink-0 w-44 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 lift-on-hover hover:border-primary/40 text-left press"
+    >
+      <div className="relative aspect-[4/3] bg-gradient-to-br from-primary/10 via-violet-500/10 to-fuchsia-500/10 flex items-center justify-center text-primary">
+        {b.image_url ? (
+          <img
+            src={b.image_url}
+            alt={b.name}
+            loading="lazy"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <Package size={32} strokeWidth={1.5} />
+        )}
+        {b.discount_percent > 0 && (
+          <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-fuchsia-500 text-white text-[8px] font-black uppercase tracking-widest shadow-sm">
+            -{b.discount_percent}%
+          </span>
+        )}
+      </div>
+      <div className="p-2.5">
+        <p className="text-[11px] font-black leading-tight line-clamp-2">
+          {b.name}
+        </p>
+        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+          {b.slots.length} producto{b.slots.length === 1 ? "" : "s"} a tu elección
+        </p>
+      </div>
+    </button>
   )
 }
 

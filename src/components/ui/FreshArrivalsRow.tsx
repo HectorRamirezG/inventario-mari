@@ -113,7 +113,7 @@ export default function FreshArrivalsRow({
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2 }}
                 onClick={() => onOpen(p.id)}
-                className="shrink-0 w-36 snap-start text-left rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow press"
+                className="shrink-0 w-36 snap-start text-left rounded-2xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 overflow-hidden lift-on-hover hover:border-primary/40 press"
                 title={p.name}
               >
                 <div className="relative w-full aspect-square bg-gradient-to-br from-pink-100 to-fuchsia-100 dark:from-pink-500/20 dark:to-fuchsia-500/20">

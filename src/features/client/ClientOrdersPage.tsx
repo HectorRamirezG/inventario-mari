@@ -1061,7 +1061,7 @@ export default function ClientOrdersPage() {
                           e.stopPropagation()
                           setQrSaleId(o.id)
                         }}
-                        className="h-8 w-8 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center press"
+                        className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-fuchsia-500 text-white flex items-center justify-center shadow-[0_4px_12px_-4px_rgba(236,72,153,0.5)] press"
                         title="QR del pedido (mostrar a Mari o repartidor)"
                         aria-label="QR del pedido"
                       >
@@ -1119,7 +1119,7 @@ export default function ClientOrdersPage() {
                       e.stopPropagation()
                       setQrSaleId(o.id)
                     }}
-                    className="h-8 px-2.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest flex items-center gap-1 press"
+                    className="h-8 px-2.5 rounded-lg bg-gradient-to-br from-primary to-fuchsia-500 text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-[0_4px_12px_-4px_rgba(236,72,153,0.5)] press"
                     title="QR del pedido (mostrar a Mari o repartidor)"
                   >
                     <QrCode size={11} />
@@ -1227,7 +1227,7 @@ export default function ClientOrdersPage() {
                       e.stopPropagation()
                       setQrSaleId(o.id)
                     }}
-                    className="h-8 w-8 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center press"
+                    className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-fuchsia-500 text-white flex items-center justify-center shadow-[0_4px_12px_-4px_rgba(236,72,153,0.5)] press"
                     title="QR del pedido"
                     aria-label="QR del pedido"
                   >

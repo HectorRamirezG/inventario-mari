@@ -54,7 +54,7 @@ export default function RecentlyViewedRow({
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
               onClick={() => onOpen(it.id)}
-              className="shrink-0 w-24 text-left rounded-xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow press"
+              className="shrink-0 w-24 text-left rounded-xl bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 overflow-hidden lift-on-hover hover:border-primary/40 press"
               title={it.name}
             >
               <div className="w-full aspect-square bg-slate-100 dark:bg-slate-700/40">

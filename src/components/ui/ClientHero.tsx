@@ -20,6 +20,7 @@ import { useBusinessRules } from "../../features/settings/businessRulesService"
 import type { WelcomeSlide as RuleSlide } from "../../features/settings/businessRulesService"
 import { useUserPrefs } from "../../lib/userPrefs"
 import { useFeedback } from "../../lib/useFeedback"
+import { useCountUp } from "../../lib/useCountUp"
 
 interface Slide {
   title: string
@@ -165,9 +166,11 @@ export default function ClientHero({ customerName, isLogged, stats }: Props) {
 
   // Pills navegacionales: solo aparecen si logueado Y el valor > 0.
   // Cada una es atajo directo a su área (loyalty / trofeos / pedidos).
+  // El `numericValue` se anima con count-up al cargar (de 0 al target)
+  // dentro del sub-componente <StatPill> para no romper reglas de hooks.
   const pills: Array<{
     icon: typeof Star
-    value: string
+    numericValue: number
     label: string
     tone: string
     href: string
@@ -175,7 +178,7 @@ export default function ClientHero({ customerName, isLogged, stats }: Props) {
   if (isLogged && (stats?.points ?? 0) > 0) {
     pills.push({
       icon: Star,
-      value: String(stats!.points),
+      numericValue: stats!.points!,
       label: "pts",
       tone: "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30",
       href: "/mis-premios",
@@ -184,7 +187,7 @@ export default function ClientHero({ customerName, isLogged, stats }: Props) {
   if (isLogged && (stats?.streak ?? 0) >= 2) {
     pills.push({
       icon: Flame,
-      value: String(stats!.streak),
+      numericValue: stats!.streak!,
       label: "días",
       tone: "bg-orange-100 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-500/30",
       href: "/mis-trofeos",
@@ -193,7 +196,7 @@ export default function ClientHero({ customerName, isLogged, stats }: Props) {
   if (isLogged && (stats?.trophies ?? 0) > 0) {
     pills.push({
       icon: Trophy,
-      value: String(stats!.trophies),
+      numericValue: stats!.trophies!,
       label: "trofeos",
       tone: "bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-500/30",
       href: "/mis-trofeos",
@@ -202,7 +205,7 @@ export default function ClientHero({ customerName, isLogged, stats }: Props) {
   if (isLogged && (stats?.activeOrders ?? 0) > 0) {
     pills.push({
       icon: Package,
-      value: String(stats!.activeOrders),
+      numericValue: stats!.activeOrders!,
       label: stats!.activeOrders === 1 ? "pedido" : "pedidos",
       tone: "bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30",
       href: "/mis-pedidos",
@@ -295,25 +298,19 @@ export default function ClientHero({ customerName, isLogged, stats }: Props) {
           forma más rápida de ver "qué tengo" y "a dónde voy". */}
       {pills.length > 0 && (
         <div className="mt-2 flex gap-1.5 overflow-x-auto scroll-container-ios -mx-1 px-1 pb-0.5">
-          {pills.map((p) => {
-            const Icon = p.icon
-            return (
-              <button
-                key={p.label + p.value}
-                type="button"
-                onClick={() => {
-                  tap()
-                  navigate(p.href)
-                }}
-                className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-black tabular-nums press transition-transform hover:scale-105 ${p.tone}`}
-                aria-label={`${p.value} ${p.label}`}
-              >
-                <Icon size={11} strokeWidth={2.5} />
-                <span>{p.value}</span>
-                <span className="opacity-70 font-bold">{p.label}</span>
-              </button>
-            )
-          })}
+          {pills.map((p) => (
+            <StatPill
+              key={p.label + p.numericValue}
+              icon={p.icon}
+              numericValue={p.numericValue}
+              label={p.label}
+              tone={p.tone}
+              onClick={() => {
+                tap()
+                navigate(p.href)
+              }}
+            />
+          ))}
         </div>
       )}
 
@@ -384,6 +381,41 @@ export default function ClientHero({ customerName, isLogged, stats }: Props) {
         </motion.button>
       </AnimatePresence>
     </div>
+  )
+}
+
+/**
+ * Sub-componente para cada pill del hero. Aislado para poder llamar
+ * `useCountUp` dentro (los hooks no pueden vivir en un .map() callback).
+ * Anima el número de 0 al target al montar — micro-detalle que hace el
+ * hero sentir "vivo" sin distraer.
+ */
+function StatPill({
+  icon: Icon,
+  numericValue,
+  label,
+  tone,
+  onClick,
+}: {
+  icon: typeof Star
+  numericValue: number
+  label: string
+  tone: string
+  onClick: () => void
+}) {
+  const animated = useCountUp(numericValue, 850)
+  const display = Math.max(0, Math.round(animated))
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-black tabular-nums press transition-transform hover:scale-105 ${tone}`}
+      aria-label={`${numericValue} ${label}`}
+    >
+      <Icon size={11} strokeWidth={2.5} />
+      <span>{display}</span>
+      <span className="opacity-70 font-bold">{label}</span>
+    </button>
   )
 }
 
