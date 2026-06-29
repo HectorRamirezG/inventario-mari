@@ -22,8 +22,6 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   Sparkles,
-  PiggyBank,
-  MessageSquare,
   Bell,
   ChevronRight,
   Wallet,
@@ -42,6 +40,8 @@ import { useNotifications } from "../notifications/notificationsService"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
 import { useFeedback } from "../../lib/useFeedback"
+import { useMyLoyaltyBalance } from "../loyalty/loyaltyService"
+import { useUserPrefs } from "../../lib/userPrefs"
 import { formatMoney, formatRelative } from "../../lib/format"
 
 import ClientHero from "../../components/ui/ClientHero"
@@ -49,6 +49,7 @@ import StoriesBar from "../stories/StoriesBar"
 import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
 import ReviewStoriesBar from "../../components/ui/ReviewStoriesBar"
 import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
+import FreshArrivalsRow from "../../components/ui/FreshArrivalsRow"
 import Skeleton from "../../components/ui/Skeleton"
 import MyPaletteSection from "./MyPaletteSection"
 import ProductOfMonthCard from "../dashboard/ProductOfMonthCard"
@@ -81,9 +82,18 @@ export default function ClientHomePage() {
   const { email: authEmail, fullName: authName, session } = useAuth()
   const isLogged = !!session
   const bRules = useBusinessRules()
+  const { balance: loyaltyBalance } = useMyLoyaltyBalance()
+  const { prefs } = useUserPrefs()
 
   const [products, setProducts] = useState<PublicProduct[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Stats personales del cliente para las pills del hero.
+  // `activeOrders` = pedidos no cancelados con balance>0 (en curso).
+  // `trophies` = action_keys únicos en loyalty_events (1 trofeo = 1 logro
+  //  distinto desbloqueado). Stale-while-revalidate via realtime.
+  const [activeOrdersCount, setActiveOrdersCount] = useState(0)
+  const [trophiesCount, setTrophiesCount] = useState(0)
 
   const aliveRef = useRef(true)
 
@@ -119,63 +129,122 @@ export default function ClientHomePage() {
     setLoading(false)
   }, [])
 
+  // Cuenta de pedidos activos del cliente para la pill del hero.
+  // Hacemos un fetch ligero (solo id) para count rápido. Mismo criterio
+  // que PriorityActions: balance>0 Y no cancelado.
+  const loadActiveOrders = useCallback(async () => {
+    if (!authEmail) {
+      setActiveOrdersCount(0)
+      return
+    }
+    const { count } = await supabase
+      .from("sales")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_email", authEmail.toLowerCase())
+      .gt("balance", 0)
+      .neq("status", "cancelled")
+    if (!aliveRef.current) return
+    setActiveOrdersCount(count ?? 0)
+  }, [authEmail])
+
+  // Cuenta de trofeos distintos desbloqueados (action_keys únicos con
+  // delta>0 en loyalty_events). Si la tabla no existe o el cliente no
+  // tiene loyalty habilitado, devuelve 0 silencioso.
+  const loadTrophies = useCallback(async () => {
+    if (!authEmail || !bRules.loyalty_enabled) {
+      setTrophiesCount(0)
+      return
+    }
+    try {
+      const { data } = await supabase
+        .from("loyalty_events")
+        .select("action_key")
+        .eq("customer_email", authEmail.toLowerCase())
+        .gt("delta", 0)
+      if (!aliveRef.current) return
+      const unique = new Set(
+        (data ?? [])
+          .map((r: any) => r.action_key)
+          .filter((k: any) => typeof k === "string" && k.length > 0),
+      )
+      setTrophiesCount(unique.size)
+    } catch {
+      if (aliveRef.current) setTrophiesCount(0)
+    }
+  }, [authEmail, bRules.loyalty_enabled])
+
   useEffect(() => {
     aliveRef.current = true
     loadCatalog()
+    loadActiveOrders()
+    loadTrophies()
     return () => {
       aliveRef.current = false
     }
-  }, [loadCatalog])
+  }, [loadCatalog, loadActiveOrders, loadTrophies])
 
   // Realtime: el hub multiplex despacha eventos al loader debounced.
   const scheduleCatalogReload = useDebouncedCallback(() => loadCatalog(), 800)
   useRealtimeSubscription("products", scheduleCatalogReload)
   useRealtimeSubscription("variants", scheduleCatalogReload)
 
+  // Cuando cambian las ventas del cliente, refresca el count.
+  const scheduleOrdersReload = useDebouncedCallback(() => loadActiveOrders(), 600)
+  useRealtimeSubscription("sales", scheduleOrdersReload, {
+    enabled: !!authEmail,
+    match: (row: any) =>
+      row?.customer_email?.toLowerCase() === authEmail?.toLowerCase(),
+  })
+
+  // Cuando cambian sus loyalty_events, refresca trofeos.
+  const scheduleTrophiesReload = useDebouncedCallback(() => loadTrophies(), 600)
+  useRealtimeSubscription("loyalty_events" as any, scheduleTrophiesReload, {
+    enabled: !!authEmail,
+    match: (row: any) =>
+      row?.customer_email?.toLowerCase() === authEmail?.toLowerCase(),
+  })
+
   // Redirige a la tienda con el producto seleccionado para abrir el BuySheet.
   const openProduct = (productId: string) => {
     navigate(`/?p=${encodeURIComponent(productId)}`)
   }
 
+  // Stats consolidadas para el hero. Solo se pasan cuando hay login.
+  const heroStats = isLogged
+    ? {
+        points: loyaltyBalance?.points ?? 0,
+        streak: prefs.dailyLoginStreak ?? 0,
+        activeOrders: activeOrdersCount,
+        trophies: trophiesCount,
+      }
+    : undefined
+
   return (
     <div className="space-y-3 pb-[calc(5rem+env(safe-area-inset-bottom))]">
+      {/* Hero personal: saludo dinámico + nombre + pills de stats
+          navegacionales (pts, racha, trofeos, pedidos) + banner anclado
+          + slide rotativo compacto. Es la primera impresión. */}
       <ClientHero
         customerName={authName || (authEmail ? authEmail.split("@")[0] : "")}
         isLogged={isLogged}
+        stats={heroStats}
       />
 
-      {/* CLIENTE LOGUEADO: info personal ARRIBA. Mensajes + saldos.
-          Premios y Reseñas FUERON QUITADOS de aqui (Mari: 'lo que ya
-          hay atajo en el +, quitalo'). Ya viven en el ActionHub Mi cuenta. */}
-
-      {/* Acciones pendientes (PRIORIDAD MÁXIMA) — saldos por pagar,
-          deseos disponibles, pedidos en camino. Solo aparece si hay
-          algo accionable. Reduce fricción: lo importante PRIMERO. */}
+      {/* Pendientes — saldos por pagar, deliveries en camino, deseos
+          disponibles, repetir último pedido. Aparece SOLO si hay algo
+          accionable; si no, no se ve nada. Es lo más importante después
+          del saludo. */}
       {isLogged && <PriorityActionsSection />}
 
+      {/* Mensajes — top 3 notificaciones del cliente, clickables. */}
       {isLogged && <MyMessagesSection />}
-      {isLogged && <MySavingsSection />}
 
-      {/* Paleta personal del cliente: tonos comprados + sugerencias de
-          reposición + cross-sell. Se auto-oculta sin historial. */}
-      {isLogged && <MyPaletteSection />}
-
-      {/* Stories de resenias — marketing organico. Banda horizontal con
-          las mejores resenias con foto, estilo Instagram stories. Click
-          en una abre el producto en la tienda. Solo aparece si hay >=3. */}
-      <ReviewStoriesBar />
-
-      {/* Productos vistos recientemente */}
-      <RecentlyViewedRow onOpen={openProduct} />
-
-      {/* Producto del mes — ganador automático del mes anterior. Se
-          auto-oculta cuando no hay ventas. Clickeable: navega via ?q= */}
-      <ProductOfMonthCard asLink />
-
-      {/* Producto del día */}
+      {/* HERO del producto del día — full width, imagen grande, badge,
+          CTA "Lo quiero". Es el primer gancho de descubrimiento. Si no
+          hay productos con stock+foto, no aparece (silencioso). */}
       {loading ? (
         <div className="my-3 rounded-3xl overflow-hidden">
-          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-64 w-full" />
         </div>
       ) : (
         <ProductOfTheDay
@@ -184,17 +253,38 @@ export default function ClientHomePage() {
         />
       )}
 
-      {/* Boton 'Ir al catalogo' QUITADO: Mari ya tiene el tab Tienda en
-          el dock y un chip Tienda en el + Mi cuenta. Saturaba sin
-          agregar valor nuevo. */}
+      {/* Recién llegados — productos creados en los últimos 21 días,
+          carrusel horizontal. Atajo de descubrimiento sin ir al tab Tienda.
+          Auto-oculta si <3 productos nuevos con stock. */}
+      {!loading && (
+        <FreshArrivalsRow
+          products={products as any}
+          onOpen={openProduct}
+        />
+      )}
 
-      {/* Stories al final: solo aparece si hay historias activas
-          (StoriesBar retorna null cuando está vacía). */}
+      {/* Stories del admin — banda Instagram (sube de posición porque
+          es marketing rotativo de Mari, antes vivía hasta el final). */}
       <StoriesBar enabled={bRules.stories_enabled} />
 
-      {/* MyReviewsCard tambien QUITADO: Mari pide no repetir. La accion
-          de calificar productos vive en el ActionHub (+) > Mi cuenta >
-          Mis resenas con badge de pendientes. */}
+      {/* Stories de reseñas — marketing orgánico con fotos reales de
+          clientas. Solo aparece si hay >=3 reseñas con foto. */}
+      <ReviewStoriesBar />
+
+      {/* Vistos recientemente — atajo a productos abiertos en esta sesión.
+          Solo aparece si hay 2+. */}
+      <RecentlyViewedRow onOpen={openProduct} />
+
+      {/* Paleta personal: tonos comprados + reposiciones sugeridas.
+          Auto-oculta sin historial. */}
+      {isLogged && <MyPaletteSection />}
+
+      {/* Producto del mes — ganador automático del mes anterior. */}
+      <ProductOfMonthCard asLink />
+
+      {/* Inversión emocional — "tu camino con Mari". Va al final como
+          cierre cálido del feed. */}
+      {isLogged && <MySavingsSection />}
     </div>
   )
 }
@@ -650,10 +740,12 @@ function MySavingsSection() {
   // Calcula el total invertido por el cliente. La tabla `sales` NO tiene
   // `customer_id` — los pedidos se asocian por `customer_email`. Usamos
   // el email del jwt para filtrar y sumar.
-  const { session, email } = useAuth()
+  const { session, email, fullName } = useAuth()
+  const { prefs } = useUserPrefs()
   const [stats, setStats] = useState<{
     totalGastado: number
     pedidos: number
+    primeraCompra: string | null
   } | null>(null)
 
   useEffect(() => {
@@ -662,21 +754,30 @@ function MySavingsSection() {
       if (!session || !email) return
       const { data } = await supabase
         .from("sales")
-        .select("total,paid,status")
+        .select("total,paid,status,created_at")
         .eq("customer_email", email.toLowerCase())
+        .order("created_at", { ascending: true })
       if (!alive) return
       const valid = (data ?? []).filter((r: any) => r.status !== "cancelled")
       const totalGastado = valid.reduce(
         (acc: number, r: any) => acc + (Number(r.paid) || 0),
         0,
       )
-      setStats({ totalGastado, pedidos: valid.length })
+      const primeraCompra =
+        valid.length > 0 ? (valid[0] as any).created_at ?? null : null
+      setStats({ totalGastado, pedidos: valid.length, primeraCompra })
     }
     load()
     return () => {
       alive = false
     }
   }, [session, email])
+
+  // Avatar circle: usa el emoji personal del cliente si lo eligió, si no
+  // la primera inicial del nombre, si no un sparkle por defecto.
+  const initial =
+    prefs.clientEmoji ||
+    (fullName?.trim()?.[0]?.toUpperCase() ?? "✨")
 
   if (!stats || stats.pedidos === 0) {
     return (
@@ -708,13 +809,13 @@ function MySavingsSection() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-black uppercase tracking-widest text-primary">
-              Bienvenida a Beauty's Me
+              Tu camino apenas empieza
             </p>
             <p className="text-sm font-black text-slate-900 dark:text-slate-100 mt-0.5 leading-snug">
-              Tu primera compra está cerca
+              Mari te tiene preparado algo bonito
             </p>
             <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 mt-1 leading-snug">
-              Arma tu carrito, aparta sin pagar todo hoy, y te contactamos por
+              Arma tu carrito, aparta con anticipo y te avisamos por
               WhatsApp para coordinar entrega.
             </p>
             <a
@@ -734,43 +835,90 @@ function MySavingsSection() {
     )
   }
 
+  // Mensaje cálido contextual según historial
+  const hasInvestment = stats.totalGastado > 0
+  const months = stats.primeraCompra
+    ? Math.max(
+        1,
+        Math.round(
+          (Date.now() - new Date(stats.primeraCompra).getTime()) /
+            (30 * 24 * 3600 * 1000),
+        ),
+      )
+    : null
+
   return (
-    <section className="my-3 rounded-3xl bg-gradient-to-br from-emerald-100 via-white to-emerald-50 dark:from-emerald-500/15 dark:via-slate-900 dark:to-emerald-500/5 border border-emerald-200 dark:border-emerald-500/30 p-4">
-      <div className="flex items-center gap-3">
-        <div className="w-11 h-11 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shrink-0">
-          <PiggyBank size={20} strokeWidth={2.5} />
+    <section
+      className="my-3 rounded-3xl relative overflow-hidden border p-4"
+      style={{
+        background:
+          "linear-gradient(135deg, color-mix(in srgb, var(--brand-from) 14%, white), color-mix(in srgb, var(--brand-to) 10%, white))",
+        borderColor: "color-mix(in srgb, var(--brand-from) 25%, transparent)",
+      }}
+    >
+      {/* Orbes decorativos para feel premium tipo Spotify Wrapped */}
+      <span
+        className="absolute -right-10 -top-10 w-40 h-40 rounded-full opacity-25 pointer-events-none blur-2xl"
+        style={{
+          background:
+            "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+        }}
+      />
+      <span
+        className="absolute -left-8 -bottom-12 w-32 h-32 rounded-full opacity-20 pointer-events-none blur-2xl"
+        style={{
+          background:
+            "linear-gradient(135deg, var(--brand-to), var(--brand-from))",
+        }}
+      />
+
+      <div className="relative flex items-center gap-3">
+        {/* Avatar circle del cliente */}
+        <div
+          className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-bloom shrink-0 text-white text-xl font-black"
+          style={{
+            background:
+              "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+          }}
+          aria-hidden
+        >
+          {initial}
         </div>
         <div className="flex-1 min-w-0">
-          {/* Si el cliente tiene pedidos pero aún no ha pagado nada (todos
-              son apartados con paid=0), mostrar "$0 invertido en N pedidos"
-              se sentía contradictorio. Detectamos el caso y mostramos
-              copy distinto para no engañar. */}
-          {stats.totalGastado <= 0 ? (
+          <p className="text-[10px] font-black uppercase tracking-widest text-primary leading-none">
+            Tu camino con Mari
+          </p>
+          {hasInvestment ? (
             <>
-              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
-                Pedidos en curso
+              <p className="text-xl font-black tabular-nums leading-tight mt-1 text-slate-900 dark:text-slate-100">
+                {formatMoney(stats.totalGastado)}
               </p>
-              <p className="text-xl font-black tabular-nums leading-tight">
-                {stats.pedidos} {stats.pedidos === 1 ? "pedido" : "pedidos"}
-              </p>
-              <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
-                Cuando liquides aparecerá tu inversión total
+              <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-tight mt-0.5">
+                en{" "}
+                <span className="tabular-nums">{stats.pedidos}</span>{" "}
+                {stats.pedidos === 1 ? "pedido" : "pedidos"}
+                {months
+                  ? ` · ${months === 1 ? "1 mes" : `${months} meses`} con nosotros`
+                  : ""}
               </p>
             </>
           ) : (
             <>
-              <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
-                Invertido en ti
+              <p className="text-base font-black leading-tight mt-1 text-slate-900 dark:text-slate-100">
+                <span className="tabular-nums">{stats.pedidos}</span>{" "}
+                {stats.pedidos === 1 ? "pedido en curso" : "pedidos en curso"}
               </p>
-              <p className="text-xl font-black tabular-nums leading-tight">
-                ${stats.totalGastado.toFixed(2)}
-              </p>
-              <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-0.5">
-                En {stats.pedidos} {stats.pedidos === 1 ? "pedido" : "pedidos"}
+              <p className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-tight mt-0.5">
+                Cuando termines de abonar verás aquí tu inversión total.
               </p>
             </>
           )}
         </div>
+        <Sparkles
+          size={16}
+          className="text-primary opacity-60 shrink-0"
+          strokeWidth={2.5}
+        />
       </div>
     </section>
   )
