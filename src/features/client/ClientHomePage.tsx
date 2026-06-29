@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useTransitionNavigate } from "../../lib/viewTransition"
 import {
   Sparkles,
   Bell,
@@ -77,7 +77,9 @@ interface PublicProduct {
 }
 
 export default function ClientHomePage() {
-  const navigate = useNavigate()
+  // navigate envuelto con View Transitions — al tocar un producto o
+  // navegar a otra ruta del cliente, el cambio anima en lugar de saltar.
+  const navigate = useTransitionNavigate()
   const { email: authEmail, fullName: authName, session } = useAuth()
   const isLogged = !!session
   const bRules = useBusinessRules()
@@ -355,7 +357,7 @@ function MyMessagesSection() {
   // Las notificaciones del cliente ya viven en `useNotifications`. Aquí
   // mostramos un resumen visual + acceso rápido al bell del header.
   const { items, unread, markAsRead } = useNotifications()
-  const navigate = useNavigate()
+  const navigate = useTransitionNavigate()
   const { tap } = useFeedback()
   const latest = items.slice(0, 3)
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
-import { useNavigate, useLocation } from "react-router-dom"
+import { useLocation } from "react-router-dom"
+import { useTransitionNavigate } from "../../lib/viewTransition"
 import { motion } from "framer-motion"
 import {
   LifeBuoy,
@@ -106,7 +107,10 @@ function writeCelebratedSet(key: string | null, set: Set<string>): void {
 
 export default function ClientOrdersPage() {
   const { email, fullName } = useAuth()
-  const navigate = useNavigate()
+  // navigate envuelto con View Transitions API: el "Ver ticket" y
+  // demás botones que cambian de ruta tienen fade suave en lugar de
+  // cambio seco. En browsers viejos degrada a navigate normal.
+  const navigate = useTransitionNavigate()
   const location = useLocation()
   // Si llegamos con state.openHelp=true (típicamente desde el
   // CommandPalette > "Pedir ayuda"), abrimos el centro de ayuda al montar.

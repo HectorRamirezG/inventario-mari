@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles,
@@ -21,6 +20,7 @@ import type { WelcomeSlide as RuleSlide } from "../../features/settings/business
 import { useUserPrefs } from "../../lib/userPrefs"
 import { useFeedback } from "../../lib/useFeedback"
 import { useCountUp } from "../../lib/useCountUp"
+import { useTransitionNavigate } from "../../lib/viewTransition"
 
 interface Slide {
   title: string
@@ -119,7 +119,10 @@ function timeBasedGreeting(isLogged: boolean | undefined): string {
 export default function ClientHero({ customerName, isLogged, stats }: Props) {
   const rules = useBusinessRules()
   const { prefs } = useUserPrefs()
-  const navigate = useNavigate()
+  // Usamos navigate envuelto con View Transitions para que el cambio
+  // de ruta al tocar una pill (pts/racha/trofeos/pedidos) tenga fade
+  // suave entre páginas en lugar de cambio seco.
+  const navigate = useTransitionNavigate()
   const { tap } = useFeedback()
   const [idx, setIdx] = useState(0)
 

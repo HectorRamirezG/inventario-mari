@@ -1062,6 +1062,33 @@ html[data-motion="high"] *::after {
   }
 }
 
+/* ─────────────────────────────────────────────────────
+ * View Transitions API — fade premium entre rutas/estados.
+ * Chrome 111+, Edge 111+, Safari 18+. En browsers sin soporte,
+ * el cambio sucede instant (graceful degradation).
+ *
+ * El callback `startViewTransition` en lib/viewTransition.ts envuelve
+ * los `navigate()` clave. Aquí solo definimos el LOOK de la transición.
+ *
+ * `::view-transition-old(root)` = snapshot del DOM ANTES del cambio.
+ * `::view-transition-new(root)` = snapshot DESPUÉS. Ambos se animan en
+ * paralelo (one fades-out + el otro fades-in) durante la duración
+ * especificada.
+ *
+ * Respetamos prefers-reduced-motion bajando a 0ms (sin transición).
+ * ───────────────────────────────────────────────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 240ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0ms;
+  }
+}
+
 /* Press automático en buttons sin clases custom — opt-out con .no-press */
 @layer base {
   button:not(.no-press):not(:disabled) {

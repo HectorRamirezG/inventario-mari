@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { useNavigate } from "react-router-dom"
+import { useTransitionNavigate } from "../../lib/viewTransition"
 import {
   Bell,
   BellOff,
@@ -414,7 +414,10 @@ export default function NotificationBell({
    */
   const [proofStatus, setProofStatus] = useState<Record<string, string>>({})
   const btnRef = useRef<HTMLButtonElement>(null)
-  const navigate = useNavigate()
+  // navigate envuelto con View Transitions API para fade entre rutas
+  // al tap en una notificación. En browsers sin soporte degrada a
+  // navigate normal sin cambio aparente.
+  const navigate = useTransitionNavigate()
 
   /** Recolecta proof_ids de las notifs visibles y consulta status en batch. */
   useEffect(() => {

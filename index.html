@@ -20,6 +20,34 @@
     <link rel="preconnect" href="https://wnnmugdynldfglabaajk.supabase.co" crossorigin />
     <link rel="dns-prefetch" href="https://wnnmugdynldfglabaajk.supabase.co" />
 
+    <!--
+      Tipografía premium · Inter Variable. Reemplaza la system-ui default
+      con una fuente moderna (la misma que usan Linear, Vercel, GitHub).
+      `font-display: swap` evita FOUT visible. Preconnect a Google Fonts
+      para acelerar el primer load. Caída elegante a system-ui si falla.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+
+    <!--
+      Open Props · variables CSS premium (shadows, easings, animations)
+      preempaquetadas. Cargadas via CDN unpkg sin install. Tamaño minified
+      < 20KB, cacheado fuerte. Disponibles en cualquier rule CSS como
+      `var(--shadow-3)`, `var(--ease-spring-3)`, `var(--size-fluid-2)`,
+      etc. Sin obligación de migrar — los nuevos componentes los pueden
+      usar, los viejos siguen igual.
+      Versión 1.7.x fijada para evitar breaking changes en CDN.
+    -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/open-props@1.7.4/open-props.min.css"
+      crossorigin
+    />
+
     <title>Beauty's Me</title>
 
     <!--
