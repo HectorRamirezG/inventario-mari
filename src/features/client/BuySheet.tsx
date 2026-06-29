@@ -299,7 +299,7 @@ export default function BuySheet({
     if (info.offset.y > 120 || info.velocity.y > 600) onClose()
   }
 
-  function confirm() {
+  function confirm(e?: React.MouseEvent<HTMLButtonElement>) {
     if (!product) return
     const lines = Object.entries(qty)
       .filter(([, q]) => q > 0)
@@ -313,6 +313,18 @@ export default function BuySheet({
         return { variantId, qty: q, isPreorder }
       })
     if (lines.length === 0) return
+    // Animación "vuelo al carrito": dispara antes del callback para
+    // que el botón aún exista en el DOM (luego el sheet se cierra).
+    const totalAdded = lines.reduce((s, l) => s + l.qty, 0)
+    if (e?.currentTarget) {
+      import("../../lib/flyToCart")
+        .then(({ flyToCart }) =>
+          flyToCart(e.currentTarget, { symbol: `+${totalAdded}` }),
+        )
+        .catch(() => {
+          /* noop */
+        })
+    }
     // Mini-celebración la PRIMERA VEZ del día que el cliente agrega
     // algo al carrito. Engagement positivo. Guard localStorage para
     // no disparar más de una vez por día por dispositivo.
@@ -738,7 +750,7 @@ export default function BuySheet({
 
               <button
                 type="button"
-                onClick={confirm}
+                onClick={(e) => confirm(e)}
                 disabled={totalUnits === 0}
                 className="bg-brand w-full h-12 rounded-2xl text-white font-black flex items-center justify-center gap-2 shadow-bloom disabled:opacity-40 active:scale-[0.98] transition-transform"
               >

@@ -1749,13 +1749,45 @@ function ShopShell() {
               <button
                 onClick={() => setProfileOpen(true)}
                 aria-label="Mi perfil"
-                className="bg-brand w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-sm active:scale-90 transition-transform"
+                className={`relative p-0.5 w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm active:scale-90 transition-transform ${
+                  showAdminLink
+                    ? "bg-gradient-to-br from-amber-400 via-orange-400 to-amber-500"
+                    : ""
+                }`}
+                style={
+                  !showAdminLink
+                    ? {
+                        background:
+                          "linear-gradient(135deg, var(--brand-from), var(--brand-to))",
+                      }
+                    : undefined
+                }
                 title={fullName ?? email ?? "Mi perfil"}
               >
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <UserIcon size={14} className="text-white" />
+                <span className="w-full h-full rounded-xl overflow-hidden flex items-center justify-center bg-white dark:bg-slate-900">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserIcon
+                      size={14}
+                      className={
+                        showAdminLink
+                          ? "text-amber-600"
+                          : "text-primary"
+                      }
+                    />
+                  )}
+                </span>
+                {showAdminLink && (
+                  <span
+                    aria-hidden
+                    title="Cuenta admin"
+                    className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 ring-2 ring-white dark:ring-slate-900 flex items-center justify-center"
+                  >
+                    <svg width="7" height="7" viewBox="0 0 24 24" fill="white">
+                      <path d="M12 2L15 8.5L22 9.5L17 14.5L18.5 22L12 18L5.5 22L7 14.5L2 9.5L9 8.5L12 2Z" />
+                    </svg>
+                  </span>
                 )}
               </button>
             ) : (

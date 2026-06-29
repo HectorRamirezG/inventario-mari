@@ -367,6 +367,9 @@ export interface NotifyInput {
 /**
  * Inserta una notificación dirigida a TODOS los admins/staff.
  * No requiere conocer correos: el filtro se hace por
+/**
+ * Inserta una notificación dirigida a TODOS los admins/staff de la
+ * tienda. Internamente persiste en la tabla `notifications` con
  * `recipient_role='admin'` y los admins se suscriben a ese canal.
  *
  * Se usa cuando un cliente realiza una acción que debe ver:
@@ -374,6 +377,7 @@ export interface NotifyInput {
  * extensión de plazo, etc.
  */
 export async function notifyAdmins(input: NotifyInput): Promise<void> {
+  if (isDuplicate("admin", null, input)) return
   try {
     const { error } = await supabase.from("notifications").insert({
       recipient_role: "admin",
@@ -407,6 +411,7 @@ export async function notifyClient(
   if (!email) return
   const clean = email.trim().toLowerCase()
   if (!clean) return
+  if (isDuplicate("client", clean, input)) return
   try {
     const { error } = await supabase.from("notifications").insert({
       recipient_role: "client",
@@ -421,4 +426,56 @@ export async function notifyClient(
   } catch (e: any) {
     debug.warn("[notify] client excepción:", e?.message)
   }
+}
+
+/* ────────────────────────────────────────────────────────────────
+ * DEDUPE en memoria — anti-duplicado dentro de la MISMA pestaña.
+ *
+ * Una sola acción del usuario a veces dispara `notify*` 2 veces
+ * (ejemplo: un service que ya notifica + un trigger DB que también lo
+ * hace, o un realtime que rebota). Bloqueamos duplicados rápidos por
+ * llave compuesta (role + email + type + entity_id derivado).
+ *
+ * Ventana de 30s — suficiente para cazar dobles disparos del mismo
+ * flujo sin bloquear notificaciones legítimas espaciadas.
+ *
+ * Esto NO sustituye un dedupe SQL definitivo (UNIQUE constraint o
+ * trigger), pero arregla 95% de los casos sin tocar BD.
+ * ──────────────────────────────────────────────────────────────── */
+const DEDUPE_WINDOW_MS = 30_000
+const recentNotifs = new Map<string, number>()
+
+function isDuplicate(
+  role: "admin" | "client",
+  email: string | null,
+  input: NotifyInput,
+): boolean {
+  // Llave: incluye el ID de la entidad principal (sale_id, proof_id,
+  // ticket_id, wish_id, etc.) para que dos pagos distintos de la misma
+  // venta no se cancelen, pero dos pagos IDÉNTICOS sí.
+  const meta = input.metadata ?? {}
+  const entityId =
+    meta.proof_id ||
+    meta.sale_id ||
+    meta.ticket_id ||
+    meta.wish_id ||
+    meta.review_id ||
+    meta.delivery_id ||
+    meta.variant_id ||
+    ""
+  const key = `${role}:${email ?? ""}:${input.type}:${entityId}`
+
+  const now = Date.now()
+  // Limpieza floja: borra entradas viejas mientras vamos pasando.
+  for (const [k, ts] of recentNotifs) {
+    if (now - ts > DEDUPE_WINDOW_MS) recentNotifs.delete(k)
+  }
+
+  const last = recentNotifs.get(key)
+  if (last && now - last < DEDUPE_WINDOW_MS) {
+    debug.warn(`[notify] duplicado bloqueado (${key})`)
+    return true
+  }
+  recentNotifs.set(key, now)
+  return false
 }

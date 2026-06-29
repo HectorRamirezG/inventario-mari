@@ -153,22 +153,12 @@ export default function ClientOrdersPage() {
   const openRateOrder = useCallback((id: string) => setRateOrderId(id), [])
   /** sale_id -> comanda más reciente (completa). */
   const [deliveryBySale, setDeliveryBySale] = useState<Record<string, MyDelivery>>({})
-  /** sale_ids cuya tarjeta compacta está expandida (revela acciones). */
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   /** sale_id -> cantidad de incidencias abiertas. Mantenido por realtime. */
   const [openTicketsBySale, setOpenTicketsBySale] = useState<Record<string, number>>({})
   /** sale_id -> primeras 4 fotos de productos (mini strip visual). */
   const [itemsBySale, setItemsBySale] = useState<Record<string, OrderItemThumb[]>>({})
   /** IDs que acaban de transicionar a "pagado" — ring verde temporal. */
   const [justPaidIds, setJustPaidIds] = useState<Set<string>>(new Set())
-  const toggleExpanded = useCallback((id: string) => {
-    setExpandedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
   const rules = useBusinessRules()
   const aliveRef = useRef(true)
   // Trackea qué deliveries el cliente ya vio en estado 'delivered' para
@@ -793,7 +783,7 @@ export default function ClientOrdersPage() {
           o.status !== "cancelled" &&
           (isCompleted || (rules.reviews_on_paid_enabled && paid))
 
-        // Diferenciación visual: peso por monto, tono por estado, accordion para repetitivos.
+        // Diferenciación visual: peso por monto, tono por estado.
         const isPremium = safeTotal >= 1000
         const isInRoute = delivery?.status === "picked_up"
         const isPending = !paid && o.status !== "cancelled"
@@ -802,9 +792,11 @@ export default function ClientOrdersPage() {
           (!claim.allowed &&
             (delivery?.status === "delivered" ||
               (paid && !delivery)))
-        const isCompact = isPending && safeTotal < 200 && !isPremium
-        const isExpanded = expandedIds.has(o.id)
-        const showInteractive = !isClosed && (!isCompact || isExpanded)
+        // showInteractive YA NO depende de isCompact (eso escondía
+        // chips críticos como "Pagar saldo" en pedidos pendientes <$200).
+        // Solo se oculta el toolbar para pedidos cerrados/cancelados
+        // (que tienen su propio mini-toolbar abajo).
+        const showInteractive = !isClosed
 
         // Capa visual: el closed se aplana, el premium gana peso, el envio activo respira.
         // `relative` siempre — los chips esquineros viven en absolute.
@@ -849,20 +841,6 @@ export default function ClientOrdersPage() {
             }
             transition={isJustPaid ? { duration: 1.6, ease: "easeOut" } : undefined}
             className={containerClass}
-            onClick={isCompact ? () => toggleExpanded(o.id) : undefined}
-            role={isCompact ? "button" : undefined}
-            tabIndex={isCompact ? 0 : undefined}
-            aria-expanded={isCompact ? isExpanded : undefined}
-            onKeyDown={
-              isCompact
-                ? (e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      toggleExpanded(o.id)
-                    }
-                  }
-                : undefined
-            }
           >
             {/* Chips esquineros — flotan SIN clip (sin contain:paint).
                 Premium gana prioridad sobre "En camino". */}
@@ -1225,11 +1203,38 @@ export default function ClientOrdersPage() {
               </p>
             )}
 
-            {/* Hint compact colapsado. */}
-            {isCompact && !isExpanded && (
-              <p className="mt-2 text-[9px] text-slate-400 italic text-center">
-                Toca para pagar o ver opciones
-              </p>
+            {/* Mini-toolbar para pedidos cerrados (cancelados o sin
+                ventana de soporte): al menos Ticket + QR siguen accesibles
+                para consultar historial. */}
+            {isClosed && (
+              <div className="mt-2 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setTicketToken(o.public_token ?? o.id)
+                  }}
+                  className="flex-1 h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-700/70 hover:bg-slate-100 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1 press"
+                  title="Ver ticket"
+                >
+                  <ShoppingBag size={11} />
+                  Ver ticket
+                </button>
+                {o.public_token && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setQrSaleId(o.id)
+                    }}
+                    className="h-8 w-8 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center press"
+                    title="QR del pedido"
+                    aria-label="QR del pedido"
+                  >
+                    <QrCode size={11} />
+                  </button>
+                )}
+              </div>
             )}
           </motion.div>
         )

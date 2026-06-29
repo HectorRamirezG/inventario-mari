@@ -67,6 +67,7 @@ export default function CartHeaderButton() {
         {...longPress}
         aria-label={`Carrito (${summary.count} piezas, total ${formatMoney(summary.total)})`}
         title={`Ver carrito · ${summary.count} ${summary.count === 1 ? "pieza" : "piezas"} · ${formatMoney(summary.total)} · long-press: vista rápida`}
+        data-cart-target="1"
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         whileTap={{ scale: 0.92 }}

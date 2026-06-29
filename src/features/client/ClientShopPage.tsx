@@ -1392,14 +1392,54 @@ export default function ClientShopPage() {
           <Skeleton className="h-8 w-48" rounded="lg" />
           <Skeleton className="h-3 w-64" rounded="full" />
         </div>
-        <Skeleton className="h-12 w-full mb-4" rounded="xl" />
-        <div className="grid grid-cols-2 gap-3">
+        {/* Buscador */}
+        <Skeleton className="h-12 w-full mb-3" rounded="xl" />
+        {/* Chips de categoría (3 chips visibles) */}
+        <div className="flex items-center gap-1.5 mb-3 overflow-x-auto pb-1">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-white dark:bg-slate-800/40 rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-700">
-              <Skeleton className="w-full aspect-square" rounded="sm" />
-              <div className="p-3 space-y-2">
+            <Skeleton
+              key={`cat-${i}`}
+              className="h-8 w-16 shrink-0"
+              rounded="full"
+            />
+          ))}
+        </div>
+        {/* Grid de productos — skeleton fiel a ProductCardClient: foto
+            cuadrada + nombre 2 líneas + chip de precio + chip tier +
+            mini-thumbnails de variantes. Asi el primer paint no "salta"
+            cuando llegan los productos reales. */}
+        <div className="grid grid-cols-2 gap-3">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div
+              key={i}
+              className="bg-white dark:bg-slate-800/40 rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-700"
+            >
+              <div className="relative w-full aspect-square">
+                <Skeleton className="w-full h-full" rounded="sm" />
+                {/* Chip de wishlist (esquina) */}
+                <div className="absolute top-2 right-2">
+                  <Skeleton className="w-7 h-7" rounded="full" />
+                </div>
+              </div>
+              <div className="p-2.5 space-y-1.5">
+                {/* Nombre (2 líneas) */}
+                <Skeleton className="h-3 w-full" rounded="full" />
                 <Skeleton className="h-3 w-3/4" rounded="full" />
-                <Skeleton className="h-4 w-1/2" rounded="full" />
+                {/* Precio + chip tier */}
+                <div className="flex items-center justify-between gap-1 pt-1">
+                  <Skeleton className="h-4 w-12" rounded="full" />
+                  <Skeleton className="h-3 w-8" rounded="full" />
+                </div>
+                {/* Mini-thumbs de variantes */}
+                <div className="flex gap-1 pt-0.5">
+                  {[0, 1, 2].map((k) => (
+                    <Skeleton
+                      key={`v-${k}`}
+                      className="w-5 h-5"
+                      rounded="full"
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           ))}
