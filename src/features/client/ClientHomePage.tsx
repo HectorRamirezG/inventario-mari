@@ -31,7 +31,7 @@ import {
   X,
   RotateCcw,
 } from "lucide-react"
-import { motion } from "framer-motion"
+import { motion, useReducedMotion } from "framer-motion"
 
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../lib/useAuth"
@@ -50,7 +50,6 @@ import RecentlyViewedRow from "../../components/ui/RecentlyViewedRow"
 import ReviewStoriesBar from "../../components/ui/ReviewStoriesBar"
 import ProductOfTheDay from "../../components/ui/ProductOfTheDay"
 import FreshArrivalsRow from "../../components/ui/FreshArrivalsRow"
-import Skeleton from "../../components/ui/Skeleton"
 import MyPaletteSection from "./MyPaletteSection"
 import ProductOfMonthCard from "../dashboard/ProductOfMonthCard"
 
@@ -219,11 +218,28 @@ export default function ClientHomePage() {
       }
     : undefined
 
+  // Stagger de entrada por sección: cada bloque aparece con un delay
+  // ligero escalonado. Si el usuario tiene `prefers-reduced-motion`,
+  // saltamos el delay y mostramos todo a la vez.
+  const reduceMotion = useReducedMotion()
+  const STAGGER_STEP_MS = 55
+  const STAGGER_MAX_MS = 360
+  const sectionMotion = (idx: number) => {
+    if (reduceMotion) return {}
+    const delay = Math.min(idx * STAGGER_STEP_MS, STAGGER_MAX_MS) / 1000
+    return {
+      initial: { opacity: 0, y: 8 },
+      animate: { opacity: 1, y: 0 },
+      transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const, delay },
+    }
+  }
+
   return (
     <div className="space-y-3 pb-[calc(5rem+env(safe-area-inset-bottom))]">
       {/* Hero personal: saludo dinámico + nombre + pills de stats
           navegacionales (pts, racha, trofeos, pedidos) + banner anclado
-          + slide rotativo compacto. Es la primera impresión. */}
+          + slide rotativo compacto. Es la primera impresión. Se renderiza
+          SIN stagger — debe aparecer inmediato. */}
       <ClientHero
         customerName={authName || (authEmail ? authEmail.split("@")[0] : "")}
         isLogged={isLogged}
@@ -234,57 +250,99 @@ export default function ClientHomePage() {
           disponibles, repetir último pedido. Aparece SOLO si hay algo
           accionable; si no, no se ve nada. Es lo más importante después
           del saludo. */}
-      {isLogged && <PriorityActionsSection />}
+      {isLogged && (
+        <motion.div {...sectionMotion(1)}>
+          <PriorityActionsSection />
+        </motion.div>
+      )}
 
       {/* Mensajes — top 3 notificaciones del cliente, clickables. */}
-      {isLogged && <MyMessagesSection />}
+      {isLogged && (
+        <motion.div {...sectionMotion(2)}>
+          <MyMessagesSection />
+        </motion.div>
+      )}
 
       {/* HERO del producto del día — full width, imagen grande, badge,
           CTA "Lo quiero". Es el primer gancho de descubrimiento. Si no
           hay productos con stock+foto, no aparece (silencioso). */}
-      {loading ? (
-        <div className="my-3 rounded-3xl overflow-hidden">
-          <Skeleton className="h-64 w-full" />
-        </div>
-      ) : (
-        <ProductOfTheDay
-          products={products as any}
-          onOpen={(p) => openProduct((p as any).id)}
-        />
-      )}
+      <motion.div {...sectionMotion(3)}>
+        {loading ? (
+          <div
+            className="my-3 relative rounded-3xl overflow-hidden bg-slate-200 dark:bg-slate-800 shimmer"
+            aria-hidden
+          >
+            <div className="w-full aspect-[16/11]" />
+            {/* Placeholder del badge superior izquierdo para que no salte
+                cuando llega el contenido. */}
+            <span className="absolute top-3 left-3 h-5 w-28 rounded-full bg-white/80 dark:bg-slate-700/80" />
+            {/* Placeholder del título + precio + CTA inferior */}
+            <div className="absolute bottom-0 inset-x-0 p-4 space-y-2">
+              <div className="h-4 w-2/3 rounded bg-white/70 dark:bg-slate-700/70" />
+              <div className="flex items-end justify-between gap-3">
+                <div className="h-6 w-24 rounded bg-white/70 dark:bg-slate-700/70" />
+                <div className="h-9 w-24 rounded-full bg-white/80 dark:bg-slate-700/80" />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <ProductOfTheDay
+            products={products as any}
+            onOpen={(p) => openProduct((p as any).id)}
+          />
+        )}
+      </motion.div>
 
       {/* Recién llegados — productos creados en los últimos 21 días,
           carrusel horizontal. Atajo de descubrimiento sin ir al tab Tienda.
           Auto-oculta si <3 productos nuevos con stock. */}
       {!loading && (
-        <FreshArrivalsRow
-          products={products as any}
-          onOpen={openProduct}
-        />
+        <motion.div {...sectionMotion(4)}>
+          <FreshArrivalsRow
+            products={products as any}
+            onOpen={openProduct}
+          />
+        </motion.div>
       )}
 
       {/* Stories del admin — banda Instagram (sube de posición porque
           es marketing rotativo de Mari, antes vivía hasta el final). */}
-      <StoriesBar enabled={bRules.stories_enabled} />
+      <motion.div {...sectionMotion(5)}>
+        <StoriesBar enabled={bRules.stories_enabled} />
+      </motion.div>
 
       {/* Stories de reseñas — marketing orgánico con fotos reales de
           clientas. Solo aparece si hay >=3 reseñas con foto. */}
-      <ReviewStoriesBar />
+      <motion.div {...sectionMotion(6)}>
+        <ReviewStoriesBar />
+      </motion.div>
 
       {/* Vistos recientemente — atajo a productos abiertos en esta sesión.
           Solo aparece si hay 2+. */}
-      <RecentlyViewedRow onOpen={openProduct} />
+      <motion.div {...sectionMotion(7)}>
+        <RecentlyViewedRow onOpen={openProduct} />
+      </motion.div>
 
       {/* Paleta personal: tonos comprados + reposiciones sugeridas.
           Auto-oculta sin historial. */}
-      {isLogged && <MyPaletteSection />}
+      {isLogged && (
+        <motion.div {...sectionMotion(8)}>
+          <MyPaletteSection />
+        </motion.div>
+      )}
 
       {/* Producto del mes — ganador automático del mes anterior. */}
-      <ProductOfMonthCard asLink />
+      <motion.div {...sectionMotion(9)}>
+        <ProductOfMonthCard asLink />
+      </motion.div>
 
       {/* Inversión emocional — "tu camino con Mari". Va al final como
           cierre cálido del feed. */}
-      {isLogged && <MySavingsSection />}
+      {isLogged && (
+        <motion.div {...sectionMotion(10)}>
+          <MySavingsSection />
+        </motion.div>
+      )}
     </div>
   )
 }
@@ -439,10 +497,14 @@ function MyMessagesSection() {
 interface PriorityItem {
   id: string
   icon: typeof Wallet
-  tone: "amber" | "violet" | "emerald"
+  tone: "amber" | "violet" | "emerald" | "rose"
   title: string
   caption: string
   href: string
+  /** Peso para ordenar por urgencia (menor = más urgente). 
+   *  0 = saldo vencido, 1 = saldo normal, 2 = delivery en camino,
+   *  3 = wish disponible, 4 = repetir último pedido. */
+  weight: number
 }
 
 const TONE_CARD: Record<PriorityItem["tone"], string> = {
@@ -452,12 +514,15 @@ const TONE_CARD: Record<PriorityItem["tone"], string> = {
     "bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30 text-violet-900 dark:text-violet-100",
   emerald:
     "bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-900 dark:text-emerald-100",
+  rose:
+    "bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-900 dark:text-rose-100",
 }
 
 const TONE_ICON_BG: Record<PriorityItem["tone"], string> = {
   amber: "bg-amber-500 text-white",
   violet: "bg-violet-500 text-white",
   emerald: "bg-emerald-500 text-white",
+  rose: "bg-rose-500 text-white",
 }
 
 /**
@@ -527,7 +592,10 @@ function PriorityActionsSection() {
     }
     const out: PriorityItem[] = []
 
-    // 1) Saldos por pagar. Limit 5 para no saturar.
+    // 1) Saldos por pagar. Limit 5 para no saturar. Diferenciamos
+    //    "vencidos" (created_at > 25 días) en rose para que el cliente
+    //    vea visualmente la urgencia distinta de los recientes.
+    const OVERDUE_DAYS = 25
     const { data: salesPending } = await supabase
       .from("sales")
       .select("id,balance,public_token,created_at,status")
@@ -540,16 +608,24 @@ function PriorityActionsSection() {
       const bal = Number(s.balance) || 0
       if (bal <= 0) continue
       const folio = String(s.id).slice(0, 8).toUpperCase()
+      const created = s.created_at ? new Date(s.created_at).getTime() : 0
+      const daysAgo = created
+        ? Math.floor((Date.now() - created) / 86400000)
+        : 0
+      const isOverdue = daysAgo >= OVERDUE_DAYS
       out.push({
         id: `saldo-${s.id}`,
         icon: Wallet,
-        tone: "amber",
-        title: `Saldo pendiente: ${formatMoney(bal)}`,
-        // Antes esta copy se repetía en cada saldo "Liquida tu pedido o
-        // reporta un pago" — cuando había 3 saldos se leían idénticas.
-        // Ahora cada card muestra su folio para diferenciarse.
-        caption: `Folio #${folio} · toca para abonar`,
+        tone: isOverdue ? "rose" : "amber",
+        // Vencidos: copy más urgente, sin repetir info.
+        title: isOverdue
+          ? `Saldo por vencer: ${formatMoney(bal)}`
+          : `Saldo pendiente: ${formatMoney(bal)}`,
+        caption: isOverdue
+          ? `Folio #${folio} · creado hace ${daysAgo} días`
+          : `Folio #${folio} · toca para abonar`,
         href: `/mis-pedidos`,
+        weight: isOverdue ? 0 : 1,
       })
     }
 
@@ -583,6 +659,7 @@ function PriorityActionsSection() {
               ? `Salió ${formatRelative(n.picked_up_at)}`
               : "Sigue el progreso en tu pedido",
             href: `/mis-pedidos`,
+            weight: 2,
           })
         }
       }
@@ -608,6 +685,7 @@ function PriorityActionsSection() {
           title: `Llegó: ${w.title}`,
           caption: "Tu deseo ya está en la tienda — pásalo a tu carrito",
           href: "/mis-deseos",
+          weight: 3,
         })
       }
     } catch {
@@ -638,12 +716,17 @@ function PriorityActionsSection() {
             title: `Repetir tu último pedido · ${formatMoney(Number(last.total) || 0)}`,
             caption: "Te llevamos al catálogo con todo cargado",
             href: `/?reorder=${last.id}`,
+            weight: 4,
           })
         }
       } catch {
         /* noop */
       }
     }
+
+    // Sort por urgencia: vencidos (0) → saldos (1) → deliveries (2) →
+    // deseos (3) → reorder (4). Después clamp a 6 para no saturar.
+    out.sort((a, b) => a.weight - b.weight)
 
     // Clamp a 6 totales para no saturar la home con 11 cards
     // (5 saldos + 3 deliveries + 3 wishes en el peor caso).

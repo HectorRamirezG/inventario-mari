@@ -19,6 +19,7 @@ import {
 import { useBusinessRules } from "../../features/settings/businessRulesService"
 import type { WelcomeSlide as RuleSlide } from "../../features/settings/businessRulesService"
 import { useUserPrefs } from "../../lib/userPrefs"
+import { useFeedback } from "../../lib/useFeedback"
 
 interface Slide {
   title: string
@@ -118,6 +119,7 @@ export default function ClientHero({ customerName, isLogged, stats }: Props) {
   const rules = useBusinessRules()
   const { prefs } = useUserPrefs()
   const navigate = useNavigate()
+  const { tap } = useFeedback()
   const [idx, setIdx] = useState(0)
 
   // Filtra slides según reglas activas. Cuando apaga un módulo
@@ -299,7 +301,10 @@ export default function ClientHero({ customerName, isLogged, stats }: Props) {
               <button
                 key={p.label + p.value}
                 type="button"
-                onClick={() => navigate(p.href)}
+                onClick={() => {
+                  tap()
+                  navigate(p.href)
+                }}
                 className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] font-black tabular-nums press transition-transform hover:scale-105 ${p.tone}`}
                 aria-label={`${p.value} ${p.label}`}
               >

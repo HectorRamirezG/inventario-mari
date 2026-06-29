@@ -1,6 +1,7 @@
 import { useMemo } from "react"
+import { useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, ChevronRight, Package } from "lucide-react"
+import { Sparkles, ChevronRight, Package, ArrowRight } from "lucide-react"
 
 import { imageThumbnail } from "../../lib/imageTransform"
 import { formatMoney } from "../../lib/format"
@@ -52,6 +53,7 @@ export default function FreshArrivalsRow({
   minToShow = 3,
   limit = 12,
 }: Props) {
+  const navigate = useNavigate()
   const fresh = useMemo(() => {
     const cutoff = Date.now() - withinDays * 24 * 3600 * 1000
     return products
@@ -151,6 +153,33 @@ export default function FreshArrivalsRow({
             )
           })}
         </AnimatePresence>
+
+        {/* CTA final "Ver todo el catálogo" — cierra la fila con un atajo
+            al catálogo completo en vez de cortar seco. Misma altura que
+            las cards de producto para no romper la alineación visual. */}
+        <motion.button
+          key="see-all"
+          layout
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.22, delay: 0.06 }}
+          type="button"
+          onClick={() => navigate("/")}
+          className="shrink-0 w-36 snap-start text-center rounded-2xl bg-gradient-to-br from-pink-50 via-fuchsia-50 to-amber-50 dark:from-pink-500/15 dark:via-fuchsia-500/15 dark:to-amber-500/15 border-2 border-dashed border-pink-300 dark:border-pink-500/40 overflow-hidden hover:shadow-md hover:border-solid transition-all press flex flex-col items-center justify-center gap-2 py-6"
+          aria-label="Ver todo el catálogo"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-fuchsia-500 text-white flex items-center justify-center shadow-lg">
+            <ArrowRight size={20} strokeWidth={2.5} />
+          </div>
+          <div className="px-2">
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 leading-tight">
+              Ver todo
+            </p>
+            <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">
+              Catálogo completo
+            </p>
+          </div>
+        </motion.button>
       </div>
     </motion.section>
   )
