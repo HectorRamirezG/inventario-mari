@@ -40,20 +40,22 @@ interface AdminVariantRow {
   variant_name: string
   product_name: string
   price: number
+  cost: number
   image: string | null
 }
 
 /** Carga directa de productos+variantes activos para el editor.
  *  No usamos el servicio del cliente porque vive en otro feature y
- *  queremos un payload mínimo. */
+ *  queremos un payload mínimo. Trae costo (cost_override > product.cost)
+ *  para que el analizador de margen pueda calcular utilidad real. */
 async function loadActiveVariants(): Promise<AdminVariantRow[]> {
   const { data: prods } = await supabase
     .from("products")
-    .select("id,name,image_url")
+    .select("id,name,image_url,cost")
     .eq("is_active", true)
   const { data: vars } = await supabase
     .from("variants")
-    .select("id,product_id,variant_name,price,price_menudeo,image_url,image_urls")
+    .select("id,product_id,variant_name,price,price_menudeo,image_url,image_urls,cost_override")
     .eq("is_active", true)
   const productById = new Map<string, any>((prods ?? []).map((p: any) => [p.id, p]))
   return (vars ?? [])
@@ -65,6 +67,7 @@ async function loadActiveVariants(): Promise<AdminVariantRow[]> {
         variant_name: String(v.variant_name ?? ""),
         product_name: String(p.name ?? ""),
         price: Number(v.price_menudeo ?? v.price ?? 0),
+        cost: Number(v.cost_override ?? p.cost ?? 0),
         image:
           (v.image_urls && v.image_urls[0]) ??
           v.image_url ??
@@ -573,6 +576,19 @@ function BundleEditorModal({
               piecesCount={slots.reduce((a, s) => a + s.qty, 0)}
             />
           )}
+
+          {/* Calculadora de margen del paquete — calcula si el descuento
+              que pusiste te deja ganancia real o si estás vendiendo
+              casi al costo. Solo aparece si hay variantes restringidas
+              en al menos un slot (sin eso no podemos saber el costo). */}
+          {slots.length > 0 && variants.length > 0 && (
+            <BundleMarginAnalyzer
+              slots={slots}
+              variants={variants}
+              discountPercent={discount}
+              onSuggestDiscount={(pct) => setDiscount(pct)}
+            />
+          )}
         </div>
 
         {/* Footer */}
@@ -967,6 +983,245 @@ function BundleClientPreview({
           </p>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ────────
+ * Calculadora de margen del paquete.
+ * Para slots con variantes restringidas: calcula precio/costo EXACTO.
+ * Para slots libres: estima usando promedio del catálogo (advertencia).
+ * Muestra margen real con el descuento puesto, status (verde >= 30%,
+ * amber 15-30%, rojo < 15%) y sugiere descuento máximo seguro.
+ * ──────── */
+interface MarginAnalysis {
+  hasFreeSlots: boolean
+  subtotalRetail: number // precio menudeo sin descuento
+  totalCost: number // costo real
+  // Aplicado el descuento
+  effectiveRevenue: number
+  profit: number
+  marginPct: number // sobre revenue: profit/revenue * 100
+  // Recomendación
+  maxSafeDiscount: number // % que dejaría margen >= MIN_TARGET_MARGIN
+}
+
+const MIN_TARGET_MARGIN = 25 // % de margen deseado mínimo
+
+function analyzeBundleMargin(
+  slots: BundleSlot[],
+  variants: AdminVariantRow[],
+  discountPercent: number,
+): MarginAnalysis {
+  const variantById = new Map(variants.map((v) => [v.id, v]))
+
+  // Promedios para slots libres
+  const validVariants = variants.filter((v) => v.price > 0 && v.cost > 0)
+  const avgPrice =
+    validVariants.length > 0
+      ? validVariants.reduce((a, v) => a + v.price, 0) / validVariants.length
+      : 0
+  const avgCost =
+    validVariants.length > 0
+      ? validVariants.reduce((a, v) => a + v.cost, 0) / validVariants.length
+      : 0
+
+  let subtotalRetail = 0
+  let totalCost = 0
+  let hasFreeSlots = false
+
+  for (const slot of slots) {
+    const eligible = slot.eligible_variant_ids
+      .map((id) => variantById.get(id))
+      .filter((v): v is AdminVariantRow => !!v && v.price > 0 && v.cost > 0)
+
+    let slotPrice: number
+    let slotCost: number
+
+    if (eligible.length === 0) {
+      // Slot libre — estimamos con promedio del catálogo
+      hasFreeSlots = true
+      slotPrice = avgPrice
+      slotCost = avgCost
+    } else {
+      // Restringido — promedio de los elegibles (conservador: el cliente
+      // podría elegir cualquiera, no sabemos cuál)
+      slotPrice = eligible.reduce((a, v) => a + v.price, 0) / eligible.length
+      slotCost = eligible.reduce((a, v) => a + v.cost, 0) / eligible.length
+    }
+    subtotalRetail += slotPrice * slot.qty
+    totalCost += slotCost * slot.qty
+  }
+
+  const discountAmt = subtotalRetail * (discountPercent / 100)
+  const effectiveRevenue = Math.max(0, subtotalRetail - discountAmt)
+  const profit = effectiveRevenue - totalCost
+  const marginPct =
+    effectiveRevenue > 0 ? (profit / effectiveRevenue) * 100 : 0
+
+  // Máximo % de descuento que mantiene margen >= MIN_TARGET_MARGIN
+  // Si totalCost / subtotalRetail = costRatio, después del descuento
+  // revenue = subtotal * (1 - d/100). margen = 1 - cost/revenue.
+  // queremos margen >= TARGET → cost/revenue <= 1 - TARGET/100
+  // → revenue >= cost / (1 - TARGET/100)
+  // → subtotal * (1 - d/100) >= cost / (1 - TARGET/100)
+  // → d <= 100 * (1 - cost / (subtotal * (1 - TARGET/100)))
+  const targetRev = totalCost / (1 - MIN_TARGET_MARGIN / 100)
+  const maxSafeDiscount =
+    subtotalRetail > 0
+      ? Math.max(0, Math.floor(100 * (1 - targetRev / subtotalRetail)))
+      : 0
+
+  return {
+    hasFreeSlots,
+    subtotalRetail,
+    totalCost,
+    effectiveRevenue,
+    profit,
+    marginPct,
+    maxSafeDiscount: Math.min(100, maxSafeDiscount),
+  }
+}
+
+function BundleMarginAnalyzer({
+  slots,
+  variants,
+  discountPercent,
+  onSuggestDiscount,
+}: {
+  slots: BundleSlot[]
+  variants: AdminVariantRow[]
+  discountPercent: number
+  onSuggestDiscount: (pct: number) => void
+}) {
+  const a = useMemo(
+    () => analyzeBundleMargin(slots, variants, discountPercent),
+    [slots, variants, discountPercent],
+  )
+
+  if (a.subtotalRetail <= 0 || a.totalCost <= 0) return null
+
+  // Tone según margen
+  const tone =
+    a.marginPct >= 30
+      ? {
+          bg: "bg-emerald-50 dark:bg-emerald-500/10",
+          border: "border-emerald-200 dark:border-emerald-500/30",
+          text: "text-emerald-700 dark:text-emerald-300",
+          accent: "text-emerald-600 dark:text-emerald-400",
+          label: "Margen saludable",
+        }
+      : a.marginPct >= 15
+        ? {
+            bg: "bg-amber-50 dark:bg-amber-500/10",
+            border: "border-amber-200 dark:border-amber-500/30",
+            text: "text-amber-700 dark:text-amber-300",
+            accent: "text-amber-600 dark:text-amber-400",
+            label: "Margen ajustado",
+          }
+        : {
+            bg: "bg-rose-50 dark:bg-rose-500/10",
+            border: "border-rose-200 dark:border-rose-500/30",
+            text: "text-rose-700 dark:text-rose-300",
+            accent: "text-rose-600 dark:text-rose-400",
+            label: a.marginPct < 0 ? "PIERDES DINERO" : "Margen peligroso",
+          }
+
+  return (
+    <div className={`rounded-2xl border ${tone.border} ${tone.bg} p-3 space-y-2`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`w-7 h-7 rounded-lg bg-white dark:bg-slate-900 ${tone.accent} flex items-center justify-center shrink-0`}>
+          <Sparkles size={13} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className={`text-[11px] font-black uppercase tracking-widest leading-none ${tone.text}`}>
+            Calculadora del paquete
+          </p>
+          <p className={`text-[9px] font-bold leading-tight mt-0.5 ${tone.accent}`}>
+            {tone.label}
+            {a.hasFreeSlots && " · estimado (slots libres)"}
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className={`text-lg font-black tabular-nums leading-none ${tone.text}`}>
+            {a.marginPct.toFixed(0)}%
+          </p>
+          <p className={`text-[8px] font-bold uppercase tracking-widest ${tone.accent}`}>
+            margen
+          </p>
+        </div>
+      </div>
+
+      {/* Mini desglose */}
+      <div className="grid grid-cols-3 gap-2 pt-1">
+        <div className="text-center">
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+            Venta
+          </p>
+          <p className="text-[11px] font-black tabular-nums text-slate-700 dark:text-slate-200">
+            {formatMoney(a.effectiveRevenue)}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+            Costo
+          </p>
+          <p className="text-[11px] font-black tabular-nums text-slate-500">
+            {formatMoney(a.totalCost)}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">
+            Ganas
+          </p>
+          <p className={`text-[11px] font-black tabular-nums ${tone.text}`}>
+            {formatMoney(a.profit)}
+          </p>
+        </div>
+      </div>
+
+      {/* Sugerencia de descuento máximo */}
+      {a.marginPct < MIN_TARGET_MARGIN &&
+        a.maxSafeDiscount < discountPercent && (
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-current/20">
+            <p className={`text-[10px] font-bold leading-snug ${tone.accent}`}>
+              Para mantener ≥{MIN_TARGET_MARGIN}% margen, bájalo a{" "}
+              <strong>{a.maxSafeDiscount}%</strong>
+            </p>
+            <button
+              type="button"
+              onClick={() => onSuggestDiscount(a.maxSafeDiscount)}
+              className={`h-7 px-2.5 rounded-full bg-white dark:bg-slate-900 ${tone.text} text-[9px] font-black uppercase tracking-widest border ${tone.border} press shrink-0`}
+            >
+              Aplicar {a.maxSafeDiscount}%
+            </button>
+          </div>
+        )}
+
+      {/* Sugerencia inversa: descuento es muy bajo, podría ser más agresivo */}
+      {a.marginPct >= MIN_TARGET_MARGIN + 15 &&
+        a.maxSafeDiscount > discountPercent + 5 && (
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-current/20">
+            <p className="text-[10px] font-bold leading-snug text-emerald-600 dark:text-emerald-400">
+              Podrías ofrecer hasta <strong>{a.maxSafeDiscount}%</strong> de
+              descuento y seguir ganando bien.
+            </p>
+            <button
+              type="button"
+              onClick={() => onSuggestDiscount(a.maxSafeDiscount)}
+              className="h-7 px-2.5 rounded-full bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 text-[9px] font-black uppercase tracking-widest border border-emerald-200 dark:border-emerald-500/30 press shrink-0"
+            >
+              Subir a {a.maxSafeDiscount}%
+            </button>
+          </div>
+        )}
+
+      {a.hasFreeSlots && (
+        <p className="text-[9px] font-bold text-slate-400 italic pt-1 leading-snug">
+          ⚠️ Hay slots libres — el costo real puede variar según qué elija el
+          cliente. Esto es un estimado con precios promedio.
+        </p>
+      )}
     </div>
   )
 }
