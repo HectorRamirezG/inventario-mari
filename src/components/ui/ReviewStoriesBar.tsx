@@ -77,8 +77,8 @@ export default function ReviewStoriesBar() {
       </div>
 
       <div
-        className="-mx-4 px-4 flex gap-2.5 overflow-x-auto scroll-container-ios snap-x snap-mandatory"
-        style={{ scrollPaddingInline: 16 }}
+        className="-mx-4 px-4 flex gap-2.5 overflow-x-auto snap-x"
+        style={{ scrollPaddingInline: 16, touchAction: "pan-x" }}
       >
         {items.map((r, i) => (
           <motion.button

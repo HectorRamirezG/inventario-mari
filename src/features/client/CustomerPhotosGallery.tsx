@@ -78,7 +78,10 @@ export default function CustomerPhotosGallery({
         </span>
       </div>
 
-      <div className="overflow-x-auto scroll-container-ios -mx-1 px-1">
+      <div
+        className="overflow-x-auto -mx-1 px-1"
+        style={{ touchAction: "pan-x" }}
+      >
         <div className="flex gap-2 pb-1">
           {reviews.map((r) => (
             <button

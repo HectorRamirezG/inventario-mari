@@ -31,7 +31,7 @@ import {
   X,
   RotateCcw,
 } from "lucide-react"
-import { motion, useReducedMotion } from "framer-motion"
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 
 import { supabase } from "../../lib/supabase"
 import { useAuth } from "../../lib/useAuth"
@@ -449,42 +449,46 @@ function MyMessagesSection() {
         )}
       </header>
       <div className="space-y-2">
-        {latest.map((n) => {
-          const routeable = !!routeFor(n)
-          return (
-            <motion.button
-              key={n.id}
-              layout
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              type="button"
-              onClick={() => handleClick(n)}
-              disabled={!routeable}
-              className={`nudge-on-hover w-full text-left rounded-2xl p-3 border transition-colors press ${
-                n.read_at
-                  ? "bg-white dark:bg-slate-800/60 border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  : "bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/30 hover:bg-primary/10"
-              } ${!routeable ? "cursor-default opacity-90" : ""}`}
-            >
-              <div className="flex items-start gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-black leading-tight">{n.title}</p>
-                  {n.body && (
-                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
-                      {n.body}
-                    </p>
+        <AnimatePresence initial={false}>
+          {latest.map((n) => {
+            const routeable = !!routeFor(n)
+            return (
+              <motion.button
+                key={n.id}
+                layout
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, height: 0, marginTop: 0 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                type="button"
+                onClick={() => handleClick(n)}
+                disabled={!routeable}
+                className={`nudge-on-hover w-full text-left rounded-2xl p-3 border transition-colors press ${
+                  n.read_at
+                    ? "bg-white dark:bg-slate-800/60 border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    : "bg-primary/5 dark:bg-primary/10 border-primary/20 dark:border-primary/30 hover:bg-primary/10"
+                } ${!routeable ? "cursor-default opacity-90" : ""}`}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-black leading-tight">{n.title}</p>
+                    {n.body && (
+                      <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
+                        {n.body}
+                      </p>
+                    )}
+                  </div>
+                  {routeable && (
+                    <ChevronRight
+                      size={14}
+                      className="nudge-arrow text-slate-400 shrink-0 mt-0.5"
+                    />
                   )}
                 </div>
-                {routeable && (
-                  <ChevronRight
-                    size={14}
-                    className="nudge-arrow text-slate-400 shrink-0 mt-0.5"
-                  />
-                )}
-              </div>
-            </motion.button>
-          )
-        })}
+              </motion.button>
+            )
+          })}
+        </AnimatePresence>
       </div>
     </section>
   )
@@ -767,53 +771,60 @@ function PriorityActionsSection() {
         </h2>
       </header>
       <div className="space-y-2">
-        {visible.map((it) => {
-          const Icon = it.icon
-          return (
-            <div
-              key={it.id}
-              className={`relative nudge-on-hover flex items-center gap-3 rounded-2xl border p-3 ${TONE_CARD[it.tone]}`}
-            >
-              <a
-                href={it.href}
-                className="absolute inset-0 z-0 press rounded-2xl"
-                aria-label={it.title}
-              />
-              <div
-                className={`relative z-10 w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${TONE_ICON_BG[it.tone]}`}
+        <AnimatePresence initial={false}>
+          {visible.map((it) => {
+            const Icon = it.icon
+            return (
+              <motion.div
+                key={it.id}
+                layout
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.94, height: 0, marginTop: 0, marginBottom: 0 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className={`relative nudge-on-hover flex items-center gap-3 rounded-2xl border p-3 ${TONE_CARD[it.tone]}`}
               >
-                <Icon size={16} />
-              </div>
-              <div className="relative z-10 flex-1 min-w-0 pointer-events-none">
-                <p className="text-[12px] font-black leading-tight truncate">
-                  {it.title}
-                </p>
-                <p className="text-[11px] font-bold opacity-80 leading-tight truncate mt-0.5">
-                  {it.caption}
-                </p>
-              </div>
-              <ChevronRight
-                size={14}
-                className="relative z-10 nudge-arrow shrink-0 opacity-60 pointer-events-none"
-              />
-              {/* Botón X dismiss — fuera del flujo principal pero
-                  encima del link, con stopPropagation. */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  dismissItem(it.id)
-                }}
-                aria-label="Ocultar por 24 horas"
-                title="Recordarme mañana"
-                className="relative z-20 shrink-0 w-7 h-7 -mr-1 rounded-full bg-black/5 hover:bg-black/15 text-current opacity-40 hover:opacity-100 flex items-center justify-center transition-opacity press"
-              >
-                <X size={11} />
-              </button>
-            </div>
-          )
-        })}
+                <a
+                  href={it.href}
+                  className="absolute inset-0 z-0 press rounded-2xl"
+                  aria-label={it.title}
+                />
+                <div
+                  className={`relative z-10 w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${TONE_ICON_BG[it.tone]}`}
+                >
+                  <Icon size={16} />
+                </div>
+                <div className="relative z-10 flex-1 min-w-0 pointer-events-none">
+                  <p className="text-[12px] font-black leading-tight truncate">
+                    {it.title}
+                  </p>
+                  <p className="text-[11px] font-bold opacity-80 leading-tight truncate mt-0.5">
+                    {it.caption}
+                  </p>
+                </div>
+                <ChevronRight
+                  size={14}
+                  className="relative z-10 nudge-arrow shrink-0 opacity-60 pointer-events-none"
+                />
+                {/* Botón X dismiss — fuera del flujo principal pero
+                    encima del link, con stopPropagation. */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    dismissItem(it.id)
+                  }}
+                  aria-label="Ocultar por 24 horas"
+                  title="Recordarme mañana"
+                  className="relative z-20 shrink-0 w-7 h-7 -mr-1 rounded-full bg-black/5 hover:bg-black/15 text-current opacity-40 hover:opacity-100 flex items-center justify-center transition-opacity press"
+                >
+                  <X size={11} />
+                </button>
+              </motion.div>
+            )
+          })}
+        </AnimatePresence>
       </div>
     </section>
   )

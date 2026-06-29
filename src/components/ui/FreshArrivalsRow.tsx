@@ -95,7 +95,10 @@ export default function FreshArrivalsRow({
         </span>
       </div>
 
-      <div className="-mx-4 px-4 flex gap-2.5 overflow-x-auto scroll-container-ios snap-x snap-mandatory pb-1">
+      <div
+        className="-mx-4 px-4 flex gap-2.5 overflow-x-auto snap-x pb-1"
+        style={{ touchAction: "pan-x" }}
+      >
         <AnimatePresence initial={false}>
           {fresh.map((p) => {
             const v =

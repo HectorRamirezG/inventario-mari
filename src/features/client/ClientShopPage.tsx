@@ -2208,6 +2208,7 @@ export default function ClientShopPage() {
                   </div>
                 )}
 
+                <AnimatePresence initial={false}>
                 {repricedCart.map((c) => {
                   const lineTotal = c.qty * c.unit_price
                   // Líneas de preventa pueden subir hasta 5 piezas (cap)
@@ -2217,9 +2218,14 @@ export default function ClientShopPage() {
                     ? c.qty < 5
                     : c.stock > 0 && c.qty < c.stock
                   return (
-                    <div
+                    <motion.div
                       key={c.variant_id}
-                      className={`flex items-stretch gap-3 p-2.5 rounded-2xl border ${
+                      layout
+                      initial={{ opacity: 0, x: -8, scale: 0.96 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      exit={{ opacity: 0, x: 16, scale: 0.92, height: 0, marginTop: 0, paddingTop: 0, paddingBottom: 0 }}
+                      transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                      className={`flex items-stretch gap-3 p-2.5 rounded-2xl border overflow-hidden ${
                         c.is_preorder
                           ? "bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30"
                           : "bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700"
@@ -2335,9 +2341,10 @@ export default function ClientShopPage() {
                           {formatMoney(lineTotal)}
                         </span>
                       </div>
-                    </div>
+                    </motion.div>
                   )
                 })}
+                </AnimatePresence>
 
                 {/* ─────────── OPCIONES Y DESGLOSE — dentro del scroll ───────────
                     Mari pidió que el footer no se "comiera" la lista. Antes

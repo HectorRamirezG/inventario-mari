@@ -43,7 +43,10 @@ export default function RecentlyViewedRow({
           <X size={9} /> Limpiar
         </button>
       </div>
-      <div className="flex gap-2 overflow-x-auto scroll-container-ios pb-1 -mx-1 px-1">
+      <div
+        className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1"
+        style={{ touchAction: "pan-x" }}
+      >
         <AnimatePresence initial={false}>
           {items.map((it) => (
             <motion.button

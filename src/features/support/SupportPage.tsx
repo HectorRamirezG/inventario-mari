@@ -338,21 +338,26 @@ export default function SupportPage() {
                 <div className="flex-1 h-px bg-gradient-to-r from-slate-200 dark:from-slate-700 to-transparent" />
               </div>
               <div className="space-y-2">
-                {items.map((t) => {
-                  const meta = categoryMeta(t.category)
-                  const isOpen = t.status === "open"
-                  const isResolved = t.status === "resolved"
-                  return (
-                    <motion.div
-                      key={t.id}
-                      layout
-                      whileTap={{ scale: 0.99 }}
-                      onClick={() => setSelected(t)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") setSelected(t)
-                      }}
+                <AnimatePresence initial={false}>
+                  {items.map((t) => {
+                    const meta = categoryMeta(t.category)
+                    const isOpen = t.status === "open"
+                    const isResolved = t.status === "resolved"
+                    return (
+                      <motion.div
+                        key={t.id}
+                        layout
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: -120, scale: 0.96, height: 0, marginTop: 0 }}
+                        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => setSelected(t)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") setSelected(t)
+                        }}
                       drag={!isResolved ? "x" : false}
                       dragConstraints={{ left: -200, right: 0 }}
                       dragElastic={{ left: 0.3, right: 0 }}
@@ -458,7 +463,8 @@ export default function SupportPage() {
                       )}
                     </motion.div>
                   )
-                })}
+                  })}
+                </AnimatePresence>
               </div>
             </div>
           ))}
