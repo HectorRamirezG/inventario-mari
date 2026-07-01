@@ -117,7 +117,7 @@ export default function PresaleEditor({
   )
 
   const countdown = value.active && value.endsAt
-    ? formatPresaleCountdown(fromDatetimeLocalValue(value.endsAt))
+    ? formatPresaleCountdown(value.endsAt)
     : null
 
   // ¿La preventa está vencida por fecha? Aviso al admin para que apague

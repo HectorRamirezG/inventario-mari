@@ -137,13 +137,21 @@ export function computePresale(
  * Formato humano de "cuánto falta" para que termine la preventa.
  * Ejemplos: "Termina en 2 días", "Termina en 5 h", "Termina en 12 min",
  * "Última hora", "Vencida".
+ *
+ * Acepta Date, string ISO o `datetime-local` (yyyy-MM-ddTHH:mm). La
+ * tolerancia a string evita bugs cuando el caller olvida convertir.
  */
 export function formatPresaleCountdown(
-  endsAt: Date | null | undefined,
+  endsAt: Date | string | null | undefined,
   now: Date = new Date(),
 ): string | null {
   if (!endsAt) return null
-  const diffMs = endsAt.getTime() - now.getTime()
+  // Normaliza a Date sin importar el tipo de entrada. Un string ISO o
+  // datetime-local es parseable por el constructor de Date. Si el input
+  // resulta inválido (NaN), devolvemos null en vez de romper el render.
+  const endsAtDate = endsAt instanceof Date ? endsAt : new Date(endsAt)
+  if (isNaN(endsAtDate.getTime())) return null
+  const diffMs = endsAtDate.getTime() - now.getTime()
   if (diffMs <= 0) return "Vencida"
 
   const min = Math.floor(diffMs / 60_000)
