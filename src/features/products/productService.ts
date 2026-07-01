@@ -13,6 +13,11 @@ export async function getProducts(): Promise<Product[]> {
       min_stock,
       is_active,
       image_url,
+      presale_active,
+      presale_price,
+      presale_discount_pct,
+      presale_ends_at,
+      presale_note,
       variants (
         id,
         product_id,
@@ -165,6 +170,12 @@ const PRODUCT_COLUMNS = [
   "min_stock",
   "is_active",
   "image_url",
+  // Preventa (todas opcionales — solo se envían las que cambian)
+  "presale_active",
+  "presale_price",
+  "presale_discount_pct",
+  "presale_ends_at",
+  "presale_note",
 ] as const
 
 // Whitelist de columnas reales en `variants`

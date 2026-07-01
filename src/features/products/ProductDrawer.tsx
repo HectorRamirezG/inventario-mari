@@ -37,6 +37,12 @@ import {
   updateProduct,
   updateVariant,
 } from "./productService"
+import PresaleEditor, {
+  EMPTY_PRESALE,
+  presaleFromDB,
+  presaleToDB,
+  type PresaleEditorValue,
+} from "./PresaleEditor"
 import { applyMovement } from "../movements/movementService"
 import { getPendingStockAlertsByProduct } from "../client/stockAlertsService"
 import StockSubscribersDrawer from "../../components/ui/StockSubscribersDrawer"
@@ -104,6 +110,11 @@ export default function ProductDrawer({
   const [minStock, setMinStock] = useState<number | "">("")
   const [saving, setSaving] = useState(false)
 
+  // Estado de PREVENTA (toggle + descuento/precio + fecha límite + nota).
+  // Se sincroniza con el producto al abrir/cambiar; al guardar se serializa
+  // vía `presaleToDB` y viaja como parte del updateProduct().
+  const [presale, setPresale] = useState<PresaleEditorValue>(EMPTY_PRESALE)
+
   // La portada mostrada en el header del drawer es la primera foto
   // disponible de la primera variante con fotos. Si nadie tiene foto,
   // el header dibuja el ícono de paquete.
@@ -149,6 +160,7 @@ export default function ProductDrawer({
       setCategory(product?.category ?? "")
       setCost(product?.cost ?? "")
       setMinStock(product?.min_stock ?? "")
+      setPresale(presaleFromDB(product ?? null))
     } else {
       // create — intenta recuperar un draft del localStorage
       try {
@@ -161,6 +173,7 @@ export default function ProductDrawer({
             setCategory(draft.category ?? "")
             setCost(draft.cost ?? "")
             setMinStock(draft.minStock ?? "")
+            setPresale(EMPTY_PRESALE)
             toast("Restauramos tu borrador anterior", { icon: "📝" })
             return
           }
@@ -170,6 +183,7 @@ export default function ProductDrawer({
       setCategory("")
       setCost("")
       setMinStock("")
+      setPresale(EMPTY_PRESALE)
     }
   }, [open, mode, product?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -289,6 +303,9 @@ export default function ProductDrawer({
           category: category.trim() || null,
           cost: Number(cost),
           min_stock: minStock === "" ? 0 : Number(minStock),
+          // Preventa: serializamos el shape del editor al shape de columnas
+          // (si !active, todos los campos se limpian a null en DB).
+          ...presaleToDB(presale),
         })
         toast.success("Cambios guardados")
         onSaved()
@@ -421,6 +438,8 @@ export default function ProductDrawer({
                   knownCategories={knownCategories}
                   sug={sug}
                   onSaved={onSaved}
+                  presale={presale}
+                  setPresale={setPresale}
                 />
               )}
 
@@ -482,6 +501,8 @@ function GeneralTab({
   knownCategories,
   sug,
   onSaved,
+  presale,
+  setPresale,
 }: {
   product?: Product
   name: string
@@ -495,6 +516,8 @@ function GeneralTab({
   knownCategories?: string[]
   sug: { men: number; med: number; may: number } | null
   onSaved?: () => void
+  presale: PresaleEditorValue
+  setPresale: (v: PresaleEditorValue) => void
 }) {
   // Estado local para galería del producto (cuando no hay variantes aún).
   // Las fotos se sincronizan al backend mediante `updateProduct`.
@@ -662,6 +685,22 @@ function GeneralTab({
             <Pill label="May" value={sug.may} />
           </div>
         </div>
+      )}
+
+      {/* Preventa: precio especial temporal por producto. Toggle apagado por
+          default; cuando se enciende, aparecen los campos de descuento/precio
+          y fecha límite. El preview usa el price_menudeo de la PRIMERA variante
+          como referencia (típicamente todas comparten precio en menudeo). */}
+      {product && (
+        <PresaleEditor
+          value={presale}
+          onChange={setPresale}
+          referencePrice={Number(
+            product.variants?.[0]?.price_menudeo ??
+              product.variants?.[0]?.price ??
+              0,
+          )}
+        />
       )}
     </div>
   )

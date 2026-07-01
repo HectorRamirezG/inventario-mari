@@ -39,6 +39,11 @@ import {
 } from "../sales/salesTier"
 import type { PricingTier } from "../pricing/pricingTypes"
 import {
+  computePresale,
+  formatPresaleCountdown,
+  type PresaleFields,
+} from "../products/presaleService"
+import {
   OVERLAY_BACKDROP_TRANSITION,
   OVERLAY_INNER_TRANSITION,
   OVERLAY_PANEL_STYLE,
@@ -77,7 +82,7 @@ function isValidHex(value: string | null | undefined): value is string {
   return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim())
 }
 
-export interface BuySheetProduct {
+export interface BuySheetProduct extends PresaleFields {
   id: string
   name: string
   category: string | null
@@ -227,8 +232,22 @@ export default function BuySheet({
   }, [projectedQty, thresholds])
 
   /** Precio efectivo de una variante con el tier proyectado. Si la
-   *  variante no tiene precios escalonados cargados, cae a `price`. */
+   *  variante no tiene precios escalonados cargados, cae a `price`.
+   *
+   *  Si el PRODUCTO está en preventa activa (mecánica nueva del admin) y
+   *  el tier proyectado es `menudeo`, usamos el precio de preventa. Para
+   *  tiers `medio`/`mayoreo` conservamos el descuento por volumen porque
+   *  ya es mejor y no queremos "doble descuento". */
   function effectivePrice(v: BuySheetVariant): number {
+    const menudeoOriginal =
+      v.price_menudeo != null ? Number(v.price_menudeo) : Number(v.price)
+
+    // Preventa por producto tiene prioridad SOLO en tier menudeo.
+    if (product && projectedTier === "menudeo") {
+      const presale = computePresale(product, menudeoOriginal)
+      if (presale.active) return presale.effectivePrice
+    }
+
     if (
       v.price_menudeo == null &&
       v.price_medio == null &&
@@ -301,15 +320,25 @@ export default function BuySheet({
 
   function confirm(e?: React.MouseEvent<HTMLButtonElement>) {
     if (!product) return
+    // Producto en preventa por admin (mecánica nueva): SIEMPRE marcamos
+    // las líneas como preorder (aunque haya stock), para que el parent
+    // aplique el precio de preventa vía computePresale y NO reprice
+    // por tier. Independiente de la regla vieja block_oversell.
+    const productInPresale = computePresale(
+      product,
+      Number(product.variants[0]?.price_menudeo ?? product.variants[0]?.price ?? 0),
+    ).active
     const lines = Object.entries(qty)
       .filter(([, q]) => q > 0)
       .map(([variantId, q]) => {
-        // Una línea es preventa cuando la variante aún no tiene stock
-        // pero la tienda permite preventa (block_oversell=false). El
-        // parent recibirá la flag y aplicará el descuento correspondiente.
+        // Una línea es preventa cuando (a) el producto está en preventa
+        // activa (admin lo marcó explícito), o (b) la variante no tiene
+        // stock pero la tienda permite oversell (regla vieja). El parent
+        // recibirá la flag y aplicará el precio correspondiente.
         const v = product.variants.find((x) => x.id === variantId)
         const isPreorder =
-          !blockOversell && !!v && (v.stock ?? 0) <= 0
+          productInPresale ||
+          (!blockOversell && !!v && (v.stock ?? 0) <= 0)
         return { variantId, qty: q, isPreorder }
       })
     if (lines.length === 0) return
@@ -457,6 +486,45 @@ export default function BuySheet({
                 </div>
               </div>
             )}
+
+            {/* Banner de PREVENTA POR PRODUCTO — se muestra cuando el
+                admin activó la preventa desde el editor. Explica al
+                cliente el precio especial y (si aplica) hasta cuándo. */}
+            {(() => {
+              const menudeo = Number(
+                product.variants[0]?.price_menudeo ?? product.variants[0]?.price ?? 0,
+              )
+              const presale = computePresale(product, menudeo)
+              if (!presale.active) return null
+              const countdown = formatPresaleCountdown(presale.endsAt)
+              return (
+                <div className="px-4 pb-2 shrink-0">
+                  <div className="rounded-2xl px-3 py-2.5 border border-fuchsia-200 dark:border-fuchsia-500/30 bg-gradient-to-r from-fuchsia-50 to-pink-50 dark:from-fuchsia-500/10 dark:to-pink-500/5 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-fuchsia-500 text-white flex items-center justify-center shadow-sm shrink-0">
+                      <Sparkles size={14} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-black text-fuchsia-900 dark:text-fuchsia-100 leading-tight flex items-center gap-1.5 flex-wrap">
+                        Preventa activa
+                        {presale.savingPct > 0 && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-500 text-white text-[9px] tabular-nums">
+                            −{Math.round(presale.savingPct)}%
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[10px] font-bold text-fuchsia-700 dark:text-fuchsia-300 leading-tight mt-0.5 truncate">
+                        {presale.note
+                          ? presale.note
+                          : "Precio especial temporal."}
+                        {countdown && countdown !== "Vencida" && (
+                          <span className="ml-1 opacity-80">· {countdown}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Lista de variantes con selector +/- */}
             <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scroll-container-ios">

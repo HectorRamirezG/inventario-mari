@@ -29,6 +29,20 @@ export interface Product {
   is_active?: boolean;
   image_url?: string | null;       // foto principal del producto
   variants?: Variant[];
+
+  // ─── Preventa (opcional, se puede activar/desactivar por producto) ───
+  // Toggle manual del admin. Si false, todo lo demás se ignora.
+  presale_active?: boolean | null;
+  // Precio fijo durante preventa. Mut. exclusivo con presale_discount_pct
+  // (si ambos están, gana este). Se aplica sobre el tier menudeo.
+  presale_price?: number | null;
+  // Descuento % durante preventa (0-90). Se aplica sobre price_menudeo.
+  presale_discount_pct?: number | null;
+  // Cuándo termina la preventa automáticamente (ISO timestamp).
+  // NULL = sin fecha límite (solo termina si el admin apaga el toggle).
+  presale_ends_at?: string | null;
+  // Mensaje opcional para el cliente (ej: "Entrega estimada 15 jul").
+  presale_note?: string | null;
 }
 
 export type SaleStatus = "paid" | "pending" | "cancelled";

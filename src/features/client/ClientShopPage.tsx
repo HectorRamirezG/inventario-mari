@@ -26,6 +26,7 @@ import {
   ShoppingBag,
   Trash2,
   Gift,
+  ArrowUpDown,
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -94,6 +95,12 @@ import {
   couponMarkerForNotes,
   type ValidatedCoupon,
 } from "../promos/couponService"
+import {
+  computePresale,
+  formatPresaleCountdown,
+  type PresaleFields,
+  type PresaleInfo,
+} from "../products/presaleService"
 
 // Loader único del BuySheet — se reutiliza para el lazy() y para el
 // preload-on-hover/idle desde los botones "+" de cada tarjeta.
@@ -121,7 +128,7 @@ interface PublicVariant {
   cost?: number
 }
 
-interface PublicProduct {
+interface PublicProduct extends PresaleFields {
   id: string
   name: string
   category: string | null
@@ -351,7 +358,9 @@ export default function ClientShopPage() {
       const [{ data: prods }, { data: vars }, { data: reviewsRaw }] = await Promise.all([
         supabase
           .from("products")
-          .select("id,name,category,image_url,created_at,cost")
+          .select(
+            "id,name,category,image_url,created_at,cost,presale_active,presale_price,presale_discount_pct,presale_ends_at,presale_note",
+          )
           .eq("is_active", true)
           .order("name"),
         supabase
@@ -954,22 +963,44 @@ export default function ClientShopPage() {
         const fresh = freshVariants.get(variantId) ?? p.variants.find((vv) => vv.id === variantId)
         if (!fresh) continue
         const realStock = Math.max(0, Number(fresh.stock) || 0)
-        // Preventa: si la regla block_oversell está apagada y la línea
-        // venía como preventa, permitimos hasta PREORDER_CAP aunque
-        // stock=0. El precio se calcula con el descuento configurado.
-        const isPreorderLine =
+        const basePrice = priceOf(fresh)
+
+        // Preventa por PRODUCTO (nueva): tiene prioridad sobre el flujo
+        // viejo de block_oversell. Si el admin marcó el producto en
+        // preventa activa, aplicamos su precio efectivo aunque haya stock.
+        const productPresale = computePresale(p, basePrice)
+        const usesProductPresale = productPresale.active
+
+        // Preventa por REGLA VIEJA: block_oversell=off + stock=0 + line
+        // llegó marcada como preorder desde el sheet.
+        const oldOverSell =
           !!isPreorder && !bRules.block_oversell && realStock === 0
-        const cap = isPreorderLine ? PREORDER_CAP : realStock
+
+        // Cap de piezas. Producto en preventa activa respeta el stock
+        // real (si hay); si no hay stock, permitimos hasta PREORDER_CAP.
+        // La regla vieja siempre usa PREORDER_CAP (stock=0 accidental).
+        const cap = usesProductPresale
+          ? realStock > 0 ? realStock : PREORDER_CAP
+          : oldOverSell
+            ? PREORDER_CAP
+            : realStock
         const safeQty = Math.min(qty, cap)
         if (safeQty <= 0) {
           skipped++
           continue
         }
         added += safeQty
-        const basePrice = priceOf(fresh)
-        const finalPrice = isPreorderLine
-          ? Math.round(basePrice * (1 - preorderPct / 100) * 100) / 100
-          : basePrice
+
+        // Precio final. Producto en preventa gana; luego regla vieja.
+        const finalPrice = usesProductPresale
+          ? productPresale.effectivePrice
+          : oldOverSell
+            ? Math.round(basePrice * (1 - preorderPct / 100) * 100) / 100
+            : basePrice
+
+        // is_preorder marca la línea para NO re-pricear por tier de volumen.
+        // Ambas mecánicas (nueva y vieja) marcan la línea igual.
+        const isPreorderLine = usesProductPresale || oldOverSell
         const ix = next.findIndex((c) => c.variant_id === variantId)
         if (ix >= 0) {
           next[ix] = {
@@ -1591,7 +1622,7 @@ export default function ClientShopPage() {
         />
       )}
 
-      <div className="flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl h-12 px-3 mb-3 shadow-sm">
+      <div className="flex items-center gap-2 bg-white dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 rounded-2xl h-11 px-3 mb-2 shadow-sm">
         <Search size={16} className="text-slate-400 shrink-0" />
         <input
           value={q}
@@ -1619,13 +1650,13 @@ export default function ClientShopPage() {
             type="button"
             onClick={() => setOnlyWishlist((v) => !v)}
             aria-label="Filtrar favoritos"
-            className={`relative w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+            className={`relative w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
               onlyWishlist
                 ? "bg-rose-500 text-white shadow-sm"
                 : "bg-rose-50 dark:bg-rose-500/15 text-rose-500"
             }`}
           >
-            <Heart size={14} fill="currentColor" />
+            <Heart size={13} fill="currentColor" />
             <span className="absolute -top-1 -right-1 text-[8px] font-black tabular-nums bg-white text-rose-600 rounded-full px-1 min-w-[14px] h-[14px] flex items-center justify-center border border-rose-300">
               {wishlist.count}
             </span>
@@ -1666,9 +1697,9 @@ export default function ClientShopPage() {
             }}
             aria-label="Compartir mi lista de deseos"
             title="Compartir lista por WhatsApp"
-            className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0 hover:bg-emerald-100"
+            className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0 hover:bg-emerald-100"
           >
-            <Share2 size={14} />
+            <Share2 size={13} />
           </button>
         )}
         <button
@@ -1697,21 +1728,24 @@ export default function ClientShopPage() {
           }}
           aria-label="Compartir tienda"
           title="Compartir tienda"
-          className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 active:scale-95"
+          className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0 active:scale-95"
         >
-          <Share2 size={14} />
+          <Share2 size={13} />
         </button>
       </div>
 
-      {/* Filtros: categoría + sort.
-          Los chips de categoría son STICKY: cuando el cliente scrollea hacia
-          abajo, la fila de categorías se queda pegada justo debajo del
-          header. Así puede cambiar de categoría sin tener que scrollear
-          hasta arriba. Mantenemos `-mx-4 px-4` para que el fondo blur
-          cubra todo el ancho de la columna. */}
-      {categories.length > 0 && (
-        <div className="sticky top-0 z-30 -mx-4 px-4 pt-2 pb-2 mb-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 scroll-container-ios">
+      {/* Barra sticky UNIFICADA: chips de categoría + sort + view mode + contador.
+          Antes eran 3 filas separadas (categorías, sort select, view switcher +
+          contador). Ahora todo cabe en una fila sticky de ~44px de alto para
+          maximizar el espacio "above the fold" de los productos. El sort usa
+          un <select> nativo transparente sobre un icono, así en mobile abre
+          el picker del sistema (rueda iOS / dropdown Android). El contador
+          solo aparece cuando hay filtros activos (búsqueda, categoría o
+          favoritos), porque cuando no hay filtro simplemente ves el grid. */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 pt-2 pb-2 mb-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-2">
+          {/* Chips de categoría scrollables horizontal */}
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 scroll-container-ios">
             <button
               type="button"
               onClick={() => setCategoryFilter("all")}
@@ -1743,59 +1777,99 @@ export default function ClientShopPage() {
               )
             })}
           </div>
+
+          {/* Divider vertical entre chips y controles */}
+          <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 shrink-0" />
+
+          {/* Sort icon-only: label envuelve un <select> nativo transparente
+              encima del icono. En mobile, dispara el picker del sistema
+              (rueda iOS / dropdown Android nativo). Cero click-outside JS. */}
+          <label
+            className={`relative shrink-0 flex items-center justify-center w-8 h-8 rounded-full cursor-pointer transition-colors ${
+              sortBy !== "newest"
+                ? "bg-primary/10 text-primary dark:bg-primary/20"
+                : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 hover:text-slate-700"
+            }`}
+            title="Ordenar productos"
+          >
+            <ArrowUpDown size={13} className="pointer-events-none" aria-hidden />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+              aria-label="Ordenar productos"
+            >
+              <option value="newest">Más recientes</option>
+              <option value="price_asc">Precio: menor a mayor</option>
+              <option value="price_desc">Precio: mayor a menor</option>
+              <option value="name">Nombre A–Z</option>
+            </select>
+          </label>
+
+          {/* View mode: 3 iconos compactos (Focus / Grid / List) */}
+          <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-full p-0.5 shrink-0">
+            {([
+              { id: "focus", label: "Focus", icon: Maximize2 },
+              { id: "grid",  label: "Grid",  icon: LayoutGrid },
+              { id: "list",  label: "Lista", icon: List },
+            ] as { id: ViewMode; label: string; icon: typeof List }[]).map((m) => {
+              const Icon = m.icon
+              const active = viewMode === m.id
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setViewMode(m.id)}
+                  aria-label={`Vista ${m.label}`}
+                  className={`relative flex items-center justify-center w-7 h-7 rounded-full transition-colors ${
+                    active
+                      ? "text-white"
+                      : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  }`}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="shop-view-pill"
+                      className="bg-brand absolute inset-0 rounded-full"
+                      transition={{ type: "spring", stiffness: 380, damping: 28 }}
+                    />
+                  )}
+                  <Icon size={11} className="relative z-10" />
+                </button>
+              )
+            })}
+          </div>
         </div>
-      )}
 
-      <div className="flex items-center gap-2 mb-3">
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          className="flex-1 h-9 px-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200 outline-none"
-        >
-          <option value="newest">Más recientes</option>
-          <option value="price_asc">Precio: menor a mayor</option>
-          <option value="price_desc">Precio: mayor a menor</option>
-          <option value="name">Nombre A–Z</option>
-        </select>
-      </div>
-
-      {/* Layout switcher */}
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] uppercase tracking-widest text-slate-400 font-black">
-          {filtered.length} {filtered.length === 1 ? "producto" : "productos"}
-        </p>
-        <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-full p-0.5">
-          {([
-            { id: "focus", label: "Focus", icon: Maximize2 },
-            { id: "grid",  label: "Grid",  icon: LayoutGrid },
-            { id: "list",  label: "Lista", icon: List },
-          ] as { id: ViewMode; label: string; icon: typeof List }[]).map((m) => {
-            const Icon = m.icon
-            const active = viewMode === m.id
-            return (
+        {/* Contador micro — SOLO cuando hay filtro activo. Cuando no hay
+            filtro, el usuario ya está viendo el catálogo completo y el
+            contador es ruido. */}
+        {(q || categoryFilter !== "all" || onlyWishlist) && (
+          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mt-1.5 flex items-center gap-1.5">
+            <span className="tabular-nums text-slate-600 dark:text-slate-300">
+              {filtered.length}
+            </span>
+            <span>{filtered.length === 1 ? "producto" : "productos"}</span>
+            {q && (
+              <span className="italic normal-case font-semibold text-slate-500 truncate">
+                · "{q}"
+              </span>
+            )}
+            {(q || categoryFilter !== "all" || onlyWishlist) && (
               <button
-                key={m.id}
                 type="button"
-                onClick={() => setViewMode(m.id)}
-                aria-label={`Vista ${m.label}`}
-                className={`relative flex items-center justify-center w-9 h-8 rounded-full transition-colors ${
-                  active
-                    ? "text-white"
-                    : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                }`}
+                onClick={() => {
+                  setQ("")
+                  setCategoryFilter("all")
+                  setOnlyWishlist(false)
+                }}
+                className="ml-auto shrink-0 text-primary hover:underline"
               >
-                {active && (
-                  <motion.span
-                    layoutId="shop-view-pill"
-                    className="bg-brand absolute inset-0 rounded-full"
-                    transition={{ type: "spring", stiffness: 380, damping: 28 }}
-                  />
-                )}
-                <Icon size={12} className="relative z-10" />
+                Limpiar
               </button>
-            )
-          })}
-        </div>
+            )}
+          </p>
+        )}
       </div>
 
       {/* Catálogo */}
@@ -2699,12 +2773,24 @@ export default function ClientShopPage() {
                   name: buySheetProduct.name,
                   category: buySheetProduct.category,
                   image_url: buySheetProduct.image_url,
+                  // Preventa por producto: pasar campos al sheet para que
+                  // muestre banner + aplique precio efectivo por tier menudeo.
+                  presale_active: buySheetProduct.presale_active ?? null,
+                  presale_price: buySheetProduct.presale_price ?? null,
+                  presale_discount_pct: buySheetProduct.presale_discount_pct ?? null,
+                  presale_ends_at: buySheetProduct.presale_ends_at ?? null,
+                  presale_note: buySheetProduct.presale_note ?? null,
                   variants: buySheetProduct.variants.map((v) => ({
                     id: v.id,
                     product_id: v.product_id,
                     variant_name: v.variant_name,
                     stock: v.stock,
                     price: priceOf(v),
+                    // Precios por tier (para que effectivePrice del sheet
+                    // pueda proyectar ahorros por volumen).
+                    price_menudeo: v.price_menudeo ?? null,
+                    price_medio: v.price_medio ?? null,
+                    price_mayoreo: v.price_mayoreo ?? null,
                     image_url:
                       (v.image_urls && v.image_urls[0]) ??
                       v.image_url ??
@@ -2936,18 +3022,41 @@ const ProductCardClient = memo(function ProductCardClientImpl({
 
   if (!variant) return null
 
+  // Preventa por PRODUCTO (mecánica nueva del admin): el producto entero
+  // se marca en preventa con precio especial y fecha límite. Reemplaza
+  // el precio menudeo mientras esté activa. Independiente de la preventa
+  // por stock=0 (regla vieja `block_oversell`) — si ambas aplican, gana
+  // la del producto porque el admin fue explícito.
+  const productPresale = computePresale(product, price)
+  const productPresaleActive = productPresale.active
+  const productPresaleCountdown = productPresaleActive
+    ? formatPresaleCountdown(productPresale.endsAt)
+    : null
+
   // out = sin stock. Si la tienda permite preventa (block_oversell=false)
-  // y stock=0, mostramos badge "Preventa" pero NO bloqueamos el botón:
+  // Y stock=0, mostramos badge "Preventa" pero NO bloqueamos el botón:
   // el BuySheet tiene el botón explícito de preventa con descuento.
+  // Si el producto tiene preventa activa, tampoco se considera "out" porque
+  // se puede comprar sin stock (el admin lo decidió al activarla).
   const outOfStock = variant.stock <= 0
-  const allowPreorder = !rules.block_oversell && outOfStock
-  const out = outOfStock && !allowPreorder
-  // Precio especial de preventa (descuento sobre el precio menudeo).
-  const preorderPct = Math.max(0, Math.min(50, rules.preorder_discount_percent || 0))
-  const preorderPrice = allowPreorder
-    ? Math.round(price * (1 - preorderPct / 100) * 100) / 100
+  const allowPreorderOldRule = !rules.block_oversell && outOfStock
+  const allowPreorder = allowPreorderOldRule || productPresaleActive
+  const out = outOfStock && !allowPreorderOldRule && !productPresaleActive
+
+  // Precio especial de preventa. Prioridad: producto (nueva) > regla vieja.
+  const oldPreorderPct = Math.max(0, Math.min(50, rules.preorder_discount_percent || 0))
+  const oldPreorderPrice = allowPreorderOldRule
+    ? Math.round(price * (1 - oldPreorderPct / 100) * 100) / 100
     : price
-  const showPreorderPrice = allowPreorder && preorderPct > 0 && preorderPrice < price
+  const preorderPrice = productPresaleActive
+    ? productPresale.effectivePrice
+    : oldPreorderPrice
+  const preorderPct = productPresaleActive
+    ? Math.round(productPresale.savingPct)
+    : oldPreorderPct
+  const showPreorderPrice = productPresaleActive
+    ? productPresale.effectivePrice < price
+    : allowPreorderOldRule && oldPreorderPct > 0 && oldPreorderPrice < price
 
   // Badge automático NUEVO: respeta la regla `new_badge_days` (default
   // 7 según businessRulesService). El admin puede subirlo/bajarlo desde
@@ -3334,6 +3443,11 @@ const ProductCardClient = memo(function ProductCardClientImpl({
             ) : allowPreorder ? (
               <span className="inline-block text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400 mt-1">
                 📦 Preventa{showPreorderPrice ? ` · ${preorderPct}% OFF` : ""}
+                {productPresaleCountdown && (
+                  <span className="ml-1 opacity-80 normal-case tracking-normal font-bold">
+                    · {productPresaleCountdown}
+                  </span>
+                )}
               </span>
             ) : rules.show_stock_to_client && variant.stock <= 2 ? (
               <span
