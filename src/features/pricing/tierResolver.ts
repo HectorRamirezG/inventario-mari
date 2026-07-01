@@ -18,14 +18,15 @@ import { DEFAULT_THRESHOLDS } from "./tierPricingService"
  *     de otro). Esto evita configuraciones inconsistentes tipo
  *     "medio=3 pero mayoreo=null" que fallarían silenciosamente.
  *
- * Comportamiento del carrito (POR LÍNEA):
- *   El tier de UNA línea se calcula usando:
- *     tier = detectTier(TOTAL_PIEZAS_DEL_CARRITO, umbrales_de_la_línea)
- *   Es decir, el conteo de piezas es cross-product (mayoreo cruzado),
- *   pero cada línea evalúa su tier con SUS propios umbrales. Ejemplo
- *   con 6 pz totales:
- *     • Producto A (umbrales 6/12) → tier "medio"
- *     • Producto B (umbrales 3/6)  → tier "mayoreo"
+ * Comportamiento del carrito (POR VARIANTE):
+ *   El tier de UNA línea se calcula usando SÓLO la cantidad de piezas
+ *   de esa MISMA variante en el carrito:
+ *     tier = detectTier(QTY_DE_LA_VARIANTE, umbrales_de_la_línea)
+ *   Ya NO hay "mayoreo cruzado": cada variante avanza a su ritmo con
+ *   su propia cantidad. Ejemplo con carrito de 8 piezas:
+ *     • Variante A: 3 pz (umbrales 3/6) → tier "medio"
+ *     • Variante B: 5 pz (umbrales 3/6) → tier "medio"
+ *   Cada una se cobra a su precio de tier según SUS piezas.
  */
 
 // ─── Shape mínimo que consume el resolver ───
@@ -69,28 +70,32 @@ export function resolveThresholds(
 }
 
 /**
- * Determina el tier de UNA línea a partir del total del carrito y
- * los umbrales resueltos para esa línea.
+ * Determina el tier de UNA variante a partir de sus piezas EN EL CARRITO
+ * (solo las de esa variante — no cross-cart) y los umbrales resueltos.
+ *
+ * Después del rework 2026-07-01: cada variante avanza a su propio tier
+ * usando SUS piezas. Ya no se combinan piezas de variantes distintas
+ * para llegar a mayoreo.
  */
 export function tierForLine(
-  totalCartQty: number,
+  variantQty: number,
   thresholds: TierThresholds,
 ): PricingTier {
-  const q = Number(totalCartQty) || 0
+  const q = Number(variantQty) || 0
   if (q >= thresholds.mayoreo_min_qty) return "mayoreo"
   if (q >= thresholds.medio_min_qty) return "medio"
   return "menudeo"
 }
 
 /**
- * "¿Cuántas piezas faltan a esta LÍNEA para subir al siguiente tier?"
+ * "¿Cuántas piezas faltan a esta VARIANTE para subir al siguiente tier?"
  * Devuelve null si ya está en mayoreo o si los umbrales son inválidos.
  */
 export function piecesToNextTierForLine(
-  totalCartQty: number,
+  variantQty: number,
   thresholds: TierThresholds,
 ): { tier: PricingTier; missing: number } | null {
-  const q = Number(totalCartQty) || 0
+  const q = Number(variantQty) || 0
   if (q < thresholds.medio_min_qty) {
     return { tier: "medio", missing: thresholds.medio_min_qty - q }
   }

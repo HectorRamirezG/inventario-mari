@@ -22,6 +22,21 @@ export interface Variant {
   // NULL = hereda del producto padre o del global.
   tier_umbral_medio?: number | null;
   tier_umbral_mayoreo?: number | null;
+
+  // ─── Preventa POR VARIANTE ───
+  // Toggle manual del admin: la variante está en preventa con precio
+  // especial. Si false, todo lo demás se ignora.
+  presale_active?: boolean | null;
+  // Precio fijo durante preventa. Mut. exclusivo con presale_discount_pct
+  // (gana este si ambos están).
+  presale_price?: number | null;
+  // Descuento % durante preventa (0-90). Se aplica sobre price_menudeo.
+  presale_discount_pct?: number | null;
+  // Cuándo termina la preventa automáticamente (ISO timestamp).
+  // NULL = sin fecha límite (termina cuando el admin apaga el toggle).
+  presale_ends_at?: string | null;
+  // Mensaje opcional para el cliente (ej: "Entrega estimada 15 jul").
+  presale_note?: string | null;
 }
 
 export interface Product {

@@ -120,11 +120,6 @@ export default function ProductDrawer({
   const [minStock, setMinStock] = useState<number | "">("")
   const [saving, setSaving] = useState(false)
 
-  // Estado de PREVENTA (toggle + descuento/precio + fecha límite + nota).
-  // Se sincroniza con el producto al abrir/cambiar; al guardar se serializa
-  // vía `presaleToDB` y viaja como parte del updateProduct().
-  const [presale, setPresale] = useState<PresaleEditorValue>(EMPTY_PRESALE)
-
   // Umbrales de tier (override por producto). NULL = hereda del global.
   // Se sincroniza con el producto al abrir; al guardar viaja vía
   // `tierThresholdsToDB` en el updateProduct().
@@ -179,7 +174,6 @@ export default function ProductDrawer({
       setCategory(product?.category ?? "")
       setCost(product?.cost ?? "")
       setMinStock(product?.min_stock ?? "")
-      setPresale(presaleFromDB(product ?? null))
       setProductTiers(tierThresholdsFromDB(product ?? null))
     } else {
       // create — intenta recuperar un draft del localStorage
@@ -193,7 +187,6 @@ export default function ProductDrawer({
             setCategory(draft.category ?? "")
             setCost(draft.cost ?? "")
             setMinStock(draft.minStock ?? "")
-            setPresale(EMPTY_PRESALE)
             setProductTiers(EMPTY_TIER_THRESHOLDS)
             toast("Restauramos tu borrador anterior", { icon: "📝" })
             return
@@ -204,7 +197,6 @@ export default function ProductDrawer({
       setCategory("")
       setCost("")
       setMinStock("")
-      setPresale(EMPTY_PRESALE)
       setProductTiers(EMPTY_TIER_THRESHOLDS)
     }
   }, [open, mode, product?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -325,10 +317,9 @@ export default function ProductDrawer({
           category: category.trim() || null,
           cost: Number(cost),
           min_stock: minStock === "" ? 0 : Number(minStock),
-          // Preventa: serializamos el shape del editor al shape de columnas
-          // (si !active, todos los campos se limpian a null en DB).
-          ...presaleToDB(presale),
           // Umbrales de tier override por producto (null = hereda global).
+          // La preventa YA no se maneja aquí — vive por variante (ver
+          // VariantAccordion).
           ...tierThresholdsToDB(productTiers),
         })
         toast.success("Cambios guardados")
@@ -462,8 +453,6 @@ export default function ProductDrawer({
                   knownCategories={knownCategories}
                   sug={sug}
                   onSaved={onSaved}
-                  presale={presale}
-                  setPresale={setPresale}
                   productTiers={productTiers}
                   setProductTiers={setProductTiers}
                   globalThresholds={globalThresholds}
@@ -530,8 +519,6 @@ function GeneralTab({
   knownCategories,
   sug,
   onSaved,
-  presale,
-  setPresale,
   productTiers,
   setProductTiers,
   globalThresholds,
@@ -548,8 +535,6 @@ function GeneralTab({
   knownCategories?: string[]
   sug: { men: number; med: number; may: number } | null
   onSaved?: () => void
-  presale: PresaleEditorValue
-  setPresale: (v: PresaleEditorValue) => void
   productTiers: TierThresholdsEditorValue
   setProductTiers: (v: TierThresholdsEditorValue) => void
   globalThresholds: TierThresholds
@@ -722,26 +707,14 @@ function GeneralTab({
         </div>
       )}
 
-      {/* Preventa: precio especial temporal por producto. Toggle apagado por
-          default; cuando se enciende, aparecen los campos de descuento/precio
-          y fecha límite. El preview usa el price_menudeo de la PRIMERA variante
-          como referencia (típicamente todas comparten precio en menudeo). */}
-      {product && (
-        <PresaleEditor
-          value={presale}
-          onChange={setPresale}
-          referencePrice={Number(
-            product.variants?.[0]?.price_menudeo ??
-              product.variants?.[0]?.price ??
-              0,
-          )}
-        />
-      )}
-
       {/* Umbrales de tier — override por producto. Si el admin lo activa,
           los umbrales personalizados se aplican a TODAS las variantes de
           este producto (a menos que la variante tenga su propio override).
-          Si está apagado, hereda de app_settings.tier_thresholds. */}
+          Si está apagado, hereda de app_settings.tier_thresholds.
+
+          NOTA: La preventa YA no se define aquí a nivel producto (rework
+          2026-07-01). Ahora cada variante tiene su propia preventa —
+          se configura en la tab "Variantes". */}
       {product && (
         <TierThresholdsEditor
           value={productTiers}
@@ -979,6 +952,7 @@ function VariantsTab({
               variant={v}
               productId={product.id}
               productCost={product.cost ?? null}
+              productName={product.name}
               pricingCfg={pricingCfg}
               isOpen={openId === v.id}
               onToggle={() => setOpenId((id) => (id === v.id ? null : v.id))}
@@ -992,6 +966,9 @@ function VariantsTab({
               }
               productTiers={productTiers}
               globalThresholds={globalThresholds}
+              siblingVariants={(product.variants ?? []).filter(
+                (sv) => sv.id !== v.id,
+              )}
             />
           ))}
         </div>
@@ -1288,6 +1265,7 @@ function VariantAccordion({
   variant,
   productId,
   productCost,
+  productName,
   pricingCfg,
   isOpen,
   onToggle,
@@ -1296,10 +1274,12 @@ function VariantAccordion({
   onShowSubscribers,
   productTiers,
   globalThresholds,
+  siblingVariants,
 }: {
   variant: Variant
   productId: string
   productCost: number | null
+  productName?: string
   pricingCfg: PricingConfig | null
   isOpen: boolean
   onToggle: () => void
@@ -1313,6 +1293,9 @@ function VariantAccordion({
   productTiers: TierThresholdsEditorValue
   /** Umbrales globales de la app (fallback final). */
   globalThresholds: TierThresholds
+  /** Otras variantes del producto (excluida la actual). Se usa para el
+   *  botón "Aplicar preventa a todas las variantes". */
+  siblingVariants: Variant[]
 }) {
   const [vName, setVName] = useState(variant.variant_name ?? "")
   const [sku, setSku] = useState(variant.sku ?? "")
@@ -1330,6 +1313,11 @@ function VariantAccordion({
   // Umbrales de tier override por variante (NULL = hereda del producto).
   const [variantTiers, setVariantTiers] = useState<TierThresholdsEditorValue>(
     tierThresholdsFromDB(variant),
+  )
+  // Preventa POR VARIANTE (rework 2026-07-01). Cada tono puede tener su
+  // propia preventa con precio/descuento y fecha límite.
+  const [variantPresale, setVariantPresale] = useState<PresaleEditorValue>(
+    presaleFromDB(variant),
   )
   const [saving, setSaving] = useState(false)
 
@@ -1350,10 +1338,14 @@ function VariantAccordion({
         : []
     )
     setVariantTiers(tierThresholdsFromDB(variant))
+    setVariantPresale(presaleFromDB(variant))
   }, [variant.id, variant.variant_name, variant.sku, variant.stock,
       variant.price_menudeo, variant.price_medio, variant.price_mayoreo,
       variant.image_url, JSON.stringify(variant.image_urls ?? []),
-      variant.tier_umbral_medio, variant.tier_umbral_mayoreo])
+      variant.tier_umbral_medio, variant.tier_umbral_mayoreo,
+      variant.presale_active, variant.presale_price,
+      variant.presale_discount_pct, variant.presale_ends_at,
+      variant.presale_note])
 
   // Sugeridos calculados desde el costo del producto (referencia)
   const sug = useMemo(() => {
@@ -1378,6 +1370,7 @@ function VariantAccordion({
   }
 
   const dirty = useMemo(() => {
+    const presaleDb = presaleToDB(variantPresale)
     return (
       vName !== (variant.variant_name ?? "") ||
       sku !== (variant.sku ?? "") ||
@@ -1387,6 +1380,16 @@ function VariantAccordion({
       Number(pma || 0) !== Number(variant.price_mayoreo || 0) ||
       (variantTiers.medio ?? null) !== (variant.tier_umbral_medio ?? null) ||
       (variantTiers.mayoreo ?? null) !== (variant.tier_umbral_mayoreo ?? null) ||
+      Boolean(presaleDb.presale_active) !==
+        Boolean(variant.presale_active) ||
+      (presaleDb.presale_price ?? null) !==
+        (variant.presale_price ?? null) ||
+      (presaleDb.presale_discount_pct ?? null) !==
+        (variant.presale_discount_pct ?? null) ||
+      (presaleDb.presale_ends_at ?? null) !==
+        (variant.presale_ends_at ?? null) ||
+      (presaleDb.presale_note ?? null) !==
+        (variant.presale_note ?? null) ||
       JSON.stringify(images) !==
         JSON.stringify(
           variant.image_urls && variant.image_urls.length > 0
@@ -1396,7 +1399,7 @@ function VariantAccordion({
             : []
         )
     )
-  }, [vName, sku, stock, pm, pmd, pma, images, variantTiers, variant])
+  }, [vName, sku, stock, pm, pmd, pma, images, variantTiers, variantPresale, variant])
 
   async function handleSave() {
     if (!vName.trim()) {
@@ -1416,6 +1419,8 @@ function VariantAccordion({
         image_url: images[0] ?? null,
         // Umbrales override por variante (NULL = hereda producto/global).
         ...tierThresholdsToDB(variantTiers),
+        // Preventa POR VARIANTE (rework 2026-07-01).
+        ...presaleToDB(variantPresale),
       } as any)
       toast.success(
         images.length > 0
@@ -1673,6 +1678,67 @@ function VariantAccordion({
                     : "global"
                 }
               />
+
+              {/* Preventa POR VARIANTE (rework 2026-07-01).
+                  Cada tono puede tener su propio precio de preventa +
+                  fecha límite + mensaje. Con el botón "Aplicar a todas
+                  las variantes", Mari puede replicar esta config a las
+                  demás variantes del producto de un tap. */}
+              <PresaleEditor
+                value={variantPresale}
+                onChange={setVariantPresale}
+                referencePrice={Number(pm) || Number(variant.price_menudeo) || 0}
+              />
+
+              {variantPresale.active && siblingVariants.length > 0 && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        `¿Aplicar la MISMA preventa a las otras ${siblingVariants.length} variantes de "${productName ?? "este producto"}"?`,
+                      )
+                    ) {
+                      return
+                    }
+                    setSaving(true)
+                    try {
+                      const dbPatch = presaleToDB(variantPresale)
+                      // Actualizamos las hermanas en paralelo. Cada
+                      // updateVariant valida su propia RLS por separado.
+                      const results = await Promise.allSettled(
+                        siblingVariants.map((v) =>
+                          updateVariant(v.id, dbPatch as any),
+                        ),
+                      )
+                      const ok = results.filter(
+                        (r) => r.status === "fulfilled",
+                      ).length
+                      const fail = results.length - ok
+                      if (fail === 0) {
+                        toast.success(
+                          `Preventa aplicada a ${ok} ${ok === 1 ? "variante" : "variantes"} ✨`,
+                        )
+                      } else if (ok > 0) {
+                        toast(
+                          `Aplicada a ${ok}, falló en ${fail}`,
+                          { icon: "⚠️" },
+                        )
+                      } else {
+                        toast.error("No se pudo aplicar")
+                      }
+                      onSaved()
+                    } finally {
+                      setSaving(false)
+                    }
+                  }}
+                  disabled={saving}
+                  className="w-full h-10 rounded-xl bg-fuchsia-50 dark:bg-fuchsia-500/10 border border-fuchsia-200 dark:border-fuchsia-500/30 text-fuchsia-700 dark:text-fuchsia-300 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-fuchsia-100 disabled:opacity-50"
+                >
+                  <Sparkles size={11} />
+                  Aplicar preventa a las otras {siblingVariants.length} variantes
+                </button>
+              )}
 
               <div className="flex gap-2 pt-1">
                 <button

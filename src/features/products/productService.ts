@@ -13,11 +13,6 @@ export async function getProducts(): Promise<Product[]> {
       min_stock,
       is_active,
       image_url,
-      presale_active,
-      presale_price,
-      presale_discount_pct,
-      presale_ends_at,
-      presale_note,
       tier_umbral_medio,
       tier_umbral_mayoreo,
       variants (
@@ -35,7 +30,12 @@ export async function getProducts(): Promise<Product[]> {
         image_url,
         image_urls,
         tier_umbral_medio,
-        tier_umbral_mayoreo
+        tier_umbral_mayoreo,
+        presale_active,
+        presale_price,
+        presale_discount_pct,
+        presale_ends_at,
+        presale_note
       )
     `)
     .order("created_at", { ascending: false })
@@ -99,6 +99,11 @@ export async function updateVariant(
       | "image_urls"
       | "tier_umbral_medio"
       | "tier_umbral_mayoreo"
+      | "presale_active"
+      | "presale_price"
+      | "presale_discount_pct"
+      | "presale_ends_at"
+      | "presale_note"
     >
   >
 ) {
@@ -167,7 +172,10 @@ export async function updateVariant(
   throw error
 }
 
-// Whitelist de columnas reales en `products` (nada de joins ni calculados)
+// Whitelist de columnas reales en `products` (nada de joins ni calculados).
+// Nota: los campos `presale_*` a nivel producto están DEPRECATED desde el
+// rework 2026-07-01 — la preventa ahora vive en variants. No los enviamos
+// desde la app para no reactivar accidentalmente configuraciones viejas.
 const PRODUCT_COLUMNS = [
   "id",
   "name",
@@ -176,12 +184,6 @@ const PRODUCT_COLUMNS = [
   "min_stock",
   "is_active",
   "image_url",
-  // Preventa (todas opcionales — solo se envían las que cambian)
-  "presale_active",
-  "presale_price",
-  "presale_discount_pct",
-  "presale_ends_at",
-  "presale_note",
   // Umbrales de tier override por producto (NULL = usa global)
   "tier_umbral_medio",
   "tier_umbral_mayoreo",
@@ -205,6 +207,12 @@ const VARIANT_COLUMNS = [
   // Umbrales de tier override por variante (NULL = hereda producto/global)
   "tier_umbral_medio",
   "tier_umbral_mayoreo",
+  // Preventa POR VARIANTE (rework 2026-07-01 — antes vivía en products).
+  "presale_active",
+  "presale_price",
+  "presale_discount_pct",
+  "presale_ends_at",
+  "presale_note",
 ] as const
 
 function pick<T extends Record<string, any>>(obj: T, keys: readonly string[]): Partial<T> {

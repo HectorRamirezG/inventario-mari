@@ -129,9 +129,15 @@ interface PublicVariant {
   /** Overrides de umbrales por variante (cascada). */
   tier_umbral_medio?: number | null
   tier_umbral_mayoreo?: number | null
+  /** Preventa POR VARIANTE (rework 2026-07-01). */
+  presale_active?: boolean | null
+  presale_price?: number | null
+  presale_discount_pct?: number | null
+  presale_ends_at?: string | null
+  presale_note?: string | null
 }
 
-interface PublicProduct extends PresaleFields {
+interface PublicProduct {
   id: string
   name: string
   category: string | null
@@ -145,6 +151,8 @@ interface PublicProduct extends PresaleFields {
   /** Overrides de umbrales por producto (cascada). */
   tier_umbral_medio?: number | null
   tier_umbral_mayoreo?: number | null
+  // NOTA: los campos presale_* a nivel producto están deprecados desde
+  // el rework 2026-07-01. La preventa vive por variante.
 }
 
 interface CartLine {
@@ -365,14 +373,14 @@ export default function ClientShopPage() {
         supabase
           .from("products")
           .select(
-            "id,name,category,image_url,created_at,cost,presale_active,presale_price,presale_discount_pct,presale_ends_at,presale_note,tier_umbral_medio,tier_umbral_mayoreo",
+            "id,name,category,image_url,created_at,cost,tier_umbral_medio,tier_umbral_mayoreo",
           )
           .eq("is_active", true)
           .order("name"),
         supabase
           .from("variants")
           .select(
-            "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls,cost_override,tier_umbral_medio,tier_umbral_mayoreo",
+            "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls,cost_override,tier_umbral_medio,tier_umbral_mayoreo,presale_active,presale_price,presale_discount_pct,presale_ends_at,presale_note",
           )
           .eq("is_active", true),
         // Stats de reseñas publicadas para enriquecer las cards del catálogo.
@@ -939,9 +947,11 @@ export default function ClientShopPage() {
   // Eliminada para no confundir y bajar peso del bundle.
 
   /** Recibe el batch del BuySheet (varias variantes con sus cantidades).
-   *  Si una línea viene con `isPreorder=true`, la aceptamos aunque no
-   *  haya stock — aplicamos el descuento de preventa de las reglas
-   *  globales y marcamos la línea para que no se reprice por tier. */
+   *  Si una línea viene con `isPreorder=true`, la variante tiene preventa
+   *  activa explícita (rework 2026-07-01: mecánica por variante). Ya no
+   *  se aplica la preventa automática por stock=0 con block_oversell=off:
+   *  cuando `block_oversell=false` permite vender sin stock a precio
+   *  normal (sin descuento automático). */
   function addBatchToCart(
     p: PublicProduct,
     lines: { variantId: string; qty: number; isPreorder?: boolean }[]
@@ -949,13 +959,8 @@ export default function ClientShopPage() {
     if (lines.length === 0) return
     let added = 0
     let skipped = 0
-    // Cap de seguridad para preventa: tope holgado para que un cliente no
-    // aparte 1000 piezas que aún no llegan. Mismo valor que BuySheet.
+    // Cap de seguridad para preventa/oversell sin stock físico.
     const PREORDER_CAP = 5
-    const preorderPct = Math.max(
-      0,
-      Math.min(50, Number(bRules.preorder_discount_percent) || 0),
-    )
     // Resolvemos stock FRESCO desde `products` (no del snapshot del sheet).
     const freshVariants = products
       .flatMap((pp) => pp.variants)
@@ -971,23 +976,22 @@ export default function ClientShopPage() {
         const realStock = Math.max(0, Number(fresh.stock) || 0)
         const basePrice = priceOf(fresh)
 
-        // Preventa por PRODUCTO (nueva): tiene prioridad sobre el flujo
-        // viejo de block_oversell. Si el admin marcó el producto en
-        // preventa activa, aplicamos su precio efectivo aunque haya stock.
-        const productPresale = computePresale(p, basePrice)
-        const usesProductPresale = productPresale.active
+        // Preventa POR VARIANTE (rework 2026-07-01). El BuySheet marca la
+        // línea con isPreorder=true cuando la variante tiene la mecánica
+        // activa. Verificamos usando computePresale con los campos de la
+        // propia variante para consistencia.
+        const variantPresale = computePresale(fresh, basePrice)
+        const usesVariantPresale = !!isPreorder && variantPresale.active
 
-        // Preventa por REGLA VIEJA: block_oversell=off + stock=0 + line
-        // llegó marcada como preorder desde el sheet.
-        const oldOverSell =
-          !!isPreorder && !bRules.block_oversell && realStock === 0
-
-        // Cap de piezas. Producto en preventa activa respeta el stock
-        // real (si hay); si no hay stock, permitimos hasta PREORDER_CAP.
-        // La regla vieja siempre usa PREORDER_CAP (stock=0 accidental).
-        const cap = usesProductPresale
+        // Cap de piezas.
+        //   - Preventa activa: stock si hay, PREORDER_CAP si no.
+        //   - Sin stock + block_oversell=off: permite hasta PREORDER_CAP
+        //     a precio normal (sin descuento auto).
+        //   - Normal: cap = stock físico.
+        const canOversell = !bRules.block_oversell && realStock === 0
+        const cap = usesVariantPresale
           ? realStock > 0 ? realStock : PREORDER_CAP
-          : oldOverSell
+          : canOversell
             ? PREORDER_CAP
             : realStock
         const safeQty = Math.min(qty, cap)
@@ -997,16 +1001,17 @@ export default function ClientShopPage() {
         }
         added += safeQty
 
-        // Precio final. Producto en preventa gana; luego regla vieja.
-        const finalPrice = usesProductPresale
-          ? productPresale.effectivePrice
-          : oldOverSell
-            ? Math.round(basePrice * (1 - preorderPct / 100) * 100) / 100
-            : basePrice
+        // Precio final: preventa por variante > menudeo normal.
+        // Si es oversell sin preventa, se cobra precio normal.
+        const finalPrice = usesVariantPresale
+          ? variantPresale.effectivePrice
+          : basePrice
 
         // is_preorder marca la línea para NO re-pricear por tier de volumen.
-        // Ambas mecánicas (nueva y vieja) marcan la línea igual.
-        const isPreorderLine = usesProductPresale || oldOverSell
+        // Solo se marca cuando la preventa por variante está activa.
+        // El oversell sin preventa NO marca is_preorder (se puede escalar
+        // por tier si el cliente sube la cantidad).
+        const isPreorderLine = usesVariantPresale
         const ix = next.findIndex((c) => c.variant_id === variantId)
         if (ix >= 0) {
           next[ix] = {
@@ -2779,14 +2784,10 @@ export default function ClientShopPage() {
                   name: buySheetProduct.name,
                   category: buySheetProduct.category,
                   image_url: buySheetProduct.image_url,
-                  // Preventa por producto: pasar campos al sheet para que
-                  // muestre banner + aplique precio efectivo por tier menudeo.
-                  presale_active: buySheetProduct.presale_active ?? null,
-                  presale_price: buySheetProduct.presale_price ?? null,
-                  presale_discount_pct: buySheetProduct.presale_discount_pct ?? null,
-                  presale_ends_at: buySheetProduct.presale_ends_at ?? null,
-                  presale_note: buySheetProduct.presale_note ?? null,
                   // Overrides de umbrales por producto (cascada).
+                  // NOTA: la preventa ya NO vive a nivel producto (rework
+                  // 2026-07-01). Cada variante lleva sus propios campos
+                  // presale_* que se pasan abajo en el mapeo de variantes.
                   tier_umbral_medio: buySheetProduct.tier_umbral_medio ?? null,
                   tier_umbral_mayoreo: buySheetProduct.tier_umbral_mayoreo ?? null,
                   variants: buySheetProduct.variants.map((v) => ({
@@ -2803,6 +2804,12 @@ export default function ClientShopPage() {
                     // Overrides de umbrales por variante (cascada).
                     tier_umbral_medio: v.tier_umbral_medio ?? null,
                     tier_umbral_mayoreo: v.tier_umbral_mayoreo ?? null,
+                    // Preventa POR VARIANTE (rework 2026-07-01).
+                    presale_active: v.presale_active ?? null,
+                    presale_price: v.presale_price ?? null,
+                    presale_discount_pct: v.presale_discount_pct ?? null,
+                    presale_ends_at: v.presale_ends_at ?? null,
+                    presale_note: v.presale_note ?? null,
                     image_url:
                       (v.image_urls && v.image_urls[0]) ??
                       v.image_url ??
@@ -3034,41 +3041,35 @@ const ProductCardClient = memo(function ProductCardClientImpl({
 
   if (!variant) return null
 
-  // Preventa por PRODUCTO (mecánica nueva del admin): el producto entero
-  // se marca en preventa con precio especial y fecha límite. Reemplaza
-  // el precio menudeo mientras esté activa. Independiente de la preventa
-  // por stock=0 (regla vieja `block_oversell`) — si ambas aplican, gana
-  // la del producto porque el admin fue explícito.
-  const productPresale = computePresale(product, price)
-  const productPresaleActive = productPresale.active
-  const productPresaleCountdown = productPresaleActive
-    ? formatPresaleCountdown(productPresale.endsAt)
+  // Preventa POR VARIANTE (rework 2026-07-01). Cada tono tiene su propia
+  // preventa activada por el admin. Se aplica solo si el admin la marcó
+  // explícitamente en esa variante. Ya no existe preventa "automática"
+  // por stock=0 + block_oversell=off.
+  const variantPresale = computePresale(variant, price)
+  const variantPresaleActive = variantPresale.active
+  const variantPresaleCountdown = variantPresaleActive
+    ? formatPresaleCountdown(variantPresale.endsAt)
     : null
 
-  // out = sin stock. Si la tienda permite preventa (block_oversell=false)
-  // Y stock=0, mostramos badge "Preventa" pero NO bloqueamos el botón:
-  // el BuySheet tiene el botón explícito de preventa con descuento.
-  // Si el producto tiene preventa activa, tampoco se considera "out" porque
-  // se puede comprar sin stock (el admin lo decidió al activarla).
+  // Reglas de stock (rework 2026-07-01):
+  //   - Preventa activa en variante → botón habilitado, aunque stock=0.
+  //   - Sin preventa + stock=0 + block_oversell=false → botón habilitado
+  //     (vender sin stock permitido) pero SIN descuento automático.
+  //   - Sin preventa + stock=0 + block_oversell=true → "Agotado".
   const outOfStock = variant.stock <= 0
-  const allowPreorderOldRule = !rules.block_oversell && outOfStock
-  const allowPreorder = allowPreorderOldRule || productPresaleActive
-  const out = outOfStock && !allowPreorderOldRule && !productPresaleActive
+  const canOversellNormal = !rules.block_oversell && outOfStock
+  const allowPreorder = variantPresaleActive
+  const out = outOfStock && !variantPresaleActive && !canOversellNormal
 
-  // Precio especial de preventa. Prioridad: producto (nueva) > regla vieja.
-  const oldPreorderPct = Math.max(0, Math.min(50, rules.preorder_discount_percent || 0))
-  const oldPreorderPrice = allowPreorderOldRule
-    ? Math.round(price * (1 - oldPreorderPct / 100) * 100) / 100
+  // Precio efectivo: preventa gana; sino menudeo.
+  const preorderPrice = variantPresaleActive
+    ? variantPresale.effectivePrice
     : price
-  const preorderPrice = productPresaleActive
-    ? productPresale.effectivePrice
-    : oldPreorderPrice
-  const preorderPct = productPresaleActive
-    ? Math.round(productPresale.savingPct)
-    : oldPreorderPct
-  const showPreorderPrice = productPresaleActive
-    ? productPresale.effectivePrice < price
-    : allowPreorderOldRule && oldPreorderPct > 0 && oldPreorderPrice < price
+  const preorderPct = variantPresaleActive
+    ? Math.round(variantPresale.savingPct)
+    : 0
+  const showPreorderPrice =
+    variantPresaleActive && variantPresale.effectivePrice < price
 
   // Badge automático NUEVO: respeta la regla `new_badge_days` (default
   // 7 según businessRulesService). El admin puede subirlo/bajarlo desde
@@ -3453,11 +3454,11 @@ const ProductCardClient = memo(function ProductCardClientImpl({
                 Agotado
               </span>
             ) : allowPreorder ? (
-              <span className="inline-block text-[9px] font-black uppercase tracking-widest text-violet-600 dark:text-violet-400 mt-1">
-                📦 Preventa{showPreorderPrice ? ` · ${preorderPct}% OFF` : ""}
-                {productPresaleCountdown && (
+              <span className="inline-block text-[9px] font-black uppercase tracking-widest text-fuchsia-600 dark:text-fuchsia-400 mt-1">
+                Preventa{showPreorderPrice ? ` · -${preorderPct}%` : ""}
+                {variantPresaleCountdown && variantPresaleCountdown !== "Vencida" && (
                   <span className="ml-1 opacity-80 normal-case tracking-normal font-bold">
-                    · {productPresaleCountdown}
+                    · {variantPresaleCountdown}
                   </span>
                 )}
               </span>

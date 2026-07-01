@@ -454,50 +454,45 @@ export default function SalesPage() {
                 const stockNum = Number(r.stock) || 0;
                 const outOfStock = stockNum <= 0;
 
-                // Preventa por PRODUCTO (nueva mecánica del admin).
-                // Reemplaza precio menudeo con precio efectivo mientras
-                // esté activa. Independiente de la regla vieja.
+                // Preventa POR VARIANTE (rework 2026-07-01). Reemplaza el
+                // precio menudeo con el precio de preventa mientras esté
+                // activa en esta variante específica.
                 const menudeoBase =
                   Number(r.price_menudeo) || Number(r.price) || 0;
-                const productPresale = computePresale(
+                const variantPresale = computePresale(
                   {
-                    presale_active: r.products?.presale_active ?? null,
-                    presale_price: r.products?.presale_price ?? null,
-                    presale_discount_pct:
-                      r.products?.presale_discount_pct ?? null,
-                    presale_ends_at: r.products?.presale_ends_at ?? null,
-                    presale_note: r.products?.presale_note ?? null,
+                    presale_active: r.presale_active ?? null,
+                    presale_price: r.presale_price ?? null,
+                    presale_discount_pct: r.presale_discount_pct ?? null,
+                    presale_ends_at: r.presale_ends_at ?? null,
+                    presale_note: r.presale_note ?? null,
                   },
                   menudeoBase,
                 );
 
-                // Preventa por regla vieja (block_oversell off + stock=0).
-                const oldPreorderPct = Math.max(
-                  0,
-                  Math.min(50, Number(rules.preorder_discount_percent) || 0),
-                );
+                // Oversell sin preventa (block_oversell=off + stock=0):
+                // permite vender sin stock a precio NORMAL. Ya NO se
+                // aplica descuento automático (rework 2026-07-01).
                 const oversellAvailable =
                   !rules.block_oversell && outOfStock;
 
                 // ¿La caja permite agregar esta variante ahora?
-                // - Sí, si hay stock.
-                // - Sí, si el producto tiene preventa activa (sin stock también).
-                // - Sí, si block_oversell está apagada (preventa por regla).
+                //   1) Sí, si hay stock.
+                //   2) Sí, si esta variante tiene preventa activa.
+                //   3) Sí, si block_oversell está apagada (oversell normal).
                 const disabled =
-                  outOfStock && !productPresale.active && !oversellAvailable;
-                const isPreorderMode =
-                  productPresale.active || oversellAvailable;
+                  outOfStock && !variantPresale.active && !oversellAvailable;
+                const isPreorderMode = variantPresale.active;
 
-                // Precio mostrado y descuento visual.
-                const displayPrice = productPresale.active
-                  ? productPresale.effectivePrice
-                  : oversellAvailable && oldPreorderPct > 0
-                    ? Math.round(menudeoBase * (1 - oldPreorderPct / 100) * 100) / 100
-                    : menudeoBase;
+                // Precio mostrado. Preventa gana. Oversell sin preventa
+                // muestra precio normal (sin descuento).
+                const displayPrice = variantPresale.active
+                  ? variantPresale.effectivePrice
+                  : menudeoBase;
                 const showStrike = displayPrice < menudeoBase;
-                const savingPctForBadge = productPresale.active
-                  ? Math.round(productPresale.savingPct)
-                  : oldPreorderPct;
+                const savingPctForBadge = variantPresale.active
+                  ? Math.round(variantPresale.savingPct)
+                  : 0;
 
                 return (
                   <motion.button
@@ -554,9 +549,11 @@ export default function SalesPage() {
                               ? active
                                 ? "text-white/90"
                                 : "text-fuchsia-600"
-                              : active
-                                ? "text-white/70"
-                                : "text-emerald-500"
+                              : oversellAvailable
+                                ? "text-amber-600"
+                                : active
+                                  ? "text-white/70"
+                                  : "text-emerald-500"
                         }`}
                       >
                         {disabled
@@ -565,7 +562,9 @@ export default function SalesPage() {
                             ? savingPctForBadge > 0
                               ? `Preventa · -${savingPctForBadge}%`
                               : "Preventa"
-                            : `${stockNum} pz`}
+                            : oversellAvailable
+                              ? "Sin stock · vender"
+                              : `${stockNum} pz`}
                       </p>
                       {inCart && (
                         <p className="text-[8px] font-black mt-0.5 text-white/80">
@@ -726,6 +725,36 @@ export default function SalesPage() {
                   // preventa. En preventa la qty > stock es esperada.
                   const overStock = !item.is_preorder && item.qty > item.stock;
                   const isPreorder = !!item.is_preorder;
+
+                  // Mini progress al siguiente tier POR LÍNEA — resuelto
+                  // con la cascada de umbrales de la propia variante.
+                  // Solo si no es preventa (preventa no participa de tier).
+                  const lineThresholds = !isPreorder
+                    ? {
+                        medio_min_qty:
+                          item.variant_tier_umbral_medio ??
+                          item.product_tier_umbral_medio ??
+                          state.thresholds.medio_min_qty,
+                        mayoreo_min_qty:
+                          item.variant_tier_umbral_mayoreo ??
+                          item.product_tier_umbral_mayoreo ??
+                          state.thresholds.mayoreo_min_qty,
+                      }
+                    : null;
+                  const nextTierHint = lineThresholds
+                    ? item.qty < lineThresholds.medio_min_qty
+                      ? {
+                          tier: "medio" as const,
+                          missing: lineThresholds.medio_min_qty - item.qty,
+                        }
+                      : item.qty < lineThresholds.mayoreo_min_qty
+                        ? {
+                            tier: "mayoreo" as const,
+                            missing: lineThresholds.mayoreo_min_qty - item.qty,
+                          }
+                        : null
+                    : null;
+
                   return (
                     <motion.div
                       key={item.variant_id}
@@ -733,7 +762,7 @@ export default function SalesPage() {
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, x: -10 }}
-                      className={`flex items-center gap-2 p-3 rounded-xl border ${
+                      className={`flex flex-col gap-1.5 p-3 rounded-xl border ${
                         overStock
                           ? "bg-rose-50/60 border-rose-100"
                           : isPreorder
@@ -741,60 +770,94 @@ export default function SalesPage() {
                             : "bg-slate-50/50 border-slate-100"
                       }`}
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[9px] font-black text-primary uppercase flex items-center gap-1">
-                          {item.variant_name}
-                          {isPreorder && (
-                            <span className="px-1 py-0.5 rounded bg-fuchsia-500 text-white text-[7px] font-black uppercase tracking-widest leading-none">
-                              Preventa
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[11px] font-black text-slate-800 truncate">
-                          {item.name}
-                        </p>
-                        <p className="text-[8px] font-bold text-slate-400 tabular-nums">
-                          {formatMoney(item.price)} c/u
-                        </p>
-                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[9px] font-black text-primary uppercase flex items-center gap-1">
+                            {item.variant_name}
+                            {isPreorder && (
+                              <span className="px-1 py-0.5 rounded bg-fuchsia-500 text-white text-[7px] font-black uppercase tracking-widest leading-none">
+                                Preventa
+                              </span>
+                            )}
+                            {!isPreorder && item.tier !== "menudeo" && (
+                              <span className="px-1 py-0.5 rounded bg-emerald-500 text-white text-[7px] font-black uppercase tracking-widest leading-none">
+                                {TIER_LABEL[item.tier as keyof typeof TIER_LABEL]}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[11px] font-black text-slate-800 truncate">
+                            {item.name}
+                          </p>
+                          <p className="text-[8px] font-bold text-slate-400 tabular-nums">
+                            {formatMoney(item.price)} c/u
+                          </p>
+                        </div>
 
-                      <div className="flex items-center bg-white shadow-sm border border-slate-100 rounded-lg p-0.5">
+                        <div className="flex items-center bg-white shadow-sm border border-slate-100 rounded-lg p-0.5">
+                          <button
+                            onClick={() =>
+                              actions.updateQty(item.variant_id, item.qty - 1)
+                            }
+                            className="p-1 hover:bg-slate-50 rounded"
+                            aria-label="Restar"
+                          >
+                            <Minus size={10} />
+                          </button>
+                          <span className="w-5 text-center text-[10px] font-black tabular-nums">
+                            {item.qty}
+                          </span>
+                          <button
+                            onClick={() =>
+                              actions.updateQty(item.variant_id, item.qty + 1)
+                            }
+                            className="p-1 hover:bg-slate-50 rounded"
+                            aria-label="Sumar"
+                          >
+                            <Plus size={10} />
+                          </button>
+                        </div>
+
+                        <div className="text-right min-w-[60px]">
+                          <p className="text-sm font-black text-slate-900 tabular-nums">
+                            {formatMoney(item.qty * item.price)}
+                          </p>
+                        </div>
+
                         <button
-                          onClick={() =>
-                            actions.updateQty(item.variant_id, item.qty - 1)
-                          }
-                          className="p-1 hover:bg-slate-50 rounded"
-                          aria-label="Restar"
+                          onClick={() => actions.removeFromCart(item.variant_id)}
+                          className="text-slate-300 hover:text-rose-500 transition-colors"
+                          aria-label="Quitar"
                         >
-                          <Minus size={10} />
-                        </button>
-                        <span className="w-5 text-center text-[10px] font-black tabular-nums">
-                          {item.qty}
-                        </span>
-                        <button
-                          onClick={() =>
-                            actions.updateQty(item.variant_id, item.qty + 1)
-                          }
-                          className="p-1 hover:bg-slate-50 rounded"
-                          aria-label="Sumar"
-                        >
-                          <Plus size={10} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
 
-                      <div className="text-right min-w-[60px]">
-                        <p className="text-sm font-black text-slate-900 tabular-nums">
-                          {formatMoney(item.qty * item.price)}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => actions.removeFromCart(item.variant_id)}
-                        className="text-slate-300 hover:text-rose-500 transition-colors"
-                        aria-label="Quitar"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {/* Mini progress al siguiente tier — POR LÍNEA. Discreto:
+                          solo texto + una barrita cuando aplica. */}
+                      {nextTierHint && (
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="flex-1 h-1 rounded-full bg-slate-200 overflow-hidden">
+                            <div
+                              className="h-full bg-emerald-500 rounded-full transition-all"
+                              style={{
+                                width: `${Math.max(
+                                  0,
+                                  Math.min(
+                                    100,
+                                    (item.qty / (nextTierHint.tier === "medio"
+                                      ? lineThresholds!.medio_min_qty
+                                      : lineThresholds!.mayoreo_min_qty)) * 100,
+                                  ),
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 shrink-0 tabular-nums">
+                            +{nextTierHint.missing}{" "}
+                            {nextTierHint.tier === "medio" ? "medio" : "mayoreo"}
+                          </span>
+                        </div>
+                      )}
                     </motion.div>
                   );
                 })

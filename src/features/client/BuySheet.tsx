@@ -34,7 +34,6 @@ import CustomerPhotosGallery from "./CustomerPhotosGallery"
 import {
   detectCartTier,
   priceForTier,
-  piecesToNextTier,
   TIER_LABEL,
 } from "../sales/salesTier"
 import type { PricingTier } from "../pricing/pricingTypes"
@@ -46,7 +45,9 @@ import {
 import {
   resolveThresholds,
   tierForLine,
+  piecesToNextTierForLine,
 } from "../pricing/tierResolver"
+import type { TierThresholds } from "../pricing/tierPricingService"
 import { DEFAULT_THRESHOLDS } from "../pricing/tierPricingService"
 import {
   OVERLAY_BACKDROP_TRANSITION,
@@ -58,7 +59,7 @@ import { useDeferredMount } from "../../lib/useDeferredMount"
 import { useBodyScrollLock } from "../../lib/bodyScrollLock"
 
 /* Estructura mínima reutilizable desde ClientShopPage */
-export interface BuySheetVariant {
+export interface BuySheetVariant extends PresaleFields {
   id: string
   product_id: string
   variant_name: string
@@ -79,6 +80,7 @@ export interface BuySheetVariant {
   /** Overrides de umbrales por variante — RAW, se resuelven vía cascada. */
   tier_umbral_medio?: number | null
   tier_umbral_mayoreo?: number | null
+  // Los campos presale_* vienen heredados de PresaleFields.
 }
 
 /**
@@ -90,7 +92,7 @@ function isValidHex(value: string | null | undefined): value is string {
   return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim())
 }
 
-export interface BuySheetProduct extends PresaleFields {
+export interface BuySheetProduct {
   id: string
   name: string
   category: string | null
@@ -99,6 +101,8 @@ export interface BuySheetProduct extends PresaleFields {
   /** Overrides de umbrales por producto — RAW, se resuelven vía cascada. */
   tier_umbral_medio?: number | null
   tier_umbral_mayoreo?: number | null
+  // La preventa ya NO vive a nivel producto (rework 2026-07-01).
+  // Cada variante tiene su propia configuración de preventa.
 }
 
 interface Props {
@@ -235,17 +239,6 @@ export default function BuySheet({
     return tierForLine(projectedQty, globalTh)
   }, [projectedQty, globalTh.medio_min_qty, globalTh.mayoreo_min_qty])
 
-  /** Lo que falta para subir al próximo tier (si aplica). Usa umbrales
-   *  globales; los overrides por producto no aplican al banner (se
-   *  reflejan en el precio real de la variante). */
-  const nextStep = useMemo(() => {
-    if (!thresholds) return null
-    return piecesToNextTier(projectedQty, {
-      umbral_medio: thresholds.medio_min_qty,
-      umbral_mayoreo: thresholds.mayoreo_min_qty,
-    })
-  }, [projectedQty, thresholds])
-
   /** Resuelve umbrales de UNA variante con cascada (variante > producto > global). */
   function resolvedFor(v: BuySheetVariant) {
     return resolveThresholds(
@@ -262,23 +255,23 @@ export default function BuySheet({
   }
 
   /** Precio efectivo de una variante con SU tier proyectado (según sus
-   *  umbrales). Si la variante no tiene precios escalonados cargados,
-   *  cae a `price`.
+   *  piezas actuales + umbrales resueltos).
    *
-   *  Si el PRODUCTO está en preventa activa (mecánica nueva del admin) y
-   *  el tier proyectado ES `menudeo`, usamos el precio de preventa. Para
+   *  Si la VARIANTE tiene preventa activa (mecánica nueva del admin) y
+   *  el tier resultante ES `menudeo`, usamos el precio de preventa. Para
    *  tiers `medio`/`mayoreo` conservamos el descuento por volumen porque
    *  ya es mejor y no queremos "doble descuento". */
   function effectivePrice(v: BuySheetVariant): number {
     const menudeoOriginal =
       v.price_menudeo != null ? Number(v.price_menudeo) : Number(v.price)
 
-    // Tier POR VARIANTE — usa sus propios umbrales resueltos.
-    const variantTier = tierForLine(projectedQty, resolvedFor(v))
+    // Tier POR VARIANTE usando SUS piezas (no las del carrito completo).
+    const variantQty = qty[v.id] ?? 0
+    const variantTier = tierForLine(variantQty, resolvedFor(v))
 
-    // Preventa por producto tiene prioridad SOLO en tier menudeo.
-    if (product && variantTier === "menudeo") {
-      const presale = computePresale(product, menudeoOriginal)
+    // Preventa por VARIANTE tiene prioridad SOLO en tier menudeo.
+    if (variantTier === "menudeo") {
+      const presale = computePresale(v, menudeoOriginal)
       if (presale.active) return presale.effectivePrice
     }
 
@@ -299,6 +292,22 @@ export default function BuySheet({
     )
   }
 
+  /** Qty + tier + progress helper para el mini-indicador de una variante. */
+  function tierProgressFor(v: BuySheetVariant): {
+    tier: PricingTier
+    variantQty: number
+    next: { tier: PricingTier; missing: number } | null
+    thresholds: TierThresholds
+  } {
+    const thresholds = resolvedFor(v)
+    const variantQty = qty[v.id] ?? 0
+    const tier = tierForLine(variantQty, thresholds)
+    const next = variantQty > 0
+      ? piecesToNextTierForLine(variantQty, thresholds)
+      : null
+    return { tier, variantQty, next, thresholds }
+  }
+
   const totalAmt = useMemo(() => {
     if (!product) return 0
     return product.variants.reduce((acc, v) => {
@@ -306,11 +315,13 @@ export default function BuySheet({
       return acc + q * effectivePrice(v)
     }, 0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qty, product, projectedTier])
+  }, [qty, product])
 
-  /** Ahorro proyectado vs menudeo si subió de tier. */
+  /** Ahorro total en el sheet (suma variante por variante). Cada línea
+   *  calcula su ahorro con SU tier — si esta variante llegó a mayoreo
+   *  pero aquella otra no, cada una aporta lo suyo. */
   const projectedSavings = useMemo(() => {
-    if (!product || projectedTier === "menudeo") return 0
+    if (!product) return 0
     return product.variants.reduce((acc, v) => {
       const q = qty[v.id] ?? 0
       if (q === 0) return acc
@@ -319,34 +330,7 @@ export default function BuySheet({
       return acc + q * Math.max(0, menudeo - effective)
     }, 0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qty, product, projectedTier])
-
-  /**
-   * Ahorro EXTRA que el cliente desbloquearía si lograra subir al
-   * siguiente tier (medio→mayoreo, o menudeo→medio). Se calcula
-   * sobre el carrito ACTUAL (qty del sheet) — la idea es decirle:
-   * "si lograras subir, sobre lo que ya tienes encarrito ahorrarías $X
-   * adicional". Si ya está en mayoreo o no hay próximo tier, es 0.
-   */
-  const potentialSavings = useMemo(() => {
-    if (!product || !nextStep) return 0
-    return product.variants.reduce((acc, v) => {
-      const q = qty[v.id] ?? 0
-      if (q === 0) return acc
-      const currentEff = effectivePrice(v)
-      const nextPriceRaw = priceForTier(
-        {
-          price_menudeo: (Number(v.price_menudeo ?? v.price) || 0) as number,
-          price_medio: (Number(v.price_medio) || 0) as number,
-          price_mayoreo: (Number(v.price_mayoreo) || 0) as number,
-        },
-        nextStep.tier,
-      )
-      const diff = Math.max(0, currentEff - nextPriceRaw)
-      return acc + q * diff
-    }, 0)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qty, product, nextStep, projectedTier])
+  }, [qty, product])
 
   function onDragEnd(_: unknown, info: PanInfo) {
     if (info.offset.y > 120 || info.velocity.y > 600) onClose()
@@ -354,25 +338,22 @@ export default function BuySheet({
 
   function confirm(e?: React.MouseEvent<HTMLButtonElement>) {
     if (!product) return
-    // Producto en preventa por admin (mecánica nueva): SIEMPRE marcamos
-    // las líneas como preorder (aunque haya stock), para que el parent
-    // aplique el precio de preventa vía computePresale y NO reprice
-    // por tier. Independiente de la regla vieja block_oversell.
-    const productInPresale = computePresale(
-      product,
-      Number(product.variants[0]?.price_menudeo ?? product.variants[0]?.price ?? 0),
-    ).active
     const lines = Object.entries(qty)
       .filter(([, q]) => q > 0)
       .map(([variantId, q]) => {
-        // Una línea es preventa cuando (a) el producto está en preventa
-        // activa (admin lo marcó explícito), o (b) la variante no tiene
-        // stock pero la tienda permite oversell (regla vieja). El parent
-        // recibirá la flag y aplicará el precio correspondiente.
+        // Una línea es preventa cuando la VARIANTE tiene preventa activa
+        // (rework 2026-07-01: mecánica explícita por variante). Ya NO
+        // se aplica automáticamente por stock=0 con block_oversell=off.
+        // Cuando `blockOversell=false` permite vender sin stock pero a
+        // precio normal — sin descuento automático.
         const v = product.variants.find((x) => x.id === variantId)
-        const isPreorder =
-          productInPresale ||
-          (!blockOversell && !!v && (v.stock ?? 0) <= 0)
+        const variantMenudeo = v
+          ? Number(v.price_menudeo ?? v.price ?? 0)
+          : 0
+        const variantPresaleActive = v
+          ? computePresale(v, variantMenudeo).active
+          : false
+        const isPreorder = variantPresaleActive
         return { variantId, qty: q, isPreorder }
       })
     if (lines.length === 0) return
@@ -521,58 +502,17 @@ export default function BuySheet({
               </div>
             )}
 
-            {/* Banner de PREVENTA POR PRODUCTO — se muestra cuando el
-                admin activó la preventa desde el editor. Explica al
-                cliente el precio especial y (si aplica) hasta cuándo. */}
-            {(() => {
-              const menudeo = Number(
-                product.variants[0]?.price_menudeo ?? product.variants[0]?.price ?? 0,
-              )
-              const presale = computePresale(product, menudeo)
-              if (!presale.active) return null
-              const countdown = formatPresaleCountdown(presale.endsAt)
-              return (
-                <div className="px-4 pb-2 shrink-0">
-                  <div className="rounded-2xl px-3 py-2.5 border border-fuchsia-200 dark:border-fuchsia-500/30 bg-gradient-to-r from-fuchsia-50 to-pink-50 dark:from-fuchsia-500/10 dark:to-pink-500/5 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-fuchsia-500 text-white flex items-center justify-center shadow-sm shrink-0">
-                      <Sparkles size={14} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-black text-fuchsia-900 dark:text-fuchsia-100 leading-tight flex items-center gap-1.5 flex-wrap">
-                        Preventa activa
-                        {presale.savingPct > 0 && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-fuchsia-500 text-white text-[9px] tabular-nums">
-                            −{Math.round(presale.savingPct)}%
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-[10px] font-bold text-fuchsia-700 dark:text-fuchsia-300 leading-tight mt-0.5 truncate">
-                        {presale.note
-                          ? presale.note
-                          : "Precio especial temporal."}
-                        {countdown && countdown !== "Vencida" && (
-                          <span className="ml-1 opacity-80">· {countdown}</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )
-            })()}
+            {/* NOTA (rework 2026-07-01): el banner "Preventa activa" a
+                nivel producto se removió. La preventa ahora es POR
+                VARIANTE y se muestra directamente en cada tarjeta de
+                variante con badge/nota/countdown en su propio precio. */}
 
             {/* Lista de variantes con selector +/- */}
             <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2 scroll-container-ios">
-              {/* Banner de tier: muestra siempre que haya algo en este sheet
-                  o en el carrito previo. Le dice al cliente exactamente
-                  qué precio se le va a aplicar y cuánto le falta para subir. */}
-              {thresholds && (projectedQty > 0) && baseCartQty === 0 && (
-                <TierBanner
-                  tier={projectedTier}
-                  next={nextStep}
-                  savings={projectedSavings}
-                  potentialNextSavings={potentialSavings}
-                />
-              )}
+              {/* NOTA (rework 2026-07-01): el banner de tier proyectado
+                  del carrito completo se removió. Ahora cada tarjeta de
+                  variante muestra SU propio progreso al siguiente tier
+                  cuando el cliente le está agregando piezas. */}
 
               {product.variants.length === 0 ? (
                 <div className="py-12 text-center text-slate-400">
@@ -583,40 +523,62 @@ export default function BuySheet({
                 product.variants.map((v) => {
                   const q = qty[v.id] ?? 0
                   const outOfStock = v.stock <= 0
-                  // Si la tienda permite preventa (regla block_oversell=false),
-                  // el botón + sigue activo aunque stock=0 con un tope holgado
-                  // (5 piezas para no abrir la puerta a abusos). El cliente
-                  // recibe un aviso visual de "Preventa".
-                  const PREORDER_CAP = 5
-                  const allowPreorder = !blockOversell && outOfStock
-                  const effectiveStock = allowPreorder
-                    ? PREORDER_CAP
-                    : v.stock
-                  // `out` controla el bloqueo duro de +/-. Solo bloquea cuando
-                  // está agotado Y NO se permite preventa.
-                  const out = outOfStock && !allowPreorder
-                  const atMax = !out && q >= effectiveStock
+
+                  // Preventa POR VARIANTE (rework 2026-07-01): SOLO se
+                  // considera preventa cuando el admin la activó
+                  // explícitamente en esta variante. Ya NO existe la
+                  // "preventa automática" por stock=0 + block_oversell.
                   const menudeoPrice = v.price_menudeo ?? v.price
+                  const variantPresale = computePresale(v, menudeoPrice)
+                  const isPreorderVariant = variantPresale.active
+                  const presaleCountdown = isPreorderVariant
+                    ? formatPresaleCountdown(variantPresale.endsAt)
+                    : null
+
+                  // Reglas de stock:
+                  //   - Preventa activa → permite hasta cap (stock si hay,
+                  //     PREORDER_CAP=5 si no).
+                  //   - Sin stock + block_oversell=false → permite vender
+                  //     sin stock a precio NORMAL (sin descuento auto).
+                  //   - Sin stock + block_oversell=true → bloqueado.
+                  const PREORDER_CAP = 5
+                  const canOversell = !blockOversell
+                  let effectiveStock: number
+                  let out: boolean
+                  if (isPreorderVariant) {
+                    effectiveStock = v.stock > 0 ? v.stock : PREORDER_CAP
+                    out = false
+                  } else if (v.stock > 0) {
+                    effectiveStock = v.stock
+                    out = false
+                  } else if (canOversell) {
+                    effectiveStock = PREORDER_CAP
+                    out = false
+                  } else {
+                    effectiveStock = 0
+                    out = true
+                  }
+                  const atMax = !out && q >= effectiveStock
+
                   const effective = effectivePrice(v)
-                  // Precio especial preventa: descuento configurable sobre
-                  // el precio efectivo cuando la variante se vende sin stock.
-                  // Se muestra al cliente como motivador para pagar antes.
-                  const preorderPrice = allowPreorder
-                    ? Math.round(
-                        effective * (1 - preorderDiscountPct / 100) * 100,
-                      ) / 100
-                    : effective
-                  const showPreorderDiscount =
-                    allowPreorder && preorderDiscountPct > 0 && preorderPrice < effective
-                  const hasDiscount =
-                    projectedTier !== "menudeo" && effective < menudeoPrice
+                  const hasDiscount = effective < menudeoPrice
+
+                  // Progreso al siguiente tier POR ESTA VARIANTE (solo
+                  // cuando el cliente ya está agregando piezas).
+                  const variantThresholds = resolvedFor(v)
+                  const nextTier = q > 0
+                    ? piecesToNextTierForLine(q, variantThresholds)
+                    : null
+
                   return (
                     <div
                       key={v.id}
                       ref={(el) => { variantRefs.current[v.id] = el }}
                       className={`flex flex-col gap-1.5 p-2.5 rounded-2xl border transition-colors ${
                         q > 0
-                          ? "bg-primary/5 border-primary/30"
+                          ? isPreorderVariant
+                            ? "bg-fuchsia-50/60 dark:bg-fuchsia-500/10 border-fuchsia-300/50 dark:border-fuchsia-500/30"
+                            : "bg-primary/5 border-primary/30"
                           : "bg-slate-50 dark:bg-slate-800/60 border-transparent"
                       }`}
                     >
@@ -653,33 +615,44 @@ export default function BuySheet({
                           <div className="flex items-baseline gap-1.5 flex-wrap">
                             <p
                               className={`text-sm font-black tabular-nums ${
-                                showPreorderDiscount
-                                  ? "text-violet-600 dark:text-violet-400"
-                                  : "text-primary"
+                                isPreorderVariant
+                                  ? "text-fuchsia-600 dark:text-fuchsia-400"
+                                  : hasDiscount
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-primary"
                               }`}
                             >
-                              {formatMoney(showPreorderDiscount ? preorderPrice : effective)}
+                              {formatMoney(effective)}
                             </p>
-                            {showPreorderDiscount && (
-                              <span className="text-[9px] font-bold text-slate-400 line-through tabular-nums">
-                                {formatMoney(effective)}
-                              </span>
-                            )}
-                            {hasDiscount && !showPreorderDiscount && (
+                            {hasDiscount && (
                               <span className="text-[9px] font-bold text-slate-400 line-through tabular-nums">
                                 {formatMoney(menudeoPrice)}
                               </span>
                             )}
                           </div>
+
+                          {/* Etiqueta debajo del precio: prioridad
+                              agotado > preventa > stock urgente > stock normal */}
                           {out ? (
                             <p className="text-[9px] font-black uppercase text-rose-500">
                               Agotado
                             </p>
-                          ) : allowPreorder ? (
-                            <p className="text-[9px] font-black uppercase text-violet-600 dark:text-violet-400">
-                              📦 Preventa{showPreorderDiscount ? ` · ${preorderDiscountPct}% OFF` : ""}
+                          ) : isPreorderVariant ? (
+                            <p className="text-[9px] font-black uppercase text-fuchsia-600 dark:text-fuchsia-400 flex items-center gap-1 flex-wrap">
+                              <Sparkles size={9} />
+                              Preventa
+                              {variantPresale.savingPct > 0 && (
+                                <span className="tabular-nums">
+                                  · -{Math.round(variantPresale.savingPct)}%
+                                </span>
+                              )}
+                              {presaleCountdown && presaleCountdown !== "Vencida" && (
+                                <span className="opacity-80 normal-case font-bold tracking-normal">
+                                  · {presaleCountdown}
+                                </span>
+                              )}
                             </p>
-                          ) : v.stock <= 3 ? (
+                          ) : v.stock <= 3 && v.stock > 0 ? (
                             <p
                               className={`text-[9px] font-black uppercase ${
                                 v.stock === 1
@@ -689,9 +662,21 @@ export default function BuySheet({
                             >
                               {v.stock === 1 ? "🔥 ¡ÚLTIMA!" : `¡Últimas ${v.stock}!`}
                             </p>
-                          ) : (
+                          ) : v.stock > 0 ? (
                             <p className="text-[9px] text-slate-400 font-bold">
                               {v.stock} disponibles
+                            </p>
+                          ) : (
+                            <p className="text-[9px] font-black uppercase text-slate-400">
+                              Sin stock físico
+                            </p>
+                          )}
+
+                          {/* Nota de preventa (mensaje del admin), separada
+                              del countdown para que quepa en móvil. */}
+                          {isPreorderVariant && variantPresale.note && (
+                            <p className="text-[9px] font-bold text-fuchsia-500/80 truncate mt-0.5">
+                              {variantPresale.note}
                             </p>
                           )}
                         </div>
@@ -700,14 +685,15 @@ export default function BuySheet({
                               −/+ pelados (que subían a 1 de un toque sin avisar
                               que era preventa), pintamos un botón explícito
                               "Pedir en preventa" que requiere clic consciente. */}
-                          {allowPreorder && q === 0 ? (
+                          {isPreorderVariant && q === 0 ? (
                             <button
                               type="button"
                               onClick={() => change(v.id, 1, effectiveStock)}
                               aria-label="Pedir en preventa"
-                              className="h-9 px-3 rounded-full bg-violet-500 hover:bg-violet-600 text-white text-[9px] font-black uppercase tracking-widest shadow-bloom active:scale-95 transition-transform flex items-center gap-1"
+                              className="h-9 px-3 rounded-full bg-fuchsia-500 hover:bg-fuchsia-600 text-white text-[9px] font-black uppercase tracking-widest shadow-bloom active:scale-95 transition-transform flex items-center gap-1"
                             >
-                              📦 Preventa
+                              <Sparkles size={10} />
+                              Preventa
                             </button>
                           ) : (
                             <>
@@ -740,9 +726,11 @@ export default function BuySheet({
                         <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] font-black">
                           <AlertTriangle size={11} className="shrink-0" />
                           <span className="flex-1">
-                            {allowPreorder
-                              ? `Tope de preventa: ${PREORDER_CAP} piezas.`
-                              : `Solo había ${v.stock} de este tono · ya las tienes todas.`}
+                            {isPreorderVariant
+                              ? `Tope de preventa: ${effectiveStock} piezas.`
+                              : v.stock > 0
+                                ? `Solo había ${v.stock} de este tono · ya las tienes todas.`
+                                : `Tope sin stock: ${effectiveStock} piezas.`}
                           </span>
                           {/* Quitar variante completa en 1 tap — antes el
                               cliente tenía que hacer N taps en el botón -.
@@ -759,6 +747,19 @@ export default function BuySheet({
                           )}
                         </div>
                       )}
+
+                      {/* Mini progreso al siguiente tier — POR VARIANTE.
+                          Sólo aparece cuando el cliente ya seleccionó al
+                          menos 1 pieza y aún puede subir de tier. Discreto:
+                          solo texto + una barrita ultra chica. */}
+                      {q > 0 && nextTier && !isPreorderVariant && (
+                        <VariantTierProgress
+                          currentQty={q}
+                          next={nextTier}
+                          thresholds={variantThresholds}
+                        />
+                      )}
+
                       {/* Cliente puede pedir que le avisemos cuando vuelva
                           a haber stock — útil cuando está agotado de verdad
                           (no pre-orden). El SQL fix_stock_alerts.sql crea
@@ -870,6 +871,50 @@ export default function BuySheet({
 }
 
 /**
+ * Mini indicador de progreso al siguiente tier POR VARIANTE (rework
+ * 2026-07-01). Discreto: una línea de texto + una barrita ~4px. No se
+ * muestra si la variante ya está en mayoreo o si el cliente no ha
+ * seleccionado piezas todavía.
+ */
+function VariantTierProgress({
+  currentQty,
+  next,
+  thresholds,
+}: {
+  currentQty: number
+  next: { tier: PricingTier; missing: number }
+  thresholds: TierThresholds
+}) {
+  // Progreso 0-1 desde el tier actual hasta el siguiente.
+  const targetQty = next.tier === "medio"
+    ? thresholds.medio_min_qty
+    : thresholds.mayoreo_min_qty
+  const previousTarget = next.tier === "medio"
+    ? 1
+    : thresholds.medio_min_qty
+  const progress = Math.max(
+    0,
+    Math.min(
+      1,
+      (currentQty - previousTarget) / Math.max(1, targetQty - previousTarget),
+    ),
+  )
+  return (
+    <div className="flex items-center gap-2 px-1 pt-1">
+      <div className="flex-1 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+        <div
+          className="h-full bg-emerald-500 rounded-full transition-all"
+          style={{ width: `${progress * 100}%` }}
+        />
+      </div>
+      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">
+        +{next.missing} para {TIER_LABEL[next.tier]}
+      </span>
+    </div>
+  )
+}
+
+/**
  * Banner de tier proyectado que ve el cliente arriba del listado.
  * Estados:
  *   - mayoreo (verde): el cliente ya está al mejor precio. Muestra
@@ -882,6 +927,11 @@ export default function BuySheet({
  * Copy en lenguaje simple: "Llevas X · Ahorras $Y · Lleva N más y ahorras
  * $Z extra". El objetivo es que el cliente sepa de un vistazo qué precio
  * está pagando y cuánto le conviene sumar más piezas.
+ *
+ * NOTA (rework 2026-07-01): este banner GLOBAL ya no se renderiza porque
+ * el tier ahora es POR VARIANTE (ver VariantTierProgress abajo). Queda
+ * como código de referencia; se puede eliminar cuando confirmemos que
+ * nadie lo importa desde otro archivo.
  */
 function TierBanner({
   tier,

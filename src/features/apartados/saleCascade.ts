@@ -51,16 +51,16 @@ export interface CascadePreview {
 /**
  * Calcula el efecto en cascada de eliminar / modificar líneas de un ticket.
  *
- * Regla maestra:
- *   • El total de piezas del carrito se sigue calculando cross-product
- *     (mayoreo cruzado se conserva).
+ * Regla maestra (rework 2026-07-01):
  *   • Cada LÍNEA calcula su tier con SUS umbrales resueltos (cascada
- *     variante > producto > global) y el total del carrito.
+ *     variante > producto > global) y SU cantidad — NO el total del
+ *     carrito. Ya no hay "mayoreo cruzado".
  *   • El precio de cada línea se recalcula con SU tier específico.
  *
- * `oldTier` y `newTier` en el preview se calculan con umbrales GLOBALES
- * solamente — sirven para el mensaje resumen "bajó de mayoreo a medio".
- * Cada línea individual reporta su tier real en `line.tier`.
+ * `oldTier` y `newTier` en el preview son informativos: reflejan qué
+ * tier alcanzaría una variante hipotética con umbrales globales si
+ * tuviera esa cantidad de piezas. Cada línea individual reporta su
+ * tier real en `line.tier`.
  *
  * No toca la BD — devuelve una vista previa. La capa de servicio que
  * lo invoque se encarga del UPDATE de sale_items, sales y movements.
@@ -74,14 +74,16 @@ export function previewCascade(
   const removed = modified.filter((l) => l._removed)
   const active = modified.filter((l) => !l._removed)
 
-  // Tier antes / después (con umbrales GLOBALES — informativo).
+  // Tier antes / después (con umbrales GLOBALES y TOTAL — solo informativo,
+  // no se usa para repricear). Sirve para el mensaje resumen tipo
+  // "bajó de mayoreo a medio" cuando el admin quita líneas.
   const oldTotalQty = original.reduce((a, l) => a + Number(l.qty || 0), 0)
   const oldTier = tierForLine(oldTotalQty, globalThresholds)
 
   const newTotalQty = active.reduce((a, l) => a + Number(l.qty || 0), 0)
   const newTier = tierForLine(newTotalQty, globalThresholds)
 
-  // Reprice POR LÍNEA con sus umbrales resueltos.
+  // Reprice POR LÍNEA con sus umbrales resueltos y SU cantidad.
   const repriced: CascadeLine[] = active.map((l) => {
     const thresholds = resolveThresholds(
       {
@@ -94,7 +96,7 @@ export function previewCascade(
       },
       globalThresholds,
     )
-    const lineTier = tierForLine(newTotalQty, thresholds)
+    const lineTier = tierForLine(Number(l.qty || 0), thresholds)
     const newPrice = priceForTier(
       {
         price_menudeo: l.price_menudeo ?? 0,

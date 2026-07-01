@@ -19,18 +19,16 @@ export interface ProductVariantLookup {
   // vía resolveThresholds() en tierResolver.ts.
   tier_umbral_medio?: number | null;
   tier_umbral_mayoreo?: number | null;
+  // Preventa POR VARIANTE (rework 2026-07-01). Antes vivía en products.
+  presale_active?: boolean | null;
+  presale_price?: number | null;
+  presale_discount_pct?: number | null;
+  presale_ends_at?: string | null;
+  presale_note?: string | null;
   products: {
     id: string;
     name: string;
     cost: number | null;
-    // Campos de PREVENTA por producto (nueva mecánica del admin).
-    // Todos opcionales/nullable: los productos sin preventa dejan estas
-    // columnas en NULL y el UI las trata como inactivas.
-    presale_active?: boolean | null;
-    presale_price?: number | null;
-    presale_discount_pct?: number | null;
-    presale_ends_at?: string | null;
-    presale_note?: string | null;
     // Umbrales de tier del producto (override sobre global).
     tier_umbral_medio?: number | null;
     tier_umbral_mayoreo?: number | null;
@@ -50,15 +48,15 @@ const VARIANT_SELECT = `
   product_id,
   tier_umbral_medio,
   tier_umbral_mayoreo,
+  presale_active,
+  presale_price,
+  presale_discount_pct,
+  presale_ends_at,
+  presale_note,
   products (
     id,
     name,
     cost,
-    presale_active,
-    presale_price,
-    presale_discount_pct,
-    presale_ends_at,
-    presale_note,
     tier_umbral_medio,
     tier_umbral_mayoreo
   )
