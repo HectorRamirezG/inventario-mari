@@ -25,8 +25,7 @@ import {
 } from "../../lib/overlayMotion"
 import type { Sale, SaleItem } from "../../types/database"
 import { previewCascade, toCascadeLine, type CascadeLine } from "./saleCascade"
-import { getPricingConfig } from "../pricing/pricingConfigService"
-import type { PricingConfig } from "../pricing/pricingTypes"
+import { useTierThresholds } from "../pricing/tierPricingService"
 import { notifyClient } from "../notifications/notificationsService"
 import { useBusinessRules } from "../settings/businessRulesService"
 import { isInClosedCycle } from "../cycles/cyclesService"
@@ -50,6 +49,11 @@ interface PricedItem extends SaleItem {
   price_menudeo: number | null
   price_medio: number | null
   price_mayoreo: number | null
+  // Overrides de umbrales para reprice por línea (cascada).
+  tier_umbral_medio?: number | null
+  tier_umbral_mayoreo?: number | null
+  product_tier_umbral_medio?: number | null
+  product_tier_umbral_mayoreo?: number | null
   _removed?: boolean
 }
 
@@ -66,16 +70,14 @@ export default function EditSaleAdjustModal({
   const [reason, setReason] = useState("")
   const [loadingItems, setLoadingItems] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [cfg, setCfg] = useState<PricingConfig | null>(null)
+  // Umbrales globales unificados (app_settings.tier_thresholds).
+  // Cada línea aplica su override por producto/variante en cascada.
+  const globalThresholds = useTierThresholds()
   // Regla `lock_edit_when_cycle_closed`: si la venta cae en un ciclo
   // ya cerrado, deshabilitamos la edición para no romper los reportes
   // históricos.
   const bRules = useBusinessRules()
   const [cycleLocked, setCycleLocked] = useState(false)
-
-  useEffect(() => {
-    getPricingConfig().then(setCfg).catch(() => setCfg(null))
-  }, [])
 
   useEffect(() => {
     if (!open || !sale) return
@@ -112,9 +114,13 @@ export default function EditSaleAdjustModal({
         setItems(baseItems.map((i) => fillEmptyPrices(i)))
         return
       }
+      // Traemos precios + overrides de umbrales de las variantes,
+      // e incluimos el producto padre para heredar sus overrides.
       const { data: variants } = await supabase
         .from("variants")
-        .select("id, price_menudeo, price_medio, price_mayoreo")
+        .select(
+          "id, price_menudeo, price_medio, price_mayoreo, tier_umbral_medio, tier_umbral_mayoreo, product_id, products (tier_umbral_medio, tier_umbral_mayoreo)",
+        )
         .in("id", variantIds)
       const vmap = new Map(
         (variants ?? []).map((v: any) => [v.id, v])
@@ -126,6 +132,10 @@ export default function EditSaleAdjustModal({
           price_menudeo: Number(v?.price_menudeo) || null,
           price_medio: Number(v?.price_medio) || null,
           price_mayoreo: Number(v?.price_mayoreo) || null,
+          tier_umbral_medio: v?.tier_umbral_medio ?? null,
+          tier_umbral_mayoreo: v?.tier_umbral_mayoreo ?? null,
+          product_tier_umbral_medio: v?.products?.tier_umbral_medio ?? null,
+          product_tier_umbral_mayoreo: v?.products?.tier_umbral_mayoreo ?? null,
         }
       })
       setItems(enriched)
@@ -180,10 +190,27 @@ export default function EditSaleAdjustModal({
 
   /* ---------- Vista previa en cascada ---------- */
   const cascade = useMemo(() => {
-    if (!sale || !cfg || originalItems.length === 0) return null
-    const orig = originalItems.map((it) => toCascadeLine(it, it))
+    if (!sale || originalItems.length === 0) return null
+    // Pasamos los overrides del producto (2do argumento de toCascadeLine)
+    // para que resolveThresholds tenga el nivel de producto disponible.
+    const buildLine = (it: PricedItem) =>
+      toCascadeLine(
+        it,
+        {
+          price_menudeo: it.price_menudeo,
+          price_medio: it.price_medio,
+          price_mayoreo: it.price_mayoreo,
+          tier_umbral_medio: it.tier_umbral_medio,
+          tier_umbral_mayoreo: it.tier_umbral_mayoreo,
+        },
+        {
+          tier_umbral_medio: it.product_tier_umbral_medio,
+          tier_umbral_mayoreo: it.product_tier_umbral_mayoreo,
+        },
+      )
+    const orig = originalItems.map(buildLine)
     const mod = items.map((it) => ({
-      ...toCascadeLine(it, it),
+      ...buildLine(it),
       _removed: it._removed,
     }))
     return previewCascade(
@@ -194,9 +221,9 @@ export default function EditSaleAdjustModal({
       },
       orig,
       mod,
-      cfg
+      globalThresholds,
     )
-  }, [sale, cfg, items, originalItems, adjustment, adjustSign])
+  }, [sale, globalThresholds, items, originalItems, adjustment, adjustSign])
 
   const tierChanged = cascade && cascade.newTier !== cascade.oldTier
 

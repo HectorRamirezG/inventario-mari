@@ -126,6 +126,9 @@ interface PublicVariant {
   /** Costo por unidad para calcular profit al insertar sale_items.
    *  cost_override de la variante o, si no, cost del producto padre. */
   cost?: number
+  /** Overrides de umbrales por variante (cascada). */
+  tier_umbral_medio?: number | null
+  tier_umbral_mayoreo?: number | null
 }
 
 interface PublicProduct extends PresaleFields {
@@ -139,6 +142,9 @@ interface PublicProduct extends PresaleFields {
   review_count?: number
   /** Promedio de rating (1–5). 0 si no hay reseñas. */
   avg_rating?: number
+  /** Overrides de umbrales por producto (cascada). */
+  tier_umbral_medio?: number | null
+  tier_umbral_mayoreo?: number | null
 }
 
 interface CartLine {
@@ -359,14 +365,14 @@ export default function ClientShopPage() {
         supabase
           .from("products")
           .select(
-            "id,name,category,image_url,created_at,cost,presale_active,presale_price,presale_discount_pct,presale_ends_at,presale_note",
+            "id,name,category,image_url,created_at,cost,presale_active,presale_price,presale_discount_pct,presale_ends_at,presale_note,tier_umbral_medio,tier_umbral_mayoreo",
           )
           .eq("is_active", true)
           .order("name"),
         supabase
           .from("variants")
           .select(
-            "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls,cost_override",
+            "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls,cost_override,tier_umbral_medio,tier_umbral_mayoreo",
           )
           .eq("is_active", true),
         // Stats de reseñas publicadas para enriquecer las cards del catálogo.
@@ -2780,6 +2786,9 @@ export default function ClientShopPage() {
                   presale_discount_pct: buySheetProduct.presale_discount_pct ?? null,
                   presale_ends_at: buySheetProduct.presale_ends_at ?? null,
                   presale_note: buySheetProduct.presale_note ?? null,
+                  // Overrides de umbrales por producto (cascada).
+                  tier_umbral_medio: buySheetProduct.tier_umbral_medio ?? null,
+                  tier_umbral_mayoreo: buySheetProduct.tier_umbral_mayoreo ?? null,
                   variants: buySheetProduct.variants.map((v) => ({
                     id: v.id,
                     product_id: v.product_id,
@@ -2791,6 +2800,9 @@ export default function ClientShopPage() {
                     price_menudeo: v.price_menudeo ?? null,
                     price_medio: v.price_medio ?? null,
                     price_mayoreo: v.price_mayoreo ?? null,
+                    // Overrides de umbrales por variante (cascada).
+                    tier_umbral_medio: v.tier_umbral_medio ?? null,
+                    tier_umbral_mayoreo: v.tier_umbral_mayoreo ?? null,
                     image_url:
                       (v.image_urls && v.image_urls[0]) ??
                       v.image_url ??

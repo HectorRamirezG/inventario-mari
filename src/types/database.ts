@@ -17,6 +17,11 @@ export interface Variant {
   effective_cost?: number | null;  // CALCULADO
   image_url?: string | null;       // foto principal (legacy / fallback)
   image_urls?: string[] | null;    // galería ordenada de fotos
+
+  // Umbrales de tier — override por variante (gana sobre producto).
+  // NULL = hereda del producto padre o del global.
+  tier_umbral_medio?: number | null;
+  tier_umbral_mayoreo?: number | null;
 }
 
 export interface Product {
@@ -43,6 +48,12 @@ export interface Product {
   presale_ends_at?: string | null;
   // Mensaje opcional para el cliente (ej: "Entrega estimada 15 jul").
   presale_note?: string | null;
+
+  // ─── Umbrales de tier — override por producto ───
+  // Se aplica a todas las variantes que no tengan override propio.
+  // NULL = usa el global (app_settings.tier_thresholds).
+  tier_umbral_medio?: number | null;
+  tier_umbral_mayoreo?: number | null;
 }
 
 export type SaleStatus = "paid" | "pending" | "cancelled";

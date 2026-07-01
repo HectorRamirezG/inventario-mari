@@ -43,6 +43,16 @@ import PresaleEditor, {
   presaleToDB,
   type PresaleEditorValue,
 } from "./PresaleEditor"
+import TierThresholdsEditor, {
+  EMPTY_TIER_THRESHOLDS,
+  tierThresholdsFromDB,
+  tierThresholdsToDB,
+  type TierThresholdsEditorValue,
+} from "./TierThresholdsEditor"
+import {
+  useTierThresholds,
+  type TierThresholds,
+} from "../pricing/tierPricingService"
 import { applyMovement } from "../movements/movementService"
 import { getPendingStockAlertsByProduct } from "../client/stockAlertsService"
 import StockSubscribersDrawer from "../../components/ui/StockSubscribersDrawer"
@@ -115,6 +125,15 @@ export default function ProductDrawer({
   // vía `presaleToDB` y viaja como parte del updateProduct().
   const [presale, setPresale] = useState<PresaleEditorValue>(EMPTY_PRESALE)
 
+  // Umbrales de tier (override por producto). NULL = hereda del global.
+  // Se sincroniza con el producto al abrir; al guardar viaja vía
+  // `tierThresholdsToDB` en el updateProduct().
+  const [productTiers, setProductTiers] = useState<TierThresholdsEditorValue>(
+    EMPTY_TIER_THRESHOLDS,
+  )
+  // Umbrales globales (para heredar cuando el producto no tiene override).
+  const globalThresholds = useTierThresholds()
+
   // La portada mostrada en el header del drawer es la primera foto
   // disponible de la primera variante con fotos. Si nadie tiene foto,
   // el header dibuja el ícono de paquete.
@@ -161,6 +180,7 @@ export default function ProductDrawer({
       setCost(product?.cost ?? "")
       setMinStock(product?.min_stock ?? "")
       setPresale(presaleFromDB(product ?? null))
+      setProductTiers(tierThresholdsFromDB(product ?? null))
     } else {
       // create — intenta recuperar un draft del localStorage
       try {
@@ -174,6 +194,7 @@ export default function ProductDrawer({
             setCost(draft.cost ?? "")
             setMinStock(draft.minStock ?? "")
             setPresale(EMPTY_PRESALE)
+            setProductTiers(EMPTY_TIER_THRESHOLDS)
             toast("Restauramos tu borrador anterior", { icon: "📝" })
             return
           }
@@ -184,6 +205,7 @@ export default function ProductDrawer({
       setCost("")
       setMinStock("")
       setPresale(EMPTY_PRESALE)
+      setProductTiers(EMPTY_TIER_THRESHOLDS)
     }
   }, [open, mode, product?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -306,6 +328,8 @@ export default function ProductDrawer({
           // Preventa: serializamos el shape del editor al shape de columnas
           // (si !active, todos los campos se limpian a null en DB).
           ...presaleToDB(presale),
+          // Umbrales de tier override por producto (null = hereda global).
+          ...tierThresholdsToDB(productTiers),
         })
         toast.success("Cambios guardados")
         onSaved()
@@ -440,6 +464,9 @@ export default function ProductDrawer({
                   onSaved={onSaved}
                   presale={presale}
                   setPresale={setPresale}
+                  productTiers={productTiers}
+                  setProductTiers={setProductTiers}
+                  globalThresholds={globalThresholds}
                 />
               )}
 
@@ -449,6 +476,8 @@ export default function ProductDrawer({
                   focusVariantId={focusVariantId ?? null}
                   onSaved={onSaved}
                   pricingCfg={pricingCfg}
+                  productTiers={productTiers}
+                  globalThresholds={globalThresholds}
                 />
               )}
             </div>
@@ -503,6 +532,9 @@ function GeneralTab({
   onSaved,
   presale,
   setPresale,
+  productTiers,
+  setProductTiers,
+  globalThresholds,
 }: {
   product?: Product
   name: string
@@ -518,6 +550,9 @@ function GeneralTab({
   onSaved?: () => void
   presale: PresaleEditorValue
   setPresale: (v: PresaleEditorValue) => void
+  productTiers: TierThresholdsEditorValue
+  setProductTiers: (v: TierThresholdsEditorValue) => void
+  globalThresholds: TierThresholds
 }) {
   // Estado local para galería del producto (cuando no hay variantes aún).
   // Las fotos se sincronizan al backend mediante `updateProduct`.
@@ -702,6 +737,21 @@ function GeneralTab({
           )}
         />
       )}
+
+      {/* Umbrales de tier — override por producto. Si el admin lo activa,
+          los umbrales personalizados se aplican a TODAS las variantes de
+          este producto (a menos que la variante tenga su propio override).
+          Si está apagado, hereda de app_settings.tier_thresholds. */}
+      {product && (
+        <TierThresholdsEditor
+          value={productTiers}
+          onChange={setProductTiers}
+          label="Umbrales de tier de este producto"
+          hint="Aplica a todas las variantes. Cada variante puede tener el suyo."
+          parentThresholds={globalThresholds}
+          parentLabel="global"
+        />
+      )}
     </div>
   )
 }
@@ -712,11 +762,15 @@ function VariantsTab({
   focusVariantId,
   onSaved,
   pricingCfg,
+  productTiers,
+  globalThresholds,
 }: {
   product: Product
   focusVariantId: string | null
   onSaved: () => void
   pricingCfg: PricingConfig | null
+  productTiers: TierThresholdsEditorValue
+  globalThresholds: TierThresholds
 }) {
   const [openId, setOpenId] = useState<string | null>(focusVariantId)
   const [showNew, setShowNew] = useState(false)
@@ -936,6 +990,8 @@ function VariantsTab({
                   variantName: v.variant_name ?? "Variante",
                 })
               }
+              productTiers={productTiers}
+              globalThresholds={globalThresholds}
             />
           ))}
         </div>
@@ -1238,6 +1294,8 @@ function VariantAccordion({
   onSaved,
   pendingAlerts = 0,
   onShowSubscribers,
+  productTiers,
+  globalThresholds,
 }: {
   variant: Variant
   productId: string
@@ -1251,6 +1309,10 @@ function VariantAccordion({
   pendingAlerts?: number
   /** Callback al tocar el chip para abrir el drawer de suscriptores. */
   onShowSubscribers?: () => void
+  /** Umbrales override del producto padre (para heredar cuando la variante no tiene). */
+  productTiers: TierThresholdsEditorValue
+  /** Umbrales globales de la app (fallback final). */
+  globalThresholds: TierThresholds
 }) {
   const [vName, setVName] = useState(variant.variant_name ?? "")
   const [sku, setSku] = useState(variant.sku ?? "")
@@ -1264,6 +1326,10 @@ function VariantAccordion({
       : variant.image_url
       ? [variant.image_url]
       : []
+  )
+  // Umbrales de tier override por variante (NULL = hereda del producto).
+  const [variantTiers, setVariantTiers] = useState<TierThresholdsEditorValue>(
+    tierThresholdsFromDB(variant),
   )
   const [saving, setSaving] = useState(false)
 
@@ -1283,9 +1349,11 @@ function VariantAccordion({
         ? [variant.image_url]
         : []
     )
+    setVariantTiers(tierThresholdsFromDB(variant))
   }, [variant.id, variant.variant_name, variant.sku, variant.stock,
       variant.price_menudeo, variant.price_medio, variant.price_mayoreo,
-      variant.image_url, JSON.stringify(variant.image_urls ?? [])])
+      variant.image_url, JSON.stringify(variant.image_urls ?? []),
+      variant.tier_umbral_medio, variant.tier_umbral_mayoreo])
 
   // Sugeridos calculados desde el costo del producto (referencia)
   const sug = useMemo(() => {
@@ -1317,6 +1385,8 @@ function VariantAccordion({
       Number(pm || 0) !== Number(variant.price_menudeo || 0) ||
       Number(pmd || 0) !== Number(variant.price_medio || 0) ||
       Number(pma || 0) !== Number(variant.price_mayoreo || 0) ||
+      (variantTiers.medio ?? null) !== (variant.tier_umbral_medio ?? null) ||
+      (variantTiers.mayoreo ?? null) !== (variant.tier_umbral_mayoreo ?? null) ||
       JSON.stringify(images) !==
         JSON.stringify(
           variant.image_urls && variant.image_urls.length > 0
@@ -1326,7 +1396,7 @@ function VariantAccordion({
             : []
         )
     )
-  }, [vName, sku, stock, pm, pmd, pma, images, variant])
+  }, [vName, sku, stock, pm, pmd, pma, images, variantTiers, variant])
 
   async function handleSave() {
     if (!vName.trim()) {
@@ -1344,6 +1414,8 @@ function VariantAccordion({
         price_mayoreo: pma === "" ? null : Number(pma),
         image_urls: images,
         image_url: images[0] ?? null,
+        // Umbrales override por variante (NULL = hereda producto/global).
+        ...tierThresholdsToDB(variantTiers),
       } as any)
       toast.success(
         images.length > 0
@@ -1574,6 +1646,33 @@ function VariantAccordion({
                   <PriceInput label="Mayoreo" value={pma} onChange={setPma} />
                 </div>
               </div>
+
+              {/* Umbrales de tier override por VARIANTE.
+                  Hereda del producto padre si el producto tiene override,
+                  o del global si no. Si esta variante no tiene override
+                  propio, el editor arranca inactivo y muestra el heredado. */}
+              <TierThresholdsEditor
+                value={variantTiers}
+                onChange={setVariantTiers}
+                label="Umbrales de esta variante"
+                hint="Solo esta variante usará estos números al calcular su tier."
+                parentThresholds={
+                  productTiers.medio != null || productTiers.mayoreo != null
+                    ? {
+                        medio_min_qty:
+                          productTiers.medio ?? globalThresholds.medio_min_qty,
+                        mayoreo_min_qty:
+                          productTiers.mayoreo ??
+                          globalThresholds.mayoreo_min_qty,
+                      }
+                    : globalThresholds
+                }
+                parentLabel={
+                  productTiers.medio != null || productTiers.mayoreo != null
+                    ? "producto"
+                    : "global"
+                }
+              />
 
               <div className="flex gap-2 pt-1">
                 <button

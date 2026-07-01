@@ -29,6 +29,20 @@ export interface CartItem {
    * del carrito cambia. Además, la UI mostrará etiqueta "Preventa".
    */
   is_preorder?: boolean;
+
+  /**
+   * Overrides de umbrales de tier — RAW desde la BD.
+   * Se resuelven vía `resolveThresholds()` (cascada variante > producto
+   * > global) cada vez que se repricea, para que un cambio de globales
+   * en vivo se refleje sin re-agregar al carrito.
+   *
+   * NULL en variante → usa el override del producto.
+   * NULL en ambos → usa umbrales globales (app_settings.tier_thresholds).
+   */
+  variant_tier_umbral_medio?: number | null;
+  variant_tier_umbral_mayoreo?: number | null;
+  product_tier_umbral_medio?: number | null;
+  product_tier_umbral_mayoreo?: number | null;
 }
 
 /**

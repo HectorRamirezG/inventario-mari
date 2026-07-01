@@ -44,6 +44,11 @@ import {
   type PresaleFields,
 } from "../products/presaleService"
 import {
+  resolveThresholds,
+  tierForLine,
+} from "../pricing/tierResolver"
+import { DEFAULT_THRESHOLDS } from "../pricing/tierPricingService"
+import {
   OVERLAY_BACKDROP_TRANSITION,
   OVERLAY_INNER_TRANSITION,
   OVERLAY_PANEL_STYLE,
@@ -71,6 +76,9 @@ export interface BuySheetVariant {
    *  `swatch_hex` en `variants`; si no está, el dato llega
    *  undefined y el componente lo ignora silenciosamente. */
   swatch_hex?: string | null
+  /** Overrides de umbrales por variante — RAW, se resuelven vía cascada. */
+  tier_umbral_medio?: number | null
+  tier_umbral_mayoreo?: number | null
 }
 
 /**
@@ -88,6 +96,9 @@ export interface BuySheetProduct extends PresaleFields {
   category: string | null
   image_url: string | null
   variants: BuySheetVariant[]
+  /** Overrides de umbrales por producto — RAW, se resuelven vía cascada. */
+  tier_umbral_medio?: number | null
+  tier_umbral_mayoreo?: number | null
 }
 
 interface Props {
@@ -208,21 +219,25 @@ export default function BuySheet({
   )
 
   /**
-   * Tier proyectado del carrito si confirmáramos ahora: la cantidad
-   * TOTAL son las piezas que el cliente ya tenía + las que está
-   * agregando en este sheet. fija los umbrales (3 piezas para
-   * medio, 6 para mayoreo por default).
+   * Tier proyectado del carrito (banner "vas a tier X") calculado con
+   * umbrales GLOBALES únicamente. Sirve para el mensaje motivador ("te
+   * faltan N piezas para mayoreo"), pero cada variante tiene su tier
+   * propio si el admin le puso override.
    */
   const projectedQty = baseCartQty + totalUnits
+  const globalTh = thresholds
+    ? {
+        medio_min_qty: thresholds.medio_min_qty,
+        mayoreo_min_qty: thresholds.mayoreo_min_qty,
+      }
+    : DEFAULT_THRESHOLDS
   const projectedTier: PricingTier = useMemo(() => {
-    if (!thresholds) return "menudeo"
-    return detectCartTier(projectedQty, {
-      umbral_medio: thresholds.medio_min_qty,
-      umbral_mayoreo: thresholds.mayoreo_min_qty,
-    })
-  }, [projectedQty, thresholds])
+    return tierForLine(projectedQty, globalTh)
+  }, [projectedQty, globalTh.medio_min_qty, globalTh.mayoreo_min_qty])
 
-  /** Lo que falta para subir al próximo tier (si aplica). */
+  /** Lo que falta para subir al próximo tier (si aplica). Usa umbrales
+   *  globales; los overrides por producto no aplican al banner (se
+   *  reflejan en el precio real de la variante). */
   const nextStep = useMemo(() => {
     if (!thresholds) return null
     return piecesToNextTier(projectedQty, {
@@ -231,19 +246,38 @@ export default function BuySheet({
     })
   }, [projectedQty, thresholds])
 
-  /** Precio efectivo de una variante con el tier proyectado. Si la
-   *  variante no tiene precios escalonados cargados, cae a `price`.
+  /** Resuelve umbrales de UNA variante con cascada (variante > producto > global). */
+  function resolvedFor(v: BuySheetVariant) {
+    return resolveThresholds(
+      {
+        tier_umbral_medio: v.tier_umbral_medio,
+        tier_umbral_mayoreo: v.tier_umbral_mayoreo,
+      },
+      {
+        tier_umbral_medio: product?.tier_umbral_medio,
+        tier_umbral_mayoreo: product?.tier_umbral_mayoreo,
+      },
+      globalTh,
+    )
+  }
+
+  /** Precio efectivo de una variante con SU tier proyectado (según sus
+   *  umbrales). Si la variante no tiene precios escalonados cargados,
+   *  cae a `price`.
    *
    *  Si el PRODUCTO está en preventa activa (mecánica nueva del admin) y
-   *  el tier proyectado es `menudeo`, usamos el precio de preventa. Para
+   *  el tier proyectado ES `menudeo`, usamos el precio de preventa. Para
    *  tiers `medio`/`mayoreo` conservamos el descuento por volumen porque
    *  ya es mejor y no queremos "doble descuento". */
   function effectivePrice(v: BuySheetVariant): number {
     const menudeoOriginal =
       v.price_menudeo != null ? Number(v.price_menudeo) : Number(v.price)
 
+    // Tier POR VARIANTE — usa sus propios umbrales resueltos.
+    const variantTier = tierForLine(projectedQty, resolvedFor(v))
+
     // Preventa por producto tiene prioridad SOLO en tier menudeo.
-    if (product && projectedTier === "menudeo") {
+    if (product && variantTier === "menudeo") {
       const presale = computePresale(product, menudeoOriginal)
       if (presale.active) return presale.effectivePrice
     }
@@ -261,7 +295,7 @@ export default function BuySheet({
         price_medio: (Number(v.price_medio) || 0) as number,
         price_mayoreo: (Number(v.price_mayoreo) || 0) as number,
       },
-      projectedTier,
+      variantTier,
     )
   }
 

@@ -15,6 +15,10 @@ export interface ProductVariantLookup {
   price_mayoreo: number | null;
   cost_override: number | null;
   product_id: string;
+  // Overrides de umbrales de tier — se aplican en cascada (variante > producto > global)
+  // vía resolveThresholds() en tierResolver.ts.
+  tier_umbral_medio?: number | null;
+  tier_umbral_mayoreo?: number | null;
   products: {
     id: string;
     name: string;
@@ -27,6 +31,9 @@ export interface ProductVariantLookup {
     presale_discount_pct?: number | null;
     presale_ends_at?: string | null;
     presale_note?: string | null;
+    // Umbrales de tier del producto (override sobre global).
+    tier_umbral_medio?: number | null;
+    tier_umbral_mayoreo?: number | null;
   } | null;
 }
 
@@ -41,6 +48,8 @@ const VARIANT_SELECT = `
   price_mayoreo,
   cost_override,
   product_id,
+  tier_umbral_medio,
+  tier_umbral_mayoreo,
   products (
     id,
     name,
@@ -49,7 +58,9 @@ const VARIANT_SELECT = `
     presale_price,
     presale_discount_pct,
     presale_ends_at,
-    presale_note
+    presale_note,
+    tier_umbral_medio,
+    tier_umbral_mayoreo
   )
 `;
 

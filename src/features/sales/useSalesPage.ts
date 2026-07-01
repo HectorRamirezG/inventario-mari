@@ -8,11 +8,17 @@ import {
   type CustomerSnapshot,
 } from "./customerHistoryService";
 import {
-  detectCartTier,
-  piecesToNextTier,
   priceForTier,
   type CartItem,
 } from "./salesTier";
+import {
+  resolveThresholds,
+  tierForLine,
+  piecesToNextTierForLine,
+} from "../pricing/tierResolver";
+import {
+  useTierThresholds,
+} from "../pricing/tierPricingService";
 import type { PricingConfig } from "../pricing/pricingTypes";
 import type { Sale } from "../../types/database";
 import { sound } from "../../lib/sound";
@@ -40,6 +46,12 @@ const DEFAULT_CONFIG: PricingConfig = {
 export function useSalesPage() {
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState<PricingConfig>(DEFAULT_CONFIG);
+
+  // Umbrales GLOBALES unificados (fuente única: app_settings.tier_thresholds).
+  // Hasta la migración de 2026-07-02, la caja admin usaba pricing_config.
+  // El hook `useTierThresholds` es reactivo y se comparte con la tienda
+  // del cliente, así los umbrales quedan sincronizados entre admin y app.
+  const globalThresholds = useTierThresholds();
 
   const [variants, setVariants] = useState<any[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -101,30 +113,51 @@ export function useSalesPage() {
     };
   }, []);
 
-  /* ---------- Tier global del carrito (cross-product wholesale) ---------- */
+  /* ---------- Tier global del carrito (cross-product wholesale) ----------
+   * IMPORTANTE: cada línea calcula su tier POR SEPARADO usando sus
+   * propios umbrales (variante > producto > global) y el total del
+   * carrito. Este `cartTier` es el tier calculado con los umbrales
+   * GLOBALES únicamente — sirve para el banner "Vas a mayoreo cuando
+   * llegues a X pz" y para colorear el badge, pero NO reprice
+   * globalmente. El repricing real vive en `repricedCart`.
+   */
   const totalQty = useMemo(
     () => cart.reduce((acc, i) => acc + i.qty, 0),
     [cart]
   );
   const cartTier = useMemo(
-    () => detectCartTier(totalQty, config),
-    [totalQty, config]
+    () => tierForLine(totalQty, globalThresholds),
+    [totalQty, globalThresholds]
   );
 
-  /* ---------- Cuando cambia el tier global, reprecificamos TODO ---------- */
+  /* ---------- Reprice POR LÍNEA con umbrales resueltos ----------
+   * Cada línea:
+   *   1) Resuelve sus umbrales por cascada (variante > producto > global).
+   *   2) Calcula su tier con el total del carrito y sus umbrales.
+   *   3) Aplica priceForTier() con SUS precios y SU tier.
+   * Las líneas de preventa mantienen su precio congelado (ver is_preorder).
+   */
   const repricedCart = useMemo<CartItem[]>(
     () =>
       cart.map((i) => {
-        // Preventa / oversell: el precio se fijó al agregar (con la
-        // preventa por producto o el descuento de preventa por regla
-        // global). NO se reprice por tier — el cliente conserva el
-        // precio con el que apartó la pieza aunque el carrito suba a
-        // mayoreo. Esto también evita el "doble descuento".
+        // Preventa / oversell: precio ya fijado al agregar. No repricear.
         if (i.is_preorder) return i;
-        const price = priceForTier(i, cartTier);
-        return { ...i, tier: cartTier, price };
+        const thresholds = resolveThresholds(
+          {
+            tier_umbral_medio: i.variant_tier_umbral_medio,
+            tier_umbral_mayoreo: i.variant_tier_umbral_mayoreo,
+          },
+          {
+            tier_umbral_medio: i.product_tier_umbral_medio,
+            tier_umbral_mayoreo: i.product_tier_umbral_mayoreo,
+          },
+          globalThresholds,
+        );
+        const tier = tierForLine(totalQty, thresholds);
+        const price = priceForTier(i, tier);
+        return { ...i, tier, price };
       }),
-    [cart, cartTier]
+    [cart, totalQty, globalThresholds]
   );
 
   const total = useMemo(
@@ -140,8 +173,8 @@ export function useSalesPage() {
   }, [total, paid]);
 
   const nextTierHint = useMemo(
-    () => piecesToNextTier(totalQty, config),
-    [totalQty, config]
+    () => piecesToNextTierForLine(totalQty, globalThresholds),
+    [totalQty, globalThresholds]
   );
 
   /* ---------- Mutaciones del carrito ---------- */
@@ -245,6 +278,13 @@ export function useSalesPage() {
         price: finalPrice,
         tier: "menudeo",
         is_preorder: isPreorderLine,
+
+        // Overrides de umbrales — RAW desde la BD (se resuelven con
+        // cascada en repricedCart). NULL = hereda del siguiente nivel.
+        variant_tier_umbral_medio: v.tier_umbral_medio ?? null,
+        variant_tier_umbral_mayoreo: v.tier_umbral_mayoreo ?? null,
+        product_tier_umbral_medio: v.products?.tier_umbral_medio ?? null,
+        product_tier_umbral_mayoreo: v.products?.tier_umbral_mayoreo ?? null,
       };
 
       // Aviso al admin del modo en que se agregó

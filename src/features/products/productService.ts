@@ -18,6 +18,8 @@ export async function getProducts(): Promise<Product[]> {
       presale_discount_pct,
       presale_ends_at,
       presale_note,
+      tier_umbral_medio,
+      tier_umbral_mayoreo,
       variants (
         id,
         product_id,
@@ -31,7 +33,9 @@ export async function getProducts(): Promise<Product[]> {
         price_medio,
         price_mayoreo,
         image_url,
-        image_urls
+        image_urls,
+        tier_umbral_medio,
+        tier_umbral_mayoreo
       )
     `)
     .order("created_at", { ascending: false })
@@ -93,6 +97,8 @@ export async function updateVariant(
       | "stock"
       | "image_url"
       | "image_urls"
+      | "tier_umbral_medio"
+      | "tier_umbral_mayoreo"
     >
   >
 ) {
@@ -176,6 +182,9 @@ const PRODUCT_COLUMNS = [
   "presale_discount_pct",
   "presale_ends_at",
   "presale_note",
+  // Umbrales de tier override por producto (NULL = usa global)
+  "tier_umbral_medio",
+  "tier_umbral_mayoreo",
 ] as const
 
 // Whitelist de columnas reales en `variants`
@@ -193,6 +202,9 @@ const VARIANT_COLUMNS = [
   "is_active",
   "image_url",
   "image_urls",
+  // Umbrales de tier override por variante (NULL = hereda producto/global)
+  "tier_umbral_medio",
+  "tier_umbral_mayoreo",
 ] as const
 
 function pick<T extends Record<string, any>>(obj: T, keys: readonly string[]): Partial<T> {

@@ -2,16 +2,18 @@ import { useState } from "react";
 import {
   Calculator,
   History,
+  Layers,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { usePricingPage } from "./usePricingPage";
 import CalculatorTab from "./CalculatorTab";
 import PricingHistory from "./PricingHistory";
+import TierOverridesTab from "./TierOverridesTab";
 import TabBar from "../../components/ui/TabBar";
 
 export default function PricingPage() {
-  const [activeTab, setActiveTab] = useState<"precios" | "historial">("precios");
+  const [activeTab, setActiveTab] = useState<"precios" | "historial" | "umbrales">("precios");
 
   const {
     products,
@@ -25,6 +27,7 @@ export default function PricingPage() {
 
   const tabs = [
     { id: "precios", label: "Precios", icon: Calculator },
+    { id: "umbrales", label: "Umbrales", icon: Layers },
     { id: "historial", label: "Historial", icon: History },
   ] as const;
 
@@ -62,6 +65,18 @@ export default function PricingPage() {
                 onSave={saveAnalysis}
                 isSaving={isSaving}
               />
+            </motion.div>
+          )}
+
+          {activeTab === "umbrales" && (
+            <motion.div
+              key="umbrales"
+              initial={{ opacity: 0, x: 8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }}
+              transition={{ duration: 0.18 }}
+            >
+              <TierOverridesTab />
             </motion.div>
           )}
 

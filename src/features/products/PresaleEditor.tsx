@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Percent, DollarSign, Calendar, Clock, X } from "lucide-react"
+import { Sparkles, Percent, DollarSign, Calendar, Clock, X, AlertTriangle } from "lucide-react"
 
 import {
   computePresale,
@@ -120,6 +120,11 @@ export default function PresaleEditor({
     ? formatPresaleCountdown(fromDatetimeLocalValue(value.endsAt))
     : null
 
+  // ¿La preventa está vencida por fecha? Aviso al admin para que apague
+  // o extienda. Consideramos vencida cuando toggle=on pero preview.reason
+  // devolvió "expired" (o sea `presale_ends_at` en el pasado).
+  const isExpired = value.active && preview.reason === "expired"
+
   function set<K extends keyof PresaleEditorValue>(
     key: K,
     v: PresaleEditorValue[K],
@@ -202,6 +207,34 @@ export default function PresaleEditor({
             className="overflow-hidden"
           >
             <div className="px-4 pb-4 pt-2 space-y-3">
+              {/* Aviso de preventa vencida: la fecha límite ya pasó pero
+                  el toggle sigue activo. Ofrecemos apagar en 1 tap o
+                  extender cambiando la fecha manualmente. */}
+              {isExpired && (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-3 py-2.5 flex items-center gap-3">
+                  <AlertTriangle
+                    size={14}
+                    className="shrink-0 text-amber-600 dark:text-amber-400"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-black text-amber-800 dark:text-amber-200 leading-tight">
+                      Preventa vencida
+                    </p>
+                    <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-tight mt-0.5">
+                      Ya no se aplica descuento — el cliente ve el precio
+                      normal. Apágala o extiéndela con una nueva fecha.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...value, active: false })}
+                    className="shrink-0 px-2.5 h-8 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-widest hover:bg-amber-600"
+                  >
+                    Apagar
+                  </button>
+                </div>
+              )}
+
               {/* Tabs modo: descuento % o precio fijo */}
               <div className="flex items-center gap-1 bg-white/70 dark:bg-slate-800/60 rounded-full p-1 border border-fuchsia-200/50 dark:border-fuchsia-500/20">
                 {(

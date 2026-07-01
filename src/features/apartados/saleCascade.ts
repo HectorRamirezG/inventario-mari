@@ -1,6 +1,12 @@
 import type { Sale, SaleItem } from "../../types/database"
-import type { PricingConfig, PricingTier } from "../pricing/pricingTypes"
-import { detectCartTier, priceForTier } from "../sales/salesTier"
+import type { PricingTier } from "../pricing/pricingTypes"
+import { priceForTier } from "../sales/salesTier"
+import {
+  resolveThresholds,
+  tierForLine,
+} from "../pricing/tierResolver"
+import type { TierThresholds } from "../pricing/tierPricingService"
+import { DEFAULT_THRESHOLDS } from "../pricing/tierPricingService"
 
 export interface CascadeLine {
   id: string
@@ -16,6 +22,11 @@ export interface CascadeLine {
   price_menudeo: number | null
   price_medio: number | null
   price_mayoreo: number | null
+  // Overrides de umbrales — cascada variante > producto > global.
+  variant_tier_umbral_medio?: number | null
+  variant_tier_umbral_mayoreo?: number | null
+  product_tier_umbral_medio?: number | null
+  product_tier_umbral_mayoreo?: number | null
   // metadata interna
   _removed?: boolean
 }
@@ -25,7 +36,7 @@ export interface CascadePreview {
   lines: CascadeLine[]
   /** Líneas marcadas como removidas (devolverán stock al guardar) */
   removed: CascadeLine[]
-  /** Tier global resultante */
+  /** Tier global resultante (usando umbrales globales — informativo) */
   newTier: PricingTier
   /** Tier antes del cambio (para mostrar el "bajó de mayoreo → medio") */
   oldTier: PricingTier
@@ -40,9 +51,16 @@ export interface CascadePreview {
 /**
  * Calcula el efecto en cascada de eliminar / modificar líneas de un ticket.
  *
- * Regla maestra: el tier (menudeo/medio/mayoreo) se calcula con el TOTAL
- * de piezas restantes contra `pricing_config.umbral_*`. Si baja de nivel
- * TODAS las líneas se recalculan al nuevo precio con `priceForTier`.
+ * Regla maestra:
+ *   • El total de piezas del carrito se sigue calculando cross-product
+ *     (mayoreo cruzado se conserva).
+ *   • Cada LÍNEA calcula su tier con SUS umbrales resueltos (cascada
+ *     variante > producto > global) y el total del carrito.
+ *   • El precio de cada línea se recalcula con SU tier específico.
+ *
+ * `oldTier` y `newTier` en el preview se calculan con umbrales GLOBALES
+ * solamente — sirven para el mensaje resumen "bajó de mayoreo a medio".
+ * Cada línea individual reporta su tier real en `line.tier`.
  *
  * No toca la BD — devuelve una vista previa. La capa de servicio que
  * lo invoque se encarga del UPDATE de sale_items, sales y movements.
@@ -51,33 +69,44 @@ export function previewCascade(
   sale: Pick<Sale, "adjustment_amount" | "shipping_amount" | "paid">,
   original: CascadeLine[],
   modified: CascadeLine[],
-  cfg: Pick<PricingConfig, "umbral_medio" | "umbral_mayoreo">
+  globalThresholds: TierThresholds = DEFAULT_THRESHOLDS,
 ): CascadePreview {
   const removed = modified.filter((l) => l._removed)
   const active = modified.filter((l) => !l._removed)
 
-  // Tier antes (con líneas originales)
+  // Tier antes / después (con umbrales GLOBALES — informativo).
   const oldTotalQty = original.reduce((a, l) => a + Number(l.qty || 0), 0)
-  const oldTier = detectCartTier(oldTotalQty, cfg)
+  const oldTier = tierForLine(oldTotalQty, globalThresholds)
 
-  // Tier después
   const newTotalQty = active.reduce((a, l) => a + Number(l.qty || 0), 0)
-  const newTier = detectCartTier(newTotalQty, cfg)
+  const newTier = tierForLine(newTotalQty, globalThresholds)
 
-  // Reprice si bajó de tier
+  // Reprice POR LÍNEA con sus umbrales resueltos.
   const repriced: CascadeLine[] = active.map((l) => {
+    const thresholds = resolveThresholds(
+      {
+        tier_umbral_medio: l.variant_tier_umbral_medio,
+        tier_umbral_mayoreo: l.variant_tier_umbral_mayoreo,
+      },
+      {
+        tier_umbral_medio: l.product_tier_umbral_medio,
+        tier_umbral_mayoreo: l.product_tier_umbral_mayoreo,
+      },
+      globalThresholds,
+    )
+    const lineTier = tierForLine(newTotalQty, thresholds)
     const newPrice = priceForTier(
       {
         price_menudeo: l.price_menudeo ?? 0,
         price_medio: l.price_medio ?? 0,
         price_mayoreo: l.price_mayoreo ?? 0,
       },
-      newTier
+      lineTier,
     )
     // Si el item no tiene precio en el nuevo tier, conserva el actual
     // (puede pasar si la variante nunca tuvo precio_menudeo capturado).
     const fallback = newPrice > 0 ? newPrice : l.unit_price
-    return { ...l, tier: newTier, unit_price: fallback }
+    return { ...l, tier: lineTier, unit_price: fallback }
   })
 
   const newSubtotal = repriced.reduce(
@@ -117,14 +146,22 @@ export function previewCascade(
   }
 }
 
-/** Crea un CascadeLine a partir de un SaleItem + precios de variante */
+/** Crea un CascadeLine a partir de un SaleItem + precios de variante.
+ *  Los overrides de umbrales son opcionales — si no se pasan, la línea
+ *  usará solo los umbrales globales al repricear. */
 export function toCascadeLine(
   item: SaleItem,
   variantPrices?: {
     price_menudeo: number | null
     price_medio: number | null
     price_mayoreo: number | null
-  }
+    tier_umbral_medio?: number | null
+    tier_umbral_mayoreo?: number | null
+  },
+  productOverrides?: {
+    tier_umbral_medio?: number | null
+    tier_umbral_mayoreo?: number | null
+  },
 ): CascadeLine {
   return {
     id: item.id,
@@ -139,5 +176,9 @@ export function toCascadeLine(
     price_menudeo: variantPrices?.price_menudeo ?? null,
     price_medio: variantPrices?.price_medio ?? null,
     price_mayoreo: variantPrices?.price_mayoreo ?? null,
+    variant_tier_umbral_medio: variantPrices?.tier_umbral_medio ?? null,
+    variant_tier_umbral_mayoreo: variantPrices?.tier_umbral_mayoreo ?? null,
+    product_tier_umbral_medio: productOverrides?.tier_umbral_medio ?? null,
+    product_tier_umbral_mayoreo: productOverrides?.tier_umbral_mayoreo ?? null,
   }
 }
