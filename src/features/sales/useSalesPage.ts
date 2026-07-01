@@ -17,8 +17,15 @@ import type { PricingConfig } from "../pricing/pricingTypes";
 import type { Sale } from "../../types/database";
 import { sound } from "../../lib/sound";
 import { getBusinessRules } from "../settings/businessRulesService";
+import { computePresale } from "../products/presaleService";
 import { confirmAction } from "../../lib/confirm";
 import { debug } from "../../lib/debug";
+
+// Cap defensivo para líneas de preventa/oversell cuando no hay stock
+// físico. Aunque el admin quiera vender sin stock, no queremos que un
+// error de teclado agregue "50" piezas al carrito de una variante que
+// aún no llegó. Mismo valor que la tienda del cliente.
+const PREORDER_CAP = 5;
 
 const DEFAULT_CONFIG: PricingConfig = {
   id: 1,
@@ -108,6 +115,12 @@ export function useSalesPage() {
   const repricedCart = useMemo<CartItem[]>(
     () =>
       cart.map((i) => {
+        // Preventa / oversell: el precio se fijó al agregar (con la
+        // preventa por producto o el descuento de preventa por regla
+        // global). NO se reprice por tier — el cliente conserva el
+        // precio con el que apartó la pieza aunque el carrito suba a
+        // mayoreo. Esto también evita el "doble descuento".
+        if (i.is_preorder) return i;
         const price = priceForTier(i, cartTier);
         return { ...i, tier: cartTier, price };
       }),
@@ -135,18 +148,60 @@ export function useSalesPage() {
   const addToCart = useCallback((v: any) => {
     const rules = getBusinessRules();
     const stockNum = Number(v.stock) || 0;
+
+    // Precio menudeo base de la variante (referencia para preventa).
+    const menudeoBase = Number(v.price_menudeo) || Number(v.price) || 0;
+
+    // ¿El producto padre tiene preventa por PRODUCTO activa? (nueva
+    // mecánica). Reemplaza el precio menudeo con el precio de preventa
+    // y marca la línea como preorder para no repricear por tier.
+    const productForPresale = {
+      presale_active: v.products?.presale_active ?? null,
+      presale_price: v.products?.presale_price ?? null,
+      presale_discount_pct: v.products?.presale_discount_pct ?? null,
+      presale_ends_at: v.products?.presale_ends_at ?? null,
+      presale_note: v.products?.presale_note ?? null,
+    };
+    const productPresale = computePresale(productForPresale, menudeoBase);
+
+    // Preventa por REGLA VIEJA: block_oversell=off + stock=0. Precio
+    // menudeo con descuento global (`preorder_discount_percent`).
+    const preorderPct = Math.max(
+      0,
+      Math.min(50, Number(rules.preorder_discount_percent) || 0),
+    );
+    const oversellAvailable = !rules.block_oversell && stockNum <= 0;
+
+    // ¿Esta línea se está agregando como preventa?
+    // Prioridad: preventa por producto (explícita del admin) > regla vieja.
+    const isPreorderLine = productPresale.active || oversellAvailable;
+
     setCart((prev) => {
       const exist = prev.find((i) => i.variant_id === v.id);
       const currentQty = exist?.qty ?? 0;
       const nextQty = currentQty + 1;
 
-      // Regla: bloquear venta sin stock (incluye sumar al carrito por encima)
-      if (rules.block_oversell && nextQty > stockNum) {
+      // Cap defensivo por línea. Cuando hay stock físico, respetamos ese
+      // stock. Cuando la preventa aplica (producto o regla) y NO hay
+      // stock, usamos PREORDER_CAP para evitar líneas absurdas.
+      const cap = productPresale.active
+        ? stockNum > 0 ? stockNum : PREORDER_CAP
+        : oversellAvailable
+          ? PREORDER_CAP
+          : stockNum;
+
+      // Bloqueo defensivo: si preventa NO aplica y no hay stock, avisar.
+      if (!isPreorderLine && rules.block_oversell && nextQty > stockNum) {
         if (stockNum <= 0) {
-          toast.error("Sin stock disponible — pre-venta deshabilitada");
+          toast.error("Sin stock disponible — preventa deshabilitada");
         } else {
           toast.error(`Solo hay ${stockNum} pz disponibles`);
         }
+        return prev;
+      }
+      // Cap de preventa: no permitir pasar del cap defensivo.
+      if (isPreorderLine && nextQty > cap) {
+        toast.error(`Cap de preventa: máximo ${cap} pz por línea`);
         return prev;
       }
 
@@ -156,9 +211,19 @@ export function useSalesPage() {
         );
       }
 
-      const menudeo = Number(v.price_menudeo) || Number(v.price) || 0;
+      const menudeo = menudeoBase;
       const medio = Number(v.price_medio) || 0;
       const mayoreo = Number(v.price_mayoreo) || 0;
+
+      // Precio final de la línea:
+      //   - Preventa por producto → precio efectivo (fijo o con %)
+      //   - Preventa por regla vieja → menudeo × (1 - preorderPct/100)
+      //   - Normal → menudeo (se repricea después según tier del carrito)
+      const finalPrice = productPresale.active
+        ? productPresale.effectivePrice
+        : oversellAvailable && preorderPct > 0
+          ? Math.round(menudeo * (1 - preorderPct / 100) * 100) / 100
+          : menudeo;
 
       const newItem: CartItem = {
         variant_id: v.id,
@@ -175,10 +240,29 @@ export function useSalesPage() {
         price_medio: medio,
         price_mayoreo: mayoreo,
 
-        // Estos dos se recalculan con `repricedCart` según el tier global.
-        price: menudeo,
+        // Estos dos se recalculan con `repricedCart` según el tier global,
+        // EXCEPTO cuando is_preorder=true (ver repricedCart).
+        price: finalPrice,
         tier: "menudeo",
+        is_preorder: isPreorderLine,
       };
+
+      // Aviso al admin del modo en que se agregó
+      if (productPresale.active) {
+        toast.success(
+          `Preventa · ${
+            productPresale.savingPct > 0
+              ? `-${Math.round(productPresale.savingPct)}%`
+              : "precio especial"
+          }`,
+          { icon: "🎁", duration: 1600 },
+        );
+      } else if (oversellAvailable && preorderPct > 0) {
+        toast(`Sin stock · Preventa -${preorderPct}%`, {
+          icon: "📦",
+          duration: 1600,
+        });
+      }
 
       return [...prev, newItem];
     });
@@ -190,6 +274,15 @@ export function useSalesPage() {
     setCart((prev) =>
       prev.map((i) => {
         if (i.variant_id !== id) return i;
+        // Preventa: usa cap defensivo (stock si hay, PREORDER_CAP si no).
+        if (i.is_preorder) {
+          const cap = i.stock > 0 ? i.stock : PREORDER_CAP;
+          if (qty > cap) {
+            toast.error(`Cap de preventa: máximo ${cap} pz`);
+            return i;
+          }
+          return { ...i, qty };
+        }
         if (rules.block_oversell && qty > i.stock) {
           toast.error(`Solo hay ${i.stock} pz disponibles`);
           return i;

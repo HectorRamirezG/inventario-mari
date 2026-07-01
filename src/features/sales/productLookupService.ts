@@ -19,6 +19,14 @@ export interface ProductVariantLookup {
     id: string;
     name: string;
     cost: number | null;
+    // Campos de PREVENTA por producto (nueva mecánica del admin).
+    // Todos opcionales/nullable: los productos sin preventa dejan estas
+    // columnas en NULL y el UI las trata como inactivas.
+    presale_active?: boolean | null;
+    presale_price?: number | null;
+    presale_discount_pct?: number | null;
+    presale_ends_at?: string | null;
+    presale_note?: string | null;
   } | null;
 }
 
@@ -36,7 +44,12 @@ const VARIANT_SELECT = `
   products (
     id,
     name,
-    cost
+    cost,
+    presale_active,
+    presale_price,
+    presale_discount_pct,
+    presale_ends_at,
+    presale_note
   )
 `;
 

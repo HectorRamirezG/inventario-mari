@@ -44,6 +44,7 @@ import {
   useBusinessRules,
   calculateAutoDiscount,
 } from "../settings/businessRulesService";
+import { computePresale } from "../products/presaleService";
 
 const TIER_TONE: Record<string, { bg: string; text: string; ring: string }> = {
   menudeo: {
@@ -450,20 +451,70 @@ export default function SalesPage() {
                   (c: any) => c.variant_id === r.id,
                 );
                 const active = !!inCart;
-                const lowStock = (r.stock ?? 0) <= 0;
+                const stockNum = Number(r.stock) || 0;
+                const outOfStock = stockNum <= 0;
+
+                // Preventa por PRODUCTO (nueva mecánica del admin).
+                // Reemplaza precio menudeo con precio efectivo mientras
+                // esté activa. Independiente de la regla vieja.
+                const menudeoBase =
+                  Number(r.price_menudeo) || Number(r.price) || 0;
+                const productPresale = computePresale(
+                  {
+                    presale_active: r.products?.presale_active ?? null,
+                    presale_price: r.products?.presale_price ?? null,
+                    presale_discount_pct:
+                      r.products?.presale_discount_pct ?? null,
+                    presale_ends_at: r.products?.presale_ends_at ?? null,
+                    presale_note: r.products?.presale_note ?? null,
+                  },
+                  menudeoBase,
+                );
+
+                // Preventa por regla vieja (block_oversell off + stock=0).
+                const oldPreorderPct = Math.max(
+                  0,
+                  Math.min(50, Number(rules.preorder_discount_percent) || 0),
+                );
+                const oversellAvailable =
+                  !rules.block_oversell && outOfStock;
+
+                // ¿La caja permite agregar esta variante ahora?
+                // - Sí, si hay stock.
+                // - Sí, si el producto tiene preventa activa (sin stock también).
+                // - Sí, si block_oversell está apagada (preventa por regla).
+                const disabled =
+                  outOfStock && !productPresale.active && !oversellAvailable;
+                const isPreorderMode =
+                  productPresale.active || oversellAvailable;
+
+                // Precio mostrado y descuento visual.
+                const displayPrice = productPresale.active
+                  ? productPresale.effectivePrice
+                  : oversellAvailable && oldPreorderPct > 0
+                    ? Math.round(menudeoBase * (1 - oldPreorderPct / 100) * 100) / 100
+                    : menudeoBase;
+                const showStrike = displayPrice < menudeoBase;
+                const savingPctForBadge = productPresale.active
+                  ? Math.round(productPresale.savingPct)
+                  : oldPreorderPct;
 
                 return (
                   <motion.button
                     key={r.id}
                     whileTap={{ scale: 0.97 }}
-                    onClick={() => !lowStock && actions.addToCart(r)}
-                    disabled={lowStock}
+                    onClick={() => !disabled && actions.addToCart(r)}
+                    disabled={disabled}
                     className={`w-full flex justify-between items-center p-3 rounded-2xl border transition-all text-left ${
-                      lowStock
+                      disabled
                         ? "bg-slate-50/60 border-slate-100 opacity-50 cursor-not-allowed"
-                        : active
-                        ? "bg-primary text-white border-primary shadow-bloom"
-                        : "bg-white border-slate-100 hover:border-primary/20"
+                        : isPreorderMode
+                          ? active
+                            ? "bg-fuchsia-500 text-white border-fuchsia-500 shadow-sm"
+                            : "bg-fuchsia-50 border-fuchsia-200 hover:border-fuchsia-400"
+                          : active
+                            ? "bg-primary text-white border-primary shadow-bloom"
+                            : "bg-white border-slate-100 hover:border-primary/20"
                     }`}
                   >
                     <div className="min-w-0 pr-2">
@@ -472,26 +523,49 @@ export default function SalesPage() {
                       </p>
                       <p
                         className={`text-[9px] truncate ${
-                          active ? "text-white/70" : "text-slate-400"
+                          active
+                            ? "text-white/70"
+                            : isPreorderMode
+                              ? "text-fuchsia-700"
+                              : "text-slate-400"
                         }`}
                       >
                         {r.products?.name}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-xs font-black italic tabular-nums">
-                        {formatMoney(r.price_menudeo || r.price)}
+                      <p className="text-xs font-black italic tabular-nums leading-tight">
+                        {formatMoney(displayPrice)}
                       </p>
+                      {showStrike && (
+                        <p
+                          className={`text-[8px] font-bold tabular-nums line-through ${
+                            active ? "text-white/50" : "text-slate-400"
+                          }`}
+                        >
+                          {formatMoney(menudeoBase)}
+                        </p>
+                      )}
                       <p
-                        className={`text-[8px] font-bold uppercase ${
-                          lowStock
+                        className={`text-[8px] font-black uppercase tracking-wide ${
+                          disabled
                             ? "text-rose-500"
-                            : active
-                            ? "text-white/70"
-                            : "text-emerald-500"
+                            : isPreorderMode
+                              ? active
+                                ? "text-white/90"
+                                : "text-fuchsia-600"
+                              : active
+                                ? "text-white/70"
+                                : "text-emerald-500"
                         }`}
                       >
-                        {lowStock ? "Sin stock" : `${r.stock} pz`}
+                        {disabled
+                          ? "Sin stock"
+                          : isPreorderMode
+                            ? savingPctForBadge > 0
+                              ? `Preventa · -${savingPctForBadge}%`
+                              : "Preventa"
+                            : `${stockNum} pz`}
                       </p>
                       {inCart && (
                         <p className="text-[8px] font-black mt-0.5 text-white/80">
@@ -648,7 +722,10 @@ export default function SalesPage() {
                 </motion.div>
               ) : (
                 state.cart.map((item: any) => {
-                  const overStock = item.qty > item.stock;
+                  // Sólo consideramos "overStock" cuando la línea NO es
+                  // preventa. En preventa la qty > stock es esperada.
+                  const overStock = !item.is_preorder && item.qty > item.stock;
+                  const isPreorder = !!item.is_preorder;
                   return (
                     <motion.div
                       key={item.variant_id}
@@ -659,12 +736,19 @@ export default function SalesPage() {
                       className={`flex items-center gap-2 p-3 rounded-xl border ${
                         overStock
                           ? "bg-rose-50/60 border-rose-100"
-                          : "bg-slate-50/50 border-slate-100"
+                          : isPreorder
+                            ? "bg-fuchsia-50/40 border-fuchsia-100"
+                            : "bg-slate-50/50 border-slate-100"
                       }`}
                     >
                       <div className="flex-1 min-w-0">
-                        <p className="text-[9px] font-black text-primary uppercase">
+                        <p className="text-[9px] font-black text-primary uppercase flex items-center gap-1">
                           {item.variant_name}
+                          {isPreorder && (
+                            <span className="px-1 py-0.5 rounded bg-fuchsia-500 text-white text-[7px] font-black uppercase tracking-widest leading-none">
+                              Preventa
+                            </span>
+                          )}
                         </p>
                         <p className="text-[11px] font-black text-slate-800 truncate">
                           {item.name}

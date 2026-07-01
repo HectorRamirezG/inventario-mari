@@ -21,6 +21,14 @@ export interface CartItem {
   // Precio efectivo aplicado en este momento (depende del tier global del carrito)
   price: number;
   tier: PricingTier;
+
+  /**
+   * Línea de PREVENTA / OVERSELL. Cuando es true, el precio ya fue
+   * decidido al agregar (por preventa por producto o descuento de
+   * preventa por regla global) y NO debe reprice-arse cuando el tier
+   * del carrito cambia. Además, la UI mostrará etiqueta "Preventa".
+   */
+  is_preorder?: boolean;
 }
 
 /**
