@@ -3,49 +3,88 @@ import type { Product, Variant } from "../../types/database"
 import { debug } from "../../lib/debug"
 
 export async function getProducts(): Promise<Product[]> {
-  const { data, error } = await supabase
-    .from("products")
-    .select(`
+  // Select con TODAS las columnas nuevas (rework 2026-07-01). Si la BD
+  // no tiene las migraciones corridas, hacemos fallback silencioso al
+  // select básico. Así el catálogo del admin siempre carga aunque
+  // Supabase esté parcialmente migrado.
+  const SELECT_FULL = `
+    id,
+    name,
+    category,
+    cost,
+    min_stock,
+    is_active,
+    image_url,
+    tier_umbral_medio,
+    tier_umbral_mayoreo,
+    variants (
       id,
-      name,
-      category,
-      cost,
-      min_stock,
+      product_id,
+      variant_name,
+      sku,
+      stock,
       is_active,
+      cost_override,
+      price,
+      price_menudeo,
+      price_medio,
+      price_mayoreo,
       image_url,
+      image_urls,
       tier_umbral_medio,
       tier_umbral_mayoreo,
-      variants (
-        id,
-        product_id,
-        variant_name,
-        sku,
-        stock,
-        is_active,
-        cost_override,
-        price,
-        price_menudeo,
-        price_medio,
-        price_mayoreo,
-        image_url,
-        image_urls,
-        tier_umbral_medio,
-        tier_umbral_mayoreo,
-        presale_active,
-        presale_price,
-        presale_discount_pct,
-        presale_ends_at,
-        presale_note
-      )
-    `)
-    .order("created_at", { ascending: false })
+      presale_active,
+      presale_price,
+      presale_discount_pct,
+      presale_ends_at,
+      presale_note
+    )
+  `
+  const SELECT_BASIC = `
+    id,
+    name,
+    category,
+    cost,
+    min_stock,
+    is_active,
+    image_url,
+    variants (
+      id,
+      product_id,
+      variant_name,
+      sku,
+      stock,
+      is_active,
+      cost_override,
+      price,
+      price_menudeo,
+      price_medio,
+      price_mayoreo,
+      image_url,
+      image_urls
+    )
+  `
 
-  if (error) {
-    debug.error(error)
+  let result = await supabase
+    .from("products")
+    .select(SELECT_FULL)
+    .order("created_at", { ascending: false })
+  if (result.error && /column .* does not exist/i.test(result.error.message)) {
+    debug.warn(
+      "[getProducts] columnas nuevas faltan — corre las migraciones (20260702, 20260703) para habilitar preventa por variante y umbrales.",
+    )
+    result = await supabase
+      .from("products")
+      .select(SELECT_BASIC)
+      .order("created_at", { ascending: false })
+  }
+
+  if (result.error) {
+    debug.error(result.error)
     return []
   }
 
-  const raw = (data ?? []) as Product[]
+  const raw = (result.data ?? []) as Product[]
 
   return raw
     .filter(p => p.is_active !== false)

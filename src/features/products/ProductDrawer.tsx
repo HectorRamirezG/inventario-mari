@@ -16,6 +16,7 @@ import {
   Check,
   ChevronDown,
   Bell,
+  AlertTriangle,
 } from "lucide-react"
 import { toast } from "react-hot-toast"
 
@@ -1689,6 +1690,91 @@ function VariantAccordion({
                 onChange={setVariantPresale}
                 referencePrice={Number(pm) || Number(variant.price_menudeo) || 0}
               />
+
+              {/* Aviso: hermanas con preventa activa. Ayuda al admin a
+                  detectar preventas "residuales" de la migración vieja
+                  (cuando la preventa era por producto y se copió a
+                  todas las variantes activas). */}
+              {(() => {
+                const siblingsWithPresale = siblingVariants.filter(
+                  (sv) => !!sv.presale_active,
+                )
+                if (siblingsWithPresale.length === 0) return null
+                return (
+                  <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-3 py-2 flex items-start gap-2">
+                    <AlertTriangle
+                      size={12}
+                      className="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-black text-amber-800 dark:text-amber-200 uppercase tracking-widest">
+                        {siblingsWithPresale.length}{" "}
+                        {siblingsWithPresale.length === 1
+                          ? "otra variante"
+                          : "otras variantes"}{" "}
+                        con preventa
+                      </p>
+                      <p className="text-[10px] font-bold text-amber-700 dark:text-amber-300 leading-tight mt-0.5">
+                        {siblingsWithPresale
+                          .map((sv) => sv.variant_name)
+                          .slice(0, 3)
+                          .join(", ")}
+                        {siblingsWithPresale.length > 3
+                          ? ` y ${siblingsWithPresale.length - 3} más`
+                          : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (
+                          !confirm(
+                            `¿Apagar preventa en las ${siblingsWithPresale.length} variantes hermanas? Esta variante NO se toca.`,
+                          )
+                        ) {
+                          return
+                        }
+                        setSaving(true)
+                        try {
+                          const results = await Promise.allSettled(
+                            siblingsWithPresale.map((sv) =>
+                              updateVariant(sv.id, {
+                                presale_active: false,
+                                presale_price: null,
+                                presale_discount_pct: null,
+                                presale_ends_at: null,
+                                presale_note: null,
+                              } as any),
+                            ),
+                          )
+                          const ok = results.filter(
+                            (r) => r.status === "fulfilled",
+                          ).length
+                          const fail = results.length - ok
+                          if (fail === 0) {
+                            toast.success(
+                              `Preventa apagada en ${ok} ${ok === 1 ? "variante" : "variantes"}`,
+                            )
+                          } else if (ok > 0) {
+                            toast(`Apagada en ${ok}, falló en ${fail}`, {
+                              icon: "⚠️",
+                            })
+                          } else {
+                            toast.error("No se pudo apagar")
+                          }
+                          onSaved()
+                        } finally {
+                          setSaving(false)
+                        }
+                      }}
+                      disabled={saving}
+                      className="shrink-0 px-2.5 h-8 rounded-full bg-amber-500 hover:bg-amber-600 text-white text-[9px] font-black uppercase tracking-widest disabled:opacity-50"
+                    >
+                      Apagar todas
+                    </button>
+                  </div>
+                )
+              })()}
 
               {variantPresale.active && siblingVariants.length > 0 && (
                 <button

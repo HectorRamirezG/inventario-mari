@@ -25,6 +25,7 @@ import { useAuth } from "../../lib/useAuth"
 import { haptic } from "../../lib/sound"
 import { getStoreInfo } from "../../lib/useStoreInfo"
 import { getBusinessRules } from "../settings/businessRulesService"
+import { useBusinessRules } from "../settings/businessRulesService"
 import { formatMoney } from "../../lib/format"
 import { imageAvatar } from "../../lib/imageTransform"
 import StickerWaButton from "./StickerWaButton"
@@ -160,6 +161,11 @@ export default function BuySheet({
   const [qty, setQty] = useState<Record<string, number>>({})
   // Refs por variante para hacer scrollIntoView a la preseleccionada.
   const variantRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  // Reglas de negocio: `show_stock_to_client` controla si mostramos
+  // cantidades exactas al cliente. Cuando está apagada (default), solo
+  // damos mensajes suaves ("pocas piezas", "por encargo") sin fundir
+  // al cliente con números crudos.
+  const bRules = useBusinessRules()
 
   // Reinicia cantidades cuando se abre con otro producto
   useEffect(() => {
@@ -631,11 +637,13 @@ export default function BuySheet({
                             )}
                           </div>
 
-                          {/* Etiqueta debajo del precio: prioridad
-                              agotado > preventa > stock urgente > stock normal */}
+                          {/* Etiqueta debajo del precio. Humaniza el
+                              mensaje y NO muestra stock crudo al cliente
+                              a menos que la regla `show_stock_to_client`
+                              esté explícitamente encendida. */}
                           {out ? (
                             <p className="text-[9px] font-black uppercase text-rose-500">
-                              Agotado
+                              Se agotó
                             </p>
                           ) : isPreorderVariant ? (
                             <p className="text-[9px] font-black uppercase text-fuchsia-600 dark:text-fuchsia-400 flex items-center gap-1 flex-wrap">
@@ -652,7 +660,16 @@ export default function BuySheet({
                                 </span>
                               )}
                             </p>
-                          ) : v.stock <= 3 && v.stock > 0 ? (
+                          ) : v.stock === 0 ? (
+                            /* Sin stock físico + block_oversell=off:
+                               mensaje discreto tipo "bajo pedido" en vez
+                               de un número negativo o "sin stock". */
+                            <p className="text-[9px] font-black uppercase text-slate-400">
+                              Bajo pedido
+                            </p>
+                          ) : bRules.show_stock_to_client && v.stock <= 3 ? (
+                            /* Urgencia sutil solo si el admin quiso
+                               mostrar stock. Usa el label configurable. */
                             <p
                               className={`text-[9px] font-black uppercase ${
                                 v.stock === 1
@@ -660,17 +677,11 @@ export default function BuySheet({
                                   : "text-amber-600"
                               }`}
                             >
-                              {v.stock === 1 ? "🔥 ¡ÚLTIMA!" : `¡Últimas ${v.stock}!`}
+                              {v.stock === 1
+                                ? "¡Última!"
+                                : `${bRules.low_stock_label || "Últimas"} ${v.stock}`}
                             </p>
-                          ) : v.stock > 0 ? (
-                            <p className="text-[9px] text-slate-400 font-bold">
-                              {v.stock} disponibles
-                            </p>
-                          ) : (
-                            <p className="text-[9px] font-black uppercase text-slate-400">
-                              Sin stock físico
-                            </p>
-                          )}
+                          ) : null}
 
                           {/* Nota de preventa (mensaje del admin), separada
                               del countdown para que quepa en móvil. */}
@@ -727,10 +738,10 @@ export default function BuySheet({
                           <AlertTriangle size={11} className="shrink-0" />
                           <span className="flex-1">
                             {isPreorderVariant
-                              ? `Tope de preventa: ${effectiveStock} piezas.`
+                              ? `Tope de preventa alcanzado.`
                               : v.stock > 0
-                                ? `Solo había ${v.stock} de este tono · ya las tienes todas.`
-                                : `Tope sin stock: ${effectiveStock} piezas.`}
+                                ? `Llegaste al máximo disponible de este tono.`
+                                : `Tope por encargo alcanzado.`}
                           </span>
                           {/* Quitar variante completa en 1 tap — antes el
                               cliente tenía que hacer N taps en el botón -.

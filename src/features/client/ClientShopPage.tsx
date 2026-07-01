@@ -39,7 +39,6 @@ import { sound } from "../../lib/sound"
 import { haptic } from "../../lib/sound"
 import { useWishlist } from "../../lib/useWishlist"
 import { useLongPress } from "../../lib/useLongPress"
-import SmartLocationInput from "../../components/ui/SmartLocationInput"
 import VariantImageCarousel from "../../components/ui/VariantImageCarousel"
 import ProductLightbox, { type LightboxSlide } from "../../components/ui/ProductLightbox"
 import Skeleton from "../../components/ui/Skeleton"
@@ -98,8 +97,6 @@ import {
 import {
   computePresale,
   formatPresaleCountdown,
-  type PresaleFields,
-  type PresaleInfo,
 } from "../products/presaleService"
 
 // Loader único del BuySheet — se reutiliza para el lazy() y para el
@@ -369,28 +366,78 @@ export default function ClientShopPage() {
   useEffect(() => {
     let alive = true
     const loadCatalog = async () => {
-      const [{ data: prods }, { data: vars }, { data: reviewsRaw }] = await Promise.all([
-        supabase
+      // Select "extendido" con todos los campos nuevos (preventa por
+      // variante, overrides de tier). Si la migración correspondiente
+      // aún no corrió en Supabase, hacemos fallback silencioso al select
+      // básico. Así el catálogo siempre carga aunque la BD esté
+      // parcialmente migrada.
+      const VARIANT_SELECT_FULL =
+        "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls,cost_override,tier_umbral_medio,tier_umbral_mayoreo,presale_active,presale_price,presale_discount_pct,presale_ends_at,presale_note"
+      const VARIANT_SELECT_BASIC =
+        "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls,cost_override"
+      const PRODUCT_SELECT_FULL =
+        "id,name,category,image_url,created_at,cost,tier_umbral_medio,tier_umbral_mayoreo"
+      const PRODUCT_SELECT_BASIC =
+        "id,name,category,image_url,created_at,cost"
+
+      // Intento robusto: si el select con las columnas nuevas falla por
+      // "column does not exist", reintentamos con el básico. Cubre el
+      // caso donde la migración SQL aún no se ha corrido en Supabase.
+      // Casts a `any` porque Supabase genera tipos dinámicos por select
+      // string y los dos paths tienen shapes distintas.
+      let prods: any[] = []
+      {
+        const q: any = await supabase
           .from("products")
-          .select(
-            "id,name,category,image_url,created_at,cost,tier_umbral_medio,tier_umbral_mayoreo",
-          )
+          .select(PRODUCT_SELECT_FULL)
           .eq("is_active", true)
-          .order("name"),
-        supabase
+          .order("name")
+        if (q.error && /column .* does not exist/i.test(q.error.message)) {
+          const fallback: any = await supabase
+            .from("products")
+            .select(PRODUCT_SELECT_BASIC)
+            .eq("is_active", true)
+            .order("name")
+          prods = fallback.data ?? []
+          if (typeof console !== "undefined") {
+            console.warn(
+              "[ClientShop] products: columnas nuevas faltan — corre migración 20260702 en Supabase.",
+            )
+          }
+        } else {
+          prods = q.data ?? []
+        }
+      }
+
+      let vars: any[] = []
+      {
+        const q: any = await supabase
           .from("variants")
-          .select(
-            "id,product_id,variant_name,sku,stock,price,price_menudeo,price_medio,price_mayoreo,image_url,image_urls,cost_override,tier_umbral_medio,tier_umbral_mayoreo,presale_active,presale_price,presale_discount_pct,presale_ends_at,presale_note",
-          )
-          .eq("is_active", true),
-        // Stats de reseñas publicadas para enriquecer las cards del catálogo.
-        // Tolerante: si la tabla aún no existe, ignoramos silenciosamente.
-        supabase
-          .from("reviews")
-          .select("product_id,rating")
-          .eq("status", "published")
-          .limit(5000),
-      ])
+          .select(VARIANT_SELECT_FULL)
+          .eq("is_active", true)
+        if (q.error && /column .* does not exist/i.test(q.error.message)) {
+          const fallback: any = await supabase
+            .from("variants")
+            .select(VARIANT_SELECT_BASIC)
+            .eq("is_active", true)
+          vars = fallback.data ?? []
+          if (typeof console !== "undefined") {
+            console.warn(
+              "[ClientShop] variants: columnas nuevas faltan — corre migraciones 20260702 y 20260703 en Supabase.",
+            )
+          }
+        } else {
+          vars = q.data ?? []
+        }
+      }
+
+      // Stats de reseñas publicadas para enriquecer las cards del catálogo.
+      // Tolerante: si la tabla aún no existe, ignoramos silenciosamente.
+      const { data: reviewsRaw } = await supabase
+        .from("reviews")
+        .select("product_id,rating")
+        .eq("status", "published")
+        .limit(5000)
       if (!alive) return
       // Mapa product.id → cost para resolver el costo de cada variante.
       // Variante sin cost_override hereda el cost del producto padre.

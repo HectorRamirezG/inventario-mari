@@ -17,6 +17,7 @@ const listeners = new Set<(t: TierThresholds) => void>()
 async function load(): Promise<TierThresholds> {
   if (cache) return cache
   try {
+    // 1) Fuente única (rework 2026-07-01): app_settings.tier_thresholds.
     const { data } = await supabase
       .from("app_settings")
       .select("value")
@@ -31,7 +32,30 @@ async function load(): Promise<TierThresholds> {
         ),
       }
     } else {
-      cache = { ...DEFAULT_THRESHOLDS }
+      // 2) Fallback legacy: si nadie ha guardado desde Settings todavía,
+      //    leemos los umbrales viejos de `pricing_config` para no forzar
+      //    al admin a re-configurar. Cubre el caso donde solo se corrió
+      //    la migración vieja o donde el user nunca abrió Settings tras
+      //    el rework.
+      try {
+        const { data: cfg } = await supabase
+          .from("pricing_config")
+          .select("umbral_medio,umbral_mayoreo")
+          .eq("id", 1)
+          .maybeSingle()
+        if (cfg) {
+          cache = {
+            medio_min_qty:
+              Number(cfg.umbral_medio) || DEFAULT_THRESHOLDS.medio_min_qty,
+            mayoreo_min_qty:
+              Number(cfg.umbral_mayoreo) || DEFAULT_THRESHOLDS.mayoreo_min_qty,
+          }
+        } else {
+          cache = { ...DEFAULT_THRESHOLDS }
+        }
+      } catch {
+        cache = { ...DEFAULT_THRESHOLDS }
+      }
     }
   } catch {
     cache = { ...DEFAULT_THRESHOLDS }
