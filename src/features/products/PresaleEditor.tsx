@@ -101,12 +101,21 @@ interface Props {
    *  para mostrar preview del descuento aplicado. Si es 0/null, el preview
    *  se oculta y solo mostramos el % o precio literal. */
   referencePrice: number
+  /**
+   * Callback opcional al hacer click en el toggle. Se dispara CON el
+   * valor `next` (true=encendiendo, false=apagando) para que el padre
+   * pueda persistir INMEDIATAMENTE sin esperar al botón "Guardar".
+   * Útil para operaciones simples como "apagar preventa" (limpia todo)
+   * o "encender preventa" (crea un draft en la BD).
+   */
+  onToggle?: (nextActive: boolean) => void
 }
 
 export default function PresaleEditor({
   value,
   onChange,
   referencePrice,
+  onToggle,
 }: Props) {
   // Preview del precio con descuento aplicado. Reusamos la MISMA función
   // del cliente para garantizar que "lo que ve el admin al configurar"
@@ -180,7 +189,14 @@ export default function PresaleEditor({
         <input
           type="checkbox"
           checked={value.active}
-          onChange={(e) => set("active", e.target.checked)}
+          onChange={(e) => {
+            const next = e.target.checked
+            onChange({ ...value, active: next })
+            // Auto-save: si el padre expone `onToggle`, notificamos
+            // ANTES de que el user tenga que dar click al botón Guardar.
+            // Útil para "apagar preventa" (limpia todo en la BD de un tap).
+            onToggle?.(next)
+          }}
           className="sr-only peer"
         />
         <div

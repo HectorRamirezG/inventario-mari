@@ -1689,6 +1689,38 @@ function VariantAccordion({
                 value={variantPresale}
                 onChange={setVariantPresale}
                 referencePrice={Number(pm) || Number(variant.price_menudeo) || 0}
+                onToggle={async (nextActive) => {
+                  // Auto-save SOLO al APAGAR (operación limpia:
+                  // marca inactivo + nullea todos los campos). Al
+                  // encender NO auto-guardamos porque el user aún
+                  // tiene que llenar precio/fecha y darle Guardar.
+                  if (nextActive) return
+                  setSaving(true)
+                  try {
+                    await updateVariant(variant.id, {
+                      presale_active: false,
+                      presale_price: null,
+                      presale_discount_pct: null,
+                      presale_ends_at: null,
+                      presale_note: null,
+                    } as any)
+                    toast.success(
+                      `Preventa apagada en "${variant.variant_name ?? "variante"}"`,
+                    )
+                    onSaved()
+                  } catch (e: any) {
+                    // Si RLS bloquea o hay otro problema, avisamos
+                    // claramente y REVERTIMOS el toggle visual para
+                    // no dejar al admin creyendo que se apagó.
+                    debug.error("[VariantAccordion.presaleToggleOff]", e)
+                    toast.error(
+                      e?.message ?? "No se pudo apagar la preventa",
+                    )
+                    setVariantPresale((prev) => ({ ...prev, active: true }))
+                  } finally {
+                    setSaving(false)
+                  }
+                }}
               />
 
               {/* Aviso: hermanas con preventa activa. Ayuda al admin a
@@ -1750,17 +1782,35 @@ function VariantAccordion({
                           const ok = results.filter(
                             (r) => r.status === "fulfilled",
                           ).length
-                          const fail = results.length - ok
+                          const failed = results.filter(
+                            (r) => r.status === "rejected",
+                          ) as PromiseRejectedResult[]
+                          const fail = failed.length
                           if (fail === 0) {
                             toast.success(
                               `Preventa apagada en ${ok} ${ok === 1 ? "variante" : "variantes"}`,
                             )
                           } else if (ok > 0) {
-                            toast(`Apagada en ${ok}, falló en ${fail}`, {
-                              icon: "⚠️",
-                            })
+                            const firstErr = failed[0]?.reason?.message ?? "error desconocido"
+                            debug.error(
+                              "[VariantAccordion.apagarTodas] fallos parciales",
+                              failed,
+                            )
+                            toast.error(
+                              `Apagada en ${ok}, ${fail} falló · ${firstErr}`,
+                              { duration: 4000 },
+                            )
                           } else {
-                            toast.error("No se pudo apagar")
+                            // Todas fallaron — típicamente RLS o token expirado.
+                            const firstErr = failed[0]?.reason?.message ?? "error desconocido"
+                            debug.error(
+                              "[VariantAccordion.apagarTodas] todas fallaron",
+                              failed,
+                            )
+                            toast.error(
+                              `No se pudo apagar: ${firstErr}`,
+                              { duration: 4000 },
+                            )
                           }
                           onSaved()
                         } finally {
