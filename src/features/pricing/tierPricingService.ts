@@ -7,8 +7,12 @@ export interface TierThresholds {
 }
 
 export const DEFAULT_THRESHOLDS: TierThresholds = {
-  medio_min_qty: 3,
-  mayoreo_min_qty: 6,
+  // Defaults "mexicanos clásicos" del mayoreo: menudeo 1-5, medio 6-11,
+  // mayoreo 12+. Coincide con la mayoría de tiendas de belleza y con el
+  // valor histórico de `pricing_config.umbral_medio/mayoreo`. El admin
+  // puede cambiarlos desde Configuración → Precios por volumen.
+  medio_min_qty: 6,
+  mayoreo_min_qty: 12,
 }
 
 let cache: TierThresholds | null = null
