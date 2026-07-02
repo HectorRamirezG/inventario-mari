@@ -443,15 +443,16 @@ export default function BuySheet({
             {/* Header */}
             <div className="flex items-start justify-between px-5 pb-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-12 h-12 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0 flex items-center justify-center">
+                <div className="w-12 h-12 aspect-square rounded-2xl overflow-hidden bg-white dark:bg-slate-800 shrink-0 flex items-center justify-center p-1 border border-slate-100 dark:border-slate-700">
                   {product.image_url ? (
                     <img
-                      src={product.image_url}
+                      src={imageAvatar(product.image_url) || product.image_url}
                       alt=""
                       width={96}
                       height={96}
+                      loading="lazy"
                       decoding="async"
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                     />
                   ) : (
                     <Package size={20} className="text-slate-300" />
@@ -589,11 +590,12 @@ export default function BuySheet({
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        {/* Miniatura: object-cover llena el cuadro. bg neutro
-                            como respaldo para imagenes con fondo transparente.
-                            Si la variante tiene swatch_hex, overlay con un
-                            círculo del color real (esquina inferior derecha). */}
-                        <div className="relative w-14 h-14 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0">
+                        {/* Miniatura: object-contain muestra el producto
+                            completo sin zoom (adapta al cuadro). bg blanco
+                            como respaldo para imágenes con fondo
+                            transparente. p-1 le da un poco de aire para
+                            que no toque los bordes. */}
+                        <div className="relative w-14 h-14 aspect-square rounded-xl bg-white dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 p-1 border border-slate-100 dark:border-slate-800">
                           {v.image_url ? (
                             <img
                               src={imageAvatar(v.image_url) || v.image_url}
@@ -602,7 +604,7 @@ export default function BuySheet({
                               decoding="async"
                               width={112}
                               height={112}
-                              className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
+                              className={`w-full h-full object-contain ${out ? "opacity-40" : ""}`}
                             />
                           ) : (
                             <Package size={18} />

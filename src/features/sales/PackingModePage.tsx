@@ -289,7 +289,7 @@ export default function PackingModePage() {
                       decoding="async"
                       width={112}
                       height={112}
-                      className="w-14 h-14 aspect-square rounded-xl object-cover bg-slate-200 dark:bg-slate-700 shrink-0"
+                      className="w-14 h-14 aspect-square rounded-xl object-contain bg-white dark:bg-slate-800 shrink-0 p-1 border border-slate-100 dark:border-slate-700"
                     />
                   ) : (
                     <div className="w-14 h-14 aspect-square rounded-xl bg-slate-200 dark:bg-slate-700 grid place-items-center shrink-0">

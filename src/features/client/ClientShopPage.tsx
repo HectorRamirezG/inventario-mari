@@ -2473,7 +2473,7 @@ export default function ClientShopPage() {
                           horizontal. bg neutro como respaldo si la imagen
                           tarda en cargar o es transparente. Usa la versión
                           optimizada de 96px para no cargar la HD completa. */}
-                      <div className="w-14 h-14 aspect-square rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 self-center">
+                      <div className="w-14 h-14 aspect-square rounded-xl bg-white dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 self-center p-1 border border-slate-100 dark:border-slate-800">
                         {c.image_url ? (
                           <img
                             src={imageAvatar(c.image_url) || c.image_url}
@@ -2482,7 +2482,7 @@ export default function ClientShopPage() {
                             decoding="async"
                             width={112}
                             height={112}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                           />
                         ) : (
                           <Package size={20} />
@@ -3351,7 +3351,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
           type="button"
           onClick={() => variant && onOpenLightbox(variant.id)}
           layoutId={`img-${product.id}`}
-          className="w-20 h-20 shrink-0 bg-slate-100 dark:bg-slate-700/50 relative"
+          className="w-20 h-20 shrink-0 bg-white dark:bg-slate-700/50 relative p-1"
           aria-label={`Ver ${product.name}`}
         >
           {cover ? (
@@ -3363,7 +3363,7 @@ const ProductCardClient = memo(function ProductCardClientImpl({
               decoding="async"
               width={160}
               height={160}
-              className={`w-full h-full object-cover ${out ? "opacity-40" : ""}`}
+              className={`w-full h-full object-contain ${out ? "opacity-40" : ""}`}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-slate-300">

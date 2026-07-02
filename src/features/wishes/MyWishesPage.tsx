@@ -195,11 +195,11 @@ export default function MyWishesPage() {
                   <div className="flex gap-3 p-3">
                     {/* Imagen */}
                     {w.image_url ? (
-                      <div className="w-24 h-24 rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
+                      <div className="w-24 h-24 aspect-square rounded-xl bg-white dark:bg-slate-800 overflow-hidden shrink-0 p-1 border border-slate-100 dark:border-slate-700">
                         <img
                           src={w.image_url}
                           alt={w.title}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                           loading="lazy"
                         />
                       </div>

@@ -958,7 +958,7 @@ export default function ClientOrdersPage() {
                   {itemThumbs.slice(0, 4).map((t, i) => (
                     <div
                       key={`${o.id}-thumb-${i}`}
-                      className="w-10 h-10 aspect-square rounded-xl bg-slate-100 dark:bg-slate-700 ring-2 ring-white dark:ring-slate-800 overflow-hidden flex items-center justify-center text-slate-300"
+                      className="w-10 h-10 aspect-square rounded-xl bg-white dark:bg-slate-800 ring-2 ring-white dark:ring-slate-900 overflow-hidden flex items-center justify-center text-slate-300 p-0.5 border border-slate-100 dark:border-slate-700"
                       title={`${t.qty}× ${t.product_name ?? ""}${t.variant_name ? " · " + t.variant_name : ""}`}
                     >
                       {t.image_url ? (
@@ -969,7 +969,7 @@ export default function ClientOrdersPage() {
                           decoding="async"
                           width={80}
                           height={80}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
                       ) : (
                         <ShoppingBag size={14} />

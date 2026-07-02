@@ -193,11 +193,11 @@ export default function BundleWizard({
             {/* Header con imagen del bundle (si hay) o icono fallback */}
             <div className="flex items-start gap-3 px-5 pb-3 shrink-0">
               {bundle.image_url ? (
-                <div className="w-14 h-14 rounded-2xl overflow-hidden shrink-0 shadow-bloom ring-2 ring-white dark:ring-slate-900">
+                <div className="w-14 h-14 aspect-square rounded-2xl overflow-hidden shrink-0 shadow-bloom ring-2 ring-white dark:ring-slate-900 bg-white dark:bg-slate-800 p-1">
                   <img
                     src={bundle.image_url}
                     alt={bundle.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 </div>
               ) : (
@@ -300,12 +300,12 @@ export default function BundleWizard({
                             : "border-slate-200 dark:border-slate-700 hover:border-primary/40"
                         }`}
                       >
-                        <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden mb-1.5">
+                        <div className="aspect-square rounded-xl bg-white dark:bg-slate-800 overflow-hidden mb-1.5 p-1 border border-slate-100 dark:border-slate-700">
                           {cover ? (
                             <img
                               src={cover}
                               alt=""
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain"
                               loading="lazy"
                             />
                           ) : (
