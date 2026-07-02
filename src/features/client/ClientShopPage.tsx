@@ -32,7 +32,7 @@ import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney } from "../../lib/format"
-import { imageThumbnail } from "../../lib/imageTransform"
+import { imageThumbnail, imageAvatar } from "../../lib/imageTransform"
 import { useAuth } from "../../lib/useAuth"
 import { fetchMyProfile } from "../profile/profileService"
 import { sound } from "../../lib/sound"
@@ -70,7 +70,6 @@ import {
 import {
   resolveThresholds,
   tierForLine,
-  piecesToNextTierForLine,
 } from "../pricing/tierResolver"
 import {
   useShippingConfig,
@@ -2405,14 +2404,20 @@ export default function ClientShopPage() {
                           : "bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700"
                       }`}
                     >
-                      {/* Miniatura del carrito: object-cover llena el cuadro
-                          completo. bg-slate-50 sirve como respaldo si la imagen
-                          tarda en cargar o es transparente. */}
-                      <div className="w-14 h-14 rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 self-center">
+                      {/* Miniatura del carrito: aspect-square + object-cover
+                          garantiza cuadro 1:1 aunque la imagen sea vertical/
+                          horizontal. bg neutro como respaldo si la imagen
+                          tarda en cargar o es transparente. Usa la versión
+                          optimizada de 96px para no cargar la HD completa. */}
+                      <div className="w-14 h-14 aspect-square rounded-xl bg-slate-50 dark:bg-slate-900/40 overflow-hidden flex items-center justify-center text-slate-300 shrink-0 self-center">
                         {c.image_url ? (
                           <img
-                            src={c.image_url}
+                            src={imageAvatar(c.image_url) || c.image_url}
                             alt=""
+                            loading="lazy"
+                            decoding="async"
+                            width={112}
+                            height={112}
                             className="w-full h-full object-cover"
                           />
                         ) : (
