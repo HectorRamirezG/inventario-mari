@@ -20,6 +20,7 @@ import {
   type PackingOrder,
 } from "./packingService"
 import { formatMoney, formatRelative, cleanPhone } from "../../lib/format"
+import { imageAvatar } from "../../lib/imageTransform"
 import { useFeedback } from "../../lib/useFeedback"
 import { toastSuccess, toastInfo } from "../../lib/toast"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
@@ -282,13 +283,16 @@ export default function PackingModePage() {
                 >
                   {it.image_url ? (
                     <img
-                      src={it.image_url}
+                      src={imageAvatar(it.image_url) || it.image_url}
                       alt=""
                       loading="lazy"
-                      className="w-14 h-14 rounded-xl object-cover bg-slate-200 dark:bg-slate-700 shrink-0"
+                      decoding="async"
+                      width={112}
+                      height={112}
+                      className="w-14 h-14 aspect-square rounded-xl object-cover bg-slate-200 dark:bg-slate-700 shrink-0"
                     />
                   ) : (
-                    <div className="w-14 h-14 rounded-xl bg-slate-200 dark:bg-slate-700 grid place-items-center shrink-0">
+                    <div className="w-14 h-14 aspect-square rounded-xl bg-slate-200 dark:bg-slate-700 grid place-items-center shrink-0">
                       <Package size={20} className="text-slate-400" />
                     </div>
                   )}

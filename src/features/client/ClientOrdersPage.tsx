@@ -16,6 +16,7 @@ import toast from "react-hot-toast"
 
 import { supabase } from "../../lib/supabase"
 import { formatMoney, formatDate, shortId } from "../../lib/format"
+import { imageAvatar } from "../../lib/imageTransform"
 import { useAuth } from "../../lib/useAuth"
 import { useRealtimeSubscription } from "../../lib/useRealtimeSubscription"
 import { useDebouncedCallback } from "../../lib/useDebouncedCallback"
@@ -957,15 +958,17 @@ export default function ClientOrdersPage() {
                   {itemThumbs.slice(0, 4).map((t, i) => (
                     <div
                       key={`${o.id}-thumb-${i}`}
-                      className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 ring-2 ring-white dark:ring-slate-800 overflow-hidden flex items-center justify-center text-slate-300"
+                      className="w-10 h-10 aspect-square rounded-xl bg-slate-100 dark:bg-slate-700 ring-2 ring-white dark:ring-slate-800 overflow-hidden flex items-center justify-center text-slate-300"
                       title={`${t.qty}× ${t.product_name ?? ""}${t.variant_name ? " · " + t.variant_name : ""}`}
                     >
                       {t.image_url ? (
                         <img
-                          src={t.image_url}
+                          src={imageAvatar(t.image_url) || t.image_url}
                           alt={t.product_name ?? ""}
                           loading="lazy"
                           decoding="async"
+                          width={80}
+                          height={80}
                           className="w-full h-full object-cover"
                         />
                       ) : (

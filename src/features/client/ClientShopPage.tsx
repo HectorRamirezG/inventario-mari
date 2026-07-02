@@ -70,6 +70,7 @@ import {
 import {
   resolveThresholds,
   tierForLine,
+  piecesToNextTierForLine,
 } from "../pricing/tierResolver"
 import {
   useShippingConfig,
@@ -2238,14 +2239,28 @@ export default function ClientShopPage() {
                     </div>
                   </div>
                 )}
-                {/* Banner tier (solo si hay items y tiene sentido) */}
-                {totalQty > 0 && (
-                  <CartTierBanner
-                    totalQty={totalQty}
-                    cartTier={cartTier}
-                    thresholds={thresholds}
-                    savings={savingsVsMenudeo}
-                  />
+                {/* Banner de tier del carrito — SIMPLIFICADO (rework 2026-07-02).
+                    Antes mostraba una barra grande "faltan X para mayoreo"
+                    calculada sobre el TOTAL del carrito. Ahora cada línea
+                    tiene su propio mini-progress (ver más abajo, dentro
+                    del map de items). Aquí sólo dejamos el "¡mayoreo activo!"
+                    cuando TODAS las líneas están en mayoreo, como celebración
+                    global. Si hay mezcla, cada línea muestra su propio badge. */}
+                {savingsVsMenudeo > 0 && (
+                  <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/30 p-3 flex items-center gap-2">
+                    <Sparkles
+                      size={14}
+                      className="shrink-0 text-emerald-600 dark:text-emerald-400"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">
+                        Estás ahorrando {formatMoney(savingsVsMenudeo)}
+                      </p>
+                      <p className="text-[10px] font-bold text-emerald-700/80 dark:text-emerald-300/80 leading-tight">
+                        Cada tono en el carrito baja de precio por su cuenta.
+                      </p>
+                    </div>
+                  </div>
                 )}
 
                 {/* Cupón — solo aparece si hay items en el carrito y
@@ -2390,6 +2405,54 @@ export default function ClientShopPage() {
                   const canIncrement = c.is_preorder
                     ? c.qty < 5
                     : c.stock > 0 && c.qty < c.stock
+
+                  // Progreso al siguiente tier POR VARIANTE. Usa la
+                  // cascada de umbrales (variante > producto > global)
+                  // y la CANTIDAD DE ESTA LÍNEA — no el total del
+                  // carrito. Coherente con el rework 2026-07-01.
+                  const variant = products
+                    .flatMap((p) => p.variants)
+                    .find((v) => v.id === c.variant_id)
+                  const productParent = products.find((p) =>
+                    (p.variants ?? []).some((v) => v.id === c.variant_id),
+                  )
+                  const lineThresholds = resolveThresholds(
+                    {
+                      tier_umbral_medio: (variant as any)?.tier_umbral_medio,
+                      tier_umbral_mayoreo: (variant as any)?.tier_umbral_mayoreo,
+                    },
+                    {
+                      tier_umbral_medio: (productParent as any)?.tier_umbral_medio,
+                      tier_umbral_mayoreo: (productParent as any)?.tier_umbral_mayoreo,
+                    },
+                    thresholds,
+                  )
+                  const lineTier = tierForLine(c.qty, lineThresholds)
+                  const nextTierInfo = c.is_preorder
+                    ? null
+                    : piecesToNextTierForLine(c.qty, lineThresholds)
+                  // Progreso 0-1 hacia el siguiente umbral.
+                  const targetForBar = nextTierInfo
+                    ? nextTierInfo.tier === "medio"
+                      ? lineThresholds.medio_min_qty
+                      : lineThresholds.mayoreo_min_qty
+                    : 0
+                  const prevTargetForBar = nextTierInfo
+                    ? nextTierInfo.tier === "medio"
+                      ? 1
+                      : lineThresholds.medio_min_qty
+                    : 0
+                  const progress = nextTierInfo && targetForBar > prevTargetForBar
+                    ? Math.max(
+                        0,
+                        Math.min(
+                          1,
+                          (c.qty - prevTargetForBar) /
+                            (targetForBar - prevTargetForBar),
+                        ),
+                      )
+                    : 0
+
                   return (
                     <motion.div
                       key={c.variant_id}
@@ -2398,12 +2461,13 @@ export default function ClientShopPage() {
                       animate={{ opacity: 1, x: 0, scale: 1 }}
                       exit={{ opacity: 0, x: 16, scale: 0.92, height: 0, marginTop: 0, paddingTop: 0, paddingBottom: 0 }}
                       transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                      className={`flex items-stretch gap-3 p-2.5 rounded-2xl border overflow-hidden ${
+                      className={`flex flex-col gap-1.5 p-2.5 rounded-2xl border overflow-hidden ${
                         c.is_preorder
-                          ? "bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30"
+                          ? "bg-fuchsia-50 dark:bg-fuchsia-500/10 border-fuchsia-200 dark:border-fuchsia-500/30"
                           : "bg-slate-50 dark:bg-slate-800/60 border-slate-100 dark:border-slate-700"
                       }`}
                     >
+                      <div className="flex items-stretch gap-3">
                       {/* Miniatura del carrito: aspect-square + object-cover
                           garantiza cuadro 1:1 aunque la imagen sea vertical/
                           horizontal. bg neutro como respaldo si la imagen
@@ -2428,15 +2492,20 @@ export default function ClientShopPage() {
                       {/* Datos + qty stepper */}
                       <div className="flex-1 min-w-0 flex flex-col justify-between gap-1">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                             <p className="text-[12px] font-black leading-tight truncate">
                               {c.product_name}
                             </p>
-                            {c.is_preorder && (
-                              <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-violet-500 text-white text-[8px] font-black uppercase tracking-widest leading-none">
-                                📦 Preventa
+                            {c.is_preorder ? (
+                              <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-fuchsia-500 text-white text-[8px] font-black uppercase tracking-widest leading-none">
+                                <Sparkles size={8} />
+                                Preventa
                               </span>
-                            )}
+                            ) : lineTier !== "menudeo" ? (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded-full bg-emerald-500 text-white text-[8px] font-black uppercase tracking-widest leading-none">
+                                {lineTier === "medio" ? "Medio" : "Mayoreo"}
+                              </span>
+                            ) : null}
                           </div>
                           {c.variant_name && (
                             <p className="text-[10px] font-bold text-slate-500 truncate">
@@ -2448,7 +2517,7 @@ export default function ClientShopPage() {
                           <p className="text-[10px] text-slate-500 tabular-nums">
                             {formatMoney(c.unit_price)} c/u
                             {c.is_preorder && (
-                              <span className="ml-1 text-violet-600 dark:text-violet-400 font-black">
+                              <span className="ml-1 text-fuchsia-600 dark:text-fuchsia-400 font-black">
                                 · entrega luego
                               </span>
                             )}
@@ -2513,13 +2582,37 @@ export default function ClientShopPage() {
                         <span
                           className={`text-sm font-black tabular-nums ${
                             c.is_preorder
-                              ? "text-violet-600 dark:text-violet-400"
+                              ? "text-fuchsia-600 dark:text-fuchsia-400"
                               : "text-primary"
                           }`}
                         >
                           {formatMoney(lineTotal)}
                         </span>
                       </div>
+                      </div>
+
+                      {/* Mini progreso al siguiente tier POR VARIANTE.
+                          Solo aparece cuando esta línea puede subir de
+                          tier con sus propios umbrales. Discreto: una
+                          barrita fina + texto "+N para X". Se oculta si
+                          la línea es preventa (preventa no participa de
+                          tier). */}
+                      {nextTierInfo && (
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="flex-1 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                            <motion.div
+                              className="h-full bg-emerald-500 rounded-full"
+                              initial={{ width: 0 }}
+                              animate={{ width: `${progress * 100}%` }}
+                              transition={{ duration: 0.4, ease: "easeOut" }}
+                            />
+                          </div>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">
+                            +{nextTierInfo.missing}{" "}
+                            {nextTierInfo.tier === "medio" ? "medio" : "mayoreo"}
+                          </span>
+                        </div>
+                      )}
                     </motion.div>
                   )
                 })}
