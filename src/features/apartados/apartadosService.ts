@@ -61,7 +61,8 @@ export async function listApartados(opts: {
         qty,
         tier,
         unit_price,
-        is_bundle
+        is_bundle,
+        is_preorder
       ),
       payments (
         id,

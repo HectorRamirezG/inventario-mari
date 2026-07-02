@@ -68,6 +68,11 @@ import {
   type TierThresholds,
 } from "../pricing/tierPricingService"
 import {
+  resolveThresholds,
+  tierForLine,
+  piecesToNextTierForLine,
+} from "../pricing/tierResolver"
+import {
   useShippingConfig,
   calcShipping,
 } from "../pricing/shippingService"
@@ -722,17 +727,23 @@ export default function ClientShopPage() {
     monthlySpent >= (bRules.auto_vip_monthly_threshold || 0) &&
     (bRules.auto_vip_monthly_threshold || 0) > 0
 
-  // Tier que aplica al carrito completo. Si es VIP automático, va directo
-  // a mayoreo (el banner del carrito lo refleja con un chip dorado).
+  // Tier "de referencia" del carrito completo — calculado con umbrales
+  // globales. Se muestra en el banner motivador ("estás en X tier")
+  // pero YA NO se usa para repricear (rework 2026-07-01: cada variante
+  // reprice con SU cantidad y SUS umbrales resueltos).
   const cartTier = useMemo(
     () => (isAutoVip ? "mayoreo" : tierForQty(totalQty, thresholds)),
     [isAutoVip, totalQty, thresholds]
   )
 
-  // Re-calcular precios + stock FRESCO de cada línea según el tier activo
-  // y el inventario actual (no el snapshot del momento que se agregó).
-  // Realtime de `variants` mantiene `products` al día, así que con este
-  // pase también obtenemos `stock` actualizado en cada render.
+  // Re-calcular precios + stock FRESCO de cada línea POR VARIANTE. Cada
+  // línea usa SU cantidad + SUS umbrales resueltos (cascada variante >
+  // producto > global). Realtime de `variants` mantiene `products` al día,
+  // así que con este pase también obtenemos `stock` actualizado.
+  //
+  // Auto-VIP: si el cliente califica como VIP, TODAS sus líneas se
+  // fuerzan a `mayoreo` — respeta la promesa "cliente frecuente = mejor
+  // precio siempre" independiente de cuánto pida de cada variante.
   const repricedCart = useMemo(
     () =>
       cart.map((c) => {
@@ -740,15 +751,38 @@ export default function ClientShopPage() {
           .flatMap((p) => p.variants)
           .find((v) => v.id === c.variant_id)
         if (!variant) return c
-        // Si la línea es de preventa, conservamos su precio especial:
-        // no se reprice por tier (ya viene con el descuento aplicado).
+        // Preventa: precio congelado al agregar. NO se reprice por tier.
         if (c.is_preorder) {
           return { ...c, stock: variant.stock }
         }
-        const newPrice = priceForTier(variant, cartTier)
-        return { ...c, unit_price: newPrice, stock: variant.stock }
+        const productParent = products.find((p) =>
+          (p.variants ?? []).some((v) => v.id === variant.id),
+        )
+        // Cascada de umbrales: variante > producto > global.
+        const lineThresholds = resolveThresholds(
+          {
+            tier_umbral_medio: (variant as any).tier_umbral_medio,
+            tier_umbral_mayoreo: (variant as any).tier_umbral_mayoreo,
+          },
+          {
+            tier_umbral_medio: (productParent as any)?.tier_umbral_medio,
+            tier_umbral_mayoreo: (productParent as any)?.tier_umbral_mayoreo,
+          },
+          thresholds,
+        )
+        // Tier POR VARIANTE (usa SU cantidad — no el total del carrito).
+        // Auto-VIP fuerza mayoreo global.
+        const lineTier = isAutoVip
+          ? "mayoreo"
+          : tierForLine(c.qty, lineThresholds)
+        const newPrice = priceForTier(variant, lineTier)
+        return {
+          ...c,
+          unit_price: newPrice,
+          stock: variant.stock,
+        }
       }),
-    [cart, cartTier, products]
+    [cart, isAutoVip, thresholds, products]
   )
 
   // Subtotal (sin envío) — solo items
@@ -925,18 +959,22 @@ export default function ClientShopPage() {
     }
   }, [subtotalAmt, appliedCoupon])
 
-  // Ahorro vs menudeo (motivacional)
+  // Ahorro vs menudeo (motivacional). Se calcula LINE-BY-LINE: cada
+  // línea aporta al ahorro solo si su tier resuelto NO es menudeo. Así
+  // el ahorro es preciso incluso cuando el carrito mezcla líneas con
+  // umbrales distintos.
   const savingsVsMenudeo = useMemo(() => {
-    if (cartTier === "menudeo") return 0
-    const menudeoTotal = cart.reduce((acc, c) => {
+    return repricedCart.reduce((acc, c) => {
+      if (c.is_preorder) return acc // preventa: ahorro ya reflejado en unit_price
       const variant = products
         .flatMap((p) => p.variants)
         .find((v) => v.id === c.variant_id)
-      if (!variant) return acc + c.unit_price * c.qty
-      return acc + priceForTier(variant, "menudeo") * c.qty
+      if (!variant) return acc
+      const menudeoUnit = priceForTier(variant, "menudeo")
+      const savedUnit = Math.max(0, menudeoUnit - c.unit_price)
+      return acc + savedUnit * c.qty
     }, 0)
-    return Math.max(0, menudeoTotal - subtotalAmt)
-  }, [cart, cartTier, subtotalAmt, products])
+  }, [repricedCart, products])
 
   function priceOf(v: PublicVariant): number {
     return v.price_menudeo ?? v.price ?? v.price_medio ?? v.price_mayoreo ?? 0
@@ -1457,6 +1495,10 @@ export default function ClientShopPage() {
           unit_price: c.unit_price,
           cost_snapshot: unitCost,
           profit: profitTotal,
+          // Preserva el flag de preventa en el histórico. Necesario para
+          // que TicketView muestre el badge "Preventa" al cliente y a
+          // Mari en apartados/reportes.
+          is_preorder: !!c.is_preorder,
         })
         if (itemErr) throw new Error(itemErr.message)
 

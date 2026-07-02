@@ -86,6 +86,10 @@ export interface SaleItem {
   cost_snapshot: number;
   profit: number;
   is_bundle?: boolean;
+  /** TRUE si la línea se vendió con precio de preventa (variant.presale_active
+   *  al momento de la venta). El precio queda congelado en unit_price y NO se
+   *  modifica aunque la preventa se apague después. */
+  is_preorder?: boolean;
 }
 
 export interface Payment {

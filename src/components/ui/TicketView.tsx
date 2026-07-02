@@ -173,7 +173,21 @@ export default function TicketView({ open, sale, onClose }: Props) {
                   {(sale.sale_items ?? []).map((it) => (
                     <tr key={it.id} className="align-top">
                       <td className="py-1 pr-2">
-                        <p className="leading-tight">{it.product_name}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="leading-tight">{it.product_name}</p>
+                          {/* Badge de PREVENTA: el flag `is_preorder` se
+                              guarda snapshot al momento de la venta. Si
+                              esta línea se vendió con precio de preventa,
+                              lo indicamos aquí para que quede en el
+                              historial del ticket aunque la preventa
+                              después se apague. El precio permanece
+                              congelado en unit_price. */}
+                          {it.is_preorder && (
+                            <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm bg-fuchsia-500 text-white text-[8px] font-black uppercase tracking-widest leading-none">
+                              Preventa
+                            </span>
+                          )}
+                        </div>
                         {it.variant_name && (
                           <p className="text-[10px] text-slate-500 leading-tight">
                             {it.variant_name}

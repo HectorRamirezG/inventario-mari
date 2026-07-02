@@ -91,6 +91,10 @@ export async function createSale(payload: CreateSalePayload) {
       unit_price: item.price,
       cost_snapshot: item.cost,
       profit: profitTotal,
+      // Marca la línea como preventa cuando el admin la vendió con
+      // precio especial. El precio ya está congelado en unit_price;
+      // este flag es para mostrar badge en tickets / apartados.
+      is_preorder: !!item.is_preorder,
     });
 
     if (itemError) {
